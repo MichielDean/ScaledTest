@@ -34,7 +34,7 @@ export async function startDockerEnvironment(): Promise<void> {
 
   try {
     // Navigate to docker directory and start the containers
-    execSync('cd docker && docker-compose up -d', { stdio: 'inherit' });
+    execSync('cd docker && docker compose up -d', { stdio: 'inherit' });
     console.log('Docker containers started successfully');
   } catch (error) {
     console.error('Failed to start Docker environment:', error);

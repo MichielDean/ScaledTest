@@ -33,7 +33,7 @@ export async function startDockerEnvironment(): Promise<void> {
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
   try {
-    execSync(`docker-compose -f "${dockerComposePath}" up -d`, { stdio: 'inherit' });
+    execSync(`docker compose -f "${dockerComposePath}" up -d`, { stdio: 'inherit' });
     testLogger.info('Docker containers started successfully'); // Wait for services to be ready
     testLogger.info('Waiting for Keycloak to be ready');
     await waitOn({

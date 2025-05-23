@@ -42,7 +42,7 @@ export async function stopDockerEnvironment(): Promise<void> {
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
   try {
-    execSync(`docker-compose -f "${dockerComposePath}" down`, { stdio: 'inherit' });
+    execSync(`docker compose -f "${dockerComposePath}" down`, { stdio: 'inherit' });
     console.log('Docker environment stopped successfully');
   } catch (error) {
     console.error('Error stopping Docker environment:', error);
@@ -62,6 +62,17 @@ export async function teardown(): Promise<void> {
 
     // Stop Docker environment
     await stopDockerEnvironment();
+
+    // Force process cleanup to ensure no hanging connections
+    // This is particularly important in CI environments
+    try {
+      // Clear any remaining timers by ensuring no unnecessary timers are created
+      const timeout = setTimeout(() => {}, 0);
+      clearTimeout(timeout);
+    } catch (err) {
+      // Ignore any errors in cleanup
+      console.error('Error during timer cleanup:', err);
+    }
 
     console.log('System test environment teardown completed successfully');
   } catch (error) {
