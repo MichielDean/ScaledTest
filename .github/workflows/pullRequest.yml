@@ -69,22 +69,6 @@ jobs:
           sudo apt-get install -y docker-compose
           docker-compose version
 
-      - name: Start Docker services
-        run: docker-compose -f docker/docker-compose.yml up -d
-
-      - name: Wait for services to be ready
-        run: |
-          echo "Waiting for Keycloak to be available..."
-          timeout 60 bash -c 'until curl -s http://localhost:8080 > /dev/null; do sleep 2; done'
-          echo "Keycloak is up and running"
-
-          echo "Waiting for OpenSearch to be available..."
-          timeout 60 bash -c 'until curl -s http://localhost:9200 > /dev/null; do sleep 2; done'
-          echo "OpenSearch is up and running"
-
-      - name: Setup Keycloak
-        run: node scripts/setup-keycloak.js
-
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
