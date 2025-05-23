@@ -1,1 +1,5 @@
+# Fix line endings before running lint-staged
+git config core.autocrlf input
+# Fix CRLF to LF for any new files
+npm run fix:lineendings
 npx lint-staged
