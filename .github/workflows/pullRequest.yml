@@ -28,6 +28,35 @@ jobs:
   build-and-test:
     runs-on: ubuntu-latest
     needs: lint-and-format
+    env:
+      # Required Keycloak configuration
+      KEYCLOAK_URL: http://localhost:8080
+      KEYCLOAK_ADMIN_USER: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      KEYCLOAK_REALM: scaledtest
+      KEYCLOAK_REALM_DISPLAY_NAME: ScaledTest CI Realm
+      KEYCLOAK_CLIENT_ID: scaledtest-client
+
+      # Test users
+      KEYCLOAK_READONLY_USER_USERNAME: readonly-user
+      KEYCLOAK_READONLY_USER_PASSWORD: password
+
+      KEYCLOAK_MAINTAINER_USER_USERNAME: maintainer-user
+      KEYCLOAK_MAINTAINER_USER_PASSWORD: password
+
+      KEYCLOAK_OWNER_USER_USERNAME: owner-user
+      KEYCLOAK_OWNER_USER_PASSWORD: password
+
+      # Required OpenSearch configuration
+      OPENSEARCH_HOST: http://localhost:9200
+      OPENSEARCH_USERNAME: admin
+      OPENSEARCH_PASSWORD: admin
+
+      # Required Next.js public variables
+      NEXT_PUBLIC_KEYCLOAK_URL: http://localhost:8080
+      NEXT_PUBLIC_KEYCLOAK_REALM: scaledtest
+      NEXT_PUBLIC_KEYCLOAK_CLIENT_ID: scaledtest-client
+      NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
     steps:
       - uses: actions/checkout@v4
 
@@ -39,6 +68,22 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y docker-compose
           docker-compose version
+
+      - name: Start Docker services
+        run: docker-compose -f docker/docker-compose.yml up -d
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for Keycloak to be available..."
+          timeout 60 bash -c 'until curl -s http://localhost:8080 > /dev/null; do sleep 2; done'
+          echo "Keycloak is up and running"
+
+          echo "Waiting for OpenSearch to be available..."
+          timeout 60 bash -c 'until curl -s http://localhost:9200 > /dev/null; do sleep 2; done'
+          echo "OpenSearch is up and running"
+
+      - name: Setup Keycloak
+        run: node scripts/setup-keycloak.js
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
