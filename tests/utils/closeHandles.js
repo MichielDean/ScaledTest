@@ -1,6 +1,9 @@
 // Helper to explicitly close any outstanding handles
 // Useful for CI environments where tests may hang
 
+// Define the delay for cleanup (ms)
+const TEARDOWN_DELAY_MS = 1000;
+
 /**
  * Jest globalTeardown function
  * This will be called after all tests have finished running
@@ -18,7 +21,7 @@ async function closeHandles() {
     // Try to clear any lingering timers
     const activeHandles = process._getActiveHandles();
     activeHandles.forEach(handle => {
-      if (handle instanceof Timeout) {
+      if (handle && typeof handle.hasRef === 'function') {
         try {
           clearTimeout(handle);
         } catch (e) {

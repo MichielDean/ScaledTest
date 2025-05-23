@@ -42,7 +42,7 @@ export async function stopDockerEnvironment(): Promise<void> {
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
   try {
-    execSync(`docker-compose -f "${dockerComposePath}" down`, { stdio: 'inherit' });
+    execSync(`docker compose -f "${dockerComposePath}" down`, { stdio: 'inherit' });
     console.log('Docker environment stopped successfully');
   } catch (error) {
     console.error('Error stopping Docker environment:', error);
