@@ -74,14 +74,11 @@ jobs:
           node-version: 20
           cache: 'npm'
 
-      - name: Install Playwright
-        run: npx playwright install
-
       - name: Install dependencies
         run: npm ci
 
-      - name: Build
-        run: npm run build
+      - name: Install Playwright
+        run: npx playwright install
 
       - name: Run all tests
         run: npm run test:ci
