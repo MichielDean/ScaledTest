@@ -16,14 +16,16 @@ async function closeHandles() {
     }
 
     // Try to clear any lingering timers
-    const timerIds = setTimeout(() => {}, 0);
-    for (let i = 1; i < timerIds; i++) {
-      try {
-        clearTimeout(i);
-      } catch (e) {
-        // Ignore errors when clearing timers
+    const activeHandles = process._getActiveHandles();
+    activeHandles.forEach(handle => {
+      if (handle instanceof Timeout) {
+        try {
+          clearTimeout(handle);
+        } catch (e) {
+          // Ignore errors when clearing timers
+        }
       }
-    }
+    });
 
     // Give time for any pending operations to finish
     await new Promise(resolve => setTimeout(resolve, 500));
