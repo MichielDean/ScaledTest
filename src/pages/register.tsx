@@ -37,10 +37,7 @@ const Register: NextPage = () => {
           <p style={{ marginBottom: '2rem', textAlign: 'center' }}>
             Click the button below to register a new account with Keycloak.
           </p>
-          <button 
-            onClick={handleRegister}
-            style={{ width: '100%', backgroundColor: '#4CAF50' }}
-          >
+          <button onClick={handleRegister} style={{ width: '100%', backgroundColor: '#4CAF50' }}>
             Register with Keycloak
           </button>
         </div>

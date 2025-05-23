@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [],
+  "compounds": [],
+  "inputs": [
+    {
+      "id": "formatAllFiles",
+      "type": "command",
+      "command": "workbench.action.tasks.runTask",
+      "args": "Format All Files"
+    }
+  ]
+}

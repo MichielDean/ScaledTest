@@ -1,0 +1,13 @@
+// tests/system/setup.ts
+import sharedSetup from '../shared-setup';
+
+/**
+ * A simple wrapper around the shared setup for System tests
+ */
+async function systemGlobalSetup() {
+  // Use the shared setup
+  await sharedSetup();
+  console.log('System-specific setup completed');
+}
+
+export default systemGlobalSetup;

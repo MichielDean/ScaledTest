@@ -2,8 +2,8 @@ import Keycloak from 'keycloak-js';
 
 const keycloakConfig = {
   url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080',
-  realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest4',
-  clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest4-client',
+  realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest',
+  clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest-client',
 };
 
 // Singleton instance of Keycloak
@@ -13,12 +13,12 @@ export const initKeycloak = (): Keycloak => {
   if (keycloak) {
     return keycloak;
   }
-  
+
   if (typeof window !== 'undefined') {
     keycloak = new Keycloak(keycloakConfig);
     return keycloak;
   }
-  
+
   throw new Error('Keycloak can only be initialized in the browser');
 };
 

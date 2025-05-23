@@ -1,0 +1,81 @@
+{
+  "id": "b9c90c94-cf82-4973-9071-c31136ca8bef",
+  "createdAt": "2025-05-08T06:50:46.266Z",
+  "testSuiteId": "9c37cabe-ff97-449e-9ba1-32b2b4934694",
+  "status": "completed",
+  "startedAt": "2025-05-08T05:50:46.266Z",
+  "completedAt": "2025-05-08T06:50:46.266Z",
+  "environment": {
+    "os": "Windows",
+    "browser": "Chrome",
+    "version": "115.0.5790.171"
+  },
+  "configuration": {
+    "headless": true,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "triggeredBy": "CI/CD Pipeline",
+  "buildId": "build-1234",
+  "testCases": [
+    {
+      "id": "3b5690a2-4d41-4aaf-8875-62a918a6558d",
+      "createdAt": "2025-05-08T06:50:46.266Z",
+      "testExecutionId": "e4f7e0d0-459c-4a57-8e16-61fcc6a57942",
+      "name": "Authentication Test Suite",
+      "description": "Tests for user authentication flows",
+      "status": "passed",
+      "startedAt": "2025-05-08T05:50:46.266Z",
+      "completedAt": "2025-05-08T06:50:46.266Z",
+      "durationMs": 2100,
+      "testResults": [
+        {
+          "id": "407b2f3e-1e4c-4e73-a2ac-e981f8ae9603",
+          "createdAt": "2025-05-08T06:50:46.266Z",
+          "testCaseId": "42227d01-bd24-40ab-b09f-248d4eca210f",
+          "status": "passed",
+          "priority": "medium",
+          "name": "Login should succeed with valid credentials",
+          "description": "Verify user can login with valid username and password",
+          "expected": "User is redirected to dashboard",
+          "actual": "User was redirected to dashboard",
+          "durationMs": 1250,
+          "tags": [
+            "authentication",
+            "login"
+          ]
+        },
+        {
+          "id": "23f2109c-8b83-4bf7-8a5a-6ebe760bbba8",
+          "createdAt": "2025-05-08T06:50:46.266Z",
+          "testCaseId": "985d4ce4-2acf-4b7e-995a-ca6e97a70a5f",
+          "status": "failed",
+          "priority": "high",
+          "name": "User data should load",
+          "description": "Verify user profile data loads on the dashboard",
+          "expected": "User profile data is displayed",
+          "actual": "API returned 404 error",
+          "errorDetails": {
+            "message": "API returned 404 error",
+            "stackTrace": "Error: API returned 404 error\n    at Object.<anonymous> (/tests/api.test.ts:25:15)"
+          },
+          "durationMs": 850,
+          "tags": [
+            "dashboard",
+            "profile"
+          ]
+        }
+      ],
+      "tags": [
+        "authentication",
+        "login"
+      ]
+    }
+  ],
+  "tags": [
+    "regression",
+    "authentication"
+  ]
+}

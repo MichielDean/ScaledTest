@@ -1,139 +1,286 @@
 /**
  * Keycloak Setup Script
- * 
+ *
  * This script creates a new realm, client, roles, and test users in Keycloak.
  * Run this script after the Keycloak server is started to set up the environment.
+ *
+ * Configuration is loaded from environment variables only:
+ * - .env.local
+ * - .env
+ *
+ * All required configuration values must be provided in environment variables.
  */
 
 const axios = require('axios');
+const path = require('path');
+const fs = require('fs');
 const dotenv = require('dotenv');
-dotenv.config({ path: './.env.local' });
 
-// Keycloak configuration
-const keycloakConfig = {
-  baseUrl: process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080',
-  realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest4',
-  clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest4-client',
-  adminUser: 'admin',
-  adminPassword: 'admin',
-  redirectUris: [
-    'http://localhost:3000/*'
-  ],
-  testUsers: [
-    {
-      username: 'readonly-user',
-      password: 'password',
-      firstName: 'Read',
-      lastName: 'Only',
-      email: 'readonly@example.com',
-      roles: ['readonly']
-    },
-    {
-      username: 'maintainer-user',
-      password: 'password',
-      firstName: 'Maintainer',
-      lastName: 'User',
-      email: 'maintainer@example.com',
-      roles: ['readonly', 'maintainer']
-    },
-    {
-      username: 'owner-user',
-      password: 'password',
-      firstName: 'Owner',
-      lastName: 'User',
-      email: 'owner@example.com',
-      roles: ['readonly', 'maintainer', 'owner']
+// Load environment variables from .env files
+dotenv.config({ path: './.env.local' });
+dotenv.config({ path: './.env' });
+
+// Validate and build configuration from environment variables
+function buildConfigFromEnv() {
+  // Helper function to get required environment variable
+  function getRequiredEnvVar(name) {
+    const value = process.env[name];
+    if (!value) {
+      throw new Error(`Required environment variable ${name} is not set`);
     }
-  ]
+    return value;
+  }
+
+  // Helper function to get optional environment variable with no default
+  function getOptionalEnvVar(name) {
+    return process.env[name];
+  }
+
+  // Helper function to parse boolean environment variable
+  function parseBooleanEnvVar(name, defaultValue = false) {
+    const value = process.env[name];
+    if (value === undefined) {
+      return defaultValue;
+    }
+    return value.toLowerCase() === 'true';
+  }
+
+  // Helper function to parse array environment variable
+  function parseArrayEnvVar(name, separator = ',', defaultValue = []) {
+    const value = process.env[name];
+    if (!value) {
+      return defaultValue;
+    }
+    return value.split(separator).map(item => item.trim());
+  }
+
+  // Build server configuration
+  const server = {
+    baseUrl: getRequiredEnvVar('KEYCLOAK_URL'),
+    adminUser: getRequiredEnvVar('KEYCLOAK_ADMIN_USER'),
+    adminPassword: getRequiredEnvVar('KEYCLOAK_ADMIN_PASSWORD'),
+    maxRetries: parseInt(getOptionalEnvVar('KEYCLOAK_MAX_RETRIES') || '30'),
+    retryInterval: parseInt(getOptionalEnvVar('KEYCLOAK_RETRY_INTERVAL') || '2000'),
+  };
+
+  // Build realm configuration
+  const realm = {
+    name: getRequiredEnvVar('KEYCLOAK_REALM'),
+    displayName: getRequiredEnvVar('KEYCLOAK_REALM_DISPLAY_NAME'),
+    enabled: true,
+    registrationAllowed: parseBooleanEnvVar('KEYCLOAK_REGISTRATION_ALLOWED', true),
+    resetPasswordAllowed: parseBooleanEnvVar('KEYCLOAK_RESET_PASSWORD_ALLOWED', true),
+    rememberMe: parseBooleanEnvVar('KEYCLOAK_REMEMBER_ME', true),
+    verifyEmail: parseBooleanEnvVar('KEYCLOAK_VERIFY_EMAIL', false),
+    loginWithEmailAllowed: parseBooleanEnvVar('KEYCLOAK_LOGIN_WITH_EMAIL', true),
+    duplicateEmailsAllowed: parseBooleanEnvVar('KEYCLOAK_DUPLICATE_EMAILS_ALLOWED', false),
+    sslRequired: getOptionalEnvVar('KEYCLOAK_SSL_REQUIRED') || 'external',
+  };
+
+  // Build client configuration
+  const client = {
+    id: getRequiredEnvVar('KEYCLOAK_CLIENT_ID'),
+    enabled: true,
+    publicClient: true,
+    directAccessGrantsEnabled: true,
+    standardFlowEnabled: true,
+    fullScopeAllowed: true,
+    protocol: 'openid-connect',
+    redirectUris: parseArrayEnvVar('KEYCLOAK_REDIRECT_URIS', ',', ['http://localhost:3000/*']),
+    webOrigins: parseArrayEnvVar('KEYCLOAK_WEB_ORIGINS', ',', ['*']),
+  };
+
+  // Get roles
+  const roles = parseArrayEnvVar('KEYCLOAK_ROLES', ',', ['readonly', 'maintainer', 'owner']);
+
+  // Build users array
+  const users = [];
+
+  // Only add users if their username is defined
+  if (process.env.KEYCLOAK_READONLY_USER_USERNAME) {
+    users.push({
+      username: getRequiredEnvVar('KEYCLOAK_READONLY_USER_USERNAME'),
+      password: getRequiredEnvVar('KEYCLOAK_READONLY_USER_PASSWORD'),
+      firstName: getOptionalEnvVar('KEYCLOAK_READONLY_USER_FIRSTNAME') || 'Read',
+      lastName: getOptionalEnvVar('KEYCLOAK_READONLY_USER_LASTNAME') || 'Only',
+      email:
+        getOptionalEnvVar('KEYCLOAK_READONLY_USER_EMAIL') ||
+        `${getRequiredEnvVar('KEYCLOAK_READONLY_USER_USERNAME')}@example.com`,
+      roles: parseArrayEnvVar('KEYCLOAK_READONLY_USER_ROLES', ',', ['readonly']),
+    });
+  }
+
+  if (process.env.KEYCLOAK_MAINTAINER_USER_USERNAME) {
+    users.push({
+      username: getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_USERNAME'),
+      password: getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_PASSWORD'),
+      firstName: getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_FIRSTNAME') || 'Maintainer',
+      lastName: getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_LASTNAME') || 'User',
+      email:
+        getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_EMAIL') ||
+        `${getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_USERNAME')}@example.com`,
+      roles: parseArrayEnvVar('KEYCLOAK_MAINTAINER_USER_ROLES', ',', ['readonly', 'maintainer']),
+    });
+  }
+
+  if (process.env.KEYCLOAK_OWNER_USER_USERNAME) {
+    users.push({
+      username: getRequiredEnvVar('KEYCLOAK_OWNER_USER_USERNAME'),
+      password: getRequiredEnvVar('KEYCLOAK_OWNER_USER_PASSWORD'),
+      firstName: getOptionalEnvVar('KEYCLOAK_OWNER_USER_FIRSTNAME') || 'Owner',
+      lastName: getOptionalEnvVar('KEYCLOAK_OWNER_USER_LASTNAME') || 'User',
+      email:
+        getOptionalEnvVar('KEYCLOAK_OWNER_USER_EMAIL') ||
+        `${getRequiredEnvVar('KEYCLOAK_OWNER_USER_USERNAME')}@example.com`,
+      roles: parseArrayEnvVar('KEYCLOAK_OWNER_USER_ROLES', ',', [
+        'readonly',
+        'maintainer',
+        'owner',
+      ]),
+    });
+  }
+
+  return {
+    server,
+    realm,
+    client,
+    roles,
+    users,
+  };
+}
+
+// Build configuration from environment variables
+let keycloakConfig;
+try {
+  keycloakConfig = buildConfigFromEnv();
+  console.log('Configuration loaded from environment variables');
+} catch (error) {
+  console.error(`Error loading configuration: ${error.message}`);
+  process.exit(1);
+}
+
+// Create axios instance with common configuration
+const api = axios.create({
+  baseURL: keycloakConfig.server.baseUrl,
+  headers: {
+    'Content-Type': 'application/json',
+  },
+});
+
+// API error handler
+const handleApiError = (error, operation) => {
+  console.error(`Error during ${operation}:`, error.message);
+  if (error.response) {
+    console.error('Status:', error.response.status);
+    console.error('Response data:', error.response.data);
+  }
+  throw error;
 };
 
 // Get admin access token
 async function getAdminToken() {
   try {
-    const response = await axios.post(
-      `${keycloakConfig.baseUrl}/realms/master/protocol/openid-connect/token`,
+    console.log('Authenticating as admin...');
+
+    const response = await api.post(
+      '/realms/master/protocol/openid-connect/token',
       new URLSearchParams({
-        'grant_type': 'password',
-        'client_id': 'admin-cli',
-        'username': keycloakConfig.adminUser,
-        'password': keycloakConfig.adminPassword
+        grant_type: 'password',
+        client_id: 'admin-cli',
+        username: keycloakConfig.server.adminUser,
+        password: keycloakConfig.server.adminPassword,
       }),
       {
         headers: {
-          'Content-Type': 'application/x-www-form-urlencoded'
-        }
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
       }
     );
-    
+
+    console.log('Admin authentication successful');
     return response.data.access_token;
   } catch (error) {
-    console.error('Failed to get admin token:', error.message);
-    if (error.response) {
-      console.error('Response data:', error.response.data);
-    }
-    throw error;
+    return handleApiError(error, 'admin authentication');
   }
 }
 
 // Check if realm exists
-async function checkRealmExists(adminToken) {
+async function checkRealmExists(adminToken, realmName) {
   try {
-    await axios.get(
-      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}`,
-      {
-        headers: {
-          'Authorization': `Bearer ${adminToken}`
-        }
-      }
-    );
+    await api.get(`/admin/realms/${realmName}`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
     return true;
   } catch (error) {
     if (error.response && error.response.status === 404) {
       return false;
     }
-    throw error;
+    return handleApiError(error, `checking if realm '${realmName}' exists`);
   }
 }
 
 // Create a new realm
 async function createRealm(adminToken) {
   try {
-    const realmExists = await checkRealmExists(adminToken);
-    
+    console.log(`Checking if realm '${keycloakConfig.realm.name}' exists...`);
+    const realmExists = await checkRealmExists(adminToken, keycloakConfig.realm.name);
+
     if (realmExists) {
-      console.log(`Realm '${keycloakConfig.realm}' already exists.`);
+      console.log(`Realm '${keycloakConfig.realm.name}' already exists.`);
       return;
     }
-    
-    await axios.post(
-      `${keycloakConfig.baseUrl}/admin/realms`,
+
+    console.log(`Creating realm '${keycloakConfig.realm.name}'...`);
+    await api.post(
+      '/admin/realms',
       {
-        realm: keycloakConfig.realm,
-        enabled: true,
-        displayName: 'ScaledTest4 Realm',
-        registrationAllowed: true,
-        resetPasswordAllowed: true,
-        rememberMe: true,
-        verifyEmail: false,
-        loginWithEmailAllowed: true,
-        duplicateEmailsAllowed: false,
-        sslRequired: 'external'
+        realm: keycloakConfig.realm.name,
+        enabled: keycloakConfig.realm.enabled,
+        displayName: keycloakConfig.realm.displayName,
+        registrationAllowed: keycloakConfig.realm.registrationAllowed,
+        resetPasswordAllowed: keycloakConfig.realm.resetPasswordAllowed,
+        rememberMe: keycloakConfig.realm.rememberMe,
+        verifyEmail: keycloakConfig.realm.verifyEmail,
+        loginWithEmailAllowed: keycloakConfig.realm.loginWithEmailAllowed,
+        duplicateEmailsAllowed: keycloakConfig.realm.duplicateEmailsAllowed,
+        sslRequired: keycloakConfig.realm.sslRequired,
       },
       {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${adminToken}`,
+        },
       }
     );
-    
-    console.log(`Realm '${keycloakConfig.realm}' created successfully.`);
+
+    console.log(`Realm '${keycloakConfig.realm.name}' created successfully.`);
   } catch (error) {
-    console.error('Failed to create realm:', error.message);
-    if (error.response) {
-      console.error('Response data:', error.response.data);
+    return handleApiError(error, 'creating realm');
+  }
+}
+
+// Check if client exists and get its ID
+async function getClientId(adminToken) {
+  try {
+    console.log(`Checking if client '${keycloakConfig.client.id}' exists...`);
+
+    const clientsResponse = await api.get(`/admin/realms/${keycloakConfig.realm.name}/clients`, {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+
+    const client = clientsResponse.data.find(c => c.clientId === keycloakConfig.client.id);
+
+    if (client) {
+      console.log(`Client '${keycloakConfig.client.id}' already exists.`);
+      return client.id;
     }
-    throw error;
+
+    return null;
+  } catch (error) {
+    return handleApiError(error, 'checking if client exists');
   }
 }
 
@@ -141,282 +288,320 @@ async function createRealm(adminToken) {
 async function createClient(adminToken) {
   try {
     // Check if client exists
-    try {
-      const clientsResponse = await axios.get(
-        `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients`,
-        {
-          headers: {
-            'Authorization': `Bearer ${adminToken}`
-          }
-        }
-      );
-      
-      const client = clientsResponse.data.find(c => c.clientId === keycloakConfig.clientId);
-      
-      if (client) {
-        console.log(`Client '${keycloakConfig.clientId}' already exists.`);
-        return client.id;
-      }
-    } catch (error) {
-      // If error, continue to create client
-      console.error('Error checking for client:', error.message);
+    let clientId = await getClientId(adminToken);
+
+    if (clientId) {
+      return clientId;
     }
-    
+
     // Create client
-    await axios.post(
-      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients`,
+    console.log(`Creating client '${keycloakConfig.client.id}'...`);
+    await api.post(
+      `/admin/realms/${keycloakConfig.realm.name}/clients`,
       {
-        clientId: keycloakConfig.clientId,
-        enabled: true,
-        publicClient: true,
-        directAccessGrantsEnabled: true,
-        redirectUris: keycloakConfig.redirectUris,
-        webOrigins: ['*'],
-        standardFlowEnabled: true,
-        fullScopeAllowed: true,
-        protocol: 'openid-connect'
+        clientId: keycloakConfig.client.id,
+        enabled: keycloakConfig.client.enabled,
+        publicClient: keycloakConfig.client.publicClient,
+        directAccessGrantsEnabled: keycloakConfig.client.directAccessGrantsEnabled,
+        redirectUris: keycloakConfig.client.redirectUris,
+        webOrigins: keycloakConfig.client.webOrigins,
+        standardFlowEnabled: keycloakConfig.client.standardFlowEnabled,
+        fullScopeAllowed: keycloakConfig.client.fullScopeAllowed,
+        protocol: keycloakConfig.client.protocol,
       },
       {
         headers: {
-          'Authorization': `Bearer ${adminToken}`,
-          'Content-Type': 'application/json'
-        }
+          Authorization: `Bearer ${adminToken}`,
+        },
       }
     );
-    
+
     // Get client ID
-    const clientsResponse = await axios.get(
-      `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients`,
+    clientId = await getClientId(adminToken);
+
+    console.log(`Client '${keycloakConfig.client.id}' created successfully.`);
+    return clientId;
+  } catch (error) {
+    return handleApiError(error, 'creating client');
+  }
+}
+
+// Check if role exists
+async function checkRoleExists(adminToken, clientId, roleName) {
+  try {
+    await api.get(
+      `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles/${roleName}`,
       {
         headers: {
-          'Authorization': `Bearer ${adminToken}`
-        }
+          Authorization: `Bearer ${adminToken}`,
+        },
       }
     );
-    
-    const client = clientsResponse.data.find(c => c.clientId === keycloakConfig.clientId);
-    
-    console.log(`Client '${keycloakConfig.clientId}' created successfully.`);
-    return client.id;
+    return true;
   } catch (error) {
-    console.error('Failed to create client:', error.message);
-    if (error.response) {
-      console.error('Response data:', error.response.data);
+    if (error.response && error.response.status === 404) {
+      return false;
     }
-    throw error;
+    return handleApiError(error, `checking if role '${roleName}' exists`);
   }
 }
 
 // Create roles
 async function createRoles(adminToken, clientId) {
   try {
-    const roles = ['readonly', 'maintainer', 'owner'];
-    
-    for (const role of roles) {
-      try {
-        // Check if role exists
-        try {
-          await axios.get(
-            `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients/${clientId}/roles/${role}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${adminToken}`
-              }
-            }
-          );
-          console.log(`Role '${role}' already exists.`);
-          continue;
-        } catch (error) {
-          // If 404, create role
-          if (error.response && error.response.status !== 404) {
-            throw error;
-          }
-        }
-        
-        // Create role
-        await axios.post(
-          `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients/${clientId}/roles`,
-          {
-            name: role,
-            description: `${role} role for the application`
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${adminToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        console.log(`Role '${role}' created successfully.`);
-      } catch (error) {
-        console.error(`Failed to create role '${role}':`, error.message);
-        if (error.response) {
-          console.error('Response data:', error.response.data);
-        }
+    console.log('Creating roles...');
+
+    for (const role of keycloakConfig.roles) {
+      // Check if role exists
+      const roleExists = await checkRoleExists(adminToken, clientId, role);
+
+      if (roleExists) {
+        console.log(`Role '${role}' already exists.`);
+        continue;
       }
+
+      // Create role
+      console.log(`Creating role '${role}'...`);
+      await api.post(
+        `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles`,
+        {
+          name: role,
+          description: `${role} role for the application`,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }
+      );
+
+      console.log(`Role '${role}' created successfully.`);
     }
   } catch (error) {
-    console.error('Failed to create roles:', error.message);
-    throw error;
+    return handleApiError(error, 'creating roles');
+  }
+}
+
+// Check if user exists
+async function getUserId(adminToken, username) {
+  try {
+    const usersResponse = await api.get(
+      `/admin/realms/${keycloakConfig.realm.name}/users?username=${username}`,
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      }
+    );
+
+    if (usersResponse.data.length > 0) {
+      return usersResponse.data[0].id;
+    }
+
+    return null;
+  } catch (error) {
+    return handleApiError(error, `checking if user '${username}' exists`);
+  }
+}
+
+// Get role representation
+async function getRoleRepresentation(adminToken, clientId, roleName) {
+  try {
+    const roleResponse = await api.get(
+      `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles/${roleName}`,
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      }
+    );
+
+    return roleResponse.data;
+  } catch (error) {
+    return handleApiError(error, `getting role representation for '${roleName}'`);
   }
 }
 
 // Create test users
 async function createTestUsers(adminToken, clientId) {
   try {
-    for (const user of keycloakConfig.testUsers) {
+    console.log('Creating test users...');
+
+    for (const user of keycloakConfig.users) {
       try {
         // Check if user exists
-        try {
-          const usersResponse = await axios.get(
-            `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users?username=${user.username}`,
+        let userId = await getUserId(adminToken, user.username);
+
+        if (userId) {
+          console.log(`User '${user.username}' already exists.`);
+        } else {
+          // Create user
+          console.log(`Creating user '${user.username}'...`);
+          await api.post(
+            `/admin/realms/${keycloakConfig.realm.name}/users`,
+            {
+              username: user.username,
+              enabled: true,
+              emailVerified: true,
+              firstName: user.firstName,
+              lastName: user.lastName,
+              email: user.email,
+              credentials: [
+                {
+                  type: 'password',
+                  value: user.password,
+                  temporary: false,
+                },
+              ],
+            },
             {
               headers: {
-                'Authorization': `Bearer ${adminToken}`
-              }
+                Authorization: `Bearer ${adminToken}`,
+              },
             }
           );
-          
-          if (usersResponse.data.length > 0) {
-            console.log(`User '${user.username}' already exists.`);
-            continue;
-          }
-        } catch (error) {
-          // If error, continue to create user
-          console.error(`Error checking for user '${user.username}':`, error.message);
+
+          // Get user ID after creation
+          userId = await getUserId(adminToken, user.username);
         }
-        
-        // Create user
-        const userResponse = await axios.post(
-          `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users`,
-          {
-            username: user.username,
-            enabled: true,
-            emailVerified: true,
-            firstName: user.firstName,
-            lastName: user.lastName,
-            email: user.email,
-            credentials: [
-              {
-                type: 'password',
-                value: user.password,
-                temporary: false
-              }
-            ]
-          },
-          {
-            headers: {
-              'Authorization': `Bearer ${adminToken}`,
-              'Content-Type': 'application/json'
-            }
-          }
-        );
-        
-        // Get user ID
-        const usersResponse = await axios.get(
-          `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users?username=${user.username}`,
-          {
-            headers: {
-              'Authorization': `Bearer ${adminToken}`
-            }
-          }
-        );
-        
-        const userId = usersResponse.data[0].id;
-        
+
         // Assign roles to user
-        for (const role of user.roles) {
+        console.log(`Assigning roles to user '${user.username}'...`);
+        for (const roleName of user.roles) {
           // Get role representation
-          const roleResponse = await axios.get(
-            `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/clients/${clientId}/roles/${role}`,
-            {
-              headers: {
-                'Authorization': `Bearer ${adminToken}`
-              }
-            }
-          );
-          
-          const roleRepresentation = roleResponse.data;
-          
+          const roleRepresentation = await getRoleRepresentation(adminToken, clientId, roleName);
+
           // Assign role to user
-          await axios.post(
-            `${keycloakConfig.baseUrl}/admin/realms/${keycloakConfig.realm}/users/${userId}/role-mappings/clients/${clientId}`,
+          await api.post(
+            `/admin/realms/${keycloakConfig.realm.name}/users/${userId}/role-mappings/clients/${clientId}`,
             [roleRepresentation],
             {
               headers: {
-                'Authorization': `Bearer ${adminToken}`,
-                'Content-Type': 'application/json'
-              }
+                Authorization: `Bearer ${adminToken}`,
+              },
             }
           );
         }
-        
-        console.log(`User '${user.username}' created successfully with roles: ${user.roles.join(', ')}`);
+
+        console.log(`User '${user.username}' setup completed with roles: ${user.roles.join(', ')}`);
       } catch (error) {
-        console.error(`Failed to create user '${user.username}':`, error.message);
-        if (error.response) {
-          console.error('Response data:', error.response.data);
-        }
+        console.error(`Error setting up user '${user.username}':`, error.message);
+        // Continue with other users even if one fails
       }
     }
   } catch (error) {
-    console.error('Failed to create test users:', error.message);
-    throw error;
+    return handleApiError(error, 'creating test users');
+  }
+}
+
+// Wait for Keycloak to be ready
+async function waitForKeycloak() {
+  console.log(`Waiting for Keycloak at ${keycloakConfig.server.baseUrl} to be ready...`);
+  let keycloakReady = false;
+  let retries = 0;
+
+  while (!keycloakReady && retries < keycloakConfig.server.maxRetries) {
+    try {
+      await api.get('/');
+      keycloakReady = true;
+    } catch (error) {
+      console.log(
+        `Keycloak not ready yet (attempt ${retries + 1}/${keycloakConfig.server.maxRetries}), waiting...`
+      );
+      await new Promise(resolve => setTimeout(resolve, keycloakConfig.server.retryInterval));
+      retries++;
+    }
+  }
+
+  if (!keycloakReady) {
+    throw new Error(`Keycloak failed to start after ${keycloakConfig.server.maxRetries} retries`);
+  }
+
+  console.log('Keycloak is ready');
+}
+
+// Export configuration for other modules to use
+function exportConfiguration() {
+  // Create the public/keycloak.json file for the frontend
+  try {
+    const publicKeycloakConfig = {
+      realm: keycloakConfig.realm.name,
+      'auth-server-url': keycloakConfig.server.baseUrl,
+      'ssl-required': keycloakConfig.realm.sslRequired,
+      resource: keycloakConfig.client.id,
+      'public-client': keycloakConfig.client.publicClient,
+      'confidential-port': 0,
+    };
+
+    // Ensure public directory exists
+    const publicDir = path.resolve(process.cwd(), 'public');
+    if (!fs.existsSync(publicDir)) {
+      fs.mkdirSync(publicDir, { recursive: true });
+    }
+
+    // Write the configuration file
+    fs.writeFileSync(
+      path.resolve(publicDir, 'keycloak.json'),
+      JSON.stringify(publicKeycloakConfig, null, 2)
+    );
+
+    console.log('Keycloak client configuration exported to public/keycloak.json');
+  } catch (error) {
+    console.error('Failed to export Keycloak configuration:', error.message);
   }
 }
 
 // Main function to run the setup
 async function setup() {
   try {
-    console.log('Setting up Keycloak...');
-    
-    // Wait for Keycloak to start
-    console.log('Waiting for Keycloak to start...');
-    let keycloakReady = false;
-    let retries = 0;
-    
-    while (!keycloakReady && retries < 30) {
-      try {
-        await axios.get(`${keycloakConfig.baseUrl}`);
-        keycloakReady = true;
-      } catch (error) {
-        console.log('Keycloak not ready yet, waiting...');
-        await new Promise(resolve => setTimeout(resolve, 2000));
-        retries++;
-      }
-    }
-    
-    if (!keycloakReady) {
-      throw new Error('Keycloak failed to start after multiple retries');
-    }
-    
+    console.log('Starting Keycloak setup...');
+
+    // Wait for Keycloak to be ready
+    await waitForKeycloak();
+
     // Get admin token
     const adminToken = await getAdminToken();
-    
+
     // Create realm
     await createRealm(adminToken);
-    
+
     // Create client
     const clientId = await createClient(adminToken);
-    
+
     // Create roles
     await createRoles(adminToken, clientId);
-    
+
     // Create test users
     await createTestUsers(adminToken, clientId);
-    
+
+    // Export configuration
+    exportConfiguration();
+
     console.log('Keycloak setup completed successfully!');
     console.log('\nTest users created:');
-    keycloakConfig.testUsers.forEach(user => {
-      console.log(`- Username: ${user.username}, Password: ${user.password}, Roles: ${user.roles.join(', ')}`);
+    keycloakConfig.users.forEach(user => {
+      console.log(
+        `- Username: ${user.username}, Password: ${user.password}, Roles: ${user.roles.join(', ')}`
+      );
     });
-    
   } catch (error) {
     console.error('Setup failed:', error.message);
     process.exit(1);
   }
 }
 
-// Run the setup
-setup();
+// Run the setup if this script is executed directly
+if (require.main === module) {
+  setup();
+} else {
+  // Export functions and config for use in other scripts
+  module.exports = {
+    setup,
+    getAdminToken,
+    createRealm,
+    createClient,
+    createRoles,
+    createTestUsers,
+    config: keycloakConfig,
+  };
+}
