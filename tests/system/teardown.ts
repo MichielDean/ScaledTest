@@ -63,6 +63,23 @@ export async function teardown(): Promise<void> {
     // Stop Docker environment
     await stopDockerEnvironment();
 
+    // Force process cleanup to ensure no hanging connections
+    // This is particularly important in CI environments
+    try {
+      // Try to clear any remaining timers that might be open
+      const timeoutIdNum = parseInt(setTimeout(() => {}, 0).toString());
+      for (let i = 1; i < timeoutIdNum; i++) {
+        try {
+          clearTimeout(i);
+        } catch (e) {
+          // Ignore errors when clearing timers
+        }
+      }
+    } catch (err) {
+      // Ignore any errors in cleanup
+      console.error('Error during timer cleanup:', err);
+    }
+
     console.log('System test environment teardown completed successfully');
   } catch (error) {
     console.error('System test environment teardown failed:', error);
