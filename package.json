@@ -17,7 +17,11 @@
     "test": "jest",
     "test:unit": "jest --selectProjects Unit",
     "test:integration": "jest --selectProjects Integration",
-    "test:system": "jest --selectProjects System"
+    "test:system": "jest --selectProjects System",
+    "test:all": "jest",
+    "test:ui": "playwright test",
+    "test:ui:setup": "node scripts/setup-keycloak.js && playwright test",
+    "test:ui:full": "docker-compose -f docker/docker-compose.yml up -d && npm run test:ui:setup"
   },
   "keywords": [],
   "author": "",
