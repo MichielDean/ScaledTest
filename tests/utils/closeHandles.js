@@ -28,7 +28,7 @@ async function closeHandles() {
     });
 
     // Give time for any pending operations to finish
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
 
     console.log('Global teardown completed successfully');
   } catch (error) {
@@ -38,4 +38,3 @@ async function closeHandles() {
 
 // Jest expects the teardown file to export a function directly
 module.exports = closeHandles;
-// This is a test line
