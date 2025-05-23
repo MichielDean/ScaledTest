@@ -105,7 +105,7 @@ Alternatively, you can start the components manually:
 1. Start the Docker containers for Keycloak and OpenSearch:
 
 ```bash
-docker-compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 2. Run the Keycloak setup script:
@@ -152,7 +152,7 @@ npm run dev
 Note that you'll still need to have Keycloak running:
 
 ```bash
-docker-compose -f docker/docker-compose.yml up -d
+docker compose -f docker/docker-compose.yml up -d
 ```
 
 ## Building for Production

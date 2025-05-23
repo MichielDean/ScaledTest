@@ -26,12 +26,16 @@ module.exports = {
       ...commonConfig,
       testMatch: ['**/tests/unit/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/unit/setup.ts'],
+      // Add global teardown to close resources properly
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
     },
     {
       displayName: 'Integration',
       ...commonConfig,
       testMatch: ['**/tests/integration/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
+      // Add global teardown to close resources properly
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
     },
     {
       displayName: 'System',
