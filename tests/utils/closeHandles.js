@@ -18,17 +18,9 @@ async function closeHandles() {
       global.gc();
     }
 
-    // Try to clear any lingering timers
-    const activeHandles = process._getActiveHandles();
-    activeHandles.forEach(handle => {
-      if (handle && typeof handle.hasRef === 'function') {
-        try {
-          clearTimeout(handle);
-        } catch (e) {
-          // Ignore errors when clearing timers
-        }
-      }
-    });
+    // Ensure all pending operations are given time to complete
+    await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
+    // Note: Jest will handle open handles automatically if tests are written correctly
 
     // Give time for any pending operations to finish
     await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
