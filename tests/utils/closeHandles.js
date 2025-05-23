@@ -38,4 +38,3 @@ async function closeHandles() {
 
 // Jest expects the teardown file to export a function directly
 module.exports = closeHandles;
-// This is a test line
