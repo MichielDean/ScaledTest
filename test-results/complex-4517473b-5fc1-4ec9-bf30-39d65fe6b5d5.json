@@ -1,0 +1,118 @@
+{
+  "id": "4517473b-5fc1-4ec9-bf30-39d65fe6b5d5",
+  "createdAt": "2025-05-08T06:50:46.270Z",
+  "testSuiteId": "49d50a90-0cdd-43e5-858d-e9f55f4e426c",
+  "status": "completed",
+  "startedAt": "2025-05-08T05:50:46.270Z",
+  "completedAt": "2025-05-08T06:50:46.270Z",
+  "environment": {
+    "os": "Windows",
+    "browser": "Chrome",
+    "version": "115.0.5790.171"
+  },
+  "configuration": {
+    "headless": true,
+    "viewport": {
+      "width": 1920,
+      "height": 1080
+    }
+  },
+  "triggeredBy": "CI/CD Pipeline",
+  "buildId": "build-1234",
+  "testCases": [
+    {
+      "id": "703f9b2d-f8fb-4ecf-9c52-5a555c6dcb38",
+      "createdAt": "2025-05-08T06:50:46.270Z",
+      "testExecutionId": "25308d6a-4a29-4045-8756-ac09c9a6e8aa",
+      "name": "Authentication Test Suite",
+      "description": "Tests for user authentication flows",
+      "status": "passed",
+      "startedAt": "2025-05-08T05:50:46.270Z",
+      "completedAt": "2025-05-08T06:50:46.270Z",
+      "durationMs": 2100,
+      "testResults": [
+        {
+          "id": "e0337c46-c1f9-4f2c-b5d5-636cfd311e2d",
+          "createdAt": "2025-05-08T06:50:46.270Z",
+          "testCaseId": "df2fc57e-9f51-41df-8f5a-58c3d3c268a4",
+          "status": "passed",
+          "priority": "medium",
+          "name": "Login should succeed with valid credentials",
+          "description": "Verify user can login with valid username and password",
+          "expected": "User is redirected to dashboard",
+          "actual": "User was redirected to dashboard",
+          "durationMs": 1250,
+          "tags": [
+            "authentication",
+            "login"
+          ]
+        },
+        {
+          "id": "633faabb-442d-40c4-a55b-7c64dd57796f",
+          "createdAt": "2025-05-08T06:50:46.270Z",
+          "testCaseId": "af8c6176-2942-4e89-a389-57643a7bcf55",
+          "status": "failed",
+          "priority": "high",
+          "name": "User data should load",
+          "description": "Verify user profile data loads on the dashboard",
+          "expected": "User profile data is displayed",
+          "actual": "API returned 404 error",
+          "errorDetails": {
+            "message": "API returned 404 error",
+            "stackTrace": "Error: API returned 404 error\n    at Object.<anonymous> (/tests/api.test.ts:25:15)"
+          },
+          "durationMs": 850,
+          "tags": [
+            "dashboard",
+            "profile"
+          ]
+        }
+      ],
+      "tags": [
+        "authentication",
+        "login"
+      ]
+    },
+    {
+      "id": "dce1e68d-a0d1-4417-97be-81b3e3819cd7",
+      "createdAt": "2025-05-08T06:50:46.270Z",
+      "testExecutionId": "4517473b-5fc1-4ec9-bf30-39d65fe6b5d5",
+      "name": "Search Functionality Test Suite",
+      "description": "Tests for search functionality",
+      "status": "failed",
+      "startedAt": "2025-05-08T06:00:46.270Z",
+      "completedAt": "2025-05-08T06:50:46.270Z",
+      "durationMs": 3000,
+      "testResults": [
+        {
+          "id": "bad730d9-9158-4caa-8db6-be77b1e728ec",
+          "createdAt": "2025-05-08T06:50:46.270Z",
+          "testCaseId": "cab4aa5c-7701-40dd-89b6-c60388339bd9",
+          "status": "failed",
+          "priority": "critical",
+          "name": "Search should return relevant results",
+          "description": "Verify search returns relevant results for keywords",
+          "expected": "Search returns matches for \"test\"",
+          "actual": "Search returned no results",
+          "errorDetails": {
+            "message": "Expected search to return results but got empty array",
+            "stackTrace": "Error: Test failed\n    at SearchTest (/tests/search.test.ts:42:10)"
+          },
+          "durationMs": 1500,
+          "tags": [
+            "search",
+            "critical-path"
+          ]
+        }
+      ],
+      "tags": [
+        "search",
+        "regression"
+      ]
+    }
+  ],
+  "tags": [
+    "regression",
+    "authentication"
+  ]
+}

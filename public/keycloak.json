@@ -1,8 +1,8 @@
 {
-  "realm": "scaledtest4",
+  "realm": "scaledtest",
   "auth-server-url": "http://localhost:8080",
   "ssl-required": "external",
-  "resource": "scaledtest4-client",
+  "resource": "scaledtest-client",
   "public-client": true,
   "confidential-port": 0
 }

@@ -11,31 +11,47 @@ const Header: React.FC = () => {
       <div>
         <Link href="/">
           <span style={{ fontWeight: 'bold', fontSize: '1.5rem', cursor: 'pointer' }}>
-            Keycloak Demo
+            ScaledTest
           </span>
         </Link>
       </div>
-      
+
       <nav className="navigation">
-        <Link href="/">Home</Link>
-        
+        <Link id="headerHome" href="/">
+          Home
+        </Link>
+
         {isAuthenticated ? (
           <>
-            <Link href="/dashboard">Dashboard</Link>
-            
+            <Link id="headerDashboard" href="/dashboard">
+              Dashboard
+            </Link>
+
             {/* Only show admin section for owners */}
             {hasRole(UserRole.OWNER) && (
-              <Link href="/admin">Admin</Link>
+              <>
+                <Link id="headerManageUsers" href="/admin/users">
+                  Manage Users
+                </Link>
+              </>
             )}
-            
-            <span>Hello, {userProfile?.firstName || userProfile?.username || 'User'}</span>
-            
-            <button onClick={logout}>Logout</button>
+
+            <span id="headerGreeting">
+              Hello, {userProfile?.firstName || userProfile?.username || 'User'}
+            </span>
+
+            <button id="headerLogOut" onClick={logout}>
+              Logout
+            </button>
           </>
         ) : (
           <>
-            <Link href="/login">Login</Link>
-            <Link href="/register">Register</Link>
+            <Link id="headerLogin" href="/login">
+              Login
+            </Link>
+            <Link id="headerRegister" href="/register">
+              Register
+            </Link>
           </>
         )}
       </nav>
