@@ -61,6 +61,30 @@ NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
 
 The application uses a Keycloak setup script to configure the Keycloak server with the necessary realm, client, roles, and test users. This script is configured using environment variables only, with strict validation for required values.
 
+## Authentication
+
+The application integrates with Keycloak for authentication and provides:
+
+1. Direct login through a custom login form that connects to Keycloak API
+2. Custom registration through a registration form that creates users in Keycloak
+3. Role-based access control using Keycloak roles
+
+### Registration
+
+The application provides two methods for user registration:
+
+1. **Custom Registration Form**: Users can register directly through the application's custom registration form, which creates an account in Keycloak and automatically logs the user in after registration.
+2. **Keycloak Registration**: Users can still access the native Keycloak registration page if desired.
+
+### Environment Variables for Authentication API
+
+Make sure to set the following environment variables for user registration to work:
+
+```
+KEYCLOAK_ADMIN_USERNAME=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+```
+
 ## Environment Configuration
 
 The application uses environment variables for all configuration, including Keycloak and OpenSearch settings. For detailed information about environment configuration for different deployment environments (local, development, staging, and production), see the [Environment Configuration Guide](docs/ENVIRONMENT.md).

@@ -15,7 +15,7 @@ import {
   getStoredToken,
   getStoredRefreshToken,
   storeTokens,
-  clearTokens,
+  clearTokens
 } from '../utils/keycloakTokenManager';
 import keycloakConfig from '../config/keycloak';
 
@@ -136,7 +136,7 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
                 },
                 'Failed to refresh token'
               );
-
+              
               // Clear stored tokens on refresh failure
               clearTokens();
 

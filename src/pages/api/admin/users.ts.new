@@ -2,9 +2,25 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import axios from 'axios';
 import { UserRole } from '../../../auth/keycloak';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { apiLogger, getRequestLogger, logError } from '../../../utils/logger';
 import { keycloakConfig, keycloakEndpoints } from '../../../config/keycloak';
 import { getAdminToken, getAllUsersWithRoles, getClientId } from '../../../utils/keycloakAdminApi';
+
+// Define module logger
+const logger = apiLogger.child({ module: 'admin' });
+
+/**
+ * Enhanced user object with role information
+ */
+interface UserWithRoles {
+  id: string;
+  username: string;
+  firstName?: string;
+  lastName?: string;
+  email?: string;
+  roles: string[];
+  isMaintainer: boolean;
+}
 
 /**
  * Represents a Keycloak role retrieved from the Admin API
@@ -53,7 +69,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
     try {
       // First, get the client ID
       const clientId = await getClientId(keycloakConfig.clientId);
-
+      
       if (!clientId) {
         return res.status(404).json({ error: 'Client not found' });
       }
@@ -91,13 +107,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         return res.status(200).json({ message: 'Successfully granted maintainer role' });
       } else {
         // Remove maintainer role
-        await axios.delete(keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId), {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-            'Content-Type': 'application/json',
-          },
-          data: [maintainerRole],
-        });
+        await axios.delete(
+          keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId),
+          {
+            headers: {
+              Authorization: `Bearer ${adminToken}`,
+              'Content-Type': 'application/json',
+            },
+            data: [maintainerRole],
+          }
+        );
 
         return res.status(200).json({ message: 'Successfully revoked maintainer role' });
       }

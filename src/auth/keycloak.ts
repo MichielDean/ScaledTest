@@ -1,10 +1,18 @@
 import Keycloak from 'keycloak-js';
+import { authLogger as logger } from '../utils/logger';
+import keycloakConfig, { UserRole as ConfigUserRole } from '../config/keycloak';
 
-const keycloakConfig = {
-  url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080',
-  realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest',
-  clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest-client',
-};
+// Log configuration for debugging
+if (typeof window !== 'undefined') {
+  logger.info(
+    {
+      url: keycloakConfig.url,
+      realm: keycloakConfig.realm,
+      clientId: keycloakConfig.clientId,
+    },
+    'Keycloak configuration'
+  );
+}
 
 // Singleton instance of Keycloak
 let keycloak: Keycloak | null = null;
@@ -30,12 +38,8 @@ export const getKeycloakInstance = (): Keycloak => {
   return keycloak;
 };
 
-// User roles defined in Keycloak
-export enum UserRole {
-  READONLY = 'readonly',
-  MAINTAINER = 'maintainer',
-  OWNER = 'owner',
-}
+// Re-export the UserRole from the centralized config
+export import UserRole = ConfigUserRole;
 
 // Check if the user has a specific role
 export const hasRole = (role: UserRole): boolean => {
