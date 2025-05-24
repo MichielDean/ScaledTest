@@ -20,7 +20,6 @@ async function closeHandles() {
 
     // Ensure all pending operations are given time to complete
     await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
-    // Note: Jest will handle open handles automatically if tests are written correctly
 
     // Give time for any pending operations to finish
     await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
