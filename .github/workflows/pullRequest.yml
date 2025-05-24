@@ -11,9 +11,8 @@ jobs:
     env:
       # Required Keycloak configuration
       KEYCLOAK_URL: http://localhost:8080
-      KEYCLOAK_ADMIN_USER: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
       KEYCLOAK_ADMIN_USERNAME: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
       KEYCLOAK_REALM: scaledtest
       KEYCLOAK_REALM_DISPLAY_NAME: ScaledTest CI Realm
       KEYCLOAK_CLIENT_ID: scaledtest-client

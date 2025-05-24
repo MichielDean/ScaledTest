@@ -92,9 +92,9 @@ const Register: NextPage = () => {
       if (response.data.success) {
         // Check if we have tokens for auto-login
         if (response.data.token && response.data.refreshToken) {
-          // Store the tokens (same as in login.tsx)
-          localStorage.setItem('keycloak_token', response.data.token);
-          localStorage.setItem('keycloak_refresh_token', response.data.refreshToken);
+          // Store the tokens using shared utility
+          const { storeTokens } = await import('../utils/keycloakTokenManager');
+          storeTokens(response.data.token, response.data.refreshToken);
 
           logger.info('User registered and automatically logged in');
 

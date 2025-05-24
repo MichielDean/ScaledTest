@@ -39,7 +39,7 @@ npm install
 ```
 # Required Keycloak configuration
 KEYCLOAK_URL=http://localhost:8080
-KEYCLOAK_ADMIN_USER=admin
+KEYCLOAK_ADMIN_USERNAME=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_REALM=scaledtest
 KEYCLOAK_REALM_DISPLAY_NAME=ScaledTest Local Realm
@@ -108,7 +108,7 @@ In production environments, consider setting the following environment variables
 
 ```
 KEYCLOAK_URL=https://your-keycloak-server
-KEYCLOAK_ADMIN_USER=your-admin-username
+KEYCLOAK_ADMIN_USERNAME=your-admin-username
 KEYCLOAK_ADMIN_PASSWORD=your-secure-admin-password
 KEYCLOAK_REALM=your-realm-name
 KEYCLOAK_CLIENT_ID=your-client-id
