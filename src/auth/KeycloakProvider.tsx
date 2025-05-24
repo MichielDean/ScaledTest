@@ -1,3 +1,4 @@
+// filepath: c:\Users\mokey\source\ScaledTest\src\auth\KeycloakProvider.tsx
 import React, {
   createContext,
   useContext,
@@ -9,6 +10,14 @@ import React, {
 import Keycloak from 'keycloak-js';
 import { initKeycloak, UserRole } from './keycloak';
 import { authLogger as logger, logError } from '../utils/logger';
+import { updateKeycloakConfig } from '../utils/keycloakConfig';
+import {
+  getStoredToken,
+  getStoredRefreshToken,
+  storeTokens,
+  clearTokens,
+} from '../utils/keycloakTokenManager';
+import keycloakConfig from '../config/keycloak';
 
 interface AuthContextType {
   keycloak: Keycloak | null;
@@ -55,19 +64,22 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
     const initAuth = async () => {
       try {
         setLoading(true);
+
+        // Update keycloak.json with current environment variables
+        updateKeycloakConfig();
+
         const keycloakInstance = initKeycloak();
 
         // Check if we have tokens stored from direct login
-        const storedToken =
-          typeof window !== 'undefined' ? localStorage.getItem('keycloak_token') : null;
-        const storedRefreshToken =
-          typeof window !== 'undefined' ? localStorage.getItem('keycloak_refresh_token') : null;
+        const storedToken = getStoredToken();
+        const storedRefreshToken = getStoredRefreshToken();
 
         const baseOptions = {
           onLoad: 'check-sso' as const,
           silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
           pkceMethod: 'S256' as const,
           checkLoginIframe: false,
+          enabledHostedDomain3pCookies: false, // Disable 3p cookie checks to avoid delays
         };
 
         // If we have tokens from direct login, use them for initialization
@@ -109,11 +121,8 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
                 setToken(keycloakInstance.token);
 
                 // Update stored tokens if they were refreshed
-                if (typeof window !== 'undefined') {
-                  localStorage.setItem('keycloak_token', keycloakInstance.token || '');
-                  if (keycloakInstance.refreshToken) {
-                    localStorage.setItem('keycloak_refresh_token', keycloakInstance.refreshToken);
-                  }
+                if (keycloakInstance.token && keycloakInstance.refreshToken) {
+                  storeTokens(keycloakInstance.token, keycloakInstance.refreshToken);
                 }
               }
             })
@@ -127,21 +136,19 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
                 },
                 'Failed to refresh token'
               );
+
               // Clear stored tokens on refresh failure
-              if (typeof window !== 'undefined') {
-                localStorage.removeItem('keycloak_token');
-                localStorage.removeItem('keycloak_refresh_token');
+              clearTokens();
 
-                // Handle logout locally instead of calling the logout function
-                if (keycloakInstance) {
-                  // Redirect to login page
-                  window.location.href = window.location.origin + '/login';
+              // Handle logout locally instead of calling the logout function
+              if (keycloakInstance) {
+                // Redirect to login page
+                window.location.href = window.location.origin + '/login';
 
-                  // This will happen after the redirect
-                  keycloakInstance.logout({
-                    redirectUri: window.location.origin + '/login',
-                  });
-                }
+                // This will happen after the redirect
+                keycloakInstance.logout({
+                  redirectUri: window.location.origin + '/login',
+                });
               }
             });
         };
@@ -152,21 +159,15 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           setToken(keycloakInstance.token);
 
           // Store tokens on successful authentication
-          if (typeof window !== 'undefined') {
-            localStorage.setItem('keycloak_token', keycloakInstance.token || '');
-            if (keycloakInstance.refreshToken) {
-              localStorage.setItem('keycloak_refresh_token', keycloakInstance.refreshToken);
-            }
+          if (keycloakInstance.token && keycloakInstance.refreshToken) {
+            storeTokens(keycloakInstance.token, keycloakInstance.refreshToken);
           }
         };
 
         keycloakInstance.onAuthError = () => {
           setError('Authentication error');
           // Clear stored tokens on auth error
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('keycloak_token');
-            localStorage.removeItem('keycloak_refresh_token');
-          }
+          clearTokens();
         };
 
         keycloakInstance.onAuthLogout = () => {
@@ -175,24 +176,18 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           setUserProfile(null);
 
           // Clear stored tokens on logout
-          if (typeof window !== 'undefined') {
-            localStorage.removeItem('keycloak_token');
-            localStorage.removeItem('keycloak_refresh_token');
-          }
+          clearTokens();
         };
       } catch (err) {
         setError('Failed to initialize authentication');
         logError(logger, 'Keycloak initialization failed', err, {
-          realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM,
-          url: process.env.NEXT_PUBLIC_KEYCLOAK_URL,
-          clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID,
+          realm: keycloakConfig.realm,
+          url: keycloakConfig.url,
+          clientId: keycloakConfig.clientId,
         });
 
         // Clear stored tokens on init error
-        if (typeof window !== 'undefined') {
-          localStorage.removeItem('keycloak_token');
-          localStorage.removeItem('keycloak_refresh_token');
-        }
+        clearTokens();
       } finally {
         setLoading(false);
       }
@@ -231,14 +226,11 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
   const logout = useCallback(() => {
     if (keycloak) {
       // Clear stored tokens
-      if (typeof window !== 'undefined') {
-        localStorage.removeItem('keycloak_token');
-        localStorage.removeItem('keycloak_refresh_token');
+      clearTokens();
 
-        // Redirect to login page immediately instead of waiting for Keycloak
-        // We'll still call keycloak.logout, but we'll redirect first
-        window.location.href = window.location.origin + '/login';
-      }
+      // Redirect to login page immediately instead of waiting for Keycloak
+      // We'll still call keycloak.logout, but we'll redirect first
+      window.location.href = window.location.origin + '/login';
 
       // This will happen after the redirect
       keycloak.logout({

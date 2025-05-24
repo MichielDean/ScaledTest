@@ -29,8 +29,9 @@ The application requires the following environment variables to be set:
 ### Keycloak Server Configuration
 
 - `KEYCLOAK_URL`: The URL of the Keycloak server
-- `KEYCLOAK_ADMIN_USER`: The admin username
-- `KEYCLOAK_ADMIN_PASSWORD`: The admin password
+- `KEYCLOAK_ADMIN_USERNAME`: The admin username for the API to create users
+- `KEYCLOAK_ADMIN_PASSWORD`: The admin password for the API to create users
+- `NEXT_PUBLIC_KEYCLOAK_URL`: The public URL of the Keycloak server (used by frontend)
 
 ### Keycloak Realm Configuration
 

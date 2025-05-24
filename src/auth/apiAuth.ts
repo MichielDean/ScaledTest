@@ -3,11 +3,7 @@ import { UserRole } from './keycloak';
 import jwt from 'jsonwebtoken';
 import axios from 'axios';
 import { authLogger as logger, logError, getRequestLogger } from '../utils/logger';
-
-// Get Keycloak configuration from environment variables
-const KEYCLOAK_URL = process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080';
-const REALM = process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest';
-const CLIENT_ID = process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest-client';
+import { keycloakConfig, keycloakEndpoints } from '../config/keycloak';
 
 // Interface for error responses
 interface ErrorResponse {
@@ -73,16 +69,14 @@ async function getJwks(): Promise<Jwks> {
     return jwksCache;
   }
   try {
-    const response = await axios.get<Jwks>(
-      `${KEYCLOAK_URL}/realms/${REALM}/protocol/openid-connect/certs`
-    );
+    const response = await axios.get<Jwks>(keycloakEndpoints.jwks);
     jwksCache = response.data;
     jwksCacheTime = Date.now();
     return response.data;
   } catch (error) {
     logError(logger, 'Failed to fetch JWKS from Keycloak', error, {
-      keycloakUrl: KEYCLOAK_URL,
-      realm: REALM,
+      keycloakUrl: keycloakConfig.url,
+      realm: keycloakConfig.realm,
     });
     throw new Error('Failed to fetch JWKS from Keycloak');
   }
@@ -144,8 +138,8 @@ export async function verifyToken(token: string): Promise<KeycloakTokenPayload> 
       // First try with full verification including audience
       const payload = jwt.verify(token, pem, {
         algorithms: ['RS256'],
-        issuer: `${KEYCLOAK_URL}/realms/${REALM}`,
-        audience: CLIENT_ID,
+        issuer: `${keycloakConfig.url}/realms/${keycloakConfig.realm}`,
+        audience: keycloakConfig.clientId,
       });
 
       return payload as KeycloakTokenPayload;
@@ -154,13 +148,13 @@ export async function verifyToken(token: string): Promise<KeycloakTokenPayload> 
       // verify without audience check but manually check if the issuer is correct
       const payload = jwt.verify(token, pem, {
         algorithms: ['RS256'],
-        issuer: `${KEYCLOAK_URL}/realms/${REALM}`,
+        issuer: `${keycloakConfig.url}/realms/${keycloakConfig.realm}`,
       });
       return payload as KeycloakTokenPayload;
     }
   } catch (error) {
     logError(logger, 'Token verification failed', error, {
-      realm: REALM,
+      realm: keycloakConfig.realm,
       isTokenProvided: !!token,
       tokenType: token?.startsWith('Bearer ') ? 'Bearer' : 'Unknown',
     });
@@ -176,7 +170,7 @@ export function hasRequiredRole(payload: KeycloakTokenPayload, requiredRoles: Us
   const realmRoles = payload.realm_access?.roles || [];
 
   // Check client specific roles
-  const clientRoles = payload.resource_access?.[CLIENT_ID]?.roles || [];
+  const clientRoles = payload.resource_access?.[keycloakConfig.clientId]?.roles || [];
 
   // Combine all roles
   const userRoles = [...realmRoles, ...clientRoles];

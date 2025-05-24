@@ -39,7 +39,7 @@ npm install
 ```
 # Required Keycloak configuration
 KEYCLOAK_URL=http://localhost:8080
-KEYCLOAK_ADMIN_USER=admin
+KEYCLOAK_ADMIN_USERNAME=admin
 KEYCLOAK_ADMIN_PASSWORD=admin
 KEYCLOAK_REALM=scaledtest
 KEYCLOAK_REALM_DISPLAY_NAME=ScaledTest Local Realm
@@ -60,6 +60,30 @@ NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
 ## Keycloak Configuration
 
 The application uses a Keycloak setup script to configure the Keycloak server with the necessary realm, client, roles, and test users. This script is configured using environment variables only, with strict validation for required values.
+
+## Authentication
+
+The application integrates with Keycloak for authentication and provides:
+
+1. Direct login through a custom login form that connects to Keycloak API
+2. Custom registration through a registration form that creates users in Keycloak
+3. Role-based access control using Keycloak roles
+
+### Registration
+
+The application provides two methods for user registration:
+
+1. **Custom Registration Form**: Users can register directly through the application's custom registration form, which creates an account in Keycloak and automatically logs the user in after registration.
+2. **Keycloak Registration**: Users can still access the native Keycloak registration page if desired.
+
+### Environment Variables for Authentication API
+
+Make sure to set the following environment variables for user registration to work:
+
+```
+KEYCLOAK_ADMIN_USERNAME=admin
+KEYCLOAK_ADMIN_PASSWORD=admin
+```
 
 ## Environment Configuration
 
@@ -84,7 +108,7 @@ In production environments, consider setting the following environment variables
 
 ```
 KEYCLOAK_URL=https://your-keycloak-server
-KEYCLOAK_ADMIN_USER=your-admin-username
+KEYCLOAK_ADMIN_USERNAME=your-admin-username
 KEYCLOAK_ADMIN_PASSWORD=your-secure-admin-password
 KEYCLOAK_REALM=your-realm-name
 KEYCLOAK_CLIENT_ID=your-client-id

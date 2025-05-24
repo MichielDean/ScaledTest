@@ -5,7 +5,7 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
-import axios, { AxiosError } from 'axios';
+import { AxiosError } from 'axios';
 import { authLogger as logger } from '../utils/logger';
 
 const Login: NextPage = () => {
@@ -34,35 +34,13 @@ const Login: NextPage = () => {
     setError(null);
 
     try {
-      // Get Keycloak configuration
-      const keycloakConfig = {
-        realm: process.env.NEXT_PUBLIC_KEYCLOAK_REALM || 'scaledtest',
-        url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080',
-        clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest-client',
-      };
+      // Import here to avoid issues with SSR
+      const { directLogin } = await import('../utils/keycloakTokenManager');
 
-      // Use Keycloak's token endpoint for direct authentication
-      const tokenEndpoint = `${keycloakConfig.url}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`;
+      // Perform direct login with username and password
+      const success = await directLogin(username, password);
 
-      // Prepare the form data for token request
-      const formData = new URLSearchParams();
-      formData.append('client_id', keycloakConfig.clientId);
-      formData.append('username', username);
-      formData.append('password', password);
-      formData.append('grant_type', 'password');
-
-      // Send the authentication request
-      const response = await axios.post(tokenEndpoint, formData.toString(), {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      });
-
-      if (response.data && response.data.access_token) {
-        // Store the tokens
-        localStorage.setItem('keycloak_token', response.data.access_token);
-        localStorage.setItem('keycloak_refresh_token', response.data.refresh_token);
-
+      if (success) {
         // Refresh the page to have KeycloakProvider initialize with the token
         window.location.href = redirectPath;
       } else {

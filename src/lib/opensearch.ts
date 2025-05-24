@@ -1,42 +1,17 @@
 import { Client } from '@opensearch-project/opensearch';
 import { dbLogger as logger, logError } from '../utils/logger';
-
-/**
- * Helper function to get required environment variable
- * Throws an error if the variable is not set
- */
-function getRequiredEnvVar(name: string): string {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(
-      `Required environment variable ${name} is not set. OpenSearch configuration is incomplete.`
-    );
-  }
-  return value;
-}
-
-/**
- * Helper function to get optional environment variable with default value
- */
-function getOptionalEnvVar(name: string, defaultValue: string): string {
-  return process.env[name] || defaultValue;
-}
-
-/**
- * Helper function to parse boolean environment variable
- */
-function parseBooleanEnvVar(name: string, defaultValue: boolean = false): boolean {
-  const value = process.env[name];
-  if (value === undefined) {
-    return defaultValue;
-  }
-  return value.toLowerCase() === 'true';
-}
+import { getRequiredEnvVar, getOptionalEnvVar, parseBooleanEnvVar } from '../utils/env';
 
 // Get OpenSearch configuration from environment variables with validation
-const host = getRequiredEnvVar('OPENSEARCH_HOST');
-const username = getRequiredEnvVar('OPENSEARCH_USERNAME');
-const password = getRequiredEnvVar('OPENSEARCH_PASSWORD');
+const host = getRequiredEnvVar('OPENSEARCH_HOST', 'OpenSearch configuration is incomplete.');
+const username = getRequiredEnvVar(
+  'OPENSEARCH_USERNAME',
+  'OpenSearch configuration is incomplete.'
+);
+const password = getRequiredEnvVar(
+  'OPENSEARCH_PASSWORD',
+  'OpenSearch configuration is incomplete.'
+);
 const rejectUnauthorized = parseBooleanEnvVar('OPENSEARCH_SSL_VERIFY', false);
 
 // Index name for test results - can be overridden with env var

@@ -1,45 +1,262 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import { useEffect } from 'react';
+import Link from 'next/link';
+import { useEffect, useState, FormEvent } from 'react';
+import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
+import Header from '../components/Header';
+import axios, { AxiosError } from 'axios';
+import { authLogger as logger } from '../utils/logger';
+
+interface RegistrationResponse {
+  success: boolean;
+  message?: string;
+  error?: string;
+  token?: string;
+  refreshToken?: string;
+  expiresIn?: number;
+}
 
 const Register: NextPage = () => {
-  const { keycloak, isAuthenticated, loading } = useAuth();
+  const { isAuthenticated, loading } = useAuth();
+  const router = useRouter();
+
+  // Form state
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+
+  // UI state
+  const [error, setError] = useState<string | null>(null);
+  const [registering, setRegistering] = useState(false);
 
   useEffect(() => {
     // If already authenticated, redirect to dashboard
     if (!loading && isAuthenticated) {
-      window.location.href = '/dashboard';
+      router.push('/dashboard');
     }
-  }, [isAuthenticated, loading]);
+  }, [isAuthenticated, loading, router]);
 
-  // Handle registration button click
-  const handleRegister = () => {
-    if (keycloak) {
-      // Redirect to Keycloak registration page
-      window.location.href = `${process.env.NEXT_PUBLIC_KEYCLOAK_URL}/realms/${process.env.NEXT_PUBLIC_KEYCLOAK_REALM}/protocol/openid-connect/registrations?client_id=${process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID}&redirect_uri=${encodeURIComponent(process.env.NEXT_PUBLIC_APP_BASE_URL as string)}&response_type=code`;
+  // Form validation
+  const validateForm = (): boolean => {
+    if (!email.trim()) {
+      setError('Email is required');
+      return false;
+    }
+
+    if (!/^\S+@\S+\.\S+$/.test(email)) {
+      setError('Please enter a valid email address');
+      return false;
+    }
+
+    if (password.length < 8) {
+      setError('Password must be at least 8 characters');
+      return false;
+    }
+
+    if (password !== confirmPassword) {
+      setError('Passwords do not match');
+      return false;
+    }
+
+    return true;
+  };
+
+  // Handle registration form submission
+  const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+
+    // Clear previous errors
+    setError(null);
+
+    // Validate form
+    if (!validateForm()) {
+      return;
+    }
+
+    setRegistering(true);
+
+    try {
+      // Send registration data to our API
+      // Use email as username
+      const response = await axios.post<RegistrationResponse>('/api/auth/register', {
+        username: email,
+        email,
+        password,
+        firstName: firstName || undefined,
+        lastName: lastName || undefined,
+      });
+
+      if (response.data.success) {
+        // Check if we have tokens for auto-login
+        if (response.data.token && response.data.refreshToken) {
+          // Store the tokens using shared utility
+          const { storeTokens } = await import('../utils/keycloakTokenManager');
+          storeTokens(response.data.token, response.data.refreshToken);
+
+          logger.info('User registered and automatically logged in');
+
+          // Redirect to dashboard with auto-login
+          window.location.href = '/dashboard';
+        } else {
+          // Fallback to login page if no tokens
+          logger.info('User registered but no tokens received for auto-login');
+          router.push('/login');
+        }
+      } else {
+        setError(response.data.error || 'Registration failed. Please try again.');
+      }
+    } catch (err) {
+      const axiosError = err as AxiosError<{ error?: string }>;
+
+      logger.error(
+        {
+          err,
+          email, // Include email for context but NOT password
+          statusCode: axiosError.response?.status,
+          errorCode: axiosError.code,
+          url: axiosError.config?.url,
+        },
+        'Registration failed'
+      );
+
+      if (axiosError.response?.data?.error) {
+        setError(axiosError.response.data.error);
+      } else if (axiosError.response?.status === 409) {
+        setError('Email already exists');
+      } else {
+        setError('Registration failed. Please try again later.');
+      }
+    } finally {
+      setRegistering(false);
     }
   };
 
   if (loading) {
-    return <div className="container">Loading...</div>;
+    return (
+      <div>
+        <Header />
+        <div className="container">
+          <div className="card" style={{ textAlign: 'center' }}>
+            <h2>Loading...</h2>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
     <div>
       <Head>
-        <title>Register - Keycloak Auth Demo</title>
+        <title>Register - ScaledTest</title>
       </Head>
+
+      <Header />
 
       <main className="container">
         <div className="form-container">
-          <h1 style={{ marginBottom: '2rem', textAlign: 'center' }}>Register</h1>
-          <p style={{ marginBottom: '2rem', textAlign: 'center' }}>
-            Click the button below to register a new account with Keycloak.
+          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Create Account</h1>
+          <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
+            Enter your email address to create an account
           </p>
-          <button onClick={handleRegister} style={{ width: '100%', backgroundColor: '#4CAF50' }}>
-            Register with Keycloak
-          </button>
+
+          {error && (
+            <div
+              id="registerError"
+              style={{
+                backgroundColor: '#ffebee',
+                color: '#c62828',
+                padding: '10px',
+                borderRadius: '4px',
+                marginBottom: '1rem',
+              }}
+            >
+              {error}
+            </div>
+          )}
+
+          <form onSubmit={handleSubmit}>
+            <div className="form-group">
+              <label htmlFor="email">Email*</label>
+              <input
+                type="email"
+                id="email"
+                value={email}
+                onChange={e => setEmail(e.target.value)}
+                placeholder="Enter your email"
+                required
+              />
+            </div>
+
+            <div className="form-row" style={{ display: 'flex', gap: '1rem' }}>
+              <div className="form-group" style={{ flex: 1 }}>
+                <label htmlFor="firstName">First Name</label>
+                <input
+                  type="text"
+                  id="firstName"
+                  value={firstName}
+                  onChange={e => setFirstName(e.target.value)}
+                  placeholder="First name"
+                />
+              </div>
+
+              <div className="form-group" style={{ flex: 1 }}>
+                <label htmlFor="lastName">Last Name</label>
+                <input
+                  type="text"
+                  id="lastName"
+                  value={lastName}
+                  onChange={e => setLastName(e.target.value)}
+                  placeholder="Last name"
+                />
+              </div>
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="password">Password*</label>
+              <input
+                type="password"
+                id="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                placeholder="Create a password (8+ characters)"
+                required
+                minLength={8}
+              />
+            </div>
+
+            <div className="form-group">
+              <label htmlFor="confirmPassword">Confirm Password*</label>
+              <input
+                type="password"
+                id="confirmPassword"
+                value={confirmPassword}
+                onChange={e => setConfirmPassword(e.target.value)}
+                placeholder="Confirm your password"
+                required
+              />
+            </div>
+
+            <button
+              id="registerButton"
+              type="submit"
+              style={{ width: '100%', marginTop: '1rem' }}
+              disabled={registering}
+            >
+              {registering ? 'Creating Account...' : 'Create Account'}
+            </button>
+
+            <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+              Already have an account?{' '}
+              <Link href="/login">
+                <span id="loginLink" style={{ color: 'var(--primary-color)', cursor: 'pointer' }}>
+                  Sign In
+                </span>
+              </Link>
+            </p>
+          </form>
         </div>
       </main>
     </div>

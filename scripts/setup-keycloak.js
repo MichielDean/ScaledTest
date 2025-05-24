@@ -15,6 +15,14 @@ const axios = require('axios');
 const path = require('path');
 const fs = require('fs');
 const dotenv = require('dotenv');
+const {
+  getRequiredEnvVar,
+  getOptionalEnvVarOrUndefined,
+  parseBooleanEnvVar,
+  parseArrayEnvVar,
+  parseIntEnvVar,
+} = require('./utils/env');
+const { getKeycloakAdminToken } = require('./utils/adminAuth');
 
 // Load environment variables from .env files
 dotenv.config({ path: './.env.local' });
@@ -22,45 +30,13 @@ dotenv.config({ path: './.env' });
 
 // Validate and build configuration from environment variables
 function buildConfigFromEnv() {
-  // Helper function to get required environment variable
-  function getRequiredEnvVar(name) {
-    const value = process.env[name];
-    if (!value) {
-      throw new Error(`Required environment variable ${name} is not set`);
-    }
-    return value;
-  }
-
-  // Helper function to get optional environment variable with no default
-  function getOptionalEnvVar(name) {
-    return process.env[name];
-  }
-
-  // Helper function to parse boolean environment variable
-  function parseBooleanEnvVar(name, defaultValue = false) {
-    const value = process.env[name];
-    if (value === undefined) {
-      return defaultValue;
-    }
-    return value.toLowerCase() === 'true';
-  }
-
-  // Helper function to parse array environment variable
-  function parseArrayEnvVar(name, separator = ',', defaultValue = []) {
-    const value = process.env[name];
-    if (!value) {
-      return defaultValue;
-    }
-    return value.split(separator).map(item => item.trim());
-  }
-
   // Build server configuration
   const server = {
     baseUrl: getRequiredEnvVar('KEYCLOAK_URL'),
-    adminUser: getRequiredEnvVar('KEYCLOAK_ADMIN_USER'),
+    adminUser: getRequiredEnvVar('KEYCLOAK_ADMIN_USERNAME'),
     adminPassword: getRequiredEnvVar('KEYCLOAK_ADMIN_PASSWORD'),
-    maxRetries: parseInt(getOptionalEnvVar('KEYCLOAK_MAX_RETRIES') || '30'),
-    retryInterval: parseInt(getOptionalEnvVar('KEYCLOAK_RETRY_INTERVAL') || '2000'),
+    maxRetries: parseIntEnvVar('KEYCLOAK_MAX_RETRIES', 30),
+    retryInterval: parseIntEnvVar('KEYCLOAK_RETRY_INTERVAL', 2000),
   };
 
   // Build realm configuration
@@ -74,7 +50,7 @@ function buildConfigFromEnv() {
     verifyEmail: parseBooleanEnvVar('KEYCLOAK_VERIFY_EMAIL', false),
     loginWithEmailAllowed: parseBooleanEnvVar('KEYCLOAK_LOGIN_WITH_EMAIL', true),
     duplicateEmailsAllowed: parseBooleanEnvVar('KEYCLOAK_DUPLICATE_EMAILS_ALLOWED', false),
-    sslRequired: getOptionalEnvVar('KEYCLOAK_SSL_REQUIRED') || 'external',
+    sslRequired: getOptionalEnvVarOrUndefined('KEYCLOAK_SSL_REQUIRED') || 'external',
   };
 
   // Build client configuration
@@ -101,10 +77,10 @@ function buildConfigFromEnv() {
     users.push({
       username: getRequiredEnvVar('KEYCLOAK_READONLY_USER_USERNAME'),
       password: getRequiredEnvVar('KEYCLOAK_READONLY_USER_PASSWORD'),
-      firstName: getOptionalEnvVar('KEYCLOAK_READONLY_USER_FIRSTNAME') || 'Read',
-      lastName: getOptionalEnvVar('KEYCLOAK_READONLY_USER_LASTNAME') || 'Only',
+      firstName: getOptionalEnvVarOrUndefined('KEYCLOAK_READONLY_USER_FIRSTNAME') || 'Read',
+      lastName: getOptionalEnvVarOrUndefined('KEYCLOAK_READONLY_USER_LASTNAME') || 'Only',
       email:
-        getOptionalEnvVar('KEYCLOAK_READONLY_USER_EMAIL') ||
+        getOptionalEnvVarOrUndefined('KEYCLOAK_READONLY_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_READONLY_USER_USERNAME')}@example.com`,
       roles: parseArrayEnvVar('KEYCLOAK_READONLY_USER_ROLES', ',', ['readonly']),
     });
@@ -114,10 +90,10 @@ function buildConfigFromEnv() {
     users.push({
       username: getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_USERNAME'),
       password: getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_PASSWORD'),
-      firstName: getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_FIRSTNAME') || 'Maintainer',
-      lastName: getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_LASTNAME') || 'User',
+      firstName: getOptionalEnvVarOrUndefined('KEYCLOAK_MAINTAINER_USER_FIRSTNAME') || 'Maintainer',
+      lastName: getOptionalEnvVarOrUndefined('KEYCLOAK_MAINTAINER_USER_LASTNAME') || 'User',
       email:
-        getOptionalEnvVar('KEYCLOAK_MAINTAINER_USER_EMAIL') ||
+        getOptionalEnvVarOrUndefined('KEYCLOAK_MAINTAINER_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_USERNAME')}@example.com`,
       roles: parseArrayEnvVar('KEYCLOAK_MAINTAINER_USER_ROLES', ',', ['readonly', 'maintainer']),
     });
@@ -127,10 +103,10 @@ function buildConfigFromEnv() {
     users.push({
       username: getRequiredEnvVar('KEYCLOAK_OWNER_USER_USERNAME'),
       password: getRequiredEnvVar('KEYCLOAK_OWNER_USER_PASSWORD'),
-      firstName: getOptionalEnvVar('KEYCLOAK_OWNER_USER_FIRSTNAME') || 'Owner',
-      lastName: getOptionalEnvVar('KEYCLOAK_OWNER_USER_LASTNAME') || 'User',
+      firstName: getOptionalEnvVarOrUndefined('KEYCLOAK_OWNER_USER_FIRSTNAME') || 'Owner',
+      lastName: getOptionalEnvVarOrUndefined('KEYCLOAK_OWNER_USER_LASTNAME') || 'User',
       email:
-        getOptionalEnvVar('KEYCLOAK_OWNER_USER_EMAIL') ||
+        getOptionalEnvVarOrUndefined('KEYCLOAK_OWNER_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_OWNER_USER_USERNAME')}@example.com`,
       roles: parseArrayEnvVar('KEYCLOAK_OWNER_USER_ROLES', ',', [
         'readonly',
@@ -177,28 +153,17 @@ const handleApiError = (error, operation) => {
   throw error;
 };
 
-// Get admin access token
+// Get admin access token (using shared utility)
 async function getAdminToken() {
   try {
     console.log('Authenticating as admin...');
-
-    const response = await api.post(
-      '/realms/master/protocol/openid-connect/token',
-      new URLSearchParams({
-        grant_type: 'password',
-        client_id: 'admin-cli',
-        username: keycloakConfig.server.adminUser,
-        password: keycloakConfig.server.adminPassword,
-      }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-      }
+    const token = await getKeycloakAdminToken(
+      keycloakConfig.server.baseUrl,
+      keycloakConfig.server.adminUser,
+      keycloakConfig.server.adminPassword
     );
-
     console.log('Admin authentication successful');
-    return response.data.access_token;
+    return token;
   } catch (error) {
     return handleApiError(error, 'admin authentication');
   }
