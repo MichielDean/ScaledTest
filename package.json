@@ -48,7 +48,6 @@
   "devDependencies": {
     "@playwright/test": "^1.52.0",
     "@types/jest": "^29.5.14",
-    "@types/next": "^9.0.0",
     "@types/node": "^22.15.21",
     "@types/supertest": "^6.0.3",
     "@types/uuid": "^10.0.0",
@@ -79,5 +78,11 @@
     "*.{js,jsx,ts,tsx,json,css,md,yml,yaml,html}": [
       "prettier --write"
     ]
+  },
+  "overrides": {
+    "glob": "10.4.5",
+    "nyc": {
+      "glob": "^7.2.3"
+    }
   }
 }
