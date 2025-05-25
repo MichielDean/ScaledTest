@@ -1,5 +1,12 @@
 name: Pull Request Validation
 
+# The following permissions are required for this workflow:
+# - `contents: read` is needed to fetch repository contents for the build and test steps.
+# - `pull-requests: write` is needed to update pull request statuses and post comments.
+permissions:
+  contents: read
+  pull-requests: write
+
 on:
   pull_request:
     branches: [main]
