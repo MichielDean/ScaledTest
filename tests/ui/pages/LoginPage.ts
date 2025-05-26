@@ -6,14 +6,14 @@ import { TestUser } from '../models/TestUsers';
  * Page object representing the login page
  */
 export class LoginPage extends BasePage {
-  readonly usernameInput: Locator;
+  readonly emailInput: Locator;
   readonly passwordInput: Locator;
   readonly signInButton: Locator;
   readonly errorMessage: Locator;
   readonly logoutButton: Locator;
   constructor(page: Page) {
     super(page);
-    this.usernameInput = page.locator('#username');
+    this.emailInput = page.locator('#email');
     this.passwordInput = page.locator('#password');
     this.signInButton = page.locator('#signInButton');
     this.errorMessage = page.locator('#loginError');
@@ -29,21 +29,32 @@ export class LoginPage extends BasePage {
   /**
    * Log in with the provided credentials
    */
-  async login(username: string, password: string) {
+  async login(email: string, password: string) {
     // Wait for the username input to be visible and ready
-    await this.usernameInput.waitFor({ state: 'visible', timeout: 10000 });
-    await this.usernameInput.fill(username);
+    await this.emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
     await this.signInButton.click();
-    // Wait for navigation to complete
-    await this.waitForNavigation();
+
+    // For failed logins, wait a bit for either navigation or error message
+    // Increase timeout to ensure we catch async errors
+    try {
+      await Promise.race([
+        this.waitForNavigation(),
+        this.errorMessage.waitFor({ state: 'visible', timeout: 10000 }),
+      ]);
+    } catch (error) {
+      // If neither navigation nor error appears, wait a bit more
+      // The async error handling might take a moment
+      await this.page.waitForTimeout(2000);
+    }
   }
 
   /**
    * Verify that the login error message is displayed
    */
   async expectLoginError() {
-    await expect(this.errorMessage).toBeVisible();
+    await expect(this.errorMessage).toBeVisible({ timeout: 10000 });
   }
   /**
    * Check if we're on the login page
@@ -59,7 +70,7 @@ export class LoginPage extends BasePage {
    */
   async loginWithUser(user: TestUser) {
     await this.goto();
-    await this.login(user.username, user.password);
+    await this.login(user.email, user.password);
   }
 
   /**

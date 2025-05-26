@@ -168,7 +168,7 @@ const UserManagement: NextPage = () => {
                       borderBottom: '2px solid #ddd',
                     }}
                   >
-                    Username
+                    Email
                   </th>
                   <th
                     style={{
@@ -212,10 +212,10 @@ const UserManagement: NextPage = () => {
                 {users.map(user => (
                   <tr
                     key={user.id}
-                    id={`user-row-${user.username}`}
+                    id={`user-row-${user.email}`}
                     style={{ borderBottom: '1px solid #ddd' }}
                   >
-                    <td style={{ padding: '0.75rem' }}>{user.username}</td>
+                    <td style={{ padding: '0.75rem' }}>{user.email}</td>
                     <td style={{ padding: '0.75rem' }}>
                       {user.firstName || ''} {user.lastName || ''}
                     </td>

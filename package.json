@@ -4,9 +4,7 @@
   "description": "A Next.js application with Keycloak authentication",
   "main": "index.js",
   "scripts": {
-    "dev": "next dev",
     "build": "next build",
-    "start": "node scripts/setup-keycloak.js && next start",
     "start:all": "docker compose -f docker/docker-compose.yml up -d && node scripts/setup-keycloak.js && next start",
     "setup:keycloak": "node scripts/setup-keycloak.js",
     "setup:keycloak:cli": "node scripts/setup-keycloak-cli.js",
@@ -27,11 +25,13 @@
   "license": "ISC",
   "dependencies": {
     "@opensearch-project/opensearch": "^3.5.1",
+    "@types/d3": "^7.4.3",
     "@types/express": "^5.0.2",
     "@types/jsonwebtoken": "^9.0.9",
     "@types/react": "^19.1.5",
     "@types/react-dom": "^19.1.5",
     "axios": "^1.9.0",
+    "d3": "^7.9.0",
     "dotenv": "^16.5.0",
     "express": "^5.1.0",
     "jsonwebtoken": "^9.0.2",

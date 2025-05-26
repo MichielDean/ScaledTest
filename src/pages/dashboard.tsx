@@ -1,5 +1,6 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
+import Link from 'next/link';
 import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
@@ -36,6 +37,58 @@ const Dashboard: NextPage = () => {
 
       <main className="container" style={{ padding: '2rem' }}>
         <h1 style={{ marginBottom: '2rem' }}>Dashboard</h1>
+
+        {/* Navigation to Other Dashboards */}
+        <div className="card" style={{ marginBottom: '2rem' }}>
+          <h2 style={{ marginBottom: '1rem' }}>Available Dashboards</h2>
+          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
+            <Link
+              href="/test-results-dashboard"
+              style={{
+                display: 'inline-block',
+                padding: '12px 24px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontWeight: '500',
+                transition: 'background-color 0.2s',
+              }}
+              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0056b3')}
+              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#007bff')}
+            >
+              🌟 Test Results Dashboard
+            </Link>
+            <button
+              disabled
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#e9ecef',
+                color: '#6c757d',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: '500',
+                cursor: 'not-allowed',
+              }}
+            >
+              📊 Performance Dashboard (Coming Soon)
+            </button>
+            <button
+              disabled
+              style={{
+                padding: '12px 24px',
+                backgroundColor: '#e9ecef',
+                color: '#6c757d',
+                border: 'none',
+                borderRadius: '6px',
+                fontWeight: '500',
+                cursor: 'not-allowed',
+              }}
+            >
+              📈 Analytics Dashboard (Coming Soon)
+            </button>
+          </div>
+        </div>
 
         <div id="user-profile-section" className="card">
           <div
