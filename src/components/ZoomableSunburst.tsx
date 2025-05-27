@@ -75,7 +75,7 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
       // When zoomed to team level (focusDepth = 1): show levels 1-4 (team, applications, suites, executions)
       const maxVisibleDepth = focusDepth + 3;
       const minVisibleDepth = Math.max(1, focusDepth); // Never show root level
-      
+
       return d.y1 <= maxVisibleDepth && d.y0 >= minVisibleDepth && d.x1 > d.x0;
     }
 
@@ -83,11 +83,9 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
       // Same visibility logic as arcs, but with size threshold for readability
       const maxVisibleDepth = focusDepth + 3;
       const minVisibleDepth = Math.max(1, focusDepth);
-      
+
       return (
-        d.y1 <= maxVisibleDepth &&
-        d.y0 >= minVisibleDepth &&
-        (d.y1 - d.y0) * (d.x1 - d.x0) > 0.02
+        d.y1 <= maxVisibleDepth && d.y0 >= minVisibleDepth && (d.y1 - d.y0) * (d.x1 - d.x0) > 0.02
       );
     }
 
