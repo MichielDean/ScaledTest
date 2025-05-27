@@ -37,8 +37,11 @@ export class UserManagementPage extends BasePage {
   /**
    * Check if a specific user is listed in the table
    */
-  async expectUserListed(username: string) {
-    const userRow = this.page.locator(`#user-row-${username}`);
+  async expectUserListed(email: string) {
+    // Find the row containing the email address in the email column
+    const userRow = this.page.locator(`#users-table tbody tr`).filter({
+      hasText: email,
+    });
     await expect(userRow).toBeVisible();
   }
 

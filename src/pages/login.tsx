@@ -11,7 +11,7 @@ import { authLogger as logger } from '../utils/logger';
 const Login: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
   const router = useRouter();
-  const [username, setUsername] = useState('');
+  const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
@@ -37,8 +37,8 @@ const Login: NextPage = () => {
       // Import here to avoid issues with SSR
       const { directLogin } = await import('../utils/keycloakTokenManager');
 
-      // Perform direct login with username and password
-      const success = await directLogin(username, password);
+      // Perform direct login with email and password
+      const success = await directLogin(email, password);
 
       if (success) {
         // Refresh the page to have KeycloakProvider initialize with the token
@@ -51,15 +51,37 @@ const Login: NextPage = () => {
       logger.error(
         {
           err,
-          username, // Include username for context but NOT password
+          email: email, // Include email for context but NOT password
           statusCode: axiosError.response?.status,
           errorCode: axiosError.code,
           url: axiosError.config?.url,
+          errorData: axiosError.response?.data,
         },
         'Login authentication failed'
       );
-      if (axiosError.response && axiosError.response.status === 401) {
-        setError('Invalid username or password');
+
+      // Provide more specific error messages based on the error
+      if (axiosError.response?.status === 401) {
+        const errorData = axiosError.response.data as {
+          error?: string;
+          error_description?: string;
+        };
+        if (errorData?.error === 'invalid_grant') {
+          setError('Invalid email or password. Please check your credentials.');
+        } else if (errorData?.error_description) {
+          setError(`Authentication failed: ${errorData.error_description}`);
+        } else {
+          setError('Invalid email or password');
+        }
+      } else if (axiosError.response?.status === 400) {
+        const errorData = axiosError.response.data as { error_description?: string };
+        if (errorData?.error_description) {
+          setError(`Login error: ${errorData.error_description}`);
+        } else {
+          setError('Bad request. Please check your input.');
+        }
+      } else if (axiosError.code === 'ECONNREFUSED' || axiosError.code === 'ERR_NETWORK') {
+        setError('Cannot connect to authentication server. Please try again later.');
       } else {
         setError('Authentication failed. Please try again later.');
       }
@@ -102,7 +124,10 @@ const Login: NextPage = () => {
                 padding: '10px',
                 borderRadius: '4px',
                 marginBottom: '1rem',
+                border: '1px solid #c62828',
+                display: 'block',
               }}
+              data-testid="login-error"
             >
               {error}
             </div>
@@ -110,13 +135,13 @@ const Login: NextPage = () => {
 
           <form onSubmit={handleSubmit}>
             <div className="form-group">
-              <label htmlFor="username">Username</label>
+              <label htmlFor="email">Email</label>
               <input
-                type="text"
-                id="username"
-                value={username}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setUsername(e.target.value)}
-                placeholder="Enter your username"
+                type="email"
+                id="email"
+                value={email}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                placeholder="Enter your email"
                 required
               />
             </div>
