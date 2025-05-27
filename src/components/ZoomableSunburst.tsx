@@ -62,7 +62,7 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
     // Create the SVG container
     const svg = d3
       .select(svgRef.current)
-      .attr('viewBox', [-width / 2, -height / 2, width, width])
+      .attr('viewBox', [-width / 2, -height / 2, width, height])
       .style('font', '10px sans-serif');
 
     // Helper functions
