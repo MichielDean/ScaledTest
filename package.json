@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "build": "next build",
-    "start:all": "docker compose -f docker/docker-compose.yml up -d && node scripts/setup-keycloak.js && next start",
+    "dev": "docker compose -f docker/docker-compose.yml up -d && node scripts/setup-keycloak.js && next dev",
     "setup:keycloak": "node scripts/setup-keycloak.js",
     "setup:keycloak:cli": "node scripts/setup-keycloak-cli.js",
     "update-deps": "npx npm-check-updates -u && npm install",
