@@ -121,3 +121,103 @@ button:hover {
   width: 100%;
   max-width: 800px;
 }
+
+/* Sunburst visualization styles */
+.sunburst-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 100%;
+}
+
+.sunburst-container svg {
+  background-color: white;
+  border-radius: 50%;
+  box-shadow: 0 8px 16px rgba(0, 0, 0, 0.1);
+}
+
+.selected-node-info {
+  max-width: 100%;
+  word-wrap: break-word;
+}
+
+.selected-node-info h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.selected-node-info p {
+  margin: 8px 0;
+  line-height: 1.4;
+}
+
+/* Dashboard grid styles */
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+  gap: 20px;
+  margin-top: 20px;
+}
+
+.stat-card {
+  background: linear-gradient(135deg, #f8f9fa 0%, #e9ecef 100%);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+  border: 1px solid #dee2e6;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease;
+}
+
+.stat-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+}
+
+.stat-card h3 {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin: 0 0 10px 0;
+  background: linear-gradient(45deg, #007bff, #0056b3);
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.dashboard-button {
+  display: inline-block;
+  padding: 12px 24px;
+  margin: 5px;
+  border-radius: 8px;
+  text-decoration: none;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 2px solid transparent;
+}
+
+.dashboard-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-button.primary {
+  background: linear-gradient(135deg, #007bff, #0056b3);
+  color: white;
+}
+
+.dashboard-button.primary:hover {
+  background: linear-gradient(135deg, #0056b3, #004085);
+}
+
+.dashboard-button.disabled {
+  background-color: #e9ecef;
+  color: #6c757d;
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+.dashboard-button.disabled:hover {
+  transform: none;
+  box-shadow: none;
+}

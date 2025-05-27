@@ -44,7 +44,7 @@ describe('Authentication Tests', () => {
 
     it('should show error message with invalid credentials', async () => {
       // Login with invalid credentials
-      await loginPage.login('invalid-user', 'wrong-password');
+      await loginPage.login('invalid-user@email.com', 'wrong-password');
 
       // Verify we stay on login page with error message
       await loginPage.expectLoginError();

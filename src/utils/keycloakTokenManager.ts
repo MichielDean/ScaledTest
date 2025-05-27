@@ -4,7 +4,7 @@
  */
 import { authLogger as logger } from './logger';
 import { keycloakEndpoints, keycloakConfig } from '../config/keycloak';
-import axios from 'axios';
+import axios, { AxiosError } from 'axios';
 
 const TOKEN_STORAGE_KEY = 'keycloak_token';
 const REFRESH_TOKEN_STORAGE_KEY = 'keycloak_refresh_token';
@@ -104,8 +104,20 @@ export const directLogin = async (username: string, password: string): Promise<b
     }
 
     return false;
-  } catch (error) {
-    logger.error({ err: error, username }, 'Direct login failed');
-    return false;
+  } catch (error: unknown) {
+    const axiosError = error as AxiosError;
+    logger.error(
+      {
+        err: error,
+        username,
+        errorMessage: axiosError?.message,
+        statusCode: axiosError?.response?.status,
+        errorData: axiosError?.response?.data,
+        url: axiosError?.config?.url,
+      },
+      'Direct login failed'
+    );
+    // Re-throw the error with more details for the UI to handle
+    throw error;
   }
 };

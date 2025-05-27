@@ -1,5 +1,5 @@
 export interface TestUser {
-  username: string;
+  email: string;
   password: string;
   displayName: string;
   roles: string[];
@@ -10,19 +10,19 @@ export interface TestUser {
  */
 export const TestUsers: Record<string, TestUser> = {
   READONLY: {
-    username: 'readonly-user',
+    email: 'readonly@example.com',
     password: 'password',
     displayName: 'Read Only',
     roles: ['readonly'],
   },
   MAINTAINER: {
-    username: 'maintainer-user',
+    email: 'maintainer@example.com',
     password: 'password',
     displayName: 'Maintainer User',
     roles: ['readonly', 'maintainer'],
   },
   OWNER: {
-    username: 'owner-user',
+    email: 'owner@example.com',
     password: 'password',
     displayName: 'Owner User',
     roles: ['readonly', 'maintainer', 'owner'],

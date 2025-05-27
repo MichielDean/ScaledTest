@@ -68,7 +68,7 @@ User Creation Examples:
   --owner-user-username=USERNAME --owner-user-password=PASSWORD
 
 Example:
-  node setup-keycloak-cli.js --url=https://auth.example.com --realm=production --client-id=myapp-client
+  node setup-keycloak-cli.js --url=http://localhost:8080 --realm=scaledtest --client-id=scaledtest-client
   `);
 }
 

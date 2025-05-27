@@ -150,18 +150,18 @@ The application automatically creates the following test users:
 
 1. **Read-only User**
 
-   - Username: readonly-user
+   - Username: readonly@example.com
    - Password: password
    - Role: readonly
 
 2. **Maintainer User**
 
-   - Username: maintainer-user
+   - Username: maintainer@example.com
    - Password: password
    - Roles: readonly, maintainer
 
 3. **Owner User**
-   - Username: owner-user
+   - Username: owner@example.com
    - Password: password
    - Roles: readonly, maintainer, owner
 
