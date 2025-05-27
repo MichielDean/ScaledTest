@@ -46,14 +46,14 @@ const Dashboard: NextPage = () => {
               href="/test-results-dashboard"
               className="dashboard-link"
               style={{
-          display: 'inline-block',
-          padding: '12px 24px',
-          backgroundColor: '#007bff',
-          color: 'white',
-          textDecoration: 'none',
-          borderRadius: '6px',
-          fontWeight: '500',
-          transition: 'background-color 0.2s',
+                display: 'inline-block',
+                padding: '12px 24px',
+                backgroundColor: '#007bff',
+                color: 'white',
+                textDecoration: 'none',
+                borderRadius: '6px',
+                fontWeight: '500',
+                transition: 'background-color 0.2s',
               }}
             >
               🌟 Test Results Dashboard
