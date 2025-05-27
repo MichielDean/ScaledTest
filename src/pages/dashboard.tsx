@@ -44,18 +44,17 @@ const Dashboard: NextPage = () => {
           <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
             <Link
               href="/test-results-dashboard"
+              className="dashboard-link"
               style={{
-                display: 'inline-block',
-                padding: '12px 24px',
-                backgroundColor: '#007bff',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: '6px',
-                fontWeight: '500',
-                transition: 'background-color 0.2s',
+          display: 'inline-block',
+          padding: '12px 24px',
+          backgroundColor: '#007bff',
+          color: 'white',
+          textDecoration: 'none',
+          borderRadius: '6px',
+          fontWeight: '500',
+          transition: 'background-color 0.2s',
               }}
-              onMouseEnter={e => (e.currentTarget.style.backgroundColor = '#0056b3')}
-              onMouseLeave={e => (e.currentTarget.style.backgroundColor = '#007bff')}
             >
               🌟 Test Results Dashboard
             </Link>

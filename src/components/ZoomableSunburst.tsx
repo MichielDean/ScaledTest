@@ -33,13 +33,13 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
     // Clear previous chart
     d3.select(svgRef.current).selectAll('*').remove();
 
-    const radius = width / 6;
+    const radius = Math.min(width, height) / 2.2; // Improved radius calculation for better space utilization
 
-    // Compute the layout
+    // Compute the layout with equal sizing
     const hierarchy = d3
       .hierarchy(data)
-      .sum(d => d.value || 1)
-      .sort((a, b) => (b.value || 0) - (a.value || 0));
+      .sum(() => 1) // Give each node equal weight
+      .sort((a, b) => (a.data.name || '').localeCompare(b.data.name || '')); // Sort alphabetically for consistency
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const root = d3.partition().size([2 * Math.PI, hierarchy.height + 1])(hierarchy as any);
@@ -49,29 +49,46 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
       d.current = d;
     });
 
-    // Create the arc generator
+    // Create the arc generator with optimized settings for better space utilization
     const arc = d3
       .arc()
       .startAngle((d: D3Node) => d.x0)
       .endAngle((d: D3Node) => d.x1)
-      .padAngle((d: D3Node) => Math.min((d.x1 - d.x0) / 2, 0.005))
-      .padRadius(radius * 1.5)
+      .padAngle((d: D3Node) => Math.min((d.x1 - d.x0) / 2, 0.002)) // Reduced padding for better space use
+      .padRadius(radius * 1.2) // Reduced pad radius
       .innerRadius((d: D3Node) => d.y0 * radius)
-      .outerRadius((d: D3Node) => Math.max(d.y0 * radius, d.y1 * radius - 1));
+      .outerRadius((d: D3Node) => Math.max(d.y0 * radius, d.y1 * radius - 0.5)); // Reduced gap between rings
 
-    // Create the SVG container
+    // Create the SVG container with optimized viewBox for better space utilization
     const svg = d3
       .select(svgRef.current)
-      .attr('viewBox', [-width / 2, -height / 2, width, width])
+      .attr('viewBox', [-width / 2, -height / 2, width, height]) // Use height instead of width for viewBox
       .style('font', '10px sans-serif');
 
-    // Helper functions
+    // Store the current focus level for dynamic visibility
+    let focusDepth = 0;
+
+    // Helper functions for improved visibility
     function arcVisible(d: D3Node) {
-      return d.y1 <= 3 && d.y0 >= 1 && d.x1 > d.x0;
+      // Show 3 levels down from the current focus point
+      // At root level (focusDepth = 0): show levels 1-3 (teams, applications, suites)
+      // When zoomed to team level (focusDepth = 1): show levels 1-4 (team, applications, suites, executions)
+      const maxVisibleDepth = focusDepth + 3;
+      const minVisibleDepth = Math.max(1, focusDepth); // Never show root level
+      
+      return d.y1 <= maxVisibleDepth && d.y0 >= minVisibleDepth && d.x1 > d.x0;
     }
 
     function labelVisible(d: D3Node) {
-      return d.y1 <= 3 && d.y0 >= 1 && (d.y1 - d.y0) * (d.x1 - d.x0) > 0.03;
+      // Same visibility logic as arcs, but with size threshold for readability
+      const maxVisibleDepth = focusDepth + 3;
+      const minVisibleDepth = Math.max(1, focusDepth);
+      
+      return (
+        d.y1 <= maxVisibleDepth &&
+        d.y0 >= minVisibleDepth &&
+        (d.y1 - d.y0) * (d.x1 - d.x0) > 0.02
+      );
     }
 
     function labelTransform(d: D3Node) {
@@ -107,8 +124,8 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
           .attr('fill-opacity', arcVisible(d.current) ? (d.children ? 0.6 : 0.4) : 0);
       });
 
-    // Make them clickable if they have children
-    path.filter((d: D3Node) => !!d.children).on('click', clicked);
+    // Make them clickable
+    path.on('click', clicked);
 
     // Add tooltips
     const format = d3.format(',d');
@@ -149,11 +166,11 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
       .attr('transform', (d: D3Node) => labelTransform(d.current))
       .text((d: D3Node) => d.data.name);
 
-    // Add center circle for zooming out
+    // Add center circle for zooming out with reduced radius for better space utilization
     const parent = svg
       .append('circle')
       .datum(root)
-      .attr('r', radius)
+      .attr('r', radius * 0.8) // Smaller center circle for more chart space
       .attr('fill', 'none')
       .attr('pointer-events', 'all')
       .style('cursor', 'pointer')
@@ -166,6 +183,15 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
       }
       setSelectedNode(p.data);
 
+      // Update focus depth for dynamic visibility
+      // When clicking center circle (p === root), zoom out to parent or root
+      if (p === root || !p.parent) {
+        focusDepth = 0;
+        p = root;
+      } else {
+        focusDepth = p.depth;
+      }
+
       parent.datum(p.parent || root);
 
       root.each((d: D3Node) => {
@@ -177,19 +203,20 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
         };
       });
 
-      // Create transition with Alt key support for slower animation
       const duration = event.altKey ? 7500 : 750;
 
       // Transition the data on all arcs, even the ones that aren't visible,
       // so that if this transition is interrupted, entering arcs will start
       // the next transition from the desired position.
-      path
+      const pathTransition = path
         .transition()
         .duration(duration)
         .tween('data', (d: D3Node) => {
           const i = d3.interpolate(d.current, d.target);
           return (t: number) => (d.current = i(t));
-        })
+        });
+
+      pathTransition
         .filter(function (d: D3Node) {
           const element = this as SVGPathElement;
           return Boolean(+element.getAttribute('fill-opacity')! || arcVisible(d.target));
@@ -198,13 +225,15 @@ export const ZoomableSunburst: React.FC<ZoomableSunburstProps> = ({
         .attr('pointer-events', (d: D3Node) => (arcVisible(d.target) ? 'auto' : 'none'))
         .attrTween('d', (d: D3Node) => () => arc(d.current) || '');
 
-      label
+      const labelTransition = label
         .filter(function (d: D3Node) {
           const element = this as SVGTextElement;
           return Boolean(+element.getAttribute('fill-opacity')! || labelVisible(d.target));
         })
         .transition()
-        .duration(duration)
+        .duration(duration);
+
+      labelTransition
         .attr('fill-opacity', (d: D3Node) => +labelVisible(d.target))
         .attrTween('transform', (d: D3Node) => () => labelTransform(d.current));
     }
