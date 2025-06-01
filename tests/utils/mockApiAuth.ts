@@ -1,7 +1,6 @@
 // tests/utils/mockApiAuth.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UserRole } from '../../src/auth/keycloak';
-import jwt from 'jsonwebtoken';
 
 // Mock version of withApiAuth that bypasses actual token verification for testing
 export function mockWithApiAuth(

@@ -334,6 +334,8 @@ async function createClient(adminToken) {
     let clientId = await getClientId(adminToken);
 
     if (clientId) {
+      // Check and create audience mapper for existing client
+      await createAudienceMapper(adminToken, clientId);
       return clientId;
     }
 
@@ -363,9 +365,66 @@ async function createClient(adminToken) {
     clientId = await getClientId(adminToken);
 
     console.log(`Client '${keycloakConfig.client.id}' created successfully.`);
+
+    // Create audience mapper for the client
+    await createAudienceMapper(adminToken, clientId);
+
     return clientId;
   } catch (error) {
     return handleApiError(error, 'creating client');
+  }
+}
+
+// Create audience mapper for the client
+async function createAudienceMapper(adminToken, clientId) {
+  try {
+    console.log(`Creating audience mapper for client '${keycloakConfig.client.id}'...`);
+
+    // Check if audience mapper already exists
+    const mappersResponse = await api.get(
+      `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/protocol-mappers/models`,
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      }
+    );
+
+    const existingMapper = mappersResponse.data.find(
+      mapper =>
+        mapper.name === 'audience-mapper' && mapper.protocolMapper === 'oidc-audience-mapper'
+    );
+
+    if (existingMapper) {
+      console.log('Audience mapper already exists.');
+      return;
+    }
+
+    // Create audience mapper
+    await api.post(
+      `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/protocol-mappers/models`,
+      {
+        name: 'audience-mapper',
+        protocol: 'openid-connect',
+        protocolMapper: 'oidc-audience-mapper',
+        consentRequired: false,
+        config: {
+          'included.client.audience': keycloakConfig.client.id,
+          'id.token.claim': 'false',
+          'access.token.claim': 'true',
+          'introspection.token.claim': 'true',
+        },
+      },
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      }
+    );
+
+    console.log(`Audience mapper created successfully for client '${keycloakConfig.client.id}'.`);
+  } catch (error) {
+    return handleApiError(error, 'creating audience mapper');
   }
 }
 
