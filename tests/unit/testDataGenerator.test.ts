@@ -55,7 +55,7 @@ describe('Test Data Generator', () => {
 
       const testExecution = generateTestExecution(overrides);
 
-      expect(testExecution.status).toBe('running');
+      expect(testExecution.status).toBe(TestExecutionStatus.RUNNING);
       expect(testExecution.triggeredBy).toBe('Manual Execution');
       expect(testExecution.buildId).toBe('manual-test-123');
       expect(testExecution.tags).toEqual(['manual', 'smoke']);
