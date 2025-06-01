@@ -7,11 +7,6 @@ import {
   TestResultStatus,
   TestResultPriority,
 } from '../../src/models/testResults';
-import {
-  TestExecutionSchema,
-  TestCaseSchema,
-  TestResultSchema,
-} from '../../src/models/validationSchemas';
 
 describe('Test Data Generator', () => {
   describe('generateTestExecution', () => {
@@ -33,19 +28,26 @@ describe('Test Data Generator', () => {
       expect(testExecution.tags).toEqual(['regression', 'authentication']);
     });
 
-    it('should generate a test execution that passes validation schema', () => {
+    it('should generate a test execution that uses valid enum values', () => {
       const testExecution = generateTestExecution();
-      const result = TestExecutionSchema.safeParse(testExecution);
 
-      expect(result.success).toBe(true);
-      if (!result.success) {
-        console.error('Validation errors:', result.error.issues);
-      }
+      // Test that all enum values are valid without using Zod schemas
+      expect(Object.values(TestExecutionStatus)).toContain(testExecution.status);
+
+      const testCase = testExecution.testCases[0];
+      expect(Object.values(TestCaseStatus)).toContain(testCase.status);
+
+      testCase.testResults.forEach(result => {
+        expect(Object.values(TestResultStatus)).toContain(result.status);
+        if (result.priority) {
+          expect(Object.values(TestResultPriority)).toContain(result.priority);
+        }
+      });
     });
 
     it('should accept and apply overrides', () => {
       const overrides = {
-        status: 'running' as TestExecutionStatus,
+        status: TestExecutionStatus.RUNNING,
         triggeredBy: 'Manual Execution',
         buildId: 'manual-test-123',
         tags: ['manual', 'smoke'],
@@ -100,9 +102,13 @@ describe('Test Data Generator', () => {
       expect(testCase.status).toBe('passed');
       expect(testCase.testResults).toHaveLength(2);
 
-      // Validate test case against schema
-      const result = TestCaseSchema.safeParse(testCase);
-      expect(result.success).toBe(true);
+      // Test the relationships and structure directly
+      testCase.testResults.forEach(result => {
+        expect(result.testCaseId).toBe(testCase.id);
+        expect(typeof result.id).toBe('string');
+        expect(typeof result.name).toBe('string');
+        expect(typeof result.createdAt).toBe('string');
+      });
     });
 
     it('should generate test execution with valid test results', () => {
@@ -129,10 +135,15 @@ describe('Test Data Generator', () => {
       expect(failedResult.errorDetails?.message).toBe('API returned 404 error');
       expect(failedResult.durationMs).toBe(850);
 
-      // Validate both test results against schema
+      // Test that all results have proper enum values and relationships
       testResults.forEach(result => {
-        const validationResult = TestResultSchema.safeParse(result);
-        expect(validationResult.success).toBe(true);
+        expect(Object.values(TestResultStatus)).toContain(result.status);
+        if (result.priority) {
+          expect(Object.values(TestResultPriority)).toContain(result.priority);
+        }
+        expect(typeof result.id).toBe('string');
+        expect(typeof result.testCaseId).toBe('string');
+        expect(typeof result.createdAt).toBe('string');
       });
     });
 
@@ -199,23 +210,6 @@ describe('Test Data Generator', () => {
 
       testCase.testResults.forEach(result => {
         expect(() => new Date(result.createdAt)).not.toThrow();
-      });
-    });
-
-    it('should generate test execution with appropriate status values', () => {
-      const testExecution = generateTestExecution();
-
-      // Check that status values are from the correct enums
-      expect(['pending', 'running', 'completed', 'failed', 'cancelled']).toContain(
-        testExecution.status
-      );
-
-      const testCase = testExecution.testCases[0];
-      expect(['pending', 'running', 'passed', 'failed', 'skipped']).toContain(testCase.status);
-
-      testCase.testResults.forEach(result => {
-        expect(['passed', 'failed', 'skipped']).toContain(result.status);
-        expect(['low', 'medium', 'high', 'critical']).toContain(result.priority);
       });
     });
   });

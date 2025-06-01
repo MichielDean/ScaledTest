@@ -1,6 +1,28 @@
 import { z } from 'zod';
+import {
+  TestExecutionStatus,
+  TestCaseStatus,
+  TestResultStatus,
+  TestResultPriority,
+  HttpMethod,
+} from './testResults';
 // We define Zod schemas that match our TypeScript types
-// No need to import the types since we're defining the schemas directly
+
+// Validation schema for HttpMethod
+export const HttpMethodSchema = z.nativeEnum(HttpMethod);
+
+// Validation schema for NetworkRequest
+export const NetworkRequestSchema = z.object({
+  url: z.string().url(),
+  method: HttpMethodSchema,
+  requestHeaders: z.record(z.string()).optional(),
+  requestBody: z.union([z.string(), z.record(z.any())]).optional(),
+  statusCode: z.number().int().min(100).max(599).optional(),
+  responseHeaders: z.record(z.string()).optional(),
+  responseBody: z.union([z.string(), z.record(z.any())]).optional(),
+  timeTakenMs: z.number().int().positive().optional(),
+  error: z.string().optional(),
+});
 
 // Validation schema for the TestErrorDetails
 export const TestErrorDetailsSchema = z.object({
@@ -9,14 +31,14 @@ export const TestErrorDetailsSchema = z.object({
   screenshotUrl: z.string().url().optional(),
   logsUrl: z.string().url().optional(),
   consoleOutput: z.string().optional(),
-  networkRequests: z.array(z.record(z.any())).optional(),
+  networkRequests: z.array(NetworkRequestSchema).optional(),
 });
 
 // Validation schema for TestResultStatus
-export const TestResultStatusSchema = z.enum(['passed', 'failed', 'error', 'warning', 'info']);
+export const TestResultStatusSchema = z.nativeEnum(TestResultStatus);
 
 // Validation schema for TestResultPriority
-export const TestResultPrioritySchema = z.enum(['critical', 'high', 'medium', 'low']);
+export const TestResultPrioritySchema = z.nativeEnum(TestResultPriority);
 
 // Validation schema for TestResult
 export const TestResultSchema = z.object({
@@ -36,7 +58,7 @@ export const TestResultSchema = z.object({
 });
 
 // Validation schema for TestCaseStatus
-export const TestCaseStatusSchema = z.enum(['passed', 'failed', 'skipped', 'blocked', 'not_run']);
+export const TestCaseStatusSchema = z.nativeEnum(TestCaseStatus);
 
 // Validation schema for TestCase
 export const TestCaseSchema = z.object({
@@ -55,13 +77,7 @@ export const TestCaseSchema = z.object({
 });
 
 // Validation schema for TestExecutionStatus
-export const TestExecutionStatusSchema = z.enum([
-  'pending',
-  'running',
-  'completed',
-  'aborted',
-  'failed',
-]);
+export const TestExecutionStatusSchema = z.nativeEnum(TestExecutionStatus);
 
 // Validation schema for TestExecution
 export const TestExecutionSchema = z.object({

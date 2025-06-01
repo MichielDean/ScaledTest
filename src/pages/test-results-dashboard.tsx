@@ -7,19 +7,6 @@ import Head from 'next/head';
 import { useAuth } from '../auth/KeycloakProvider';
 import withAuth from '../auth/withAuth';
 import Header from '../components/Header';
-import { generateSampleTestData } from '../utils/sampleData';
-import { TestResultData } from '../models/testResults';
-import { uiLogger, logError } from '../utils/logger';
-
-/**
- * Test Results Dashboard
- */
-
-import React, { useState, useEffect } from 'react';
-import Head from 'next/head';
-import { useAuth } from '../auth/KeycloakProvider';
-import withAuth from '../auth/withAuth';
-import Header from '../components/Header';
 import { TestResultData } from '../models/testResults';
 import { uiLogger, logError } from '../utils/logger';
 

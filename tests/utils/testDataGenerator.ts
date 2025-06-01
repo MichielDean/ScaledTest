@@ -14,13 +14,16 @@ export const generateTestExecution = (overrides: Partial<any> = {}) => {
   const now = new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
+  // Generate a single test case ID that will be shared by all test results
+  const testCaseId = uuidv4();
+
   const testResults = [
     {
       id: uuidv4(),
       createdAt: now.toISOString(),
-      testCaseId: uuidv4(),
-      status: 'passed' as TestResultStatus,
-      priority: 'medium' as TestResultPriority,
+      testCaseId: testCaseId, // Use the shared test case ID
+      status: TestResultStatus.PASSED,
+      priority: TestResultPriority.MEDIUM,
       name: 'Login should succeed with valid credentials',
       description: 'Verify user can login with valid username and password',
       expected: 'User is redirected to dashboard',
@@ -31,9 +34,9 @@ export const generateTestExecution = (overrides: Partial<any> = {}) => {
     {
       id: uuidv4(),
       createdAt: now.toISOString(),
-      testCaseId: uuidv4(),
-      status: 'failed' as TestResultStatus,
-      priority: 'high' as TestResultPriority,
+      testCaseId: testCaseId, // Use the shared test case ID
+      status: TestResultStatus.FAILED,
+      priority: TestResultPriority.HIGH,
       name: 'User data should load',
       description: 'Verify user profile data loads on the dashboard',
       expected: 'User profile data is displayed',
@@ -50,12 +53,12 @@ export const generateTestExecution = (overrides: Partial<any> = {}) => {
 
   const testCases = [
     {
-      id: uuidv4(),
+      id: testCaseId, // Use the same test case ID
       createdAt: now.toISOString(),
       testExecutionId: overrides.id || uuidv4(),
       name: 'Authentication Test Suite',
       description: 'Tests for user authentication flows',
-      status: 'passed' as TestCaseStatus,
+      status: TestCaseStatus.PASSED,
       startedAt: oneHourAgo.toISOString(),
       completedAt: now.toISOString(),
       durationMs: 2100,
@@ -68,7 +71,7 @@ export const generateTestExecution = (overrides: Partial<any> = {}) => {
     id: uuidv4(),
     createdAt: now.toISOString(),
     testSuiteId: uuidv4(),
-    status: 'completed' as TestExecutionStatus,
+    status: TestExecutionStatus.COMPLETED,
     startedAt: oneHourAgo.toISOString(),
     completedAt: now.toISOString(),
     environment: {

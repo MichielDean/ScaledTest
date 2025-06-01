@@ -72,7 +72,13 @@ export interface TestSuite extends BaseEntity {
 /**
  * Status of a test execution
  */
-export type TestExecutionStatus = 'pending' | 'running' | 'completed' | 'aborted' | 'failed';
+export enum TestExecutionStatus {
+  PENDING = 'pending',
+  RUNNING = 'running',
+  COMPLETED = 'completed',
+  ABORTED = 'aborted',
+  FAILED = 'failed',
+}
 
 /**
  * Represents a single execution of a test suite
@@ -101,7 +107,13 @@ export interface TestExecution extends BaseEntity {
 /**
  * Status of a test case
  */
-export type TestCaseStatus = 'passed' | 'failed' | 'skipped' | 'blocked' | 'not_run';
+export enum TestCaseStatus {
+  PASSED = 'passed',
+  FAILED = 'failed',
+  SKIPPED = 'skipped',
+  BLOCKED = 'blocked',
+  NOT_RUN = 'not_run',
+}
 
 /**
  * Represents a single test case within a test execution
@@ -128,12 +140,38 @@ export interface TestCase extends BaseEntity {
 /**
  * Status of a test result
  */
-export type TestResultStatus = 'passed' | 'failed' | 'error' | 'warning' | 'info';
+export enum TestResultStatus {
+  PASSED = 'passed',
+  FAILED = 'failed',
+  ERROR = 'error',
+  WARNING = 'warning',
+  INFO = 'info',
+}
 
 /**
  * Priority level for a test result
  */
-export type TestResultPriority = 'critical' | 'high' | 'medium' | 'low';
+export enum TestResultPriority {
+  CRITICAL = 'critical',
+  HIGH = 'high',
+  MEDIUM = 'medium',
+  LOW = 'low',
+}
+
+/**
+ * HTTP methods for network requests
+ */
+export enum HttpMethod {
+  GET = 'GET',
+  POST = 'POST',
+  PUT = 'PUT',
+  DELETE = 'DELETE',
+  PATCH = 'PATCH',
+  HEAD = 'HEAD',
+  OPTIONS = 'OPTIONS',
+  TRACE = 'TRACE',
+  CONNECT = 'CONNECT',
+}
 
 /**
  * Represents a network request made during a test
@@ -142,7 +180,7 @@ export interface NetworkRequest {
   /** Request URL */
   url: string;
   /** HTTP method used */
-  method: string;
+  method: HttpMethod;
   /** Request headers */
   requestHeaders?: Record<string, string>;
   /** Request payload/body */
