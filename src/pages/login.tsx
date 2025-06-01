@@ -103,13 +103,6 @@ const Login: NextPage = () => {
     }
   };
 
-  // Show login form immediately instead of waiting for auth provider loading
-  // This improves time to paint significantly
-  if (loading && !isAuthenticated) {
-    // Show the login form while still loading for better UX
-    // We'll handle the redirect after auth completes
-  }
-
   // If already authenticated and not loading, redirect immediately
   if (!loading && isAuthenticated) {
     router.push(redirectPath);
