@@ -99,7 +99,7 @@ describe('Test Data Generator', () => {
       expect(testCase.id).toBeDefined();
       expect(testCase.name).toBe('Authentication Test Suite');
       expect(testCase.description).toBe('Tests for user authentication flows');
-      expect(testCase.status).toBe('passed');
+      expect(testCase.status).toBe(TestCaseStatus.PASSED);
       expect(testCase.testResults).toHaveLength(2);
 
       // Test the relationships and structure directly
