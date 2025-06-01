@@ -8,20 +8,17 @@ import { randomUUID } from 'crypto';
 /**
  * Create a base logger instance with appropriate configuration
  * - Uses different log levels based on environment
- * - Applies pretty-printing in non-production environments
+ * - Always uses pretty-printing for consistent, readable output
  * - Enables colorized output for better readability
  */
 const logger = pino({
   level: process.env.NODE_ENV === 'production' ? 'info' : 'debug',
-  transport:
-    process.env.NODE_ENV !== 'production'
-      ? {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-          },
-        }
-      : undefined,
+  transport: {
+    target: 'pino-pretty',
+    options: {
+      colorize: true,
+    },
+  },
   timestamp: pino.stdTimeFunctions.isoTime,
   // Add application name to all logs
   base: { app: 'scaledtest' },
