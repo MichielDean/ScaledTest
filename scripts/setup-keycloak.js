@@ -9,6 +9,10 @@
  * - .env
  *
  * All required configuration values must be provided in environment variables.
+ *
+ * CLI Usage:
+ *   node setup-keycloak.js [--option=value ...]
+ *   node setup-keycloak.js --help
  */
 
 const axios = require('axios');
@@ -23,6 +27,80 @@ const {
   parseIntEnvVar,
 } = require('./utils/env');
 const { getKeycloakAdminToken } = require('./utils/adminAuth');
+
+// Process command-line arguments if provided
+function processCliArgs() {
+  const args = process.argv.slice(2);
+
+  // Check for help
+  if (args.includes('--help')) {
+    showHelp();
+    process.exit(0);
+  }
+
+  // Process arguments
+  args.forEach(arg => {
+    if (arg.startsWith('--')) {
+      const [key, value] = arg.substring(2).split('=');
+      if (value) {
+        // Convert key from kebab-case to environment variable format
+        const envKey = 'KEYCLOAK_' + key.toUpperCase().replace(/-/g, '_');
+        process.env[envKey] = value;
+      }
+    }
+  });
+}
+
+// Display help information
+function showHelp() {
+  console.log(`
+Keycloak Setup Script
+
+Usage:
+  node setup-keycloak.js [options]
+
+Required Options:
+  --url=URL                  Keycloak server URL
+  --admin-user=USERNAME      Admin username
+  --admin-password=PASSWORD  Admin password
+  --realm=REALM              Realm name
+  --realm-display-name=NAME  Realm display name
+  --client-id=CLIENT_ID      Client ID
+
+Optional Options:
+  --redirect-uris=URIs       Comma-separated redirect URIs (default: http://localhost:3000/*)
+  --web-origins=ORIGINS      Comma-separated web origins (default: *)
+  --roles=ROLES              Comma-separated role names (default: readonly,maintainer,owner)
+  --registration-allowed=BOOL Enable/disable registration (default: true)
+  --reset-password-allowed=BOOL Enable/disable password reset (default: true)
+  --remember-me=BOOL         Enable/disable remember me feature (default: true)
+  --verify-email=BOOL        Enable/disable email verification (default: false)
+  --login-with-email=BOOL    Enable/disable login with email (default: true)
+  --max-retries=NUM          Maximum number of connection retries (default: 30)
+  --retry-interval=MS        Retry interval in milliseconds (default: 2000)
+  --help                     Show this help information
+
+User Creation Examples:
+  # To create a readonly user:
+  --readonly-user-username=USERNAME --readonly-user-password=PASSWORD
+
+  # To create a maintainer user:
+  --maintainer-user-username=USERNAME --maintainer-user-password=PASSWORD
+
+  # To create an owner user:
+  --owner-user-username=USERNAME --owner-user-password=PASSWORD
+
+Example:
+  node setup-keycloak.js --url=http://localhost:8080 --realm=scaledtest --client-id=scaledtest-client
+
+Environment Configuration:
+  Alternatively, you can set configuration via environment variables in .env files.
+  CLI arguments will override environment variables.
+  `);
+}
+
+// Process CLI arguments first (before loading .env files)
+processCliArgs();
 
 // Load environment variables from .env files
 dotenv.config({ path: './.env.local' });
