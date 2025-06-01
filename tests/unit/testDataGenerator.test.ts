@@ -1,60 +1,222 @@
 // tests/unit/testDataGenerator.test.ts
-import { generateTestExecution } from '../utils/testDataGenerator';
-import { TestExecutionSchema } from '../../src/models/validationSchemas';
 import { v4 as uuidv4 } from 'uuid';
+import { generateTestExecution } from '../utils/testDataGenerator';
+import {
+  TestExecutionStatus,
+  TestCaseStatus,
+  TestResultStatus,
+  TestResultPriority,
+} from '../../src/models/testResults';
+import {
+  TestExecutionSchema,
+  TestCaseSchema,
+  TestResultSchema,
+} from '../../src/models/validationSchemas';
 
 describe('Test Data Generator', () => {
-  describe('Test Execution Generation', () => {
-    it('should generate a valid test execution object', () => {
-      // Act
+  describe('generateTestExecution', () => {
+    it('should generate a valid test execution with default values', () => {
       const testExecution = generateTestExecution();
 
-      // Assert
-      const result = TestExecutionSchema.safeParse(testExecution);
-      expect(result.success).toBe(true);
+      expect(testExecution).toBeDefined();
+      expect(testExecution.id).toBeDefined();
+      expect(testExecution.createdAt).toBeDefined();
+      expect(testExecution.testSuiteId).toBeDefined();
+      expect(testExecution.status).toBe('completed');
+      expect(testExecution.startedAt).toBeDefined();
+      expect(testExecution.completedAt).toBeDefined();
+      expect(testExecution.environment).toBeDefined();
+      expect(testExecution.configuration).toBeDefined();
+      expect(testExecution.triggeredBy).toBe('CI/CD Pipeline');
+      expect(testExecution.buildId).toBe('build-1234');
+      expect(testExecution.testCases).toBeDefined();
+      expect(testExecution.tags).toEqual(['regression', 'authentication']);
     });
 
-    it('should apply custom property overrides correctly', () => {
-      // Arrange
-      const customId = uuidv4();
-      const customStatus = 'failed';
-      const customTags = ['custom', 'tags'];
+    it('should generate a test execution that passes validation schema', () => {
+      const testExecution = generateTestExecution();
+      const result = TestExecutionSchema.safeParse(testExecution);
 
-      // Act
-      const testExecution = generateTestExecution({
-        id: customId,
-        status: customStatus,
-        tags: customTags,
+      expect(result.success).toBe(true);
+      if (!result.success) {
+        console.error('Validation errors:', result.error.issues);
+      }
+    });
+
+    it('should accept and apply overrides', () => {
+      const overrides = {
+        status: 'running' as TestExecutionStatus,
+        triggeredBy: 'Manual Execution',
+        buildId: 'manual-test-123',
+        tags: ['manual', 'smoke'],
+      };
+
+      const testExecution = generateTestExecution(overrides);
+
+      expect(testExecution.status).toBe('running');
+      expect(testExecution.triggeredBy).toBe('Manual Execution');
+      expect(testExecution.buildId).toBe('manual-test-123');
+      expect(testExecution.tags).toEqual(['manual', 'smoke']);
+    });
+
+    it('should generate test execution with proper environment configuration', () => {
+      const testExecution = generateTestExecution();
+
+      expect(testExecution.environment).toEqual({
+        os: 'Windows',
+        browser: 'Chrome',
+        version: '115.0.5790.171',
       });
 
-      // Assert
-      expect(testExecution.id).toBe(customId);
-      expect(testExecution.status).toBe(customStatus);
-      expect(testExecution.tags).toEqual(customTags);
+      expect(testExecution.configuration).toEqual({
+        headless: true,
+        viewport: { width: 1920, height: 1080 },
+      });
+    });
 
-      // Verify the result is still valid
-      const result = TestExecutionSchema.safeParse(testExecution);
+    it('should generate test execution with valid timestamp relationships', () => {
+      const testExecution = generateTestExecution();
+
+      const createdAt = new Date(testExecution.createdAt);
+      const startedAt = new Date(testExecution.startedAt);
+      const completedAt = new Date(testExecution.completedAt);
+
+      // startedAt should be before completedAt
+      expect(startedAt.getTime()).toBeLessThan(completedAt.getTime());
+
+      // createdAt should be around completedAt (within a few seconds)
+      expect(Math.abs(createdAt.getTime() - completedAt.getTime())).toBeLessThan(5000);
+    });
+
+    it('should generate test execution with valid test cases', () => {
+      const testExecution = generateTestExecution();
+
+      expect(testExecution.testCases).toHaveLength(1);
+
+      const testCase = testExecution.testCases[0];
+      expect(testCase.id).toBeDefined();
+      expect(testCase.name).toBe('Authentication Test Suite');
+      expect(testCase.description).toBe('Tests for user authentication flows');
+      expect(testCase.status).toBe('passed');
+      expect(testCase.testResults).toHaveLength(2);
+
+      // Validate test case against schema
+      const result = TestCaseSchema.safeParse(testCase);
       expect(result.success).toBe(true);
     });
 
-    it('should generate unique IDs for each execution', () => {
-      // Act
-      const execution1 = generateTestExecution();
-      const execution2 = generateTestExecution();
+    it('should generate test execution with valid test results', () => {
+      const testExecution = generateTestExecution();
+      const testCase = testExecution.testCases[0];
+      const testResults = testCase.testResults;
 
-      // Assert
-      expect(execution1.id).not.toBe(execution2.id);
-      expect(execution1.testSuiteId).not.toBe(execution2.testSuiteId);
-      expect(execution1.testCases[0].id).not.toBe(execution2.testCases[0].id);
+      expect(testResults).toHaveLength(2);
+
+      // Check first test result (passing)
+      const passedResult = testResults[0];
+      expect(passedResult.status).toBe('passed');
+      expect(passedResult.priority).toBe('medium');
+      expect(passedResult.name).toBe('Login should succeed with valid credentials');
+      expect(passedResult.durationMs).toBe(1250);
+      expect(passedResult.tags).toEqual(['authentication', 'login']);
+
+      // Check second test result (failing)
+      const failedResult = testResults[1];
+      expect(failedResult.status).toBe('failed');
+      expect(failedResult.priority).toBe('high');
+      expect(failedResult.name).toBe('User data should load');
+      expect(failedResult.errorDetails).toBeDefined();
+      expect(failedResult.errorDetails?.message).toBe('API returned 404 error');
+      expect(failedResult.durationMs).toBe(850);
+
+      // Validate both test results against schema
+      testResults.forEach(result => {
+        const validationResult = TestResultSchema.safeParse(result);
+        expect(validationResult.success).toBe(true);
+      });
     });
 
-    it('should include test cases with test results', () => {
-      // Act
+    it('should generate UUIDs for all ID fields', () => {
       const testExecution = generateTestExecution();
 
-      // Assert
-      expect(testExecution.testCases.length).toBeGreaterThan(0);
-      expect(testExecution.testCases[0].testResults.length).toBeGreaterThan(0);
+      // Check main execution ID
+      expect(testExecution.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+      expect(testExecution.testSuiteId).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+
+      // Check test case IDs
+      const testCase = testExecution.testCases[0];
+      expect(testCase.id).toMatch(
+        /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+      );
+
+      // Check test result IDs
+      testCase.testResults.forEach(result => {
+        expect(result.id).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        );
+        expect(result.testCaseId).toMatch(
+          /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i
+        );
+      });
+    });
+
+    it('should generate test execution with correct duration calculations', () => {
+      const testExecution = generateTestExecution();
+      const testCase = testExecution.testCases[0];
+
+      // Test case duration should be sum of test result durations
+      const expectedDuration = testCase.testResults.reduce(
+        (sum, result) => sum + result.durationMs,
+        0
+      );
+      expect(testCase.durationMs).toBe(expectedDuration);
+    });
+
+    it('should preserve override ID in test case testExecutionId', () => {
+      const customId = uuidv4();
+      const testExecution = generateTestExecution({ id: customId });
+
+      expect(testExecution.id).toBe(customId);
+      expect(testExecution.testCases[0].testExecutionId).toBe(customId);
+    });
+
+    it('should generate consistent timestamp formats', () => {
+      const testExecution = generateTestExecution();
+
+      // Check that all timestamps are valid ISO strings
+      expect(() => new Date(testExecution.createdAt)).not.toThrow();
+      expect(() => new Date(testExecution.startedAt)).not.toThrow();
+      expect(() => new Date(testExecution.completedAt)).not.toThrow();
+
+      const testCase = testExecution.testCases[0];
+      expect(() => new Date(testCase.createdAt)).not.toThrow();
+      expect(() => new Date(testCase.startedAt)).not.toThrow();
+      expect(() => new Date(testCase.completedAt)).not.toThrow();
+
+      testCase.testResults.forEach(result => {
+        expect(() => new Date(result.createdAt)).not.toThrow();
+      });
+    });
+
+    it('should generate test execution with appropriate status values', () => {
+      const testExecution = generateTestExecution();
+
+      // Check that status values are from the correct enums
+      expect(['pending', 'running', 'completed', 'failed', 'cancelled']).toContain(
+        testExecution.status
+      );
+
+      const testCase = testExecution.testCases[0];
+      expect(['pending', 'running', 'passed', 'failed', 'skipped']).toContain(testCase.status);
+
+      testCase.testResults.forEach(result => {
+        expect(['passed', 'failed', 'skipped']).toContain(result.status);
+        expect(['low', 'medium', 'high', 'critical']).toContain(result.priority);
+      });
     });
   });
 });
