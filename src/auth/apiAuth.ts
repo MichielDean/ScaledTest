@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UserRole } from './keycloak';
-import { jwtVerify, createRemoteJWKSet } from 'jose';
+import { jwtVerify, createRemoteJWKSet, JWTPayload } from 'jose';
 import { authLogger as logger, logError, getRequestLogger } from '../utils/logger';
 import { keycloakConfig, keycloakEndpoints } from '../config/keycloak';
 
@@ -11,15 +11,11 @@ interface ErrorResponse {
   details?: unknown;
 }
 
-// Interface for JWT token payload with roles
-interface KeycloakTokenPayload {
-  exp: number;
-  iat: number;
+// Interface for JWT token payload with Keycloak-specific claims
+// Extends the standard JWTPayload from jose library for better compliance
+interface KeycloakTokenPayload extends JWTPayload {
+  // Keycloak-specific claims not covered by standard JWTPayload
   auth_time: number;
-  jti: string;
-  iss: string;
-  aud: string | string[];
-  sub: string;
   typ: string;
   azp: string;
   session_state: string;
@@ -53,7 +49,8 @@ export async function verifyToken(token: string): Promise<KeycloakTokenPayload> 
       issuer,
       audience: keycloakConfig.clientId,
     });
-    return payload as unknown as KeycloakTokenPayload;
+
+    return payload as KeycloakTokenPayload;
   } catch (error) {
     // Log and throw any verification errors
     logError(logger, 'Token verification failed', error, {
