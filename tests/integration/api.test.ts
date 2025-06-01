@@ -15,6 +15,7 @@ jest.mock('jose', () => ({
   jwtVerify: jest.fn().mockResolvedValue({
     payload: {
       sub: 'user-123',
+      aud: 'scaledtest-client', // Add correct audience
       resource_access: {
         'scaledtest-client': {
           roles: ['owner', 'maintainer', 'readonly'],

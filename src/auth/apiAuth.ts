@@ -45,33 +45,25 @@ const JWKS = createRemoteJWKSet(new URL(keycloakEndpoints.jwks));
 
 // Function to verify JWT token using the jose library
 export async function verifyToken(token: string): Promise<KeycloakTokenPayload> {
+  const issuer = `${keycloakConfig.url}/realms/${keycloakConfig.realm}`;
+
   try {
-    // Use jose to verify the token with automatic JWKS fetching and certificate handling
+    // Verify with strict audience validation
     const { payload } = await jwtVerify(token, JWKS, {
-      issuer: `${keycloakConfig.url}/realms/${keycloakConfig.realm}`,
+      issuer,
       audience: keycloakConfig.clientId,
     });
-
     return payload as unknown as KeycloakTokenPayload;
-  } catch {
-    try {
-      // If audience validation fails (which is common in test scenarios),
-      // verify without audience check but ensure the issuer is correct
-      const { payload } = await jwtVerify(token, JWKS, {
-        issuer: `${keycloakConfig.url}/realms/${keycloakConfig.realm}`,
-      });
-
-      return payload as unknown as KeycloakTokenPayload;
-    } catch (error) {
-      logError(logger, 'Token verification failed', error, {
-        realm: keycloakConfig.realm,
-        isTokenProvided: !!token,
-        tokenType: token?.startsWith('Bearer ') ? 'Bearer' : 'Unknown',
-      });
-      throw new Error(
-        `Token verification failed: ${error instanceof Error ? error.message : String(error)}`
-      );
-    }
+  } catch (error) {
+    // Log and throw any verification errors
+    logError(logger, 'Token verification failed', error, {
+      realm: keycloakConfig.realm,
+      isTokenProvided: !!token,
+      tokenType: token?.startsWith('Bearer ') ? 'Bearer' : 'Unknown',
+    });
+    throw new Error(
+      `Token verification failed: ${error instanceof Error ? error.message : String(error)}`
+    );
   }
 }
 

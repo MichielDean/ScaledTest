@@ -100,6 +100,7 @@ describe('API Authentication Middleware', () => {
       (jwtVerify as jest.Mock).mockResolvedValue({
         payload: {
           sub: 'user-123',
+          aud: 'scaledtest-client', // Add correct audience
           resource_access: {
             'scaledtest-client': {
               roles: [UserRole.READONLY], // Only readonly role, not OWNER
@@ -134,6 +135,7 @@ describe('API Authentication Middleware', () => {
       (jwtVerify as jest.Mock).mockResolvedValue({
         payload: {
           sub: 'user-123',
+          aud: 'scaledtest-client', // Add correct audience
           resource_access: {
             'scaledtest-client': {
               roles: [UserRole.OWNER, UserRole.MAINTAINER, UserRole.READONLY],
