@@ -74,18 +74,22 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
         const storedToken = getStoredToken();
         const storedRefreshToken = getStoredRefreshToken();
 
+        // Fast initialization options - never auto-redirect to Keycloak login
         const baseOptions = {
-          onLoad: 'check-sso' as const,
+          onLoad: 'check-sso' as const, // Always use check-sso to avoid auto-redirects
           silentCheckSsoRedirectUri: window.location.origin + '/silent-check-sso.html',
           pkceMethod: 'S256' as const,
           checkLoginIframe: false,
           enabledHostedDomain3pCookies: false, // Disable 3p cookie checks to avoid delays
+          flow: 'standard' as const,
+          responseMode: 'fragment' as const,
         };
 
         // If we have tokens from direct login, use them for initialization
         type InitOptionValue = string | boolean | undefined;
         const initOptions: Record<string, InitOptionValue> = { ...baseOptions };
         if (storedToken && storedRefreshToken) {
+          // When we have stored tokens, use them directly
           // Keycloak typings don't include token/refreshToken in the InitOptions,
           // but they are actually supported in the API according to documentation
           initOptions.token = storedToken;
@@ -100,16 +104,19 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
         setIsAuthenticated(keycloakInstance.authenticated === true);
         setToken(keycloakInstance.token);
 
+        // Load user profile in the background after initial auth setup
+        // This prevents blocking the UI during initial load
         if (keycloakInstance.authenticated) {
-          try {
-            const profile = await keycloakInstance.loadUserProfile();
-            setUserProfile(profile);
-          } catch (profileError) {
-            logError(logger, 'Failed to load user profile', profileError, {
-              userId: keycloakInstance.subject,
-              tokenExpiration: keycloakInstance.tokenParsed?.exp,
+          // Don't await this - let it load in background
+          keycloakInstance
+            .loadUserProfile()
+            .then(profile => setUserProfile(profile))
+            .catch(profileError => {
+              logError(logger, 'Failed to load user profile', profileError, {
+                userId: keycloakInstance.subject,
+                tokenExpiration: keycloakInstance.tokenParsed?.exp,
+              });
             });
-          }
         }
 
         // Set up token refresh
@@ -211,12 +218,15 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
   }, [keycloak]);
 
   const login = useCallback(() => {
+    // This login function is for Keycloak-hosted login
+    // Since you're using a custom login page, this shouldn't auto-redirect
+    // The custom login page uses directLogin from keycloakTokenManager instead
     if (keycloak) {
-      // Get the current URL to set as redirectUri
       const currentPath = window.location.pathname;
       const redirectUri =
         window.location.origin + (currentPath === '/login' ? '/dashboard' : currentPath);
 
+      // Only redirect to Keycloak if explicitly called (not automatically)
       keycloak.login({
         redirectUri: redirectUri,
       });
