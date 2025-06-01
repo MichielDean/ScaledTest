@@ -17,7 +17,7 @@
     "test:integration": "jest --selectProjects Integration",
     "test:system": "jest --selectProjects System",
     "prepare": "husky",
-    "postinstall": "husky"
+    "postinstall": "husky && npx playwright install chromium"
   },
   "keywords": [],
   "author": "",

@@ -6,6 +6,23 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
+// Deep merge utility function
+function deepMerge(target, source) {
+  const result = { ...target };
+
+  for (const key in source) {
+    if (source.hasOwnProperty(key)) {
+      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
+        result[key] = deepMerge(target[key] || {}, source[key]);
+      } else {
+        result[key] = source[key];
+      }
+    }
+  }
+
+  return result;
+}
+
 // Load configuration
 function loadConfig() {
   const configPath = path.resolve(process.cwd(), 'jest-playwright.config.js');
@@ -24,7 +41,7 @@ function loadConfig() {
   if (fs.existsSync(configPath)) {
     try {
       const userConfig = require(configPath);
-      return { ...defaultConfig, ...userConfig };
+      return deepMerge(defaultConfig, userConfig);
     } catch (error) {
       console.warn('Failed to load jest-playwright config, using defaults:', error.message);
     }
