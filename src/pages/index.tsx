@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 
-// Fast redirect to login page without showing "Redirecting..." UI
 const Home: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
   const router = useRouter();
@@ -19,8 +18,6 @@ const Home: NextPage = () => {
       // If still loading, do an immediate redirect to login anyway
       // The login page will handle auth state properly
       router.replace('/login');
-
-      return () => clearTimeout(timer);
     }
   }, [isAuthenticated, loading, router]);
 
