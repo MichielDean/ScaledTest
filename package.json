@@ -7,7 +7,6 @@
     "build": "next build",
     "dev": "docker compose -f docker/docker-compose.yml up -d && node scripts/setup-keycloak.js && next dev",
     "setup:keycloak": "node scripts/setup-keycloak.js",
-    "setup:keycloak:cli": "node scripts/setup-keycloak-cli.js",
     "update-deps": "npx npm-check-updates -u && npm install",
     "lint": "next lint",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md,yml,yaml,html}\"",

@@ -97,11 +97,11 @@ NODE_ENV=production npm run start
 
 ## Using Command Line Arguments
 
-You can also override environment variables using command line arguments with the setup-keycloak-cli.js script:
+You can also override environment variables using command line arguments:
 
 ```bash
 # Run the Keycloak setup with command line arguments
-node scripts/setup-keycloak-cli.js --realm=custom-realm --client-id=custom-client
+node scripts/setup-keycloak.js --realm=custom-realm --client-id=custom-client
 ```
 
 ## Configuration Details
