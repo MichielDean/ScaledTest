@@ -133,7 +133,7 @@ describe('Test Data Generator', () => {
 
       // Check second test result (failing)
       const failedResult = testResults[1];
-      expect(failedResult.status).toBe('failed');
+      expect(failedResult.status).toBe(TestResultStatus.FAILED);
       expect(failedResult.priority).toBe('high');
       expect(failedResult.name).toBe('User data should load');
       expect(failedResult.errorDetails).toBeDefined();
