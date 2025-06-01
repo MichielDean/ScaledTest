@@ -77,7 +77,9 @@ describe('Test Data Generator', () => {
     });
 
     it('should generate test execution with valid timestamp relationships', () => {
-      const testExecution = generateTestExecution();
+      // Use a fixed timestamp to ensure deterministic behavior
+      const fixedTimestamp = new Date('2025-06-01T12:00:00.000Z');
+      const testExecution = generateTestExecution({}, fixedTimestamp);
 
       const createdAt = new Date(testExecution.createdAt);
       const startedAt = new Date(testExecution.startedAt);
@@ -86,8 +88,11 @@ describe('Test Data Generator', () => {
       // startedAt should be before completedAt
       expect(startedAt.getTime()).toBeLessThan(completedAt.getTime());
 
-      // createdAt should be around completedAt (within a few seconds)
-      expect(Math.abs(createdAt.getTime() - completedAt.getTime())).toBeLessThan(5000);
+      // createdAt should equal completedAt when using fixed timestamp
+      expect(createdAt.getTime()).toBe(completedAt.getTime());
+
+      // Verify the exact timestamp relationships with fixed values
+      expect(completedAt.getTime() - startedAt.getTime()).toBe(60 * 60 * 1000); // 1 hour difference
     });
 
     it('should generate test execution with valid test cases', () => {
@@ -196,7 +201,9 @@ describe('Test Data Generator', () => {
     });
 
     it('should generate consistent timestamp formats', () => {
-      const testExecution = generateTestExecution();
+      // Use a fixed timestamp to ensure deterministic behavior
+      const fixedTimestamp = new Date('2025-06-01T12:00:00.000Z');
+      const testExecution = generateTestExecution({}, fixedTimestamp);
 
       // Check that all timestamps are valid ISO strings
       expect(() => new Date(testExecution.createdAt)).not.toThrow();

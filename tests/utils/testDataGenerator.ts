@@ -10,8 +10,8 @@ import {
 /**
  * Generates a valid test execution object that matches the validation schema
  */
-export const generateTestExecution = (overrides: Partial<any> = {}) => {
-  const now = new Date();
+export const generateTestExecution = (overrides: Partial<any> = {}, fixedTimestamp?: Date) => {
+  const now = fixedTimestamp || new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
   // Generate a single test case ID that will be shared by all test results
