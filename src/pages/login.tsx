@@ -18,7 +18,20 @@ const Login: NextPage = () => {
 
   // Get the returnUrl from the query parameters
   const { returnUrl } = router.query;
-  const redirectPath = typeof returnUrl === 'string' ? returnUrl : '/dashboard';
+  const sanitizeUrl = (url: string): string => {
+    try {
+      const parsedUrl = new URL(url, window.location.origin);
+      // Allow only relative URLs or URLs matching the current origin
+      if (parsedUrl.origin === window.location.origin) {
+        return parsedUrl.pathname + parsedUrl.search + parsedUrl.hash;
+      }
+    } catch {
+      // If URL parsing fails, fallback to a safe default
+      return '/dashboard';
+    }
+    return '/dashboard';
+  };
+  const redirectPath = typeof returnUrl === 'string' ? sanitizeUrl(returnUrl) : '/dashboard';
 
   useEffect(() => {
     // If already authenticated, redirect to dashboard or the return URL
@@ -90,17 +103,10 @@ const Login: NextPage = () => {
     }
   };
 
-  if (loading) {
-    return (
-      <div>
-        <Header />
-        <div className="container">
-          <div className="card" style={{ textAlign: 'center' }}>
-            <h2>Loading...</h2>
-          </div>
-        </div>
-      </div>
-    );
+  // If already authenticated and not loading, redirect immediately
+  if (!loading && isAuthenticated) {
+    router.push(redirectPath);
+    return null;
   }
 
   return (
