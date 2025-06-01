@@ -186,7 +186,7 @@ describe('Test Data Generator', () => {
 
       // Test case duration should be sum of test result durations
       const expectedDuration = testCase.testResults.reduce(
-        (sum, result) => sum + result.durationMs,
+        (sum, result) => sum + (result.durationMs ?? 0),
         0
       );
       expect(testCase.durationMs).toBe(expectedDuration);

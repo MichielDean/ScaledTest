@@ -1,6 +1,7 @@
 // tests/utils/testDataGenerator.ts
 import { v4 as uuidv4 } from 'uuid';
 import {
+  TestExecution,
   TestExecutionStatus,
   TestCaseStatus,
   TestResultStatus,
@@ -9,8 +10,15 @@ import {
 
 /**
  * Generates a valid test execution object that matches the validation schema
+ * @param overrides - Partial TestExecution object to override default values
+ * @param fixedTimestamp - Optional fixed Date to use for all timestamps instead of current time.
+ *                        Useful for deterministic testing and avoiding flaky time-based assertions.
+ * @returns A complete TestExecution object with generated test cases and results
  */
-export const generateTestExecution = (overrides: Partial<any> = {}, fixedTimestamp?: Date) => {
+export const generateTestExecution = (
+  overrides: Partial<TestExecution> = {},
+  fixedTimestamp?: Date
+) => {
   const now = fixedTimestamp || new Date();
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
 
