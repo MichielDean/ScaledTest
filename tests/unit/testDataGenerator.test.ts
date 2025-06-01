@@ -17,7 +17,7 @@ describe('Test Data Generator', () => {
       expect(testExecution.id).toBeDefined();
       expect(testExecution.createdAt).toBeDefined();
       expect(testExecution.testSuiteId).toBeDefined();
-      expect(testExecution.status).toBe('completed');
+      expect(testExecution.status).toBe(TestExecutionStatus.COMPLETED);
       expect(testExecution.startedAt).toBeDefined();
       expect(testExecution.completedAt).toBeDefined();
       expect(testExecution.environment).toBeDefined();
