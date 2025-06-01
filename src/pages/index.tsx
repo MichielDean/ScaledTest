@@ -7,7 +7,6 @@ import { useAuth } from '../auth/KeycloakProvider';
 const Home: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
   const router = useRouter();
-  const REDIRECT_DELAY_MS = 100;
 
   useEffect(() => {
     // Fast redirect logic - don't wait for loading to complete
@@ -19,9 +18,7 @@ const Home: NextPage = () => {
     } else {
       // If still loading, do an immediate redirect to login anyway
       // The login page will handle auth state properly
-      const timer = setTimeout(() => {
-        router.replace('/login');
-      }, REDIRECT_DELAY_MS);
+      router.replace('/login');
 
       return () => clearTimeout(timer);
     }
