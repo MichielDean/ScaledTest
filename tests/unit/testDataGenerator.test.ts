@@ -83,7 +83,7 @@ describe('Test Data Generator', () => {
 
       const createdAt = new Date(testExecution.createdAt);
       const startedAt = new Date(testExecution.startedAt);
-      const completedAt = new Date(testExecution.completedAt);
+      const completedAt = new Date(testExecution.completedAt!);
 
       // startedAt should be before completedAt
       expect(startedAt.getTime()).toBeLessThan(completedAt.getTime());
@@ -208,12 +208,14 @@ describe('Test Data Generator', () => {
       // Check that all timestamps are valid ISO strings
       expect(() => new Date(testExecution.createdAt)).not.toThrow();
       expect(() => new Date(testExecution.startedAt)).not.toThrow();
-      expect(() => new Date(testExecution.completedAt)).not.toThrow();
+      expect(() => new Date(testExecution.completedAt!)).not.toThrow();
 
       const testCase = testExecution.testCases[0];
       expect(() => new Date(testCase.createdAt)).not.toThrow();
       expect(() => new Date(testCase.startedAt)).not.toThrow();
-      expect(() => new Date(testCase.completedAt)).not.toThrow();
+      if (testCase.completedAt) {
+        expect(() => new Date(testCase.completedAt!)).not.toThrow();
+      }
 
       testCase.testResults.forEach(result => {
         expect(() => new Date(result.createdAt)).not.toThrow();

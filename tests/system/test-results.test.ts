@@ -3,6 +3,7 @@ import supertest from 'supertest';
 import { v4 as uuidv4 } from 'uuid';
 import { generateTestExecution } from '../utils/testDataGenerator';
 import { getAuthHeader } from '../utils/auth';
+import { TestCaseStatus, TestResultStatus, TestResultPriority } from '../../src/models/testResults';
 
 describe('Test Results API', () => {
   let authHeaders: Record<string, string>;
@@ -54,7 +55,7 @@ describe('Test Results API', () => {
         testExecutionId: testData.id,
         name: 'Search Functionality Test Suite',
         description: 'Tests for search functionality',
-        status: 'failed' as const,
+        status: TestCaseStatus.FAILED,
         startedAt: new Date(Date.now() - 50 * 60 * 1000).toISOString(), // 50 minutes ago
         completedAt: new Date().toISOString(),
         durationMs: 3000,
@@ -63,8 +64,8 @@ describe('Test Results API', () => {
             id: uuidv4(),
             createdAt: new Date().toISOString(),
             testCaseId: uuidv4(),
-            status: 'failed' as const,
-            priority: 'critical' as const,
+            status: TestResultStatus.FAILED,
+            priority: TestResultPriority.CRITICAL,
             name: 'Search should return relevant results',
             description: 'Verify search returns relevant results for keywords',
             expected: 'Search returns matches for "test"',
