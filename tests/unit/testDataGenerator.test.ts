@@ -134,7 +134,7 @@ describe('Test Data Generator', () => {
       // Check second test result (failing)
       const failedResult = testResults[1];
       expect(failedResult.status).toBe(TestResultStatus.FAILED);
-      expect(failedResult.priority).toBe('high');
+      expect(failedResult.priority).toBe(TestResultPriority.HIGH);
       expect(failedResult.name).toBe('User data should load');
       expect(failedResult.errorDetails).toBeDefined();
       expect(failedResult.errorDetails?.message).toBe('API returned 404 error');
