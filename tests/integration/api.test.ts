@@ -28,31 +28,37 @@ jest.mock('jose', () => ({
 
 // Mock the auth middleware
 jest.mock('../../src/auth/apiAuth', () => ({
-  validateToken: jest.fn().mockImplementation((req, res, next) => {
-    // Set authenticated user in request
-    req.user = {
-      id: 'user-123',
-      roles: ['owner', 'maintainer', 'readonly'],
-    };
-    // Call next to continue processing
-    if (typeof next === 'function') {
-      return next();
-    }
-    // If used as a handler wrapper, return a handler that will be called
-    return handler => handler(req, res);
-  }),
-  requireRole: jest.fn().mockImplementation(role => (req, res, next) => {
-    if (typeof next === 'function') {
-      return next();
-    }
-    return handler => handler(req, res);
-  }),
+  validateToken: jest
+    .fn()
+    .mockImplementation((req: NextApiRequest, res: NextApiResponse, next: () => void) => {
+      // Set authenticated user in request
+      (req as any).user = {
+        id: 'user-123',
+        roles: ['owner', 'maintainer', 'readonly'],
+      };
+      // Call next to continue processing
+      if (typeof next === 'function') {
+        return next();
+      }
+      // If used as a handler wrapper, return a handler that will be called
+      return (handler: (req: NextApiRequest, res: NextApiResponse) => void) => handler(req, res);
+    }),
+  requireRole: jest
+    .fn()
+    .mockImplementation(
+      (role: string) => (req: NextApiRequest, res: NextApiResponse, next: () => void) => {
+        if (typeof next === 'function') {
+          return next();
+        }
+        return (handler: (req: NextApiRequest, res: NextApiResponse) => void) => handler(req, res);
+      }
+    ),
   // Add the withApiAuth function that's used in the API routes
-  withApiAuth: jest.fn().mockImplementation((handler, roles) => {
+  withApiAuth: jest.fn().mockImplementation((handler: any, roles?: string[]) => {
     // Return a new handler function that calls the original handler
-    return async (req, res) => {
+    return async (req: NextApiRequest, res: NextApiResponse) => {
       // Add user information to the request
-      req.user = {
+      (req as any).user = {
         id: 'user-123',
         roles: ['owner', 'maintainer', 'readonly'],
       };
