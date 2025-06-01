@@ -15,8 +15,7 @@ const commonConfig = {
 // Define Playwright-specific config
 const playwrightConfig = {
   ...commonConfig,
-  preset: 'jest-playwright-preset',
-  testEnvironment: 'jest-playwright-preset',
+  setupFilesAfterEnv: ['<rootDir>/tests/jest-playwright-setup.js'],
 };
 
 module.exports = {
