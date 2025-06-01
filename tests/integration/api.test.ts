@@ -10,19 +10,20 @@ jest.mock('keycloak-js', () => {
   };
 });
 
-// Mock jsonwebtoken
-jest.mock('jsonwebtoken', () => ({
-  decode: jest.fn().mockReturnValue({
-    header: { kid: 'test-key-id' },
-  }),
-  verify: jest.fn().mockReturnValue({
-    sub: 'user-123',
-    resource_access: {
-      'scaledtest-client': {
-        roles: ['owner', 'maintainer', 'readonly'],
+// Mock jose library
+jest.mock('jose', () => ({
+  jwtVerify: jest.fn().mockResolvedValue({
+    payload: {
+      sub: 'user-123',
+      aud: 'scaledtest-client', // Add correct audience
+      resource_access: {
+        'scaledtest-client': {
+          roles: ['owner', 'maintainer', 'readonly'],
+        },
       },
     },
   }),
+  createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
 }));
 
 // Mock the auth middleware
