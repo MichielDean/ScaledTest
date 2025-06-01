@@ -52,7 +52,7 @@ export async function verifyToken(token: string): Promise<KeycloakTokenPayload> 
       audience: keycloakConfig.clientId,
     });
 
-    return payload as unknown as KeycloakTokenPayload;
+    return payload as KeycloakTokenPayload;
   } catch {
     try {
       // If audience validation fails (which is common in test scenarios),
