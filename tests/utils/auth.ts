@@ -37,7 +37,6 @@ export const getAuthToken = async (
         client_id: keycloakConfig.resource,
         username,
         password,
-        audience: keycloakConfig.resource, // Add audience parameter to match expected client_id
       }),
       {
         headers: {
