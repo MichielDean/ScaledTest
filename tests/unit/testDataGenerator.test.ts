@@ -126,7 +126,7 @@ describe('Test Data Generator', () => {
       // Check first test result (passing)
       const passedResult = testResults[0];
       expect(passedResult.status).toBe(TestResultStatus.PASSED);
-      expect(passedResult.priority).toBe('medium');
+      expect(passedResult.priority).toBe(TestResultPriority.MEDIUM);
       expect(passedResult.name).toBe('Login should succeed with valid credentials');
       expect(passedResult.durationMs).toBe(1250);
       expect(passedResult.tags).toEqual(['authentication', 'login']);
