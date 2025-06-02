@@ -83,7 +83,43 @@ import opensearchClient from '../../src/lib/opensearch';
 import testResultsHandler from '../../src/pages/api/test-results';
 
 jest.mock('../utils/auth');
-jest.mock('../../src/lib/opensearch');
+jest.mock('../../src/lib/opensearch', () => {
+  return {
+    __esModule: true,
+    default: {
+      indices: {
+        exists: jest.fn(),
+        create: jest.fn(),
+      },
+      index: jest.fn(),
+      search: jest.fn(),
+    },
+    TEST_RESULTS_INDEX: 'test-results',
+    checkConnection: jest.fn(),
+    ensureIndexExists: jest.fn(),
+  };
+});
+jest.mock('../../src/utils/logger', () => ({
+  apiLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  },
+  dbLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  },
+  getRequestLogger: jest.fn().mockReturnValue({
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  }),
+  logError: jest.fn(),
+}));
 
 const mockGetAuthToken = getAuthToken as jest.MockedFunction<typeof getAuthToken>;
 const mockOpensearchClient = opensearchClient as jest.Mocked<typeof opensearchClient>;
