@@ -1,7 +1,7 @@
 // tests/integration/api.test.ts
 import { v4 as uuidv4 } from 'uuid';
-import { generateTestExecution } from '../utils/testDataGenerator';
 import { NextApiRequest, NextApiResponse } from 'next';
+import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
 
 // Mock dependencies first, before any imports that use them
 jest.mock('keycloak-js', () => {
@@ -26,221 +26,254 @@ jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
 }));
 
-// Mock the auth middleware
-jest.mock('../../src/auth/apiAuth', () => ({
-  validateToken: jest
-    .fn()
-    .mockImplementation((req: NextApiRequest, res: NextApiResponse, next: () => void) => {
-      // Set authenticated user in request
-      (req as any).user = {
-        id: 'user-123',
-        roles: ['owner', 'maintainer', 'readonly'],
-      };
-      // Call next to continue processing
-      if (typeof next === 'function') {
-        return next();
-      }
-      // If used as a handler wrapper, return a handler that will be called
-      return (handler: (req: NextApiRequest, res: NextApiResponse) => void) => handler(req, res);
+// Mock logger to prevent console output during tests
+jest.mock('../../src/utils/logger', () => ({
+  apiLogger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+  getRequestLogger: jest.fn().mockReturnValue({
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    child: jest.fn().mockReturnValue({
+      debug: jest.fn(),
+      info: jest.fn(),
+      warn: jest.fn(),
+      error: jest.fn(),
     }),
-  requireRole: jest
-    .fn()
-    .mockImplementation(
-      (role: string) => (req: NextApiRequest, res: NextApiResponse, next: () => void) => {
-        if (typeof next === 'function') {
-          return next();
-        }
-        return (handler: (req: NextApiRequest, res: NextApiResponse) => void) => handler(req, res);
-      }
-    ),
-  // Add the withApiAuth function that's used in the API routes
-  withApiAuth: jest.fn().mockImplementation((handler: any, roles?: string[]) => {
-    // Return a new handler function that calls the original handler
-    return async (req: NextApiRequest, res: NextApiResponse) => {
-      // Add user information to the request
-      (req as any).user = {
-        id: 'user-123',
-        roles: ['owner', 'maintainer', 'readonly'],
-      };
-      // Call the original handler
-      return handler(req, res);
-    };
   }),
-}));
-
-// Mock the UserRole enum that's used in the API routes
-jest.mock('../../src/auth/keycloak', () => ({
-  UserRole: {
-    READONLY: 'readonly',
-    MAINTAINER: 'maintainer',
-    OWNER: 'owner',
+  logError: jest.fn(),
+  dbLogger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+  },
+  uiLogger: {
+    debug: jest.fn(),
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
   },
 }));
 
-// Now import these AFTER mocking
-import { getAuthToken } from '../utils/auth';
-import opensearchClient from '../../src/lib/opensearch';
-import testResultsHandler from '../../src/pages/api/test-results';
+// Mock OpenSearch client
+const mockOpenSearchClient = {
+  indices: {
+    exists: jest.fn().mockResolvedValue({ body: true }),
+    create: jest.fn().mockResolvedValue({ body: { acknowledged: true } }),
+  },
+  index: jest.fn().mockResolvedValue({
+    body: { _id: '123', result: 'created' },
+  }),
+  search: jest.fn().mockResolvedValue({
+    body: {
+      hits: {
+        hits: [],
+        total: { value: 0 },
+      },
+    },
+  }),
+};
 
-jest.mock('../utils/auth');
 jest.mock('../../src/lib/opensearch', () => {
   return {
     __esModule: true,
-    default: {
-      indices: {
-        exists: jest.fn(),
-        create: jest.fn(),
-      },
-      index: jest.fn(),
-      search: jest.fn(),
-    },
-    TEST_RESULTS_INDEX: 'test-results',
-    checkConnection: jest.fn(),
-    ensureIndexExists: jest.fn(),
+    default: mockOpenSearchClient,
+    ensureCtrfReportsIndexExists: jest.fn().mockResolvedValue(undefined),
   };
 });
-jest.mock('../../src/utils/logger', () => ({
-  apiLogger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-  },
-  dbLogger: {
-    info: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-  },
-  getRequestLogger: jest.fn().mockReturnValue({
-    info: jest.fn(),
-    error: jest.fn(),
-    debug: jest.fn(),
-    warn: jest.fn(),
-  }),
-  logError: jest.fn(),
-}));
 
-const mockGetAuthToken = getAuthToken as jest.MockedFunction<typeof getAuthToken>;
-const mockOpensearchClient = opensearchClient as jest.Mocked<typeof opensearchClient>;
+// Mock crypto for testing
+const originalCrypto = global.crypto;
+Object.defineProperty(global, 'crypto', {
+  value: {
+    randomUUID: jest.fn(() => '00000000-0000-0000-0000-000000000000'),
+  },
+});
 
-// Mock Next.js API request and response
-const mockReq = (overrides = {}) => {
+// Import API handlers
+import ctrfReportsHandler from '../../src/pages/api/test-reports';
+
+// Create a mock for NextApiRequest and NextApiResponse
+const mockReq = (method: string, body: any = {}, query: any = {}) => {
   return {
-    method: 'POST',
+    method,
+    body,
+    query,
     headers: {
       authorization: 'Bearer mock-token',
     },
-    body: {},
-    user: {
-      id: 'user-123',
-      roles: ['owner', 'maintainer', 'readonly'],
-    },
-    ...overrides,
   } as unknown as NextApiRequest;
 };
 
 const mockRes = () => {
-  const res = {
-    status: jest.fn().mockReturnThis(),
-    json: jest.fn().mockReturnThis(),
-    end: jest.fn(),
-    statusCode: 200,
-    getHeader: jest.fn(),
-    setHeader: jest.fn(),
-  } as unknown as NextApiResponse;
-  return res;
+  const res: any = {};
+  res.status = jest.fn().mockReturnValue(res);
+  res.json = jest.fn().mockReturnValue(res);
+  return res as NextApiResponse;
 };
 
-describe('API Integration Tests', () => {
-  beforeEach(() => {
+// Helper to run a test with the API handler
+const runHandlerTest = async (
+  handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
+  method: string,
+  body?: any,
+  query?: any
+) => {
+  const req = mockReq(method, body, query);
+  const res = mockRes();
+  await handler(req, res);
+  return { req, res };
+};
+
+describe('API Endpoints', () => {
+  afterEach(() => {
     jest.clearAllMocks();
-
-    // Mock authentication
-    mockGetAuthToken.mockResolvedValue('mock-token');
-
-    // Mock OpenSearch client methods
-    mockOpensearchClient.indices = {
-      exists: jest.fn().mockResolvedValue({ body: true }),
-      create: jest.fn().mockResolvedValue({ body: { acknowledged: true } }),
-    } as any;
-
-    mockOpensearchClient.index = jest.fn().mockResolvedValue({
-      body: {
-        _id: 'test-id',
-        result: 'created',
-      },
-    });
-
-    mockOpensearchClient.cluster = {
-      health: jest.fn().mockResolvedValue({ body: { status: 'green' } }),
-    } as any;
   });
 
-  describe('Test Results API', () => {
-    describe('Data Validation', () => {
-      it('should accept valid test execution data', async () => {
-        // Arrange
-        const testData = generateTestExecution();
-        const req = mockReq({ body: testData });
-        const res = mockRes();
+  afterAll(() => {
+    // Restore the original crypto
+    Object.defineProperty(global, 'crypto', {
+      value: originalCrypto,
+    });
+  });
 
-        // Act
-        await testResultsHandler(req, res);
+  describe('CTRF Reports API', () => {
+    it('should store a valid CTRF report via POST', async () => {
+      const ctrfReport = generateCtrfReport();
+      const { res } = await runHandlerTest(ctrfReportsHandler, 'POST', ctrfReport);
 
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(201);
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            success: true,
-            id: expect.any(String),
-          })
-        );
-        expect(mockOpensearchClient.index).toHaveBeenCalled();
-      });
-
-      it('should reject data with missing required fields', async () => {
-        // Arrange
-        const invalidTestData = {
-          id: uuidv4(),
-          // Missing required fields
-        };
-        const req = mockReq({ body: invalidTestData });
-        const res = mockRes();
-
-        // Act
-        await testResultsHandler(req, res);
-
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(400);
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            success: false,
-            error: expect.stringContaining('Validation error'),
-          })
-        );
-        expect(mockOpensearchClient.index).not.toHaveBeenCalled();
-      });
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: 'CTRF report stored successfully',
+        })
+      );
+      expect(mockOpenSearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+          id: expect.any(String),
+          body: expect.objectContaining({
+            reportFormat: 'CTRF',
+          }),
+          refresh: true,
+        })
+      );
     });
 
-    describe('HTTP Method Handling', () => {
-      it('should reject non-POST methods', async () => {
-        // Arrange
-        const req = mockReq({ method: 'GET' });
-        const res = mockRes();
+    it('should validate CTRF report structure', async () => {
+      const invalidReport = {
+        // Missing required fields
+        reportFormat: 'CTRF',
+      };
+      const { res } = await runHandlerTest(ctrfReportsHandler, 'POST', invalidReport);
 
-        // Act
-        await testResultsHandler(req, res);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'CTRF report validation failed',
+        })
+      );
+    });
 
-        // Assert
-        expect(res.status).toHaveBeenCalledWith(405);
-        expect(res.json).toHaveBeenCalledWith(
-          expect.objectContaining({
-            success: false,
-            error: expect.stringContaining('Method not allowed'),
-          })
-        );
+    it('should get CTRF reports via GET', async () => {
+      mockOpenSearchClient.search.mockResolvedValueOnce({
+        body: {
+          hits: {
+            hits: [
+              {
+                _id: '123',
+                _source: generateCtrfReport(),
+              },
+            ],
+            total: { value: 1 },
+          },
+        },
       });
+
+      const { res } = await runHandlerTest(ctrfReportsHandler, 'GET', undefined, {
+        page: '1',
+        size: '10',
+      });
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          reports: expect.arrayContaining([expect.any(Object)]),
+          total: 1,
+        })
+      );
+      expect(mockOpenSearchClient.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+        })
+      );
+    });
+
+    it('should apply filters when getting CTRF reports', async () => {
+      mockOpenSearchClient.search.mockResolvedValueOnce({
+        body: {
+          hits: {
+            hits: [],
+            total: { value: 0 },
+          },
+        },
+      });
+
+      await runHandlerTest(ctrfReportsHandler, 'GET', undefined, {
+        page: '1',
+        size: '10',
+        status: 'failed',
+        tool: 'jest',
+        environment: 'production',
+      });
+
+      expect(mockOpenSearchClient.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            query: expect.objectContaining({
+              bool: expect.objectContaining({
+                must: expect.arrayContaining([
+                  expect.objectContaining({
+                    nested: expect.objectContaining({
+                      path: 'results.tests',
+                      query: expect.objectContaining({
+                        term: { 'results.tests.status': 'failed' },
+                      }),
+                    }),
+                  }),
+                  expect.objectContaining({
+                    term: { 'results.tool.name': 'jest' },
+                  }),
+                  expect.objectContaining({
+                    term: { 'results.environment.testEnvironment': 'production' },
+                  }),
+                ]),
+              }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should reject unsupported methods', async () => {
+      const { res } = await runHandlerTest(ctrfReportsHandler, 'PUT', {});
+
+      expect(res.status).toHaveBeenCalledWith(405);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
+          error: 'Method not allowed. Supported methods: POST, GET',
+        })
+      );
     });
   });
 });

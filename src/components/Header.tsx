@@ -27,10 +27,6 @@ const Header: React.FC = () => {
               Dashboard
             </Link>
 
-            <Link id="headerTestResults" href="/test-results-dashboard">
-              Test Results
-            </Link>
-
             {/* Only show admin section for owners */}
             {hasRole(UserRole.OWNER) && (
               <>

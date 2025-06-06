@@ -1,18 +1,15 @@
+// filepath: c:\Users\mokey\source\ScaledTest\tests\unit\validationSchemas.test.ts
 // tests/unit/validationSchemas.test.ts
 import { v4 as uuidv4 } from 'uuid';
 import {
-  TestErrorDetailsSchema,
-  TestResultStatusSchema,
-  TestResultPrioritySchema,
-  TestResultSchema,
-  TestCaseStatusSchema,
-  TestCaseSchema,
-  TestExecutionStatusSchema,
-  TestExecutionSchema,
+  ErrorDetailsSchema,
+  HttpMethodSchema,
+  NetworkRequestSchema,
 } from '../../src/models/validationSchemas';
+import { HttpMethod } from '../../src/models/validationSchemas';
 
 describe('Validation Schemas', () => {
-  describe('TestErrorDetailsSchema Validation', () => {
+  describe('ErrorDetailsSchema Validation', () => {
     it('should validate a complete error details object', () => {
       const validErrorDetails = {
         message: 'Error: Test failed unexpectedly',
@@ -21,7 +18,7 @@ describe('Validation Schemas', () => {
         consoleOutput: 'Some console output',
       };
 
-      const result = TestErrorDetailsSchema.safeParse(validErrorDetails);
+      const result = ErrorDetailsSchema.safeParse(validErrorDetails);
       expect(result.success).toBe(true);
     });
 
@@ -30,7 +27,7 @@ describe('Validation Schemas', () => {
         message: 'An error occurred',
       };
 
-      const result = TestErrorDetailsSchema.safeParse(minimalErrorDetails);
+      const result = ErrorDetailsSchema.safeParse(minimalErrorDetails);
       expect(result.success).toBe(true);
     });
 
@@ -40,7 +37,7 @@ describe('Validation Schemas', () => {
         screenshotUrl: 'invalid-url',
       };
 
-      const result = TestErrorDetailsSchema.safeParse(invalidErrorDetails);
+      const result = ErrorDetailsSchema.safeParse(invalidErrorDetails);
       expect(result.success).toBe(false);
       if (!result.success) {
         expect(result.error.issues[0].path).toContain('screenshotUrl');
@@ -48,119 +45,55 @@ describe('Validation Schemas', () => {
     });
   });
 
-  describe('TestResultSchema Validation', () => {
-    it('should validate a complete test result object', () => {
-      const now = new Date().toISOString();
-      const validTestResult = {
-        id: uuidv4(),
-        createdAt: now,
-        testCaseId: uuidv4(),
-        status: 'passed',
-        priority: 'high',
-        name: 'Login Test',
-        description: 'Test user login functionality',
-        expected: 'User should be logged in',
-        actual: 'User was logged in successfully',
-        durationMs: 1500,
-        tags: ['login', 'authentication'],
+  describe('NetworkRequestSchema Validation', () => {
+    it('should validate a complete network request object', () => {
+      const validNetworkRequest = {
+        url: 'https://api.example.com/users',
+        method: HttpMethod.GET,
+        requestHeaders: { 'Content-Type': 'application/json' },
+        statusCode: 200,
+        responseHeaders: { 'Content-Type': 'application/json' },
+        responseBody: '{"success":true}',
+        timeTakenMs: 150,
       };
 
-      const result = TestResultSchema.safeParse(validTestResult);
+      const result = NetworkRequestSchema.safeParse(validNetworkRequest);
       expect(result.success).toBe(true);
     });
 
-    it('should reject invalid status values', () => {
-      const now = new Date().toISOString();
-      const invalidTestResult = {
-        id: uuidv4(),
-        createdAt: now,
-        testCaseId: uuidv4(),
-        status: 'invalid-status', // Invalid status
-        name: 'Test Name',
+    it('should validate with only required fields', () => {
+      const minimalNetworkRequest = {
+        url: 'https://api.example.com/users',
+        method: HttpMethod.GET,
       };
 
-      const result = TestResultSchema.safeParse(invalidTestResult);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].path).toContain('status');
-      }
-    });
-
-    it('should reject invalid UUID format', () => {
-      const now = new Date().toISOString();
-      const invalidTestResult = {
-        id: 'not-a-uuid',
-        createdAt: now,
-        testCaseId: uuidv4(),
-        status: 'passed',
-        name: 'Test Name',
-      };
-
-      const result = TestResultSchema.safeParse(invalidTestResult);
-      expect(result.success).toBe(false);
-      if (!result.success) {
-        expect(result.error.issues[0].path).toContain('id');
-      }
-    });
-  });
-
-  describe('TestExecutionSchema Validation', () => {
-    it('should validate a complete test execution with nested test cases and results', () => {
-      const now = new Date().toISOString();
-      const oneHourAgo = new Date(Date.now() - 3600000).toISOString();
-
-      const validTestExecution = {
-        id: uuidv4(),
-        createdAt: now,
-        testSuiteId: uuidv4(),
-        status: 'completed',
-        startedAt: oneHourAgo,
-        completedAt: now,
-        environment: {
-          os: 'Windows',
-          browser: 'Chrome',
-        },
-        testCases: [
-          {
-            id: uuidv4(),
-            createdAt: now,
-            testExecutionId: uuidv4(),
-            name: 'Login Test Suite',
-            status: 'passed',
-            startedAt: oneHourAgo,
-            completedAt: now,
-            testResults: [
-              {
-                id: uuidv4(),
-                createdAt: now,
-                testCaseId: uuidv4(),
-                status: 'passed',
-                name: 'Should login successfully',
-              },
-            ],
-          },
-        ],
-      };
-
-      const result = TestExecutionSchema.safeParse(validTestExecution);
+      const result = NetworkRequestSchema.safeParse(minimalNetworkRequest);
       expect(result.success).toBe(true);
     });
 
-    it('should reject when missing required fields', () => {
-      const now = new Date().toISOString();
-      const invalidTestExecution = {
-        id: uuidv4(),
-        createdAt: now,
-        // Missing testSuiteId
-        status: 'running',
-        startedAt: now,
-        testCases: [],
+    it('should reject invalid URL formats', () => {
+      const invalidNetworkRequest = {
+        url: 'not-a-url',
+        method: HttpMethod.GET,
       };
 
-      const result = TestExecutionSchema.safeParse(invalidTestExecution);
+      const result = NetworkRequestSchema.safeParse(invalidNetworkRequest);
       expect(result.success).toBe(false);
       if (!result.success) {
-        expect(result.error.issues[0].path).toContain('testSuiteId');
+        expect(result.error.issues[0].path).toContain('url');
+      }
+    });
+
+    it('should reject invalid HTTP methods', () => {
+      const invalidNetworkRequest = {
+        url: 'https://api.example.com/users',
+        method: 'INVALID_METHOD', // Invalid method
+      };
+
+      const result = NetworkRequestSchema.safeParse(invalidNetworkRequest);
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error.issues[0].path).toContain('method');
       }
     });
   });

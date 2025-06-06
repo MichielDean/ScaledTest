@@ -1,6 +1,6 @@
 import { Client } from '@opensearch-project/opensearch';
 import { dbLogger as logger, logError } from '../utils/logger';
-import { getRequiredEnvVar, getOptionalEnvVar, parseBooleanEnvVar } from '../utils/env';
+import { getRequiredEnvVar, parseBooleanEnvVar } from '../utils/env';
 
 // Get OpenSearch configuration from environment variables with validation
 const host = getRequiredEnvVar('OPENSEARCH_HOST', 'OpenSearch configuration is incomplete.');
@@ -14,19 +14,12 @@ const password = getRequiredEnvVar(
 );
 const rejectUnauthorized = parseBooleanEnvVar('OPENSEARCH_SSL_VERIFY', false);
 
-// Index name for test results - can be overridden with env var
-export const TEST_RESULTS_INDEX = getOptionalEnvVar(
-  'OPENSEARCH_TEST_RESULTS_INDEX',
-  'test-results'
-);
-
 // Log configuration (without password)
 logger.debug(
   {
     host,
     username,
     sslVerification: rejectUnauthorized,
-    testResultsIndex: TEST_RESULTS_INDEX,
   },
   'Configuring OpenSearch client'
 );
@@ -57,149 +50,62 @@ export const checkConnection = async (): Promise<boolean> => {
   }
 };
 
-/**
- * Check if the test results index exists and create it if not,
- * with mappings for all the nested objects, tags, and metadata.
- *
- * @returns {Promise<boolean>} Whether the index exists or was created successfully
- */
-export const checkAndCreateTestResultsIndex = async (): Promise<boolean> => {
+// Function to ensure the CTRF reports index exists
+export const ensureCtrfReportsIndexExists = async (): Promise<void> => {
+  const indexName = 'ctrf-reports';
   try {
-    // Check if the index exists
-    const indexExists = await opensearchClient.indices.exists({
-      index: TEST_RESULTS_INDEX,
-    });
+    const indexExists = await opensearchClient.indices.exists({ index: indexName });
 
-    if (indexExists.body) {
-      logger.debug({ index: TEST_RESULTS_INDEX }, 'Index already exists');
-      return true;
-    }
-
-    // Create the index with mappings
-    const response = await opensearchClient.indices.create({
-      index: TEST_RESULTS_INDEX,
-      body: {
-        settings: {
-          number_of_shards: 1,
-          number_of_replicas: 1,
-        },
-        mappings: {
-          properties: {
-            // Base entity fields
-            id: { type: 'keyword' },
-            createdAt: { type: 'date' },
-            tags: { type: 'keyword' },
-            metadata: {
-              type: 'object',
-              enabled: true,
-            },
-
-            // Team fields
-            name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
-            description: { type: 'text' },
-
-            // Application specific fields
-            teamId: { type: 'keyword' },
-            version: { type: 'keyword' },
-            repositoryUrl: { type: 'keyword' },
-
-            // TestSuite specific fields
-            applicationId: { type: 'keyword' },
-            sourceLocation: { type: 'keyword' },
-
-            // TestExecution specific fields
-            testSuiteId: { type: 'keyword' },
-            status: { type: 'keyword' },
-            startedAt: { type: 'date' },
-            completedAt: { type: 'date' },
-            environment: {
-              type: 'object',
-              enabled: true,
-            },
-            configuration: {
-              type: 'object',
-              enabled: true,
-            },
-            triggeredBy: { type: 'keyword' },
-            buildId: { type: 'keyword' },
-
-            // TestCase fields
-            testExecutionId: { type: 'keyword' },
-            durationMs: { type: 'long' },
-
-            // TestCase.testResults nested mapping
-            testCases: {
-              type: 'nested',
-              properties: {
-                id: { type: 'keyword' },
-                createdAt: { type: 'date' },
-                tags: { type: 'keyword' },
-                metadata: {
-                  type: 'object',
-                  enabled: true,
-                },
-                testExecutionId: { type: 'keyword' },
-                name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
-                description: { type: 'text' },
-                status: { type: 'keyword' },
-                startedAt: { type: 'date' },
-                completedAt: { type: 'date' },
-                durationMs: { type: 'long' },
-
-                // TestResult nested mapping
-                testResults: {
-                  type: 'nested',
-                  properties: {
-                    id: { type: 'keyword' },
-                    createdAt: { type: 'date' },
-                    tags: { type: 'keyword' },
-                    metadata: {
-                      type: 'object',
-                      enabled: true,
-                    },
-                    testCaseId: { type: 'keyword' },
-                    status: { type: 'keyword' },
-                    priority: { type: 'keyword' },
-                    name: { type: 'text', fields: { keyword: { type: 'keyword' } } },
-                    description: { type: 'text' },
-                    expected: { type: 'text' },
-                    actual: { type: 'text' },
-                    durationMs: { type: 'long' },
-
-                    // TestErrorDetails nested mapping
-                    errorDetails: {
-                      type: 'object',
-                      properties: {
-                        message: { type: 'text' },
-                        stackTrace: { type: 'text' },
-                        screenshotUrl: { type: 'keyword' },
-                        logsUrl: { type: 'keyword' },
-                        consoleOutput: { type: 'text' },
-                        networkRequests: {
-                          type: 'nested',
-                          enabled: true,
-                        },
-                      },
-                    },
-                  },
+    if (!indexExists.body) {
+      await opensearchClient.indices.create({
+        index: indexName,
+        body: {
+          mappings: {
+            properties: {
+              reportId: { type: 'keyword' },
+              reportFormat: { type: 'keyword' },
+              specVersion: { type: 'keyword' },
+              timestamp: { type: 'date' },
+              storedAt: { type: 'date' },
+              generatedBy: { type: 'keyword' },
+              'results.tool.name': { type: 'keyword' },
+              'results.tool.version': { type: 'keyword' },
+              'results.summary.tests': { type: 'integer' },
+              'results.summary.passed': { type: 'integer' },
+              'results.summary.failed': { type: 'integer' },
+              'results.summary.skipped': { type: 'integer' },
+              'results.summary.pending': { type: 'integer' },
+              'results.summary.other': { type: 'integer' },
+              'results.summary.start': { type: 'date' },
+              'results.summary.stop': { type: 'date' },
+              'results.tests': {
+                type: 'nested',
+                properties: {
+                  name: { type: 'text' },
+                  status: { type: 'keyword' },
+                  duration: { type: 'integer' },
+                  suite: { type: 'keyword' },
+                  filePath: { type: 'keyword' },
+                  tags: { type: 'keyword' },
+                  flaky: { type: 'boolean' },
                 },
               },
+              'results.environment.appName': { type: 'keyword' },
+              'results.environment.appVersion': { type: 'keyword' },
+              'results.environment.buildName': { type: 'keyword' },
+              'results.environment.buildNumber': { type: 'keyword' },
+              'results.environment.branchName': { type: 'keyword' },
+              'results.environment.testEnvironment': { type: 'keyword' },
             },
           },
         },
-      },
-    });
-
-    logger.debug(
-      { index: TEST_RESULTS_INDEX, response: response.body },
-      'Created index with mappings'
-    );
-    return true;
+      });
+      logger.info({ index: indexName }, 'Created OpenSearch index for CTRF reports');
+    }
   } catch (error) {
-    logError(logger, `Failed to create index`, error, { index: TEST_RESULTS_INDEX });
-    return false;
+    logError(logger, 'Failed to ensure CTRF reports index exists', error);
+    throw error; // Re-throw to be handled by the caller
   }
 };
 
-// Export the client for use in other files
 export default opensearchClient;
