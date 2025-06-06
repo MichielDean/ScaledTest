@@ -1,13 +1,11 @@
+// filepath: c:\Users\mokey\source\ScaledTest\src\pages\api\test-reports.ts
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth } from '../../auth/apiAuth';
 import { UserRole } from '../../auth/keycloak';
-import { apiLogger, getRequestLogger, logError } from '../../utils/logger';
-import opensearchClient from '../../lib/opensearch';
+import { getRequestLogger, logError } from '../../utils/logger';
+import opensearchClient, { ensureCtrfReportsIndexExists } from '../../lib/opensearch';
 import { CtrfSchema } from '../../schemas/ctrf/ctrf';
 import { z } from 'zod';
-
-// Define logger for this file
-const logger = apiLogger;
 
 // Validation schema for CTRF reports
 const CtrfReportSchema = z.object({
@@ -20,6 +18,7 @@ const CtrfReportSchema = z.object({
     tool: z.object({
       name: z.string(),
       version: z.string().optional(),
+      url: z.string().optional(),
       extra: z.record(z.unknown()).optional(),
     }),
     summary: z.object({
@@ -132,57 +131,9 @@ type GetResponse = {
   total: number;
 };
 
-// Create OpenSearch index for CTRF reports if it doesn't exist
+// Function to ensure the OpenSearch index exists for CTRF reports
 const ensureIndexExists = async () => {
-  const indexName = 'ctrf-reports';
-  const indexExists = await opensearchClient.indices.exists({ index: indexName });
-
-  if (!indexExists.body) {
-    await opensearchClient.indices.create({
-      index: indexName,
-      body: {
-        mappings: {
-          properties: {
-            reportId: { type: 'keyword' },
-            reportFormat: { type: 'keyword' },
-            specVersion: { type: 'keyword' },
-            timestamp: { type: 'date' },
-            storedAt: { type: 'date' },
-            generatedBy: { type: 'keyword' },
-            'results.tool.name': { type: 'keyword' },
-            'results.tool.version': { type: 'keyword' },
-            'results.summary.tests': { type: 'integer' },
-            'results.summary.passed': { type: 'integer' },
-            'results.summary.failed': { type: 'integer' },
-            'results.summary.skipped': { type: 'integer' },
-            'results.summary.pending': { type: 'integer' },
-            'results.summary.other': { type: 'integer' },
-            'results.summary.start': { type: 'date' },
-            'results.summary.stop': { type: 'date' },
-            'results.tests': {
-              type: 'nested',
-              properties: {
-                name: { type: 'text' },
-                status: { type: 'keyword' },
-                duration: { type: 'integer' },
-                suite: { type: 'keyword' },
-                filePath: { type: 'keyword' },
-                tags: { type: 'keyword' },
-                flaky: { type: 'boolean' },
-              },
-            },
-            'results.environment.appName': { type: 'keyword' },
-            'results.environment.appVersion': { type: 'keyword' },
-            'results.environment.buildName': { type: 'keyword' },
-            'results.environment.buildNumber': { type: 'keyword' },
-            'results.environment.branchName': { type: 'keyword' },
-            'results.environment.testEnvironment': { type: 'keyword' },
-          },
-        },
-      },
-    });
-    logger.info({ index: indexName }, 'Created OpenSearch index for CTRF reports');
-  }
+  await ensureCtrfReportsIndexExists();
 };
 
 // Handle incoming requests

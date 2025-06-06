@@ -106,6 +106,10 @@ export const generateCtrfReport = (
     results: {
       ...defaultReport.results,
       ...overrides.results,
+      tool: {
+        ...defaultReport.results.tool,
+        ...overrides.results?.tool,
+      },
     },
   };
 };

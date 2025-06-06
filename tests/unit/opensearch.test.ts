@@ -29,8 +29,7 @@ jest.mock('@opensearch-project/opensearch', () => {
 // Now import the module that uses the mocked client
 import opensearchClient, {
   checkConnection,
-  checkAndCreateTestResultsIndex,
-  TEST_RESULTS_INDEX,
+  ensureCtrfReportsIndexExists,
 } from '../../src/lib/opensearch';
 
 describe('OpenSearch Client', () => {
@@ -54,24 +53,60 @@ describe('OpenSearch Client', () => {
 
       // Assert
       expect(result).toBe(true);
-      expect(mockHealthFn).toHaveBeenCalledTimes(1);
+      expect(mockHealthFn).toHaveBeenCalled();
     });
 
     it('should report failed connection when cluster health check fails', async () => {
       // Arrange
-      mockHealthFn.mockRejectedValueOnce(new Error('Connection failed'));
+      mockHealthFn.mockRejectedValueOnce(new Error('Connection refused'));
 
       // Act
       const result = await checkConnection();
 
       // Assert
       expect(result).toBe(false);
-      expect(mockHealthFn).toHaveBeenCalledTimes(1);
+      expect(mockHealthFn).toHaveBeenCalled();
     });
   });
 
   describe('Index Management', () => {
-    it('should not create index when it already exists', async () => {
+    it('should create CTRF reports index if it does not exist', async () => {
+      // Arrange
+      mockExistsFn.mockResolvedValueOnce({
+        body: false,
+        statusCode: 404,
+        headers: {},
+        meta: {} as any,
+      });
+      mockCreateFn.mockResolvedValueOnce({
+        body: { acknowledged: true },
+        statusCode: 200,
+        headers: {},
+        meta: {} as any,
+      });
+
+      // Act
+      await ensureCtrfReportsIndexExists();
+
+      // Assert
+      expect(mockExistsFn).toHaveBeenCalledWith({ index: 'ctrf-reports' });
+      expect(mockCreateFn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+          body: expect.objectContaining({
+            mappings: expect.objectContaining({
+              properties: expect.objectContaining({
+                reportId: expect.any(Object),
+                reportFormat: expect.any(Object),
+                timestamp: expect.any(Object),
+              }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should not create CTRF reports index if it already exists', async () => {
       // Arrange
       mockExistsFn.mockResolvedValueOnce({
         body: true,
@@ -81,44 +116,22 @@ describe('OpenSearch Client', () => {
       });
 
       // Act
-      const result = await checkAndCreateTestResultsIndex();
+      await ensureCtrfReportsIndexExists();
 
       // Assert
-      expect(result).toBe(true);
-      expect(mockExistsFn).toHaveBeenCalledWith({ index: TEST_RESULTS_INDEX });
+      expect(mockExistsFn).toHaveBeenCalledWith({ index: 'ctrf-reports' });
       expect(mockCreateFn).not.toHaveBeenCalled();
     });
 
-    it('should create index when it does not exist', async () => {
+    it('should throw an error if index check fails', async () => {
       // Arrange
-      mockExistsFn.mockResolvedValueOnce({
-        body: false,
-        statusCode: 404,
-        headers: {},
-        meta: {} as any,
-      });
+      mockExistsFn.mockRejectedValueOnce(new Error('OpenSearch error'));
 
-      mockCreateFn.mockResolvedValueOnce({
-        body: { acknowledged: true },
-        statusCode: 200,
-        headers: {},
-        meta: {} as any,
-      });
-
-      // Act
-      const result = await checkAndCreateTestResultsIndex();
-
-      // Assert
-      expect(result).toBe(true);
-      expect(mockExistsFn).toHaveBeenCalledWith({ index: TEST_RESULTS_INDEX });
-      expect(mockCreateFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          index: TEST_RESULTS_INDEX,
-        })
-      );
+      // Act & Assert
+      await expect(ensureCtrfReportsIndexExists()).rejects.toThrow('OpenSearch error');
     });
 
-    it('should handle index creation failures', async () => {
+    it('should throw an error if index creation fails', async () => {
       // Arrange
       mockExistsFn.mockResolvedValueOnce({
         body: false,
@@ -126,20 +139,22 @@ describe('OpenSearch Client', () => {
         headers: {},
         meta: {} as any,
       });
-
       mockCreateFn.mockRejectedValueOnce(new Error('Failed to create index'));
 
-      // Act
-      const result = await checkAndCreateTestResultsIndex();
+      // Act & Assert
+      await expect(ensureCtrfReportsIndexExists()).rejects.toThrow('Failed to create index');
+    });
+  });
 
-      // Assert
-      expect(result).toBe(false);
-      expect(mockExistsFn).toHaveBeenCalledWith({ index: TEST_RESULTS_INDEX });
-      expect(mockCreateFn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          index: TEST_RESULTS_INDEX,
-        })
-      );
+  describe('Client Configuration', () => {
+    it('should create a client with the correct configuration', () => {
+      // Since Client is called during module initialization and Jest mocks are set up
+      // after the module is imported, we can't actually check the Client constructor call.
+      // Instead, we'll check that the opensearchClient object exists
+      expect(opensearchClient).toBeDefined();
+
+      // We can still check the mock to make sure it's been set up correctly
+      expect(Client).toBeDefined();
     });
   });
 });

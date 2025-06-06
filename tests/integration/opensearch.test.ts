@@ -6,7 +6,7 @@ setupOpenSearchTestEnv();
 
 import { Client } from '@opensearch-project/opensearch';
 import { v4 as uuidv4 } from 'uuid';
-import { generateTestExecution } from '../utils/testDataGenerator';
+import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
 
 // Create mock before importing the module that uses it
 const mockClient = {
@@ -20,7 +20,7 @@ const mockClient = {
   },
   indices: {
     exists: jest.fn().mockResolvedValue({
-      body: true,
+      body: false,
       statusCode: 200,
       headers: {},
       meta: {} as any,
@@ -31,147 +31,173 @@ const mockClient = {
       headers: {},
       meta: {} as any,
     }),
-    delete: jest.fn().mockResolvedValue({
-      body: { acknowledged: true },
-      statusCode: 200,
-      headers: {},
-      meta: {} as any,
-    }),
   },
   index: jest.fn().mockResolvedValue({
-    body: {
-      _id: 'test-id',
-      result: 'created',
-    },
+    body: { _id: 'test-id', result: 'created' },
     statusCode: 201,
     headers: {},
     meta: {} as any,
   }),
-  get: jest.fn().mockImplementation(({ id }) => {
-    return Promise.resolve({
-      body: {
-        _id: id,
-        _source: {
-          id,
-          name: 'Test document',
-          createdAt: new Date().toISOString(),
-          testCases: [
-            {
-              testResults: [{}],
-            },
-          ],
-        },
+  search: jest.fn().mockResolvedValue({
+    body: {
+      hits: {
+        hits: [],
+        total: { value: 0 },
       },
-      statusCode: 200,
-      headers: {},
-      meta: {} as any,
-    });
+    },
+    statusCode: 200,
+    headers: {},
+    meta: {} as any,
   }),
 };
 
-// Mock the OpenSearch client
 jest.mock('@opensearch-project/opensearch', () => {
   return {
-    Client: jest.fn(() => mockClient),
+    Client: jest.fn().mockImplementation(() => mockClient),
   };
 });
 
-// Now import the module that uses the mocked client
+// Import the module with the mocked dependencies
 import opensearchClient, {
   checkConnection,
-  checkAndCreateTestResultsIndex,
-  TEST_RESULTS_INDEX,
+  ensureCtrfReportsIndexExists,
 } from '../../src/lib/opensearch';
 
-// This is an integration test that uses a mock OpenSearch client
-describe('OpenSearch Integration', () => {
-  // Use a unique index name for each test run to avoid conflicts
-  const testIndexName = `test-results-${uuidv4().substring(0, 8)}`;
-
-  beforeAll(() => {
-    // Override the index name for testing
-    (global as any).TEST_RESULTS_INDEX = testIndexName;
+describe('OpenSearch Client', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
-
-  afterAll(() => {
-    // Restore the original TEST_RESULTS_INDEX
-    delete (global as any).TEST_RESULTS_INDEX;
-  });
-
-  describe('Cluster Connection', () => {
-    it('should successfully connect to OpenSearch cluster', async () => {
-      // Act
-      const connected = await checkConnection();
-
-      // Assert
-      expect(connected).toBe(true);
+  describe('Configuration', () => {
+    it('should create a properly configured OpenSearch client', () => {
+      // Since Client is called during module initialization and Jest mocks are set up
+      // after the module is imported, we can't actually check the Client constructor call.
+      // Instead, we'll check that the opensearchClient object exists
+      expect(opensearchClient).toBeDefined();
     });
   });
 
-  describe('Index Management', () => {
-    it('should properly create and verify index existence', async () => {
-      // Act
-      const result = await checkAndCreateTestResultsIndex();
-
-      // Assert
+  describe('Health Check', () => {
+    it('should check cluster health', async () => {
+      const result = await checkConnection();
       expect(result).toBe(true);
+      expect(mockClient.cluster.health).toHaveBeenCalled();
+    });
+
+    it('should handle health check errors', async () => {
+      // Mock an error for this test
+      mockClient.cluster.health.mockRejectedValueOnce(new Error('Connection failed'));
+      const result = await checkConnection();
+      expect(result).toBe(false);
+    });
+  });
+
+  describe('Index Creation', () => {
+    it('should create CTRF reports index if it does not exist', async () => {
+      // Mock the index not existing
+      mockClient.indices.exists.mockResolvedValueOnce({
+        body: false,
+        statusCode: 404,
+        headers: {},
+        meta: {} as any,
+      });
+
+      await ensureCtrfReportsIndexExists();
+
+      expect(mockClient.indices.exists).toHaveBeenCalledWith({ index: 'ctrf-reports' });
+      expect(mockClient.indices.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+          body: expect.objectContaining({
+            mappings: expect.objectContaining({
+              properties: expect.objectContaining({
+                reportId: expect.any(Object),
+                reportFormat: expect.any(Object),
+                'results.tests': expect.any(Object),
+              }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should not create CTRF reports index if it already exists', async () => {
+      // Mock the index already existing
+      mockClient.indices.exists.mockResolvedValueOnce({
+        body: true,
+        statusCode: 200,
+        headers: {},
+        meta: {} as any,
+      });
+
+      await ensureCtrfReportsIndexExists();
+
+      expect(mockClient.indices.exists).toHaveBeenCalledWith({ index: 'ctrf-reports' });
+      expect(mockClient.indices.create).not.toHaveBeenCalled();
     });
   });
 
   describe('Document Operations', () => {
-    it('should successfully index and retrieve a simple document', async () => {
-      // Arrange
-      const testDoc = {
-        id: uuidv4(),
-        name: 'Test document',
-        createdAt: new Date().toISOString(),
-      };
+    it('should index CTRF reports', async () => {
+      const report = generateCtrfReport();
 
-      // Act - Index the document
-      const indexResult = await opensearchClient.index({
-        index: testIndexName,
-        id: testDoc.id,
-        body: testDoc,
-        refresh: true,
+      // Use the OpenSearch client to index the document
+      const response = await opensearchClient.index({
+        index: 'ctrf-reports',
+        id: report.reportId || uuidv4(),
+        body: report,
       });
 
-      // Assert
-      expect(indexResult.body._id).toBe('test-id');
-
-      // Act - Retrieve the document
-      const getResult = await opensearchClient.get({
-        index: testIndexName,
-        id: testDoc.id,
-      });
-
-      // Assert - We're just checking the mock returns something reasonable
-      expect(getResult.body._source).toBeDefined();
+      expect(mockClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+          id: expect.any(String),
+          body: expect.objectContaining({
+            reportFormat: 'CTRF',
+          }),
+        })
+      );
+      expect(response.body._id).toBe('test-id');
+      expect(response.body.result).toBe('created');
     });
 
-    it('should successfully index a complete test execution object', async () => {
-      // Arrange
-      const testExecution = generateTestExecution();
-
-      // Act - Index the test execution
-      const indexResult = await opensearchClient.index({
-        index: testIndexName,
-        id: testExecution.id,
-        body: testExecution,
-        refresh: true,
+    it('should search for CTRF reports', async () => {
+      // Mock search results
+      const mockReport = generateCtrfReport();
+      mockClient.search.mockResolvedValueOnce({
+        body: {
+          hits: {
+            hits: [
+              {
+                _id: 'test-id',
+                _source: mockReport,
+              },
+            ],
+            total: { value: 1 },
+          },
+        },
+        statusCode: 200,
+        headers: {},
+        meta: {} as any,
       });
 
-      // Assert
-      expect(indexResult.body._id).toBe('test-id');
-      expect(indexResult.body.result).toBe('created');
-
-      // Act - Retrieve the test execution (mocked)
-      const getResult = await opensearchClient.get({
-        index: testIndexName,
-        id: testExecution.id,
+      const response = await opensearchClient.search({
+        index: 'ctrf-reports',
+        body: {
+          query: { match_all: {} },
+        },
       });
 
-      // Assert - Using simplified checks since we're using mocks
-      expect(getResult.body._source).toBeDefined();
+      expect(mockClient.search).toHaveBeenCalledWith(
+        expect.objectContaining({
+          index: 'ctrf-reports',
+          body: expect.objectContaining({
+            query: { match_all: {} },
+          }),
+        })
+      );
+
+      expect(response.body.hits.hits).toHaveLength(1);
+      expect(response.body.hits.hits[0]._source).toEqual(mockReport);
     });
   });
 });
