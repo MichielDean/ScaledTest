@@ -26,7 +26,7 @@ describe('Authentication Integration', () => {
       mockAxios.post.mockResolvedValueOnce(mockTokenResponse);
 
       // Act
-      const result = await getAuthToken('maintainer-user', 'password');
+      const result = await getAuthToken('maintainer@example.com', 'password');
 
       // Assert
       expect(result).toBe(mockTokenResponse.data.access_token);

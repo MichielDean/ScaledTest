@@ -23,7 +23,7 @@ const loadKeycloakConfig = (): any => {
 
 // Get authentication token for test user with specific role
 export const getAuthToken = async (
-  username: string = 'maintainer-user',
+  username: string = 'maintainer@example.com',
   password: string = 'password'
 ): Promise<string> => {
   const keycloakConfig = loadKeycloakConfig();
