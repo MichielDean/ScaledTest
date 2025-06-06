@@ -19,6 +19,21 @@ const playwrightConfig = {
 };
 
 module.exports = {
+  // Global reporters configuration - applies to all projects
+  reporters: [
+    'default',
+    [
+      'jest-ctrf-json-reporter',
+      {
+        outputFile: 'ctrf-report.json',
+        outputDir: './',
+        reportName: 'Jest Test Results',
+        appName: 'ScaledTest',
+        appVersion: '1.0.0',
+        generatedBy: 'jest-ctrf-json-reporter',
+      },
+    ],
+  ],
   projects: [
     {
       displayName: 'Unit',

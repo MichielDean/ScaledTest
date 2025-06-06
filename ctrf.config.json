@@ -1,0 +1,16 @@
+{
+  "outputFile": "ctrf-report.json",
+  "outputDir": "./",
+  "reportName": "Jest Test Results",
+  "appName": "ScaledTest",
+  "appVersion": "1.0.0",
+  "environment": {
+    "testEnvironment": "local",
+    "buildName": "Local Development"
+  },
+  "annotations": {
+    "generatedBy": "jest-ctrf-json-reporter",
+    "testFramework": "Jest",
+    "project": "ScaledTest"
+  }
+}
