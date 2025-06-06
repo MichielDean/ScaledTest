@@ -70,13 +70,14 @@ jest.mock('../../src/auth/keycloak', () => ({
 }));
 
 import { getAuthToken } from '../utils/auth';
-import opensearchClient from '../../src/lib/opensearch';
+import opensearchClient, { ensureCtrfReportsIndexExists } from '../../src/lib/opensearch';
 import testReportsHandler from '../../src/pages/api/test-reports';
 
 jest.mock('../utils/auth');
 jest.mock('../../src/lib/opensearch', () => {
   return {
     __esModule: true,
+    ensureCtrfReportsIndexExists: jest.fn().mockImplementation(() => Promise.resolve()),
     default: {
       indices: {
         exists: jest.fn(),
@@ -503,11 +504,8 @@ describe('CTRF Reports API Integration Tests', () => {
 
   describe('Index creation', () => {
     it('should create OpenSearch index if it does not exist', async () => {
-      (mockOpensearchClient.indices.exists as jest.Mock).mockImplementationOnce(() => {
-        const promise = Promise.resolve({ body: false });
-        (promise as any).abort = jest.fn();
-        return promise;
-      });
+      // Get the ensureCtrfReportsIndexExists function from the mock
+      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
 
       const ctrfReport = generateCtrfReport();
       const req = mockReq({
@@ -518,21 +516,8 @@ describe('CTRF Reports API Integration Tests', () => {
 
       await testReportsHandler(req, res);
 
-      expect(mockOpensearchClient.indices.create).toHaveBeenCalledWith({
-        index: 'ctrf-reports',
-        body: {
-          mappings: expect.objectContaining({
-            properties: expect.objectContaining({
-              reportId: { type: 'keyword' },
-              reportFormat: { type: 'keyword' },
-              'results.summary.tests': { type: 'integer' },
-              'results.tests': expect.objectContaining({
-                type: 'nested',
-              }),
-            }),
-          }),
-        },
-      });
+      // Check that the function was called to ensure the index exists
+      expect(ensureCtrfReportsIndexExists).toHaveBeenCalled();
     });
   });
 });

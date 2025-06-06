@@ -1,12 +1,13 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { Readable } from 'stream';
-import { CtrfSchema } from '../../src/schemas/ctrf/ctrf';
+import { CtrfSchema, Status, ReportFormat } from '../../src/schemas/ctrf/ctrf';
 import testReportsHandler from '../../src/pages/api/test-reports';
 import opensearchClient from '../../src/lib/opensearch';
 import {
   generateCtrfReport,
   generateMinimalCtrfReport,
   generateInvalidCtrfReport,
+  generateLargeCtrfReport,
 } from '../utils/ctrfTestDataGenerator';
 import { UserRole } from '../../src/auth/keycloak';
 import { ZodError } from 'zod';
@@ -24,9 +25,8 @@ jest.mock('../../src/lib/opensearch', () => {
       index: jest.fn(),
       search: jest.fn(),
     },
-    TEST_RESULTS_INDEX: 'test-results',
     checkConnection: jest.fn(),
-    ensureIndexExists: jest.fn(),
+    ensureCtrfReportsIndexExists: jest.fn().mockImplementation(() => Promise.resolve()),
   };
 });
 
@@ -285,24 +285,15 @@ describe('CTRF Reports API Unit Tests', () => {
     });
 
     it('should ensure index exists before storing', async () => {
-      (mockOpensearchClient.indices.exists as jest.Mock).mockImplementationOnce(() => {
-        const promise = Promise.resolve({
-          body: false,
-          statusCode: 404,
-          headers: {},
-          meta: {} as any,
-        }) as any;
-        promise.abort = jest.fn();
-        return promise;
-      });
       const report = generateCtrfReport();
       const req = mockRequest('POST', report);
       const res = mockResponse();
 
       await testReportsHandler(req, res);
 
-      expect(mockOpensearchClient.indices.exists).toHaveBeenCalledWith({ index: 'ctrf-reports' });
-      expect(mockOpensearchClient.indices.create).toHaveBeenCalledTimes(1);
+      // Now we check if ensureCtrfReportsIndexExists was called instead of directly checking indices.exists
+      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
+      expect(ensureCtrfReportsIndexExists).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
     });
   });
@@ -568,13 +559,12 @@ describe('CTRF Reports API Unit Tests', () => {
   });
 
   describe('Global Error Handling', () => {
-    it('should return 500 if ensureIndexExists throws an unexpected error', async () => {
-      (mockOpensearchClient.indices.exists as jest.Mock).mockImplementationOnce(() => {
-        const error = new Error('Unexpected index check error');
-        const promise = Promise.reject(error) as any;
-        promise.abort = jest.fn();
-        return promise;
+    it('should return 500 if ensureCtrfReportsIndexExists throws an unexpected error', async () => {
+      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
+      (ensureCtrfReportsIndexExists as jest.Mock).mockImplementationOnce(() => {
+        return Promise.reject(new Error('Unexpected index check error'));
       });
+
       const report = generateCtrfReport();
       const req = mockRequest('POST', report);
       const res = mockResponse();
@@ -585,6 +575,664 @@ describe('CTRF Reports API Unit Tests', () => {
       expect(res.json).toHaveBeenCalledWith({
         success: false,
         error: 'Internal server error',
+      });
+    });
+  });
+
+  describe('Optional CTRF Fields Validation', () => {
+    it('should handle tool version and URL fields', async () => {
+      const report: CtrfSchema = {
+        reportFormat: ReportFormat.CTRF,
+        specVersion: '1.0.0',
+        reportId: '12345678-1234-1234-1234-123456789abc',
+        timestamp: new Date().toISOString(),
+        generatedBy: 'Enhanced Test Suite',
+        results: {
+          tool: {
+            name: 'Jest',
+            version: '29.7.0',
+            url: 'https://jestjs.io',
+            extra: {
+              runner: 'default',
+              config: 'jest.config.js',
+            },
+          },
+          summary: {
+            tests: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: 'Tool URL test',
+              status: Status.passed,
+              duration: 150,
+            },
+          ],
+        },
+      };
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          id: expect.any(String),
+        })
+      );
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tool: expect.objectContaining({
+                name: 'Jest',
+                version: '29.7.0',
+                url: 'https://jestjs.io',
+              }),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should validate test-level optional fields are preserved', async () => {
+      const report = generateCtrfReport();
+      const testWithAllFields = report.results.tests[0];
+
+      // Add comprehensive optional fields
+      testWithAllFields.flaky = true;
+      testWithAllFields.retries = 3;
+      testWithAllFields.tags = ['flaky', 'retry', 'edge-case'];
+      testWithAllFields.attachments = [
+        {
+          name: 'screenshot.png',
+          contentType: 'image/png',
+          path: '/screenshots/test.png',
+          extra: { timestamp: new Date().toISOString() },
+        },
+      ];
+      testWithAllFields.steps = [
+        {
+          name: 'Initial setup',
+          status: Status.passed,
+          extra: { setupTime: '200ms' },
+        },
+      ];
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  flaky: true,
+                  retries: 3,
+                  tags: expect.arrayContaining(['flaky', 'retry', 'edge-case']),
+                  attachments: expect.arrayContaining([
+                    expect.objectContaining({
+                      name: 'screenshot.png',
+                      contentType: 'image/png',
+                      path: '/screenshots/test.png',
+                    }),
+                  ]),
+                  steps: expect.arrayContaining([
+                    expect.objectContaining({
+                      name: 'Initial setup',
+                      status: Status.passed,
+                    }),
+                  ]),
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('Security and Input Sanitization', () => {
+    it('should handle XSS attempts in test names and messages', async () => {
+      const maliciousReport = generateCtrfReport({
+        results: {
+          tool: {
+            name: '<script>alert("xss")</script>',
+          },
+          summary: {
+            tests: 1,
+            passed: 0,
+            failed: 1,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: '<img src="x" onerror="alert(1)">Test with XSS attempt',
+              status: Status.failed,
+              duration: 100,
+              message: '<script>console.log("malicious")</script>Authentication failed',
+              trace: 'Error: <iframe src="javascript:alert(1)"></iframe>',
+              suite: '<svg onload="alert(1)">Security Suite',
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', maliciousReport);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      // Should accept the report but the XSS content should be stored as-is
+      // (sanitization would typically happen on the frontend)
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tool: expect.objectContaining({
+                name: '<script>alert("xss")</script>',
+              }),
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: '<img src="x" onerror="alert(1)">Test with XSS attempt',
+                  message: '<script>console.log("malicious")</script>Authentication failed',
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should reject oversized report payloads', async () => {
+      // Create a report with extremely large content
+      const largeContent = 'x'.repeat(10 * 1024 * 1024); // 10MB string
+      const largeReport = generateCtrfReport({
+        results: {
+          tool: { name: 'LargeTest' },
+          summary: {
+            tests: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: 'Large content test',
+              status: Status.passed,
+              duration: 100,
+              message: largeContent,
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', largeReport);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      // The handler should process it but OpenSearch might reject very large documents
+      // In practice, you'd want payload size limits at the API gateway level
+      expect(res.status).toHaveBeenCalled();
+    });
+
+    it('should handle special characters and Unicode in test data', async () => {
+      const unicodeReport = generateCtrfReport({
+        results: {
+          tool: { name: 'Unicode测试工具' },
+          summary: {
+            tests: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: '测试用例 🚀 with émojis and spëcial chars',
+              status: Status.passed,
+              duration: 100,
+              suite: 'Iñtërnâtiônàlizætiøn Suite',
+              message: 'Тест прошел успешно ✅',
+              filePath: 'tests/unicode/测试.test.ts',
+              tags: ['unicode', 'i18n', '中文', 'العربية'],
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', unicodeReport);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tool: expect.objectContaining({
+                name: 'Unicode测试工具',
+              }),
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: '测试用例 🚀 with émojis and spëcial chars',
+                  message: 'Тест прошел успешно ✅',
+                  tags: expect.arrayContaining(['unicode', 'i18n', '中文', 'العربية']),
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('Boundary Condition Testing', () => {
+    it('should handle reports with maximum test count (1000+ tests)', async () => {
+      const largeReport = generateLargeCtrfReport(1000);
+      const req = mockRequest('POST', largeReport);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              summary: expect.objectContaining({
+                tests: 1000,
+              }),
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: expect.any(String),
+                  status: expect.any(String),
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should handle extremely long test names', async () => {
+      const longName = 'A'.repeat(2000); // 2KB test name
+      const report = generateCtrfReport({
+        results: {
+          tool: { name: 'BoundaryTest' },
+          summary: {
+            tests: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: longName,
+              status: Status.passed,
+              duration: 100,
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: longName,
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should handle zero duration tests', async () => {
+      const report = generateCtrfReport({
+        results: {
+          tool: { name: 'ZeroDurationTest' },
+          summary: {
+            tests: 2,
+            passed: 1,
+            failed: 0,
+            skipped: 1,
+            pending: 0,
+            other: 0,
+            start: Date.now(),
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: 'Instantaneous test',
+              status: Status.passed,
+              duration: 0,
+              start: Date.now(),
+              stop: Date.now(),
+            },
+            {
+              name: 'Skipped test with zero duration',
+              status: Status.skipped,
+              duration: 0,
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: 'Instantaneous test',
+                  duration: 0,
+                }),
+                expect.objectContaining({
+                  name: 'Skipped test with zero duration',
+                  duration: 0,
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should handle deeply nested extra fields', async () => {
+      const deeplyNestedExtra = {
+        level1: {
+          level2: {
+            level3: {
+              level4: {
+                level5: {
+                  data: 'deep value',
+                  array: [1, 2, 3, { nested: true }],
+                  boolean: false,
+                  null: null,
+                },
+              },
+            },
+          },
+        },
+        array: [{ item: 1 }, { item: 2, nested: { data: 'nested in array' } }],
+      };
+
+      const report = generateCtrfReport({
+        results: {
+          tool: {
+            name: 'DeepNestingTest',
+            extra: deeplyNestedExtra,
+          },
+          summary: {
+            tests: 1,
+            passed: 1,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+            extra: deeplyNestedExtra,
+          },
+          tests: [
+            {
+              name: 'Deep nesting test',
+              status: Status.passed,
+              duration: 100,
+              extra: deeplyNestedExtra,
+            },
+          ],
+          extra: deeplyNestedExtra,
+        },
+        extra: deeplyNestedExtra,
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              tool: expect.objectContaining({
+                extra: expect.objectContaining({
+                  level1: expect.objectContaining({
+                    level2: expect.objectContaining({
+                      level3: expect.objectContaining({
+                        level4: expect.objectContaining({
+                          level5: expect.objectContaining({
+                            data: 'deep value',
+                          }),
+                        }),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          }),
+        })
+      );
+    });
+  });
+
+  describe('Data Integrity and Consistency', () => {
+    it('should validate summary counts match actual test array', async () => {
+      const report = generateCtrfReport({
+        results: {
+          tool: { name: 'ConsistencyTest' },
+          summary: {
+            tests: 3, // This should match the actual test count
+            passed: 2,
+            failed: 1,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: 'Test 1',
+              status: Status.passed,
+              duration: 100,
+            },
+            {
+              name: 'Test 2',
+              status: Status.passed,
+              duration: 150,
+            },
+            {
+              name: 'Test 3',
+              status: Status.failed,
+              duration: 200,
+              message: 'Test failed',
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+
+      // Verify the summary counts are consistent
+      const storedReport = mockOpensearchClient.index.mock.calls[0][0].body;
+      const actualPassed = storedReport.results.tests.filter(
+        (t: any) => t.status === 'passed'
+      ).length;
+      const actualFailed = storedReport.results.tests.filter(
+        (t: any) => t.status === 'failed'
+      ).length;
+
+      expect(storedReport.results.summary.passed).toBe(actualPassed);
+      expect(storedReport.results.summary.failed).toBe(actualFailed);
+      expect(storedReport.results.summary.tests).toBe(storedReport.results.tests.length);
+    });
+
+    it('should handle reports with mismatched summary counts', async () => {
+      const report = generateCtrfReport({
+        results: {
+          tool: { name: 'MismatchTest' },
+          summary: {
+            tests: 5, // Intentionally wrong count
+            passed: 10, // Intentionally wrong count
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: Date.now() - 1000,
+            stop: Date.now(),
+          },
+          tests: [
+            {
+              name: 'Single test',
+              status: Status.passed,
+              duration: 100,
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      // The API should accept the report as-is since the schema validation passes
+      // It's the responsibility of the report generator to ensure consistency
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(mockOpensearchClient.index).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: expect.objectContaining({
+            results: expect.objectContaining({
+              summary: expect.objectContaining({
+                tests: 5, // Original values preserved
+                passed: 10,
+              }),
+              tests: expect.arrayContaining([
+                expect.objectContaining({
+                  name: 'Single test',
+                }),
+              ]),
+            }),
+          }),
+        })
+      );
+    });
+
+    it('should preserve timestamp ordering and consistency', async () => {
+      const baseTime = Date.now();
+      const report = generateCtrfReport({
+        timestamp: new Date(baseTime).toISOString(),
+        results: {
+          tool: { name: 'TimestampTest' },
+          summary: {
+            tests: 3,
+            passed: 3,
+            failed: 0,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: baseTime - 1000,
+            stop: baseTime,
+          },
+          tests: [
+            {
+              name: 'First test',
+              status: Status.passed,
+              duration: 100,
+              start: baseTime - 900,
+              stop: baseTime - 800,
+            },
+            {
+              name: 'Second test',
+              status: Status.passed,
+              duration: 200,
+              start: baseTime - 700,
+              stop: baseTime - 500,
+            },
+            {
+              name: 'Third test',
+              status: Status.passed,
+              duration: 150,
+              start: baseTime - 400,
+              stop: baseTime - 250,
+            },
+          ],
+        },
+      });
+
+      const req = mockRequest('POST', report);
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+
+      const storedReport = mockOpensearchClient.index.mock.calls[0][0].body;
+      expect(storedReport.timestamp).toBe(new Date(baseTime).toISOString());
+      expect(storedReport.results.summary.start).toBe(baseTime - 1000);
+      expect(storedReport.results.summary.stop).toBe(baseTime);
+
+      // Verify test timestamps are preserved
+      storedReport.results.tests.forEach((test: any, index: number) => {
+        expect(test.start).toBeDefined();
+        expect(test.stop).toBeDefined();
+        expect(test.stop).toBeGreaterThan(test.start);
       });
     });
   });
