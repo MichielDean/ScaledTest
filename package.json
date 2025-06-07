@@ -16,6 +16,7 @@
     "test:unit": "jest --selectProjects Unit",
     "test:integration": "jest --selectProjects Integration",
     "test:system": "jest --selectProjects System",
+    "send-test-results": "node scripts/send-test-results.js",
     "generate-ctrf:types": "npx json2ts -i src/schemas/ctrf/ctrf-schema.json -o src/schemas/ctrf/ctrf.ts --inferStringEnumKeysFromValues --enableConstEnums",
     "prepare": "husky",
     "postinstall": "husky && npx playwright install chromium"
@@ -36,6 +37,7 @@
     "pino-pretty": "^13.0.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
+    "recharts": "^2.15.3",
     "zod": "^3.25.45"
   },
   "devDependencies": {

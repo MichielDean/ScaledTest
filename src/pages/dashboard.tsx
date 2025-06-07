@@ -6,12 +6,24 @@ import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { useAuth } from '../auth/KeycloakProvider';
 import { UserRole } from '../auth/keycloak';
+import {
+  TestTrendsChart,
+  TestDurationAnalysis,
+  TestSuiteOverview,
+  FlakyTestDetector,
+  ErrorAnalysis,
+} from '../components/charts';
+import { TestReport } from '../types/dashboard';
+import styles from '../styles/Dashboard.module.css';
 
 const Dashboard: NextPage = () => {
-  const { userProfile, hasRole } = useAuth();
+  const { userProfile, hasRole, token } = useAuth();
   const [content, setContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [newContent, setNewContent] = useState<string>('');
+  const [reports, setReports] = useState<TestReport[]>([]);
+  const [loadingReports, setLoadingReports] = useState<boolean>(true);
+  const [showAnalytics, setShowAnalytics] = useState<boolean>(false);
 
   // Simulate fetching content based on user role
   useEffect(() => {
@@ -19,7 +31,17 @@ const Dashboard: NextPage = () => {
       'This is some sample content that can be viewed by all authenticated users.';
     setContent(defaultContent);
     setNewContent(defaultContent);
-  }, []);
+
+    // Fetch test reports for analytics components only when token is available
+    if (token) {
+      fetchTestReports();
+    }
+  }, [token]);
+
+  // Fetch test reports from OpenSearch for analytics (simplified)
+  const fetchTestReports = async () => {
+    // This function is kept for compatibility but we're now using individual component calls
+  };
 
   // Handle content update
   const handleUpdateContent = () => {
@@ -31,77 +53,69 @@ const Dashboard: NextPage = () => {
     <div>
       <Head>
         <title>Dashboard - Keycloak Auth Demo</title>
+        <style jsx>{`
+          @keyframes spin {
+            0% {
+              transform: rotate(0deg);
+            }
+            100% {
+              transform: rotate(360deg);
+            }
+          }
+        `}</style>
       </Head>
 
       <Header />
 
-      <main className="container" style={{ padding: '2rem' }}>
-        <h1 style={{ marginBottom: '2rem' }}>Dashboard</h1>
+      <main className={styles.main}>
+        <h1 className={styles.title}>Dashboard</h1>
 
         {/* Navigation to Other Dashboards */}
-        <div className="card" style={{ marginBottom: '2rem' }}>
-          <h2 style={{ marginBottom: '1rem' }}>Available Dashboards</h2>
-          <div style={{ display: 'flex', gap: '1rem', flexWrap: 'wrap' }}>
-            <Link
-              href="/test-results-dashboard"
-              className="dashboard-link"
-              style={{
-                display: 'inline-block',
-                padding: '12px 24px',
-                backgroundColor: '#007bff',
-                color: 'white',
-                textDecoration: 'none',
-                borderRadius: '6px',
-                fontWeight: '500',
-                transition: 'background-color 0.2s',
-              }}
-            >
+        <div className={`card ${styles.dashboardNavigation}`}>
+          <h2 className={styles.navigationTitle}>Available Dashboards</h2>
+          <div className={styles.navigationButtons}>
+            <Link href="/test-results-dashboard" className={styles.dashboardLink}>
               🌟 Test Results Dashboard
             </Link>
             <button
-              disabled
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#e9ecef',
-                color: '#6c757d',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: '500',
-                cursor: 'not-allowed',
-              }}
+              onClick={() => setShowAnalytics(!showAnalytics)}
+              className={`${styles.toggleButton} ${showAnalytics ? styles.active : styles.inactive}`}
             >
-              📊 Performance Dashboard (Coming Soon)
+              📊 Analytics Dashboard (OpenSearch)
             </button>
-            <button
-              disabled
-              style={{
-                padding: '12px 24px',
-                backgroundColor: '#e9ecef',
-                color: '#6c757d',
-                border: 'none',
-                borderRadius: '6px',
-                fontWeight: '500',
-                cursor: 'not-allowed',
-              }}
-            >
-              📈 Analytics Dashboard (Coming Soon)
+            <button disabled className={styles.disabledButton}>
+              📈 Performance Dashboard (Coming Soon)
             </button>
           </div>
         </div>
 
-        <div id="user-profile-section" className="card">
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1rem',
-            }}
-          >
+        {/* Analytics Dashboard Section */}
+        {showAnalytics && (
+          <div className={styles.analyticsSection}>
+            <div className={styles.analyticsHeader}>
+              <div className={styles.analyticsHeaderContent}>
+                <h2>📊 Analytics Dashboard</h2>
+                <p>Real-time analytics from OpenSearch test data</p>
+              </div>
+              <button onClick={() => setShowAnalytics(false)} className={styles.hideButton}>
+                Hide Analytics
+              </button>
+            </div>
+
+            {/* Main Analytics Content */}
+            <div className={styles.analyticsCard}>
+              <h3 className={styles.analyticsCardTitle}>📈 Test Trends Analysis</h3>
+              <TestTrendsChart days={7} token={token} />
+            </div>
+          </div>
+        )}
+
+        <div id="user-profile-section" className={`card ${styles.userProfileSection}`}>
+          <div className={styles.profileHeader}>
             <h2>User Profile</h2>
           </div>
 
-          <div style={{ marginBottom: '1rem' }}>
+          <div className={styles.profileInfo}>
             <p>
               <strong>Username:</strong> {userProfile?.username || 'N/A'}
             </p>
@@ -114,7 +128,7 @@ const Dashboard: NextPage = () => {
             <p>
               <strong>Roles:</strong>
             </p>
-            <ul id="user-roles-list">
+            <ul id="user-roles-list" className={styles.rolesList}>
               {hasRole(UserRole.READONLY) && <li id="role-readonly">Read-only</li>}
               {hasRole(UserRole.MAINTAINER) && <li id="role-maintainer">Maintainer</li>}
               {hasRole(UserRole.OWNER) && <li id="role-owner">Owner</li>}
@@ -122,15 +136,8 @@ const Dashboard: NextPage = () => {
           </div>
         </div>
 
-        <div id="content-section" className="card" style={{ marginTop: '2rem' }}>
-          <div
-            style={{
-              display: 'flex',
-              justifyContent: 'space-between',
-              alignItems: 'center',
-              marginBottom: '1rem',
-            }}
-          >
+        <div id="content-section" className={`card ${styles.contentSection}`}>
+          <div className={styles.contentHeader}>
             <h2>Content Section</h2>
             {(hasRole(UserRole.MAINTAINER) || hasRole(UserRole.OWNER)) && !isEditing && (
               <button id="edit-content-button" onClick={() => setIsEditing(true)}>
@@ -144,23 +151,18 @@ const Dashboard: NextPage = () => {
               <textarea
                 value={newContent}
                 onChange={e => setNewContent(e.target.value)}
-                style={{
-                  width: '100%',
-                  minHeight: '150px',
-                  padding: '0.5rem',
-                  marginBottom: '1rem',
-                  borderRadius: '4px',
-                  border: '1px solid #ddd',
-                }}
+                className={styles.contentTextarea}
               />
-              <div style={{ display: 'flex', gap: '1rem' }}>
-                <button onClick={handleUpdateContent}>Save Changes</button>
+              <div className={styles.contentActions}>
+                <button onClick={handleUpdateContent} className={styles.saveButton}>
+                  Save Changes
+                </button>
                 <button
                   onClick={() => {
                     setIsEditing(false);
                     setNewContent(content);
                   }}
-                  style={{ backgroundColor: '#ff6b6b' }}
+                  className={styles.cancelButton}
                 >
                   Cancel
                 </button>
@@ -174,12 +176,10 @@ const Dashboard: NextPage = () => {
         </div>
 
         {hasRole(UserRole.OWNER) && (
-          <div id="admin-actions-section" className="card" style={{ marginTop: '2rem' }}>
+          <div id="admin-actions-section" className={`card ${styles.adminSection}`}>
             <h2>Admin Actions</h2>
             <p>This section is only visible to users with the Owner role.</p>
-            <button style={{ marginTop: '1rem', backgroundColor: '#ff6b6b' }}>
-              Reset Application
-            </button>
+            <button className={styles.resetButton}>Reset Application</button>
           </div>
         )}
       </main>

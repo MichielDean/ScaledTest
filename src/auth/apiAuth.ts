@@ -86,9 +86,21 @@ export function withApiAuth(
 ) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     try {
+      // Debug logging
+      console.log('DEBUG AUTH: Middleware called for:', req.url);
+      console.log('DEBUG AUTH: Method:', req.method);
+      console.log('DEBUG AUTH: Required roles:', requiredRoles);
+
       // Extract the bearer token from the Authorization header
       const authHeader = req.headers.authorization;
+      console.log('DEBUG AUTH: Auth header present:', !!authHeader);
+      console.log(
+        'DEBUG AUTH: Auth header value:',
+        authHeader ? authHeader.substring(0, 20) + '...' : 'NONE'
+      );
+
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.log('DEBUG AUTH: No valid bearer token found');
         return res.status(401).json({
           success: false,
           error: 'Unauthorized - No valid token provided',
@@ -96,18 +108,32 @@ export function withApiAuth(
       }
 
       const token = authHeader.split(' ')[1];
+      console.log('DEBUG AUTH: Token extracted, length:', token ? token.length : 0);
 
       try {
         // Verify the token
+        console.log('DEBUG AUTH: Verifying token...');
         const payload = await verifyToken(token);
+        console.log('DEBUG AUTH: Token verified successfully');
+        console.log('DEBUG AUTH: User payload:', {
+          sub: payload.sub,
+          preferred_username: payload.preferred_username,
+          realm_access: payload.realm_access,
+          resource_access: payload.resource_access,
+        });
 
         // Check if the user has the required role
         if (requiredRoles.length > 0 && !hasRequiredRole(payload, requiredRoles)) {
+          console.log('DEBUG AUTH: User does not have required roles');
           return res.status(403).json({
             success: false,
             error: 'Forbidden - Insufficient permissions',
           } as ErrorResponse);
-        } // Add the decoded token to the request object for future use
+        }
+
+        console.log('DEBUG AUTH: Role check passed, proceeding to handler');
+
+        // Add the decoded token to the request object for future use
         // Extend the NextApiRequest type
         interface AuthenticatedRequest extends NextApiRequest {
           user: KeycloakTokenPayload;
