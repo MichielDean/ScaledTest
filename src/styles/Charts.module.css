@@ -1,0 +1,224 @@
+/* Chart component styles using CSS Modules */
+
+.chartContainer {
+  width: 100%;
+  max-width: none;
+}
+
+.chartWrapper {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: none;
+}
+
+.chartTitle {
+  font-size: 1.25rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  color: #374151;
+}
+
+.loadingContainer {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.loadingContent {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 16rem;
+}
+
+.loadingSpinner {
+  animation: spin 1s linear infinite;
+  border-radius: 50%;
+  height: 3rem;
+  width: 3rem;
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  margin: 0 auto 1rem;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.loadingText {
+  color: #6b7280;
+  text-align: center;
+}
+
+.loadingSubtext {
+  font-size: 0.875rem;
+  color: #9ca3af;
+  margin-top: 0.5rem;
+  text-align: center;
+}
+
+.errorContainer {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.errorContent {
+  text-align: center;
+  padding: 2rem 0;
+}
+
+.errorTitle {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.errorMessage {
+  color: #dc2626;
+  margin-bottom: 1rem;
+}
+
+.retryButton {
+  background-color: #3b82f6;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.retryButton:hover {
+  background-color: #2563eb;
+}
+
+.dataSourceIndicator {
+  background-color: #dbeafe;
+  border: 1px solid #bfdbfe;
+  border-radius: 8px;
+  padding: 1rem;
+  width: 100%;
+  max-width: none;
+}
+
+.dataSourceHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.dataSourceInfo {
+  margin-left: 0.75rem;
+}
+
+.dataSourceTitle {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #1e40af;
+}
+
+.dataSourceDetails {
+  font-size: 0.875rem;
+  color: #2563eb;
+}
+
+.dataSourceControls {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.timeRangeSelect {
+  border: 1px solid #d1d5db;
+  border-radius: 0.25rem;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.refreshButton {
+  background-color: #3b82f6;
+  color: white;
+  padding: 0.25rem 0.75rem;
+  font-size: 0.875rem;
+  border-radius: 0.25rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.refreshButton:hover {
+  background-color: #2563eb;
+}
+
+.noDataContainer {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  text-align: center;
+}
+
+.noDataTitle {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #111827;
+  margin-bottom: 0.5rem;
+}
+
+.noDataMessage {
+  color: #6b7280;
+  margin-bottom: 0.5rem;
+}
+
+.noDataSubtext {
+  font-size: 0.875rem;
+  color: #9ca3af;
+}
+
+.checkAgainButton {
+  margin-top: 1rem;
+  background-color: #3b82f6;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.checkAgainButton:hover {
+  background-color: #2563eb;
+}
+
+.authRequiredContainer {
+  background-color: #fef3c7;
+  border: 1px solid #f59e0b;
+  border-radius: 8px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.authRequiredTitle {
+  font-size: 1.125rem;
+  font-weight: 500;
+  color: #92400e;
+  margin-bottom: 0.5rem;
+}
+
+.authRequiredMessage {
+  color: #6b7280;
+  margin-bottom: 1rem;
+}

@@ -143,6 +143,13 @@ async function handler(
 ) {
   const reqLogger = getRequestLogger(req);
 
+  // Debug logging
+  console.log('DEBUG API: Request received');
+  console.log('DEBUG API: Method:', req.method);
+  console.log('DEBUG API: Headers:', req.headers);
+  console.log('DEBUG API: Authorization header:', req.headers.authorization);
+  console.log('DEBUG API: User attached to request:', (req as any).user ? 'YES' : 'NO');
+
   try {
     await ensureIndexExists();
 
@@ -385,5 +392,5 @@ async function handleGet(
 }
 
 // Export the protected API route
-// Only users with 'maintainer' or 'owner' roles can access this endpoint
-export default withApiAuth(handler, [UserRole.MAINTAINER, UserRole.OWNER]);
+// All authenticated users can read test reports, but only maintainers/owners can write
+export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
