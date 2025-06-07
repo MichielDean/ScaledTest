@@ -208,6 +208,27 @@ npm run update-deps
 - **CI/CD**: GitHub Actions
 - **Report Format**: CTRF (Common Test Result Format)
 
+## Testing & CTRF Reporting
+
+ScaledTest includes comprehensive testing capabilities with automated CTRF (Common Test Report Format) reporting:
+
+### Running Tests with CTRF Reporting
+
+```bash
+# Send existing test results to API
+npm run send-test-results
+```
+
+### CTRF Benefits
+
+- **Standardized Format**: Uses the industry-standard CTRF schema
+- **API Integration**: Automatically sends test results to your own API for dogfooding
+- **Rich Metadata**: Includes environment info, timing, and failure details
+- **Authentication**: Supports Keycloak authentication for secure API submission
+- **Flexible Reporting**: Works with CI/CD pipelines and local development
+
+For detailed CTRF configuration and usage, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).
+
 ## Contributing
 
 See our [contributing guide](docs/CONTRIBUTING.md) for how to contribute to the project.
