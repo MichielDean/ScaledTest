@@ -27,6 +27,10 @@ const Header: React.FC = () => {
               Dashboard
             </Link>
 
+            <Link id="headerProfile" href="/profile">
+              Profile
+            </Link>
+
             {/* Only show admin section for owners */}
             {hasRole(UserRole.OWNER) && (
               <>

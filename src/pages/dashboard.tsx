@@ -110,32 +110,6 @@ const Dashboard: NextPage = () => {
           </div>
         )}
 
-        <div id="user-profile-section" className={`card ${styles.userProfileSection}`}>
-          <div className={styles.profileHeader}>
-            <h2>User Profile</h2>
-          </div>
-
-          <div className={styles.profileInfo}>
-            <p>
-              <strong>Username:</strong> {userProfile?.username || 'N/A'}
-            </p>
-            <p>
-              <strong>Name:</strong> {userProfile?.firstName || ''} {userProfile?.lastName || ''}
-            </p>
-            <p>
-              <strong>Email:</strong> {userProfile?.email || 'N/A'}
-            </p>
-            <p>
-              <strong>Roles:</strong>
-            </p>
-            <ul id="user-roles-list" className={styles.rolesList}>
-              {hasRole(UserRole.READONLY) && <li id="role-readonly">Read-only</li>}
-              {hasRole(UserRole.MAINTAINER) && <li id="role-maintainer">Maintainer</li>}
-              {hasRole(UserRole.OWNER) && <li id="role-owner">Owner</li>}
-            </ul>
-          </div>
-        </div>
-
         <div id="content-section" className={`card ${styles.contentSection}`}>
           <div className={styles.contentHeader}>
             <h2>Content Section</h2>
