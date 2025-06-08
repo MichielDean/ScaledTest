@@ -154,13 +154,11 @@ async function handlePost(
       ctrfReport.timestamp = new Date().toISOString();
     }
 
-    // Add storage timestamp
     const reportWithMeta = {
       ...ctrfReport,
       storedAt: new Date().toISOString(),
     };
 
-    // Store CTRF report in OpenSearch
     await opensearchClient.index({
       index: 'ctrf-reports',
       id: ctrfReport.reportId,

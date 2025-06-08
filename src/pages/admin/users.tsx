@@ -11,7 +11,7 @@ import { uiLogger as logger, logError } from '../../utils/logger';
 import { UserWithRoles } from '../../types/user';
 
 const UserManagement: NextPage = () => {
-  const { keycloak, isAuthenticated, hasRole, loading: authLoading } = useAuth();
+  const { keycloak, isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
@@ -36,8 +36,15 @@ const UserManagement: NextPage = () => {
       setLoading(true);
       setError(null);
 
-      // Call our API endpoint
-      const response = await axios.get('/api/admin/users');
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await axios.get('/api/admin/users', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.status !== 200) {
         throw new Error(`Failed to fetch users: ${response.statusText}`);
@@ -60,11 +67,22 @@ const UserManagement: NextPage = () => {
       setError(null);
       setSuccessMessage(null);
 
-      // Call our API endpoint
-      const response = await axios.post('/api/admin/users', {
-        userId,
-        grantMaintainer,
-      });
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await axios.post(
+        '/api/admin/users',
+        {
+          userId,
+          grantMaintainer,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.status !== 200) {
         throw new Error('Failed to update user role');
@@ -176,15 +194,6 @@ const UserManagement: NextPage = () => {
                       borderBottom: '2px solid #ddd',
                     }}
                   >
-                    Email
-                  </th>
-                  <th
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'left',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
                     Roles
                   </th>
                   <th
@@ -209,7 +218,6 @@ const UserManagement: NextPage = () => {
                     <td style={{ padding: '0.75rem' }}>
                       {user.firstName || ''} {user.lastName || ''}
                     </td>
-                    <td style={{ padding: '0.75rem' }}>{user.email}</td>
                     <td style={{ padding: '0.75rem' }}>
                       {user.roles.map(role => (
                         <span

@@ -71,7 +71,6 @@ const Register: NextPage = () => {
     setRegistering(true);
 
     try {
-      // Send registration data to our API
       // Use email as username
       const response = await axios.post<RegisterResponse>('/api/auth/register', {
         username: email,
@@ -84,7 +83,6 @@ const Register: NextPage = () => {
       if (response.data.success) {
         // Check if we have tokens for auto-login
         if (response.data.token && response.data.refreshToken) {
-          // Store the tokens using shared utility
           const { storeTokens } = await import('../utils/keycloakTokenManager');
           storeTokens(response.data.token, response.data.refreshToken);
 

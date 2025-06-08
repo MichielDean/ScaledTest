@@ -75,7 +75,6 @@ jest.mock('../../src/auth/apiAuth', () => ({
     return requiredRoles.some((role: string) => userRoles.includes(role));
   }),
   createApi: {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     readWrite: jest.fn((handlers, options) => {
       // Mock implementation that simulates the real createApi.readWrite behavior
       return async (req: NextApiRequest, res: NextApiResponse) => {
@@ -92,8 +91,8 @@ jest.mock('../../src/auth/apiAuth', () => ({
             name: 'Test User',
             email: 'test@example.com',
             preferred_username: 'test-user',
-            realm_access: { roles: [UserRole.MAINTAINER] }, // Changed to MAINTAINER for write access
-            resource_access: { 'scaledtest-client': { roles: [UserRole.MAINTAINER] } }, // Changed to MAINTAINER
+            realm_access: { roles: [UserRole.MAINTAINER] },
+            resource_access: { 'scaledtest-client': { roles: [UserRole.MAINTAINER] } },
             auth_time: Date.now(),
             typ: 'Bearer',
             azp: 'scaledtest-client',
@@ -144,8 +143,7 @@ jest.mock('../../src/auth/apiAuth', () => ({
               error: 'Method not allowed. Supported methods: POST, GET',
             });
           }
-          // eslint-disable-next-line @typescript-eslint/no-unused-vars
-        } catch (error) {
+        } catch {
           // Handle setup errors properly
           return res.status(500).json({
             success: false,

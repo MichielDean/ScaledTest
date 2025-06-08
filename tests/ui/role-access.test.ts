@@ -1,6 +1,7 @@
 import { describe, beforeEach, afterEach, it } from '@jest/globals';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
+import { ProfilePage } from './pages/ProfilePage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
@@ -12,12 +13,14 @@ declare const page: Page;
 describe('Role-based Access Tests', () => {
   let loginPage: LoginPage;
   let dashboardPage: DashboardPage;
+  let profilePage: ProfilePage;
   let headerComponent: HeaderComponent;
   let userManagementPage: UserManagementPage;
 
   beforeEach(async () => {
     loginPage = new LoginPage(page);
     dashboardPage = new DashboardPage(page);
+    profilePage = new ProfilePage(page);
     headerComponent = new HeaderComponent(page);
     userManagementPage = new UserManagementPage(page);
   });
@@ -37,7 +40,9 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should see correct role assignment', async () => {
-      await dashboardPage.expectHasRole('Read-only');
+      await profilePage.goto();
+      await profilePage.expectProfileLoaded();
+      await profilePage.expectHasRole('Read-only');
     });
 
     it('should not have content editing permissions', async () => {
@@ -68,8 +73,10 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should see correct role assignments', async () => {
-      await dashboardPage.expectHasRole('Read-only');
-      await dashboardPage.expectHasRole('Maintainer');
+      await profilePage.goto();
+      await profilePage.expectProfileLoaded();
+      await profilePage.expectHasRole('Read-only');
+      await profilePage.expectHasRole('Maintainer');
     });
 
     it('should have content editing permissions', async () => {
@@ -100,9 +107,11 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should see correct role assignments', async () => {
-      await dashboardPage.expectHasRole('Read-only');
-      await dashboardPage.expectHasRole('Maintainer');
-      await dashboardPage.expectHasRole('Owner');
+      await profilePage.goto();
+      await profilePage.expectProfileLoaded();
+      await profilePage.expectHasRole('Read-only');
+      await profilePage.expectHasRole('Maintainer');
+      await profilePage.expectHasRole('Owner');
     });
 
     it('should have content editing permissions', async () => {

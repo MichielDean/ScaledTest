@@ -47,7 +47,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       'Keycloak configuration for registration'
     );
 
-    // Get admin token using centralized function
     const adminToken = await getAdminToken();
 
     // Then create user
@@ -93,7 +92,6 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       }
     );
 
-    // Return tokens along with success
     return res.status(201).json({
       success: true,
       message: 'User registered successfully',

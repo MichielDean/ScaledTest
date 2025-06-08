@@ -2,12 +2,11 @@
  * Jest setup file that provides Playwright globals
  * This replaces jest-playwright-preset with a simplified implementation
  */
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const { chromium } = require('playwright');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const path = require('path');
-// eslint-disable-next-line @typescript-eslint/no-require-imports
-const fs = require('fs');
+
+// CommonJS imports are required in this Jest setup file
+const { chromium } = require('playwright'); // eslint-disable-line @typescript-eslint/no-require-imports
+const path = require('path'); // eslint-disable-line @typescript-eslint/no-require-imports
+const fs = require('fs'); // eslint-disable-line @typescript-eslint/no-require-imports
 
 // Deep merge utility function
 function deepMerge(target, source) {
@@ -43,12 +42,11 @@ function loadConfig() {
 
   if (fs.existsSync(configPath)) {
     try {
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const userConfig = require(configPath);
+      const userConfig = require(configPath); // eslint-disable-line @typescript-eslint/no-require-imports
       return deepMerge(defaultConfig, userConfig);
     } catch (error) {
-      // eslint-disable-next-line no-console
-      console.warn('Failed to load jest-playwright config, using defaults:', error.message);
+      // Console logging is needed for test setup debugging
+      console.warn('Failed to load jest-playwright config, using defaults:', error.message); // eslint-disable-line no-console
     }
   }
 
@@ -125,20 +123,21 @@ const teardownPlaywright = async () => {
 };
 
 // Setup before each test file
-// eslint-disable-next-line no-undef
-beforeAll(async () => {
+// Jest globals are available in test environment
+global.beforeAll(async () => {
+  // eslint-disable-line no-undef
   await setupPlaywright();
 });
 
 // Teardown after each test file
-// eslint-disable-next-line no-undef
-afterAll(async () => {
+global.afterAll(async () => {
+  // eslint-disable-line no-undef
   await teardownPlaywright();
 });
 
 // Setup before each test
-// eslint-disable-next-line no-undef
-beforeEach(async () => {
+global.beforeEach(async () => {
+  // eslint-disable-line no-undef
   // Reset page for each test to ensure clean state
   if (global.jestPlaywright && global.jestPlaywright.resetPage) {
     await global.jestPlaywright.resetPage();

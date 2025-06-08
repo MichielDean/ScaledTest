@@ -12,10 +12,8 @@ import { KeycloakRole } from '../../../types/user';
  */
 const handleGet: MethodHandler = async (req, res, reqLogger) => {
   try {
-    // Get admin token
     await getAdminToken();
 
-    // Get all users with their roles
     const usersWithRoles = await getAllUsersWithRoles();
     return res.status(200).json(usersWithRoles);
   } catch (error) {
@@ -31,7 +29,6 @@ const handleGet: MethodHandler = async (req, res, reqLogger) => {
  */
 const handlePost: MethodHandler = async (req, res, reqLogger) => {
   try {
-    // Get admin token
     const adminToken = await getAdminToken();
 
     const { userId, grantMaintainer } = req.body;
@@ -49,7 +46,6 @@ const handlePost: MethodHandler = async (req, res, reqLogger) => {
       return res.status(404).json({ error: 'Client not found' });
     }
 
-    // Get available roles
     const rolesResponse = await axios.get<KeycloakRole[]>(
       keycloakEndpoints.getClientRolesEndpoint(clientId),
       {

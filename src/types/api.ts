@@ -37,8 +37,7 @@ export interface RegisterResponse extends AuthResponse {
 /**
  * User management API responses
  */
-// eslint-disable-next-line @typescript-eslint/no-empty-object-type
-export interface UserManagementResponse extends SuccessApiResponse<UserWithRoles[]> {}
+export type UserManagementResponse = SuccessApiResponse<UserWithRoles[]>;
 
 /**
  * OpenSearch response for analytics endpoints

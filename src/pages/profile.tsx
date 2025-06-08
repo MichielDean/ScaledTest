@@ -20,7 +20,7 @@ const Profile: NextPage = () => {
       <main className={styles.main}>
         <h1 className={styles.title}>User Profile</h1>
 
-        <div className={`card ${styles.userProfileSection}`}>
+        <div id="user-profile-section" className={`card ${styles.userProfileSection}`}>
           <div className={styles.profileHeader}>
             <h2>Profile Information</h2>
           </div>
