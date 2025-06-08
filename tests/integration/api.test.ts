@@ -1,5 +1,4 @@
 // tests/integration/api.test.ts
-import { v4 as uuidv4 } from 'uuid';
 import { NextApiRequest, NextApiResponse } from 'next';
 import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
 
@@ -100,7 +99,11 @@ Object.defineProperty(global, 'crypto', {
 import ctrfReportsHandler from '../../src/pages/api/test-reports';
 
 // Create a mock for NextApiRequest and NextApiResponse
-const mockReq = (method: string, body: any = {}, query: any = {}) => {
+const mockReq = (
+  method: string,
+  body: Record<string, unknown> = {},
+  query: Record<string, unknown> = {}
+): NextApiRequest => {
   return {
     method,
     body,
@@ -111,19 +114,19 @@ const mockReq = (method: string, body: any = {}, query: any = {}) => {
   } as unknown as NextApiRequest;
 };
 
-const mockRes = () => {
-  const res: any = {};
+const mockRes = (): NextApiResponse => {
+  const res = {} as NextApiResponse;
   res.status = jest.fn().mockReturnValue(res);
   res.json = jest.fn().mockReturnValue(res);
-  return res as NextApiResponse;
+  return res;
 };
 
 // Helper to run a test with the API handler
 const runHandlerTest = async (
   handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
   method: string,
-  body?: any,
-  query?: any
+  body?: Record<string, unknown>,
+  query?: Record<string, unknown>
 ) => {
   const req = mockReq(method, body, query);
   const res = mockRes();
@@ -271,7 +274,7 @@ describe('API Endpoints', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Method not allowed. Supported methods: POST, GET',
+          error: 'Method not allowed. Supported methods: GET, POST',
         })
       );
     });

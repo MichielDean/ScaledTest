@@ -1,8 +1,6 @@
 // OpenSearch Analytics API - Test Suite Overview Data
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../../auth/apiAuth';
-import { UserRole } from '../../../auth/keycloak';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { MethodHandler, createApi } from '../../../auth/apiAuth';
+import { logError } from '../../../utils/logger';
 import {
   getTestSuiteOverviewFromOpenSearch,
   getOpenSearchHealthStatus,
@@ -39,23 +37,9 @@ type ErrorResponse = {
 };
 
 /**
- * API handler for Test Suite Overview analytics data from OpenSearch
- * GET /api/analytics/test-suite-overview
- *
- * This endpoint aggregates test results by suite from the OpenSearch 'ctrf-reports' index
- * All data is sourced directly from OpenSearch - no local database is used
+ * Handle GET requests - retrieve test suite overview data
  */
-async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse | ErrorResponse>) {
-  const reqLogger = getRequestLogger(req);
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed. Only GET is supported.',
-      source: 'OpenSearch',
-    });
-  }
-
+const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, res, reqLogger) => {
   try {
     reqLogger.info('Fetching test suite overview data from OpenSearch');
 
@@ -132,7 +116,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse
       details: error instanceof Error ? error.message : String(error),
     });
   }
-}
+};
 
-// Export the protected API route - all authenticated users can access analytics for read-only purposes
-export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+// Export the super-generic API with read-only access for all authenticated users
+export default createApi.readOnly(handleGet);

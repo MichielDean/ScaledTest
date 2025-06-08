@@ -8,17 +8,7 @@ import { UserRole } from '../../auth/keycloak';
 import Header from '../../components/Header';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../utils/logger';
-
-// Interface for a simplified user with role management capabilities
-interface UserWithRoles {
-  id: string;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  roles: string[];
-  isMaintainer: boolean;
-}
+import { UserWithRoles } from '../../types/user';
 
 const UserManagement: NextPage = () => {
   const { keycloak, isAuthenticated, hasRole, loading: authLoading } = useAuth();

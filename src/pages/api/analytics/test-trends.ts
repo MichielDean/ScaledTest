@@ -1,8 +1,6 @@
 // OpenSearch Analytics API - Test Trends Data
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../../auth/apiAuth';
-import { UserRole } from '../../../auth/keycloak';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { MethodHandler, createApi } from '../../../auth/apiAuth';
+import { logError } from '../../../utils/logger';
 import {
   getTestTrendsFromOpenSearch,
   getOpenSearchHealthStatus,
@@ -40,24 +38,9 @@ type ErrorResponse = {
 };
 
 /**
- * API handler for Test Trends analytics data from OpenSearch
- * GET /api/analytics/test-trends?days=30
- *
- * This endpoint provides test result trends over time from the OpenSearch 'ctrf-reports' index
- * Uses the storedAt timestamp to create daily aggregations
- * All data is sourced directly from OpenSearch - no local database is used
+ * Handle GET requests - retrieve test trends data
  */
-async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse | ErrorResponse>) {
-  const reqLogger = getRequestLogger(req);
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed. Only GET is supported.',
-      source: 'OpenSearch',
-    });
-  }
-
+const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, res, reqLogger) => {
   try {
     // Parse query parameters
     const daysParam = req.query.days as string;
@@ -149,7 +132,16 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse
       details: error instanceof Error ? error.message : String(error),
     });
   }
-}
+};
 
-// Export the protected API route - all authenticated users can access analytics for read-only purposes
-export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+/**
+ * API handler for Test Trends analytics data from OpenSearch
+ * GET /api/analytics/test-trends?days=30
+ *
+ * This endpoint provides test result trends over time from the OpenSearch 'ctrf-reports' index
+ * Uses the storedAt timestamp to create daily aggregations
+ * All data is sourced directly from OpenSearch - no local database is used
+ */
+
+// Export the super-generic API with read-only access for all authenticated users
+export default createApi.readOnly(handleGet);

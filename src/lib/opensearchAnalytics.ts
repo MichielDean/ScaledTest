@@ -9,6 +9,103 @@ import {
   FlakyTestData,
 } from '../types/dashboard';
 
+// OpenSearch aggregation bucket interfaces
+interface SuiteBucket {
+  key: string;
+  total_tests?: { value: number };
+  passed_tests?: { value: number };
+  failed_tests?: { value: number };
+  skipped_tests?: { value: number };
+  avg_duration?: { value: number };
+}
+
+interface DateBucket {
+  key_as_string: string;
+  total_tests: { value: number };
+  passed_tests?: { value: number };
+  failed_tests?: { value: number };
+  skipped_tests?: { value: number };
+}
+
+interface DurationBucket {
+  key: string;
+  doc_count: number;
+}
+
+interface ErrorBucket {
+  key: string;
+  doc_count: number;
+  test_names?: {
+    buckets: { key: string }[];
+  };
+}
+
+interface FlakyTestBucket {
+  key: string;
+  status_distribution?: {
+    buckets: Array<{
+      key: string;
+      doc_count: number;
+    }>;
+  };
+  marked_flaky?: {
+    doc_count: number;
+  };
+  total_runs?: {
+    value: number;
+  };
+  avg_duration?: {
+    value: number;
+  };
+}
+
+// OpenSearch aggregation response interfaces
+/*
+interface OpenSearchAggregations {
+  suites?: {
+    buckets: SuiteBucket[];
+  };
+  tests_over_time?: {
+    buckets: DateBucket[];
+  };
+  duration_ranges?: {
+    buckets: DurationBucket[];
+  };
+  failed_tests?: {
+    failed_only?: {
+      error_messages?: {
+        buckets: ErrorBucket[];
+      };
+    };
+  };
+  test_status_aggregation?: {
+    buckets: Array<{
+      key: string;
+      doc_count: number;
+      test_info?: {
+        buckets: Array<{
+          key: string;
+          doc_count: number;
+          first_occurrence?: {
+            hits?: {
+              hits?: Array<{
+                _source?: {
+                  results?: {
+                    tests?: Array<{
+                      flaky?: boolean;
+                    }>;
+                  };
+                };
+              }>;
+            };
+          };
+        }>;
+      };
+    }>;
+  };
+}
+*/
+
 /**
  * OpenSearch Analytics Service
  * This service provides all analytics data for the test results dashboard
@@ -69,16 +166,22 @@ export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOve
       },
     });
 
-    const buckets = response.body.aggregations?.suites?.buckets || [];
+    const buckets =
+      (response.body.aggregations?.suites as { buckets: SuiteBucket[] })?.buckets || [];
 
-    const data: TestSuiteOverviewData[] = buckets.map((bucket: any) => ({
-      name: bucket.key,
-      total: bucket.total_tests?.value || 0,
-      passed: bucket.passed_tests?.value || 0,
-      failed: bucket.failed_tests?.value || 0,
-      skipped: bucket.skipped_tests?.value || 0,
-      avgDuration: bucket.avg_duration?.value || 0,
-    }));
+    const data: TestSuiteOverviewData[] = buckets.map((bucket: SuiteBucket) => {
+      const total = bucket.total_tests?.value || 0;
+      const passed = bucket.passed_tests?.value || 0;
+      return {
+        name: bucket.key,
+        total,
+        passed,
+        failed: bucket.failed_tests?.value || 0,
+        skipped: bucket.skipped_tests?.value || 0,
+        passRate: total > 0 ? (passed / total) * 100 : 0,
+        avgDuration: bucket.avg_duration?.value || 0,
+      };
+    });
 
     logger.info(
       { suitesCount: data.length },
@@ -144,9 +247,10 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
       },
     });
 
-    const buckets = response.body.aggregations?.trends?.buckets || [];
+    const buckets =
+      (response.body.aggregations?.trends as { buckets: DateBucket[] })?.buckets || [];
 
-    const data: TestTrendsData[] = buckets.map((bucket: any) => ({
+    const data: TestTrendsData[] = buckets.map((bucket: DateBucket) => ({
       date: bucket.key_as_string,
       total: bucket.total_tests?.value || 0,
       passed: bucket.passed_tests?.value || 0,
@@ -217,14 +321,25 @@ export async function getTestDurationAnalysisFromOpenSearch(): Promise<TestDurat
       },
     });
 
-    const buckets = response.body.aggregations?.duration_ranges?.duration_buckets?.buckets || [];
+    const buckets =
+      (
+        response.body.aggregations?.duration_ranges as {
+          duration_buckets: { buckets: DurationBucket[] };
+        }
+      )?.duration_buckets?.buckets || [];
 
-    const data: TestDurationData[] = buckets.map((bucket: any) => ({
+    const data: TestDurationData[] = buckets.map((bucket: DurationBucket) => ({
       range: bucket.key,
       count: bucket.doc_count,
-      avgDuration: response.body.aggregations?.duration_ranges?.avg_duration?.value || 0,
-      maxDuration: response.body.aggregations?.duration_ranges?.max_duration?.value || 0,
-      minDuration: response.body.aggregations?.duration_ranges?.min_duration?.value || 0,
+      avgDuration:
+        (response.body.aggregations?.duration_ranges as { avg_duration: { value: number } })
+          ?.avg_duration?.value || 0,
+      maxDuration:
+        (response.body.aggregations?.duration_ranges as { max_duration: { value: number } })
+          ?.max_duration?.value || 0,
+      minDuration:
+        (response.body.aggregations?.duration_ranges as { min_duration: { value: number } })
+          ?.min_duration?.value || 0,
     }));
 
     logger.info(
@@ -287,12 +402,16 @@ export async function getErrorAnalysisFromOpenSearch(): Promise<ErrorAnalysisDat
     });
 
     const buckets =
-      response.body.aggregations?.failed_tests?.failed_only?.error_messages?.buckets || [];
+      (
+        response.body.aggregations?.failed_tests as {
+          failed_only: { error_messages: { buckets: ErrorBucket[] } };
+        }
+      )?.failed_only?.error_messages?.buckets || [];
 
-    const data: ErrorAnalysisData[] = buckets.map((bucket: any) => ({
+    const data: ErrorAnalysisData[] = buckets.map((bucket: ErrorBucket) => ({
       errorMessage: bucket.key,
       count: bucket.doc_count,
-      affectedTests: bucket.test_names?.buckets?.map((test: any) => test.key) || [],
+      affectedTests: bucket.test_names?.buckets?.map((test: { key: string }) => test.key) || [],
     }));
 
     logger.info({ errors: data.length }, 'Successfully retrieved error analysis from OpenSearch');
@@ -353,43 +472,51 @@ export async function getFlakyTestsFromOpenSearch(): Promise<FlakyTestData[]> {
       },
     });
 
-    const testBuckets = response.body.aggregations?.test_results?.by_test_name?.buckets || [];
+    const testBuckets =
+      (response.body.aggregations?.test_results as { by_test_name: { buckets: FlakyTestBucket[] } })
+        ?.by_test_name?.buckets || [];
 
     const data: FlakyTestData[] = testBuckets
-      .filter((bucket: any) => {
+      .filter((bucket: FlakyTestBucket) => {
         // Consider a test flaky if it has multiple status types or is marked as flaky
         const statusCount = bucket.status_distribution?.buckets?.length || 0;
         const totalRuns = bucket.total_runs?.value || 0;
-        const markedFlaky = bucket.marked_flaky?.doc_count > 0;
+        const markedFlaky = (bucket.marked_flaky?.doc_count || 0) > 0;
 
         return statusCount > 1 || markedFlaky || totalRuns > 5; // Filter for potentially flaky tests
       })
-      .map((bucket: any) => {
+      .map((bucket: FlakyTestBucket) => {
         const statusBuckets = bucket.status_distribution?.buckets || [];
         const totalRuns = bucket.total_runs?.value || 0;
 
         let passed = 0,
           failed = 0,
           skipped = 0;
-        statusBuckets.forEach((status: any) => {
+        statusBuckets.forEach((status: { key: string; doc_count: number }) => {
           if (status.key === 'passed') passed = status.doc_count;
           else if (status.key === 'failed') failed = status.doc_count;
           else if (status.key === 'skipped') skipped = status.doc_count;
         });
 
         const flakyScore = totalRuns > 0 ? (failed / totalRuns) * 100 : 0;
+        const avgDuration = bucket.avg_duration?.value || 0;
+        const isFlaky = flakyScore > 10 && flakyScore < 90; // Consider flaky if between 10-90% failure rate
 
         return {
           testName: bucket.key,
+          suite: 'OpenSearch Analysis', // Default suite name since we don't have suite-level aggregation
           totalRuns,
           passed,
           failed,
+          failures: failed, // Alias for backward compatibility
           skipped,
           flakyScore,
-          isMarkedFlaky: bucket.marked_flaky?.doc_count > 0,
+          avgDuration: Math.round(avgDuration),
+          isMarkedFlaky: (bucket.marked_flaky?.doc_count || 0) > 0,
+          isFlaky,
         };
       })
-      .sort((a, b) => b.flakyScore - a.flakyScore); // Sort by flaky score descending
+      .sort((a: FlakyTestData, b: FlakyTestData) => b.flakyScore - a.flakyScore); // Sort by flaky score descending
 
     logger.info(
       { flakyTests: data.length },

@@ -5,27 +5,7 @@ import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { UserRole } from '../auth/keycloak';
 import { useAuth } from '../auth/KeycloakProvider';
-import { CtrfSchema } from '../schemas/ctrf/ctrf';
-
-// Types for our dashboard data
-interface TestReport extends CtrfSchema {
-  _id: string;
-  storedAt: string;
-}
-
-interface TestReportsResponse {
-  success: boolean;
-  reports: TestReport[];
-  total: number;
-}
-
-interface DashboardFilters {
-  status: string;
-  tool: string;
-  environment: string;
-  page: number;
-  size: number;
-}
+import { TestReport, TestReportsResponse, DashboardFilters } from '../types/dashboard';
 
 const TestResultsDashboard: NextPage = () => {
   const { token } = useAuth();

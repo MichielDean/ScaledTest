@@ -9,20 +9,10 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
-import { TestReport } from '../../types/dashboard';
+import { TestReport, FlakyTestData } from '../../types/dashboard';
 
 interface FlakyTestDetectorProps {
   reports: TestReport[];
-}
-
-interface FlakyTestData {
-  testName: string;
-  suite: string;
-  totalRuns: number;
-  failures: number;
-  flakyScore: number;
-  avgDuration: number;
-  isFlaky: boolean;
 }
 
 const FlakyTestDetector: React.FC<FlakyTestDetectorProps> = ({ reports }) => {
@@ -64,9 +54,13 @@ const FlakyTestDetector: React.FC<FlakyTestDetectorProps> = ({ reports }) => {
           testName: testName.length > 30 ? testName.substring(0, 30) + '...' : testName,
           suite,
           totalRuns,
-          failures: history.failures,
+          passed: history.passes,
+          failed: history.failures,
+          failures: history.failures, // Alias for backward compatibility
+          skipped: 0, // Not tracked in this analysis
           flakyScore,
           avgDuration: Math.round(avgDuration),
+          isMarkedFlaky: false, // Not available in this context
           isFlaky,
         });
       }
@@ -82,7 +76,13 @@ const FlakyTestDetector: React.FC<FlakyTestDetectorProps> = ({ reports }) => {
 
   const topFlakyTests = flakyTests.slice(0, 10);
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload: FlakyTestData }>;
+  }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (

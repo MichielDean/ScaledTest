@@ -1,12 +1,13 @@
-import { describe, beforeEach, afterEach, it, expect } from '@jest/globals';
+import { describe, beforeEach, afterEach, it } from '@jest/globals';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
+import type { Page } from 'playwright';
 
 // For Jest-Playwright integration
-declare const page: any;
+declare const page: Page;
 
 describe('Role-based Access Tests', () => {
   let loginPage: LoginPage;

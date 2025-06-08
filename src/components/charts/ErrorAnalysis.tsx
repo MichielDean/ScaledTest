@@ -8,21 +8,11 @@ import {
   Tooltip,
   ResponsiveContainer,
   Cell,
-  ScatterChart,
-  Scatter,
-  ZAxis,
 } from 'recharts';
 import { TestReport } from '../../types/dashboard';
 
 interface ErrorAnalysisProps {
   reports: TestReport[];
-}
-
-interface ErrorPattern {
-  pattern: string;
-  count: number;
-  tests: string[];
-  category: string;
 }
 
 interface ErrorData {
@@ -152,7 +142,13 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
     }
   };
 
-  const CustomTooltip = ({ active, payload, label }: any) => {
+  const CustomTooltip = ({
+    active,
+    payload,
+  }: {
+    active?: boolean;
+    payload?: Array<{ payload: ErrorData }>;
+  }) => {
     if (active && payload && payload.length) {
       const data = payload[0].payload;
       return (
@@ -194,7 +190,7 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
 
   // Prepare category data for chart
   const categoryData = Object.entries(errorCategories)
-    .filter(([_, count]) => count > 0)
+    .filter(([, count]) => count > 0)
     .map(([category, count]) => ({ category, count }))
     .sort((a, b) => b.count - a.count);
 
@@ -302,7 +298,7 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
                 label={{ value: 'Total Errors', angle: -90, position: 'insideLeft' }}
               />
               <Tooltip
-                formatter={(value, name) => [value, 'Error Count']}
+                formatter={value => [value, 'Error Count']}
                 labelFormatter={label => `Category: ${label}`}
               />
               <Bar dataKey="count" fill="#8884d8" />

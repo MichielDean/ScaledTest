@@ -2,16 +2,21 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { Readable } from 'stream';
 import { CtrfSchema, Status, ReportFormat } from '../../src/schemas/ctrf/ctrf';
 import testReportsHandler from '../../src/pages/api/test-reports';
-import opensearchClient from '../../src/lib/opensearch';
+import opensearchClient, { ensureCtrfReportsIndexExists } from '../../src/lib/opensearch';
 import {
   generateCtrfReport,
-  generateMinimalCtrfReport,
   generateInvalidCtrfReport,
   generateLargeCtrfReport,
 } from '../utils/ctrfTestDataGenerator';
 import { UserRole } from '../../src/auth/keycloak';
-import { ZodError } from 'zod';
-import { apiLogger } from '../../src/utils/logger';
+import { AuthenticatedRequest } from '../../src/types/auth';
+import { hasRequiredRole } from '../../src/auth/apiAuth';
+import { OpenSearchPromise, OpenSearchErrorPromise } from '../../src/types/opensearch';
+
+// Test-specific types for this file only
+type TestResult = CtrfSchema['results']['tests'][0];
+type MockRequestBody = { [key: string]: unknown };
+type MockRequestQuery = { [key: string]: string | string[] | undefined };
 
 // Mock dependencies
 jest.mock('../../src/lib/opensearch', () => {
@@ -61,14 +66,123 @@ jest.mock('../../src/utils/logger', () => ({
 
 // Mock withApiAuth to bypass actual authentication for unit tests
 jest.mock('../../src/auth/apiAuth', () => ({
-  withApiAuth: jest.fn((handler, _requiredRoles) => {
+  hasRequiredRole: jest.fn((payload, requiredRoles) => {
+    // Mock implementation that checks if user has required roles
+    const userRoles = [
+      ...(payload.realm_access?.roles || []),
+      ...(payload.resource_access?.['scaledtest-client']?.roles || []),
+    ];
+    return requiredRoles.some((role: string) => userRoles.includes(role));
+  }),
+  createApi: {
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    readWrite: jest.fn((handlers, options) => {
+      // Mock implementation that simulates the real createApi.readWrite behavior
+      return async (req: NextApiRequest, res: NextApiResponse) => {
+        try {
+          // Run setup function if provided (this is what was missing!)
+          if (options?.setup) {
+            await options.setup();
+          }
+
+          // Add user to request for authentication
+          const authenticatedReq = req as AuthenticatedRequest;
+          authenticatedReq.user = {
+            sub: 'test-user-id',
+            name: 'Test User',
+            email: 'test@example.com',
+            preferred_username: 'test-user',
+            realm_access: { roles: [UserRole.MAINTAINER] }, // Changed to MAINTAINER for write access
+            resource_access: { 'scaledtest-client': { roles: [UserRole.MAINTAINER] } }, // Changed to MAINTAINER
+            auth_time: Date.now(),
+            typ: 'Bearer',
+            azp: 'scaledtest-client',
+            session_state: 'test-session',
+            acr: '1',
+            scope: 'openid profile email',
+            sid: 'test-sid',
+            email_verified: true,
+          };
+
+          // Call the appropriate handler based on HTTP method
+          const method = req.method?.toUpperCase() || 'GET';
+          const handler = handlers[method as keyof typeof handlers];
+
+          if (handler) {
+            // Check permissions for write operations using hasRequiredRole mock
+            if (
+              method === 'POST' ||
+              method === 'PUT' ||
+              method === 'PATCH' ||
+              method === 'DELETE'
+            ) {
+              const hasPermission = hasRequiredRole(authenticatedReq.user, [
+                UserRole.MAINTAINER,
+                UserRole.OWNER,
+              ]);
+
+              if (!hasPermission) {
+                return res.status(403).json({
+                  success: false,
+                  error: 'Forbidden - Write operations require maintainer or owner privileges',
+                });
+              }
+            }
+
+            // Create a mock logger
+            const reqLogger = {
+              info: jest.fn(),
+              error: jest.fn(),
+              warn: jest.fn(),
+              debug: jest.fn(),
+            };
+
+            return handler(authenticatedReq, res, reqLogger);
+          } else {
+            return res.status(405).json({
+              success: false,
+              error: 'Method not allowed. Supported methods: POST, GET',
+            });
+          }
+          // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        } catch (error) {
+          // Handle setup errors properly
+          return res.status(500).json({
+            success: false,
+            error: 'Internal server error',
+          });
+        }
+      };
+    }),
+    readOnly: jest.fn(),
+    adminOnly: jest.fn(),
+    custom: jest.fn(),
+  },
+  withApiAuth: jest.fn((handler, requiredRoles) => {
+    void requiredRoles; // Indicate parameter is intentionally unused
     return async (req: NextApiRequest, res: NextApiResponse) => {
-      // Simulate an authenticated user for testing purposes
-      (req as any).user = {
+      const authenticatedReq = req as AuthenticatedRequest;
+      authenticatedReq.user = {
         sub: 'test-user-id',
         name: 'Test User',
         email: 'test@example.com',
-        roles: [UserRole.MAINTAINER], // Adjust roles as needed for tests
+        preferred_username: 'test-user',
+        realm_access: {
+          roles: [UserRole.MAINTAINER, UserRole.READONLY],
+        },
+        resource_access: {
+          'scaledtest-client': {
+            roles: [UserRole.MAINTAINER, UserRole.READONLY],
+          },
+        },
+        auth_time: Date.now(),
+        typ: 'Bearer',
+        azp: 'scaledtest-client',
+        session_state: 'test-session',
+        acr: '1',
+        scope: 'openid profile email',
+        sid: 'test-sid',
+        email_verified: true,
       };
       return handler(req, res);
     };
@@ -77,7 +191,11 @@ jest.mock('../../src/auth/apiAuth', () => ({
 
 const mockOpensearchClient = opensearchClient as jest.Mocked<typeof opensearchClient>;
 
-const mockRequest = (method: string, body?: any, query?: any): NextApiRequest => {
+const mockRequest = (
+  method: string,
+  body?: MockRequestBody | null,
+  query?: MockRequestQuery
+): NextApiRequest => {
   const req = {
     method,
     body,
@@ -117,8 +235,8 @@ describe('CTRF Reports API Unit Tests', () => {
         body: true,
         statusCode: 200,
         headers: {},
-        meta: {} as any,
-      }) as any;
+        meta: {},
+      }) as OpenSearchPromise;
       promise.abort = jest.fn();
       return promise;
     });
@@ -127,8 +245,8 @@ describe('CTRF Reports API Unit Tests', () => {
         body: { acknowledged: true },
         statusCode: 200,
         headers: {},
-        meta: {} as any,
-      }) as any;
+        meta: {},
+      }) as OpenSearchPromise;
       promise.abort = jest.fn();
       return promise;
     });
@@ -137,8 +255,8 @@ describe('CTRF Reports API Unit Tests', () => {
         body: { _id: 'test-id', result: 'created' },
         statusCode: 201,
         headers: {},
-        meta: {} as any,
-      }) as any;
+        meta: {},
+      }) as OpenSearchPromise;
       promise.abort = jest.fn();
       return promise;
     });
@@ -152,8 +270,8 @@ describe('CTRF Reports API Unit Tests', () => {
         },
         statusCode: 200,
         headers: {},
-        meta: {} as any,
-      }) as any;
+        meta: {},
+      }) as OpenSearchPromise;
       promise.abort = jest.fn();
       return promise;
     });
@@ -246,7 +364,7 @@ describe('CTRF Reports API Unit Tests', () => {
     it('should return 503 if OpenSearch connection fails (ECONNREFUSED)', async () => {
       mockOpensearchClient.index.mockImplementationOnce(() => {
         const error = new Error('ECONNREFUSED test error');
-        const promise = Promise.reject(error) as any;
+        const promise = Promise.reject(error) as OpenSearchErrorPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -266,7 +384,7 @@ describe('CTRF Reports API Unit Tests', () => {
     it('should return 500 for other OpenSearch errors', async () => {
       mockOpensearchClient.index.mockImplementationOnce(() => {
         const error = new Error('Some other OpenSearch error');
-        const promise = Promise.reject(error) as any;
+        const promise = Promise.reject(error) as OpenSearchErrorPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -292,7 +410,6 @@ describe('CTRF Reports API Unit Tests', () => {
       await testReportsHandler(req, res);
 
       // Now we check if ensureCtrfReportsIndexExists was called instead of directly checking indices.exists
-      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
       expect(ensureCtrfReportsIndexExists).toHaveBeenCalled();
       expect(res.status).toHaveBeenCalledWith(201);
     });
@@ -313,8 +430,8 @@ describe('CTRF Reports API Unit Tests', () => {
           },
           statusCode: 200,
           headers: {},
-          meta: {} as any,
-        }) as any;
+          meta: {},
+        }) as OpenSearchPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -471,7 +588,7 @@ describe('CTRF Reports API Unit Tests', () => {
     it('should return 503 if OpenSearch service unavailable on GET', async () => {
       mockOpensearchClient.search.mockImplementationOnce(() => {
         const error = new Error('ECONNREFUSED test error');
-        const promise = Promise.reject(error) as any;
+        const promise = Promise.reject(error) as OpenSearchErrorPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -490,7 +607,7 @@ describe('CTRF Reports API Unit Tests', () => {
     it('should return 500 for other OpenSearch errors on GET', async () => {
       mockOpensearchClient.search.mockImplementationOnce(() => {
         const error = new Error('Some other OpenSearch error');
-        const promise = Promise.reject(error) as any;
+        const promise = Promise.reject(error) as OpenSearchErrorPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -511,7 +628,7 @@ describe('CTRF Reports API Unit Tests', () => {
       // Set up a mock that will properly throw an error that will be caught by the handleGet function
       (mockOpensearchClient.search as jest.Mock).mockImplementationOnce(() => {
         const error = new Error('Unexpected index check error');
-        const promise = Promise.reject(error) as any;
+        const promise = Promise.reject(error) as OpenSearchErrorPromise;
         promise.abort = jest.fn();
         return promise;
       });
@@ -560,7 +677,6 @@ describe('CTRF Reports API Unit Tests', () => {
 
   describe('Global Error Handling', () => {
     it('should return 500 if ensureCtrfReportsIndexExists throws an unexpected error', async () => {
-      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
       (ensureCtrfReportsIndexExists as jest.Mock).mockImplementationOnce(() => {
         return Promise.reject(new Error('Unexpected index check error'));
       });
@@ -1112,10 +1228,10 @@ describe('CTRF Reports API Unit Tests', () => {
       // Verify the summary counts are consistent
       const storedReport = mockOpensearchClient.index.mock.calls[0][0].body;
       const actualPassed = storedReport.results.tests.filter(
-        (t: any) => t.status === 'passed'
+        (t: TestResult) => t.status === 'passed'
       ).length;
       const actualFailed = storedReport.results.tests.filter(
-        (t: any) => t.status === 'failed'
+        (t: TestResult) => t.status === 'failed'
       ).length;
 
       expect(storedReport.results.summary.passed).toBe(actualPassed);
@@ -1229,11 +1345,117 @@ describe('CTRF Reports API Unit Tests', () => {
       expect(storedReport.results.summary.stop).toBe(baseTime);
 
       // Verify test timestamps are preserved
-      storedReport.results.tests.forEach((test: any, index: number) => {
+      storedReport.results.tests.forEach((test: TestResult) => {
         expect(test.start).toBeDefined();
         expect(test.stop).toBeDefined();
-        expect(test.stop).toBeGreaterThan(test.start);
+        if (test.start && test.stop) {
+          expect(test.stop).toBeGreaterThan(test.start);
+        }
       });
+    });
+  });
+
+  describe('Role-Based Authorization', () => {
+    beforeEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('should allow READONLY users to GET reports', async () => {
+      // Mock hasRequiredRole to return true for any roles since GET operations allow all authenticated users
+      (hasRequiredRole as jest.Mock).mockReturnValue(true);
+
+      // Mock OpenSearch response for GET
+      mockOpensearchClient.search.mockImplementation(() => {
+        const promise = Promise.resolve({
+          body: {
+            hits: {
+              hits: [],
+              total: { value: 0 },
+            },
+          },
+          statusCode: 200,
+          headers: {},
+          meta: {},
+        });
+        const typedPromise = promise as unknown as OpenSearchPromise;
+        typedPromise.abort = jest.fn();
+        return typedPromise;
+      });
+
+      const req = mockRequest('GET', null, { page: '1', size: '10' });
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(200);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          reports: [],
+          total: 0,
+        })
+      );
+    });
+
+    it('should block READONLY users from POST operations', async () => {
+      // Mock hasRequiredRole to return false for MAINTAINER/OWNER roles (simulating readonly user)
+      (hasRequiredRole as jest.Mock).mockReturnValue(false);
+
+      const req = mockRequest('POST', generateCtrfReport());
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(403);
+      expect(res.json).toHaveBeenCalledWith({
+        success: false,
+        error: 'Forbidden - Write operations require maintainer or owner privileges',
+      });
+
+      // Ensure no OpenSearch operations were attempted
+      expect(mockOpensearchClient.index).not.toHaveBeenCalled();
+    });
+
+    it('should allow MAINTAINER users to POST reports', async () => {
+      // Mock hasRequiredRole to return true for MAINTAINER/OWNER roles
+      (hasRequiredRole as jest.Mock).mockReturnValue(true);
+
+      const req = mockRequest('POST', generateCtrfReport());
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: 'CTRF report stored successfully',
+        })
+      );
+
+      // Ensure OpenSearch operations were attempted
+      expect(mockOpensearchClient.index).toHaveBeenCalled();
+    });
+
+    it('should allow OWNER users to POST reports', async () => {
+      // Mock hasRequiredRole to return true for MAINTAINER/OWNER roles
+      (hasRequiredRole as jest.Mock).mockReturnValue(true);
+
+      const req = mockRequest('POST', generateCtrfReport());
+      const res = mockResponse();
+
+      await testReportsHandler(req, res);
+
+      expect(res.status).toHaveBeenCalledWith(201);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          message: 'CTRF report stored successfully',
+        })
+      );
+
+      // Ensure OpenSearch operations were attempted
+      expect(mockOpensearchClient.index).toHaveBeenCalled();
     });
   });
 });

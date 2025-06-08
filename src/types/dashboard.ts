@@ -1,4 +1,5 @@
 import { CtrfSchema } from '../schemas/ctrf/ctrf';
+import { BaseFilters, SuccessApiResponse, AnalyticsDataWithRates } from './common';
 
 // Types for our dashboard data
 export interface TestReport extends CtrfSchema {
@@ -6,13 +7,12 @@ export interface TestReport extends CtrfSchema {
   storedAt: string;
 }
 
-export interface TestReportsResponse {
-  success: boolean;
-  reports: TestReport[];
+export interface TestReportsResponse extends SuccessApiResponse<TestReport[]> {
+  reports: TestReport[]; // Alias for backward compatibility with existing components
   total: number;
 }
 
-export interface DashboardFilters {
+export interface DashboardFilters extends BaseFilters {
   status: string;
   tool: string;
   environment: string;
@@ -21,13 +21,8 @@ export interface DashboardFilters {
 }
 
 // Types for analytics components
-export interface TestTrendsData {
+export interface TestTrendsData extends AnalyticsDataWithRates {
   date: string;
-  total: number;
-  passed: number;
-  failed: number;
-  skipped: number;
-  passRate: number;
 }
 
 export interface TestDurationData {
@@ -38,12 +33,27 @@ export interface TestDurationData {
   maxDuration: number;
 }
 
-export interface TestSuiteOverviewData {
+export interface TestSuiteOverviewData extends AnalyticsDataWithRates {
   name: string;
-  total: number;
+  avgDuration: number;
+}
+
+export interface ErrorAnalysisData {
+  errorMessage: string;
+  count: number;
+  affectedTests: string[];
+}
+
+export interface FlakyTestData {
+  testName: string;
+  suite: string;
+  totalRuns: number;
   passed: number;
   failed: number;
+  failures: number; // Alias for failed for backward compatibility
   skipped: number;
-  passRate: number;
+  flakyScore: number;
   avgDuration: number;
+  isMarkedFlaky: boolean;
+  isFlaky: boolean; // Computed flaky status
 }

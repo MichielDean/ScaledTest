@@ -1,49 +1,39 @@
-// filepath: c:\Users\mokey\source\ScaledTest\src\pages\api\admin\users.ts
-import { NextApiRequest, NextApiResponse } from 'next';
+// Admin API for user management
 import axios from 'axios';
+import { MethodHandler, createApi } from '../../../auth/apiAuth';
 import { UserRole } from '../../../auth/keycloak';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { logError } from '../../../utils/logger';
 import { keycloakConfig, keycloakEndpoints } from '../../../config/keycloak';
 import { getAdminToken, getAllUsersWithRoles, getClientId } from '../../../utils/keycloakAdminApi';
+import { KeycloakRole } from '../../../types/user';
 
 /**
- * Represents a Keycloak role retrieved from the Admin API
+ * Handle GET requests - retrieve all users with their roles
  */
-interface KeycloakRole {
-  id: string;
-  name: string;
-  description?: string;
-  composite?: boolean;
-  clientRole?: boolean;
-  containerId?: string;
-}
-
-// Handler for user-related API requests
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // Create a request-specific logger with request ID
-  const reqLogger = getRequestLogger(req);
-
-  // Get admin token
-  let adminToken;
+const handleGet: MethodHandler = async (req, res, reqLogger) => {
   try {
-    adminToken = await getAdminToken();
-  } catch {
-    return res.status(500).json({ error: 'Failed to authenticate with Keycloak admin' });
-  }
+    // Get admin token
+    await getAdminToken();
 
-  if (req.method === 'GET') {
     // Get all users with their roles
-    try {
-      const usersWithRoles = await getAllUsersWithRoles();
-      return res.status(200).json(usersWithRoles);
-    } catch (error) {
-      logError(reqLogger, 'Error fetching users', error, {
-        realm: keycloakConfig.realm,
-      });
-      return res.status(500).json({ error: 'Failed to fetch users' });
-    }
-  } else if (req.method === 'POST') {
-    // Update user role
+    const usersWithRoles = await getAllUsersWithRoles();
+    return res.status(200).json(usersWithRoles);
+  } catch (error) {
+    logError(reqLogger, 'Error fetching users', error, {
+      realm: keycloakConfig.realm,
+    });
+    return res.status(500).json({ error: 'Failed to fetch users' });
+  }
+};
+
+/**
+ * Handle POST requests - update user roles (grant/revoke maintainer)
+ */
+const handlePost: MethodHandler = async (req, res, reqLogger) => {
+  try {
+    // Get admin token
+    const adminToken = await getAdminToken();
+
     const { userId, grantMaintainer } = req.body;
 
     // Validate userId to ensure it is a valid UUID
@@ -52,69 +42,78 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    try {
-      // First, get the client ID
-      const clientId = await getClientId(keycloakConfig.clientId);
+    // First, get the client ID
+    const clientId = await getClientId(keycloakConfig.clientId);
 
-      if (!clientId) {
-        return res.status(404).json({ error: 'Client not found' });
+    if (!clientId) {
+      return res.status(404).json({ error: 'Client not found' });
+    }
+
+    // Get available roles
+    const rolesResponse = await axios.get<KeycloakRole[]>(
+      keycloakEndpoints.getClientRolesEndpoint(clientId),
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
       }
+    );
 
-      // Get available roles
-      const rolesResponse = await axios.get<KeycloakRole[]>(
-        keycloakEndpoints.getClientRolesEndpoint(clientId),
+    const roles = rolesResponse.data;
+    const maintainerRole = roles.find((role: KeycloakRole) => role.name === UserRole.MAINTAINER);
+
+    if (!maintainerRole) {
+      return res.status(404).json({ error: 'Maintainer role not found' });
+    }
+
+    if (grantMaintainer) {
+      // Add maintainer role
+      await axios.post(
+        keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId),
+        [maintainerRole],
         {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-          },
-        }
-      );
-
-      const roles = rolesResponse.data;
-      const maintainerRole = roles.find((role: KeycloakRole) => role.name === UserRole.MAINTAINER);
-
-      if (!maintainerRole) {
-        return res.status(404).json({ error: 'Maintainer role not found' });
-      }
-
-      if (grantMaintainer) {
-        // Add maintainer role
-        await axios.post(
-          keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId),
-          [maintainerRole],
-          {
-            headers: {
-              Authorization: `Bearer ${adminToken}`,
-              'Content-Type': 'application/json',
-            },
-          }
-        );
-
-        return res.status(200).json({ message: 'Successfully granted maintainer role' });
-      } else {
-        // Remove maintainer role
-        await axios.delete(keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId), {
           headers: {
             Authorization: `Bearer ${adminToken}`,
             'Content-Type': 'application/json',
           },
-          data: [maintainerRole],
-        });
+        }
+      );
 
-        return res.status(200).json({ message: 'Successfully revoked maintainer role' });
-      }
-    } catch (error) {
-      logError(reqLogger, 'Error updating user role', error, {
-        userId,
-        grantMaintainer,
-        realm: keycloakConfig.realm,
-        clientId: keycloakConfig.clientId,
+      return res.status(200).json({ message: 'Successfully granted maintainer role' });
+    } else {
+      // Remove maintainer role
+      await axios.delete(keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId), {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+          'Content-Type': 'application/json',
+        },
+        data: [maintainerRole],
       });
-      return res.status(500).json({ error: 'Failed to update user role' });
+
+      return res.status(200).json({ message: 'Successfully revoked maintainer role' });
     }
-  } else {
-    // Method not allowed
-    res.setHeader('Allow', ['GET', 'POST']);
-    return res.status(405).json({ error: `Method ${req.method} not allowed` });
+  } catch (error) {
+    logError(reqLogger, 'Error updating user role', error, {
+      userId: req.body?.userId,
+      grantMaintainer: req.body?.grantMaintainer,
+      realm: keycloakConfig.realm,
+      clientId: keycloakConfig.clientId,
+    });
+    return res.status(500).json({ error: 'Failed to update user role' });
   }
-}
+};
+
+/**
+ * Admin API for user management
+ * GET  /api/admin/users - Get all users with their roles
+ * POST /api/admin/users - Update user roles (grant/revoke maintainer)
+ *
+ * This endpoint requires OWNER role for all operations
+ * Manages Keycloak user roles through admin API
+ */
+
+// Export the super-generic API with admin-only access
+export default createApi.adminOnly({
+  GET: handleGet,
+  POST: handlePost,
+});

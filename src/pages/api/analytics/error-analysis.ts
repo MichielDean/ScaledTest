@@ -1,60 +1,20 @@
 // OpenSearch Analytics API - Error Analysis Data
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../../auth/apiAuth';
-import { UserRole } from '../../../auth/keycloak';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { createApi, MethodHandler } from '../../../auth/apiAuth';
+import { logError } from '../../../utils/logger';
 import {
   getErrorAnalysisFromOpenSearch,
   getOpenSearchHealthStatus,
 } from '../../../lib/opensearchAnalytics';
 
-type SuccessResponse = {
-  success: true;
-  data: Array<{
-    errorMessage: string;
-    count: number;
-    affectedTests: string[];
-  }>;
-  meta: {
-    source: 'OpenSearch';
-    index: 'ctrf-reports';
-    timestamp: string;
-    opensearchHealth: {
-      connected: boolean;
-      indexExists: boolean;
-      documentsCount: number;
-      clusterHealth: string;
-    };
-  };
-};
-
-type ErrorResponse = {
-  success: false;
-  error: string;
-  source: 'OpenSearch';
-  details?: unknown;
-};
-
 /**
- * API handler for Error Analysis data from OpenSearch
- * GET /api/analytics/error-analysis
+ * Handle GET requests - retrieve error analysis data from OpenSearch
  *
  * This endpoint analyzes failure patterns and common error messages
  * from failed tests in the OpenSearch 'ctrf-reports' index
  * Uses nested aggregations to group by error messages and affected tests
  * All data is sourced directly from OpenSearch - no local database is used
  */
-async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse | ErrorResponse>) {
-  const reqLogger = getRequestLogger(req);
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed. Only GET is supported.',
-      source: 'OpenSearch',
-    });
-  }
-
+const handleGet: MethodHandler = async (req, res, reqLogger) => {
   try {
     reqLogger.info('Fetching error analysis from OpenSearch');
 
@@ -131,7 +91,17 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse
       details: error instanceof Error ? error.message : String(error),
     });
   }
-}
+};
 
-// Export the protected API route - all authenticated users can access analytics for read-only purposes
-export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+/**
+ * API handler for Error Analysis data from OpenSearch
+ * GET /api/analytics/error-analysis
+ *
+ * This endpoint analyzes failure patterns and common error messages
+ * from failed tests in the OpenSearch 'ctrf-reports' index
+ * Uses nested aggregations to group by error messages and affected tests
+ * All data is sourced directly from OpenSearch - no local database is used
+ */
+
+// Export the super-generic API with read-only access for all authenticated users
+export default createApi.readOnly(handleGet);

@@ -9,6 +9,7 @@ const TEARDOWN_DELAY_MS = 1000;
  * This will be called after all tests have finished running
  */
 async function closeHandles() {
+  // eslint-disable-next-line no-console
   console.log('Running global teardown to close any open handles...');
 
   try {
@@ -24,8 +25,10 @@ async function closeHandles() {
     // Give time for any pending operations to finish
     await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
 
+    // eslint-disable-next-line no-console
     console.log('Global teardown completed successfully');
   } catch (error) {
+    // eslint-disable-next-line no-console
     console.error('Error closing handles:', error);
   }
 }

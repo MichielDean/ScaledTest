@@ -1,5 +1,5 @@
 // Test Duration Analysis Chart - Data sourced from OpenSearch
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   BarChart,
   Bar,
@@ -7,39 +7,23 @@ import {
   YAxis,
   CartesianGrid,
   Tooltip,
-  Legend,
   ResponsiveContainer,
   PieChart,
   Pie,
   Cell,
 } from 'recharts';
 import { TestDurationData } from '../../types/dashboard';
+import { OpenSearchApiResponse, OpenSearchErrorApiResponse } from '../../types/opensearch';
 
 interface TestDurationAnalysisProps {
   token?: string;
 }
 
-interface OpenSearchResponse {
-  success: boolean;
-  data: TestDurationData[];
-  meta: {
-    source: 'OpenSearch';
-    index: string;
-    timestamp: string;
-    opensearchHealth: {
-      connected: boolean;
-      indexExists: boolean;
-      documentsCount: number;
-      clusterHealth: string;
-    };
-  };
-}
+// Use the shared OpenSearchApiResponse with TestDurationData type
+type TestDurationResponse = OpenSearchApiResponse<TestDurationData>;
 
-interface ErrorResponse {
-  success: false;
-  error: string;
-  source: 'OpenSearch';
-}
+// Use the shared OpenSearchErrorApiResponse
+type ErrorResponse = OpenSearchErrorApiResponse;
 
 const COLORS = ['#10b981', '#3b82f6', '#f59e0b', '#ef4444', '#8b5cf6'];
 
@@ -47,14 +31,14 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
   const [data, setData] = useState<TestDurationData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [opensearchHealth, setOpensearchHealth] = useState<any>(null);
+  const [opensearchHealth, setOpensearchHealth] = useState<{
+    connected: boolean;
+    indexExists: boolean;
+    documentsCount: number;
+    clusterHealth: string;
+  } | null>(null);
 
-  useEffect(() => {
-    if (token) {
-      fetchDurationData();
-    }
-  }, [token]);
-  const fetchDurationData = async () => {
+  const fetchDurationData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -75,23 +59,29 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
         throw new Error(`OpenSearch API error: ${response.status}`);
       }
 
-      const result: OpenSearchResponse | ErrorResponse = await response.json();
+      const result: TestDurationResponse | ErrorResponse = await response.json();
 
       if (!result.success) {
         const errorResult = result as ErrorResponse;
         throw new Error(errorResult.error || 'Failed to fetch from OpenSearch');
       }
 
-      const successResult = result as OpenSearchResponse;
+      const successResult = result as TestDurationResponse;
       setData(successResult.data);
       setOpensearchHealth(successResult.meta.opensearchHealth);
     } catch (err) {
-      console.error('Failed to fetch duration analysis from OpenSearch:', err);
+      // Using proper error logging instead of console.error
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchDurationData();
+    }
+  }, [token, fetchDurationData]);
 
   if (loading) {
     return (
@@ -244,7 +234,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
                     label={{ value: 'Test Count', angle: -90, position: 'insideLeft' }}
                   />
                   <Tooltip
-                    formatter={(value, name) => [value, 'Tests']}
+                    formatter={value => [value, 'Tests']}
                     labelFormatter={label => `Duration: ${label}`}
                   />
                   <Bar dataKey="count" fill="#3b82f6" />
@@ -273,7 +263,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value, name) => [value, 'Tests']} />
+                  <Tooltip formatter={value => [value, 'Tests']} />
                 </PieChart>
               </ResponsiveContainer>
             </div>

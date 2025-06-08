@@ -1,5 +1,5 @@
 // Test Trends Chart - Data sourced from OpenSearch
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -13,62 +13,44 @@ import {
   Area,
 } from 'recharts';
 import { TestTrendsData } from '../../types/dashboard';
-import styles from '../../styles/Charts.module.css';
+import {
+  OpenSearchApiResponse,
+  OpenSearchErrorApiResponse,
+  OpenSearchHealth,
+} from '../../types/opensearch';
 
 interface TestTrendsProps {
   days?: number;
   token?: string;
 }
 
-interface OpenSearchResponse {
-  success: boolean;
-  data: TestTrendsData[];
+// Use shared OpenSearchApiResponse with a specialized meta type for trends
+interface TestTrendsResponse extends OpenSearchApiResponse<TestTrendsData> {
   meta: {
     source: 'OpenSearch';
     index: string;
     daysRequested: number;
     timestamp: string;
-    opensearchHealth: {
-      connected: boolean;
-      indexExists: boolean;
-      documentsCount: number;
-      clusterHealth: string;
-    };
+    opensearchHealth: OpenSearchHealth;
   };
 }
 
-interface ErrorResponse {
-  success: false;
-  error: string;
-  source: 'OpenSearch';
-}
+// Use the shared OpenSearchErrorApiResponse
+type ErrorResponse = OpenSearchErrorApiResponse;
 
 const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
   const [data, setData] = useState<TestTrendsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [opensearchHealth, setOpensearchHealth] = useState<any>(null);
+  const [opensearchHealth, setOpensearchHealth] = useState<{
+    connected: boolean;
+    indexExists: boolean;
+    documentsCount: number;
+    clusterHealth: string;
+  } | null>(null);
   const [selectedDays, setSelectedDays] = useState(days);
 
-  useEffect(() => {
-    if (token) {
-      fetchTestTrendsData();
-    }
-  }, [selectedDays, token]); // If no token is available, show authentication required message
-  if (!token) {
-    return (
-      <div className={styles.authRequiredContainer}>
-        <div>
-          <h3 className={styles.authRequiredTitle}>🔐 Authentication Required</h3>
-          <p className={styles.authRequiredMessage}>
-            No authentication token available. Please ensure you are logged in.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  const fetchTestTrendsData = async () => {
+  const fetchTestTrendsData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -91,23 +73,29 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
         throw new Error(`OpenSearch API error: ${response.status} - ${errorText}`);
       }
 
-      const result: OpenSearchResponse | ErrorResponse = await response.json();
+      const result: TestTrendsResponse | ErrorResponse = await response.json();
 
       if (!result.success) {
         const errorResult = result as ErrorResponse;
         throw new Error(errorResult.error || 'Failed to fetch from OpenSearch');
       }
 
-      const successResult = result as OpenSearchResponse;
+      const successResult = result as TestTrendsResponse;
       setData(successResult.data || []);
       setOpensearchHealth(successResult.meta?.opensearchHealth);
     } catch (err) {
-      console.error('Failed to fetch test trends from OpenSearch:', err);
+      // Using proper error handling instead of console.error
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedDays, token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchTestTrendsData();
+    }
+  }, [fetchTestTrendsData, token]);
 
   if (loading) {
     return (

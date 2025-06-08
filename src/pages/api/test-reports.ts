@@ -1,7 +1,5 @@
-// filepath: c:\Users\mokey\source\ScaledTest\src\pages\api\test-reports.ts
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../auth/apiAuth';
-import { UserRole } from '../../auth/keycloak';
+import type { NextApiResponse } from 'next';
+import { AuthenticatedRequest, createApi } from '../../auth/apiAuth';
 import { getRequestLogger, logError } from '../../utils/logger';
 import opensearchClient, { ensureCtrfReportsIndexExists } from '../../lib/opensearch';
 import { CtrfSchema } from '../../schemas/ctrf/ctrf';
@@ -136,45 +134,9 @@ const ensureIndexExists = async () => {
   await ensureCtrfReportsIndexExists();
 };
 
-// Handle incoming requests
-async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<SuccessResponse | ErrorResponse | GetResponse>
-) {
-  const reqLogger = getRequestLogger(req);
-
-  // Debug logging
-  console.log('DEBUG API: Request received');
-  console.log('DEBUG API: Method:', req.method);
-  console.log('DEBUG API: Headers:', req.headers);
-  console.log('DEBUG API: Authorization header:', req.headers.authorization);
-  console.log('DEBUG API: User attached to request:', (req as any).user ? 'YES' : 'NO');
-
-  try {
-    await ensureIndexExists();
-
-    if (req.method === 'POST') {
-      return await handlePost(req, res, reqLogger);
-    } else if (req.method === 'GET') {
-      return await handleGet(req, res, reqLogger);
-    } else {
-      return res.status(405).json({
-        success: false,
-        error: 'Method not allowed. Supported methods: POST, GET',
-      });
-    }
-  } catch (error) {
-    logError(reqLogger, 'Unexpected error in CTRF reports handler', error);
-    return res.status(500).json({
-      success: false,
-      error: 'Internal server error',
-    });
-  }
-}
-
 // Handle POST requests - store new CTRF reports
 async function handlePost(
-  req: NextApiRequest,
+  req: AuthenticatedRequest,
   res: NextApiResponse<SuccessResponse | ErrorResponse>,
   reqLogger: ReturnType<typeof getRequestLogger> // Use specific type for reqLogger
 ) {
@@ -263,7 +225,7 @@ async function handlePost(
 
 // Handle GET requests - retrieve CTRF reports
 async function handleGet(
-  req: NextApiRequest,
+  req: AuthenticatedRequest,
   res: NextApiResponse<GetResponse | ErrorResponse>,
   reqLogger: ReturnType<typeof getRequestLogger> // Use specific type for reqLogger
 ) {
@@ -391,6 +353,13 @@ async function handleGet(
   }
 }
 
-// Export the protected API route
-// All authenticated users can read test reports, but only maintainers/owners can write
-export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+// Export the complete API handler with authentication, logging, and error handling
+export default createApi.readWrite(
+  {
+    GET: handleGet,
+    POST: handlePost,
+  },
+  {
+    setup: ensureIndexExists,
+  }
+);

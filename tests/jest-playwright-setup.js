@@ -2,8 +2,11 @@
  * Jest setup file that provides Playwright globals
  * This replaces jest-playwright-preset with a simplified implementation
  */
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const { chromium } = require('playwright');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const path = require('path');
+// eslint-disable-next-line @typescript-eslint/no-require-imports
 const fs = require('fs');
 
 // Deep merge utility function
@@ -11,7 +14,7 @@ function deepMerge(target, source) {
   const result = { ...target };
 
   for (const key in source) {
-    if (source.hasOwnProperty(key)) {
+    if (Object.prototype.hasOwnProperty.call(source, key)) {
       if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
         result[key] = deepMerge(target[key] || {}, source[key]);
       } else {
@@ -40,9 +43,11 @@ function loadConfig() {
 
   if (fs.existsSync(configPath)) {
     try {
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const userConfig = require(configPath);
       return deepMerge(defaultConfig, userConfig);
     } catch (error) {
+      // eslint-disable-next-line no-console
       console.warn('Failed to load jest-playwright config, using defaults:', error.message);
     }
   }
@@ -120,16 +125,19 @@ const teardownPlaywright = async () => {
 };
 
 // Setup before each test file
+// eslint-disable-next-line no-undef
 beforeAll(async () => {
   await setupPlaywright();
 });
 
 // Teardown after each test file
+// eslint-disable-next-line no-undef
 afterAll(async () => {
   await teardownPlaywright();
 });
 
 // Setup before each test
+// eslint-disable-next-line no-undef
 beforeEach(async () => {
   // Reset page for each test to ensure clean state
   if (global.jestPlaywright && global.jestPlaywright.resetPage) {

@@ -4,7 +4,6 @@
 import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 setupOpenSearchTestEnv();
 
-import { Client } from '@opensearch-project/opensearch';
 import { v4 as uuidv4 } from 'uuid';
 import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
 
@@ -15,7 +14,7 @@ const mockClient = {
       body: { status: 'green' },
       statusCode: 200,
       headers: {},
-      meta: {} as any,
+      meta: {},
     }),
   },
   indices: {
@@ -23,20 +22,20 @@ const mockClient = {
       body: false,
       statusCode: 200,
       headers: {},
-      meta: {} as any,
+      meta: {},
     }),
     create: jest.fn().mockResolvedValue({
       body: { acknowledged: true },
       statusCode: 200,
       headers: {},
-      meta: {} as any,
+      meta: {},
     }),
   },
   index: jest.fn().mockResolvedValue({
     body: { _id: 'test-id', result: 'created' },
     statusCode: 201,
     headers: {},
-    meta: {} as any,
+    meta: {},
   }),
   search: jest.fn().mockResolvedValue({
     body: {
@@ -47,7 +46,7 @@ const mockClient = {
     },
     statusCode: 200,
     headers: {},
-    meta: {} as any,
+    meta: {},
   }),
 };
 
@@ -98,7 +97,7 @@ describe('OpenSearch Client', () => {
         body: false,
         statusCode: 404,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       await ensureCtrfReportsIndexExists();
@@ -126,7 +125,7 @@ describe('OpenSearch Client', () => {
         body: true,
         statusCode: 200,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       await ensureCtrfReportsIndexExists();
@@ -177,7 +176,7 @@ describe('OpenSearch Client', () => {
         },
         statusCode: 200,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       const response = await opensearchClient.search({

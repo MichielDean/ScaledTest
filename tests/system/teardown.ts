@@ -18,11 +18,11 @@ export async function stopNextApp(): Promise<void> {
         const pid = execSync(`powershell -Command "${findCommand}"`, { encoding: 'utf8' }).trim();
 
         if (pid) {
-          console.log(`Killing Next.js process with PID ${pid}`);
+          testLogger.info(`Killing Next.js process with PID ${pid}`);
           execSync(`taskkill /F /PID ${pid}`);
         }
       } catch (error) {
-        console.error('Error stopping Next.js app:', error);
+        testLogger.error({ err: error }, 'Error stopping Next.js app');
       }
     } else {
       // On non-Windows platforms
@@ -30,7 +30,7 @@ export async function stopNextApp(): Promise<void> {
     }
 
     // Ensure the process is marked as null after killing
-    console.log('Next.js application stopped');
+    testLogger.info('Next.js application stopped');
   }
 }
 
@@ -38,14 +38,14 @@ export async function stopNextApp(): Promise<void> {
  * Shutdown Docker environment
  */
 export async function stopDockerEnvironment(): Promise<void> {
-  console.log('Stopping Docker environment...');
+  testLogger.info('Stopping Docker environment...');
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
   try {
     execSync(`docker compose -f "${dockerComposePath}" down --volumes`, { stdio: 'inherit' });
-    console.log('Docker environment stopped successfully');
+    testLogger.info('Docker environment stopped successfully');
   } catch (error) {
-    console.error('Error stopping Docker environment:', error);
+    testLogger.error({ err: error }, 'Error stopping Docker environment');
     throw error;
   }
 }
@@ -54,7 +54,7 @@ export async function stopDockerEnvironment(): Promise<void> {
  * Main teardown function for Jest
  */
 export async function teardown(): Promise<void> {
-  console.log('Starting system test environment teardown...');
+  testLogger.info('Starting system test environment teardown...');
 
   try {
     // Stop the Next.js app
@@ -71,12 +71,12 @@ export async function teardown(): Promise<void> {
       clearTimeout(timeout);
     } catch (err) {
       // Ignore any errors in cleanup
-      console.error('Error during timer cleanup:', err);
+      testLogger.error({ err }, 'Error during timer cleanup');
     }
 
-    console.log('System test environment teardown completed successfully');
+    testLogger.info('System test environment teardown completed successfully');
   } catch (error) {
-    console.error('System test environment teardown failed:', error);
+    testLogger.error({ err: error }, 'System test environment teardown failed');
     throw error;
   }
 }

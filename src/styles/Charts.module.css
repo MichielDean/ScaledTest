@@ -1,15 +1,19 @@
 /* Chart component styles using CSS Modules */
 
+/* Shared card styling to reduce duplication */
+.card {
+  background-color: white;
+  padding: 1.5rem;
+  border-radius: 8px;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
 .chartContainer {
   width: 100%;
   max-width: none;
 }
 
 .chartWrapper {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   margin-bottom: 1rem;
   width: 100%;
   max-width: none;
@@ -20,13 +24,6 @@
   font-weight: bold;
   margin-bottom: 1rem;
   color: #374151;
-}
-
-.loadingContainer {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .loadingContent {
@@ -65,13 +62,6 @@
   color: #9ca3af;
   margin-top: 0.5rem;
   text-align: center;
-}
-
-.errorContainer {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
 }
 
 .errorContent {
@@ -164,10 +154,6 @@
 }
 
 .noDataContainer {
-  background-color: white;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
   text-align: center;
 }
 

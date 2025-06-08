@@ -1,7 +1,6 @@
 // OpenSearch Analytics API - Test Duration Analysis Data
-import type { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../../auth/apiAuth';
-import { UserRole } from '../../../auth/keycloak';
+import type { NextApiResponse } from 'next';
+import { AuthenticatedRequest, createApi } from '../../../auth/apiAuth';
 import { getRequestLogger, logError } from '../../../utils/logger';
 import {
   getTestDurationAnalysisFromOpenSearch,
@@ -38,24 +37,13 @@ type ErrorResponse = {
 };
 
 /**
- * API handler for Test Duration Analysis data from OpenSearch
- * GET /api/analytics/test-duration
- *
- * This endpoint analyzes test execution times and performance patterns
- * from the OpenSearch 'ctrf-reports' index using nested aggregations on test duration
- * All data is sourced directly from OpenSearch - no local database is used
+ * Handle GET requests for test duration analysis
  */
-async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse | ErrorResponse>) {
-  const reqLogger = getRequestLogger(req);
-
-  if (req.method !== 'GET') {
-    return res.status(405).json({
-      success: false,
-      error: 'Method not allowed. Only GET is supported.',
-      source: 'OpenSearch',
-    });
-  }
-
+async function handleGet(
+  req: AuthenticatedRequest,
+  res: NextApiResponse<SuccessResponse | ErrorResponse>,
+  reqLogger: ReturnType<typeof getRequestLogger>
+) {
   try {
     reqLogger.info('Fetching test duration analysis from OpenSearch');
 
@@ -134,5 +122,5 @@ async function handler(req: NextApiRequest, res: NextApiResponse<SuccessResponse
   }
 }
 
-// Export the protected API route - all authenticated users can access analytics for read-only purposes
-export default withApiAuth(handler, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+// Export read-only API - all authenticated users can access analytics
+export default createApi.readOnly(handleGet);

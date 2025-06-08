@@ -6,33 +6,26 @@ import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { useAuth } from '../auth/KeycloakProvider';
 import { UserRole } from '../auth/keycloak';
-import {
-  TestTrendsChart,
-  TestDurationAnalysis,
-  TestSuiteOverview,
-  FlakyTestDetector,
-  ErrorAnalysis,
-} from '../components/charts';
-import { TestReport } from '../types/dashboard';
+import { TestTrendsChart } from '../components/charts';
 import styles from '../styles/Dashboard.module.css';
 
 const Dashboard: NextPage = () => {
-  const { userProfile, hasRole, token } = useAuth();
+  const { hasRole, token } = useAuth();
   const [content, setContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [newContent, setNewContent] = useState<string>('');
-  const [reports, setReports] = useState<TestReport[]>([]);
-  const [loadingReports, setLoadingReports] = useState<boolean>(true);
   const [showAnalytics, setShowAnalytics] = useState<boolean>(false);
 
-  // Simulate fetching content based on user role
+  // Initialize content on component mount
   useEffect(() => {
     const defaultContent =
       'This is some sample content that can be viewed by all authenticated users.';
     setContent(defaultContent);
     setNewContent(defaultContent);
+  }, []);
 
-    // Fetch test reports for analytics components only when token is available
+  // Fetch test reports when token becomes available
+  useEffect(() => {
     if (token) {
       fetchTestReports();
     }

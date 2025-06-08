@@ -1,5 +1,5 @@
 // Test Suite Overview Chart - Data sourced from OpenSearch
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   PieChart,
   Pie,
@@ -14,45 +14,30 @@ import {
   CartesianGrid,
 } from 'recharts';
 import { TestSuiteOverviewData } from '../../types/dashboard';
+import { OpenSearchApiResponse, OpenSearchErrorApiResponse } from '../../types/opensearch';
 
 interface TestSuiteOverviewProps {
   token?: string;
 }
 
-interface OpenSearchResponse {
-  success: boolean;
-  data: TestSuiteOverviewData[];
-  meta: {
-    source: 'OpenSearch';
-    index: string;
-    timestamp: string;
-    opensearchHealth: {
-      connected: boolean;
-      indexExists: boolean;
-      documentsCount: number;
-      clusterHealth: string;
-    };
-  };
-}
+// Use the shared OpenSearchApiResponse with TestSuiteOverviewData type
+type TestSuiteOverviewResponse = OpenSearchApiResponse<TestSuiteOverviewData>;
 
-interface ErrorResponse {
-  success: false;
-  error: string;
-  source: 'OpenSearch';
-}
+// Use the shared OpenSearchErrorApiResponse
+type ErrorResponse = OpenSearchErrorApiResponse;
 
 const TestSuiteOverview: React.FC<TestSuiteOverviewProps> = ({ token }) => {
   const [data, setData] = useState<TestSuiteOverviewData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [opensearchHealth, setOpensearchHealth] = useState<any>(null);
+  const [opensearchHealth, setOpensearchHealth] = useState<{
+    connected: boolean;
+    indexExists: boolean;
+    documentsCount: number;
+    clusterHealth: string;
+  } | null>(null);
 
-  useEffect(() => {
-    if (token) {
-      fetchTestSuiteData();
-    }
-  }, [token]);
-  const fetchTestSuiteData = async () => {
+  const fetchTestSuiteData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -73,23 +58,29 @@ const TestSuiteOverview: React.FC<TestSuiteOverviewProps> = ({ token }) => {
         throw new Error(`OpenSearch API error: ${response.status}`);
       }
 
-      const result: OpenSearchResponse | ErrorResponse = await response.json();
+      const result: TestSuiteOverviewResponse | ErrorResponse = await response.json();
 
       if (!result.success) {
         const errorResult = result as ErrorResponse;
         throw new Error(errorResult.error || 'Failed to fetch from OpenSearch');
       }
 
-      const successResult = result as OpenSearchResponse;
+      const successResult = result as TestSuiteOverviewResponse;
       setData(successResult.data);
       setOpensearchHealth(successResult.meta.opensearchHealth);
     } catch (err) {
-      console.error('Failed to fetch test suite data from OpenSearch:', err);
+      // Using proper error handling instead of console.error
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
+
+  useEffect(() => {
+    if (token) {
+      fetchTestSuiteData();
+    }
+  }, [token, fetchTestSuiteData]);
 
   if (loading) {
     return (
