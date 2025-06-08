@@ -72,7 +72,7 @@ export class UserManagementPage extends BasePage {
       // Check for the return button
       const returnButton = this.page.locator('#return-to-previous');
       await expect(returnButton).toBeVisible();
-    } catch (error) {
+    } catch {
       // If not redirected, check that we're still on the admin page but don't see user data
       // This is an acceptable state for the test as the protection can be done either via
       // redirect or by hiding content

@@ -1,6 +1,6 @@
 import { NextPage } from 'next';
 import Head from 'next/head';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../auth/KeycloakProvider';
 import { withAuth } from '../../auth/withAuth';
@@ -8,20 +8,10 @@ import { UserRole } from '../../auth/keycloak';
 import Header from '../../components/Header';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../utils/logger';
-
-// Interface for a simplified user with role management capabilities
-interface UserWithRoles {
-  id: string;
-  username: string;
-  firstName?: string;
-  lastName?: string;
-  email: string;
-  roles: string[];
-  isMaintainer: boolean;
-}
+import { UserWithRoles } from '../../types/user';
 
 const UserManagement: NextPage = () => {
-  const { keycloak, isAuthenticated, hasRole, loading: authLoading } = useAuth();
+  const { keycloak, isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
   const router = useRouter();
   const [users, setUsers] = useState<UserWithRoles[]>([]);
   const [loading, setLoading] = useState(true);
@@ -41,13 +31,20 @@ const UserManagement: NextPage = () => {
   }, [authLoading, isAuthenticated, hasRole, router]);
 
   // Fetch all users from our server-side API endpoint
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // Call our API endpoint
-      const response = await axios.get('/api/admin/users');
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await axios.get('/api/admin/users', {
+        headers: {
+          Authorization: `Bearer ${token}`,
+        },
+      });
 
       if (response.status !== 200) {
         throw new Error(`Failed to fetch users: ${response.statusText}`);
@@ -62,7 +59,7 @@ const UserManagement: NextPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   // Update user role through our server-side API endpoint
   const updateUserRole = async (userId: string, grantMaintainer: boolean) => {
@@ -70,11 +67,22 @@ const UserManagement: NextPage = () => {
       setError(null);
       setSuccessMessage(null);
 
-      // Call our API endpoint
-      const response = await axios.post('/api/admin/users', {
-        userId,
-        grantMaintainer,
-      });
+      if (!token) {
+        throw new Error('No authentication token available');
+      }
+
+      const response = await axios.post(
+        '/api/admin/users',
+        {
+          userId,
+          grantMaintainer,
+        },
+        {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        }
+      );
 
       if (response.status !== 200) {
         throw new Error('Failed to update user role');
@@ -102,7 +110,7 @@ const UserManagement: NextPage = () => {
     if (keycloak) {
       fetchUsers();
     }
-  }, [keycloak]);
+  }, [keycloak, fetchUsers]);
 
   return (
     <div>
@@ -186,15 +194,6 @@ const UserManagement: NextPage = () => {
                       borderBottom: '2px solid #ddd',
                     }}
                   >
-                    Email
-                  </th>
-                  <th
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'left',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
                     Roles
                   </th>
                   <th
@@ -219,7 +218,6 @@ const UserManagement: NextPage = () => {
                     <td style={{ padding: '0.75rem' }}>
                       {user.firstName || ''} {user.lastName || ''}
                     </td>
-                    <td style={{ padding: '0.75rem' }}>{user.email}</td>
                     <td style={{ padding: '0.75rem' }}>
                       {user.roles.map(role => (
                         <span

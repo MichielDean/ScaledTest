@@ -45,7 +45,7 @@ describe('OpenSearch Client', () => {
         body: { status: 'green' },
         statusCode: 200,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       // Act
@@ -76,13 +76,13 @@ describe('OpenSearch Client', () => {
         body: false,
         statusCode: 404,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
       mockCreateFn.mockResolvedValueOnce({
         body: { acknowledged: true },
         statusCode: 200,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       // Act
@@ -112,7 +112,7 @@ describe('OpenSearch Client', () => {
         body: true,
         statusCode: 200,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
 
       // Act
@@ -137,7 +137,7 @@ describe('OpenSearch Client', () => {
         body: false,
         statusCode: 404,
         headers: {},
-        meta: {} as any,
+        meta: {},
       });
       mockCreateFn.mockRejectedValueOnce(new Error('Failed to create index'));
 

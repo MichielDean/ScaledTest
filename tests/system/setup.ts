@@ -16,7 +16,7 @@ function isDockerRunning(): boolean {
   try {
     execSync('docker info', { stdio: 'ignore' });
     return true;
-  } catch (error) {
+  } catch {
     return false;
   }
 }
@@ -57,11 +57,11 @@ export async function startDockerEnvironment(): Promise<void> {
  */
 export async function setupKeycloak(): Promise<void> {
   try {
-    console.log('Setting up Keycloak configuration...');
+    testLogger.info('Setting up Keycloak configuration...');
     execSync('node scripts/setup-keycloak.js', { stdio: 'inherit' });
-    console.log('Keycloak setup completed');
+    testLogger.info('Keycloak setup completed');
   } catch (error) {
-    console.error('Failed to setup Keycloak:', error);
+    testLogger.error({ err: error }, 'Failed to setup Keycloak');
     throw error;
   }
 }
@@ -70,7 +70,7 @@ export async function setupKeycloak(): Promise<void> {
  * Start Next.js app
  */
 export async function startNextApp(): Promise<void> {
-  console.log('Starting Next.js application...');
+  testLogger.info('Starting Next.js application...');
 
   // Use next start to run the production build
   // You might want to build the app first if it's not already built
@@ -85,23 +85,23 @@ export async function startNextApp(): Promise<void> {
     });
 
     nextAppProcess.stdout?.on('data', data => {
-      console.log(`Next.js: ${data.toString().trim()}`);
+      testLogger.info(`Next.js: ${data.toString().trim()}`);
     });
 
     nextAppProcess.stderr?.on('data', data => {
-      console.error(`Next.js error: ${data.toString().trim()}`);
+      testLogger.error(`Next.js error: ${data.toString().trim()}`);
     });
 
     // Wait for Next.js to be ready
-    console.log('Waiting for Next.js to be ready...');
+    testLogger.info('Waiting for Next.js to be ready...');
     await waitOn({
       resources: ['http://localhost:3000'],
       timeout: 30000, // 30 seconds timeout
     });
 
-    console.log('Next.js application is ready');
+    testLogger.info('Next.js application is ready');
   } catch (error) {
-    console.error('Failed to start Next.js application:', error);
+    testLogger.error({ err: error }, 'Failed to start Next.js application');
     throw error;
   }
 }
@@ -110,7 +110,7 @@ export async function startNextApp(): Promise<void> {
  * Main setup function for Jest
  */
 export default async function setup(): Promise<void> {
-  console.log('Starting system test environment setup...');
+  testLogger.info('Starting system test environment setup...');
 
   try {
     // Set up required environment variables
@@ -120,8 +120,10 @@ export default async function setup(): Promise<void> {
     // Ignore any errors if nothing is running
     try {
       await teardown();
-    } catch (error) {
-      console.log('No previous environment to clean up, or clean up failed (this is usually okay)');
+    } catch {
+      testLogger.info(
+        'No previous environment to clean up, or clean up failed (this is usually okay)'
+      );
     }
 
     // Start fresh environment
@@ -129,9 +131,9 @@ export default async function setup(): Promise<void> {
     await setupKeycloak();
     await startNextApp();
 
-    console.log('System test environment setup completed successfully');
+    testLogger.info('System test environment setup completed successfully');
   } catch (error) {
-    console.error('System test environment setup failed:', error);
+    testLogger.error({ err: error }, 'System test environment setup failed');
     // Try to clean up anything that might have started
     await teardown();
     throw error;

@@ -1,21 +1,2 @@
-import { UserRole } from '../auth/keycloak';
-
-export interface User {
-  id: string;
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  roles: UserRole[];
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-export interface UserProfile {
-  id: string;
-  username: string;
-  email: string;
-  firstName?: string;
-  lastName?: string;
-  roles: string[];
-}
+// Re-export user interfaces from the centralized types location
+export type { User, UserProfile, UserWithRoles } from '../types/user';

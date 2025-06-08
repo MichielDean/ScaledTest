@@ -155,7 +155,6 @@ async function sendTestResults() {
 
     console.log(`🚀 Sending to: ${apiUrl}`);
 
-    // Send the report to the API
     const response = await axios.post(apiUrl, enhancedReport, {
       headers,
       timeout: 30000, // 30 second timeout

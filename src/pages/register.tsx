@@ -7,15 +7,7 @@ import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
 import axios, { AxiosError } from 'axios';
 import { authLogger as logger } from '../utils/logger';
-
-interface RegistrationResponse {
-  success: boolean;
-  message?: string;
-  error?: string;
-  token?: string;
-  refreshToken?: string;
-  expiresIn?: number;
-}
+import { RegisterResponse } from '../types/api';
 
 const Register: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -79,9 +71,8 @@ const Register: NextPage = () => {
     setRegistering(true);
 
     try {
-      // Send registration data to our API
       // Use email as username
-      const response = await axios.post<RegistrationResponse>('/api/auth/register', {
+      const response = await axios.post<RegisterResponse>('/api/auth/register', {
         username: email,
         email,
         password,
@@ -92,7 +83,6 @@ const Register: NextPage = () => {
       if (response.data.success) {
         // Check if we have tokens for auto-login
         if (response.data.token && response.data.refreshToken) {
-          // Store the tokens using shared utility
           const { storeTokens } = await import('../utils/keycloakTokenManager');
           storeTokens(response.data.token, response.data.refreshToken);
 

@@ -1,6 +1,6 @@
 // src/utils/keycloakAdminApi.ts
 import axios, { AxiosError } from 'axios';
-import { keycloakEndpoints, keycloakAdminConfig } from '../config/keycloak';
+import { keycloakEndpoints, keycloakAdminConfig, keycloakConfig } from '../config/keycloak';
 import { authLogger as logger, logError } from './logger';
 
 // Cache for admin token to avoid too many requests
@@ -23,7 +23,6 @@ export async function getAdminToken(): Promise<string> {
   }
 
   try {
-    // Get a new token
     const formData = new URLSearchParams();
     formData.append('grant_type', 'password');
     formData.append('client_id', 'admin-cli');
@@ -118,7 +117,7 @@ export async function getUserByUsername(username: string) {
 export async function getAllUsersWithRoles() {
   try {
     const token = await getAdminToken();
-    const clientId = await getClientId(keycloakAdminConfig.username);
+    const clientId = await getClientId(keycloakConfig.clientId);
 
     // First get all users
     const usersResponse = await axios.get(keycloakEndpoints.users, {
