@@ -43,7 +43,7 @@ export class LoginPage extends BasePage {
         this.waitForNavigation(),
         this.errorMessage.waitFor({ state: 'visible', timeout: 10000 }),
       ]);
-    } catch (error) {
+    } catch {
       // If neither navigation nor error appears, wait a bit more
       // The async error handling might take a moment
       await this.page.waitForTimeout(2000);
@@ -94,7 +94,7 @@ export class LoginPage extends BasePage {
         // If we're already logged out, make sure we're on the login page
         await this.goto();
       }
-    } catch (error) {
+    } catch {
       // If any error occurs, try to navigate directly to login page
       await this.goto();
     }

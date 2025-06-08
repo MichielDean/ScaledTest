@@ -4,7 +4,16 @@ import {
   generateMinimalCtrfReport,
   generateInvalidCtrfReport,
 } from '../utils/ctrfTestDataGenerator';
-import { CtrfSchema } from '../../src/schemas/ctrf/ctrf';
+import { AuthenticatedRequest } from '../../src/auth/apiAuth';
+import opensearchClient, { ensureCtrfReportsIndexExists } from '../../src/lib/opensearch';
+// We need types from opensearch but use them implicitly
+// No direct imports needed
+
+// Type alias for promises with abort capability
+// (similar to OpenSearchPromise but with jest mock)
+type AbortablePromise<T> = Promise<T> & {
+  abort: jest.Mock;
+};
 
 jest.mock('keycloak-js', () => {
   return function () {
@@ -31,9 +40,26 @@ jest.mock('../../src/auth/apiAuth', () => ({
   validateToken: jest
     .fn()
     .mockImplementation((req: NextApiRequest, res: NextApiResponse, next: () => void) => {
-      (req as any).user = {
-        id: 'user-123',
-        roles: ['owner', 'maintainer', 'readonly'],
+      const authenticatedReq = req as AuthenticatedRequest;
+      authenticatedReq.user = {
+        sub: 'user-123',
+        auth_time: Date.now(),
+        typ: 'Bearer',
+        azp: 'scaledtest-client',
+        session_state: 'test-session',
+        acr: '1',
+        realm_access: { roles: ['owner', 'maintainer', 'readonly'] },
+        resource_access: {
+          'scaledtest-client': {
+            roles: ['owner', 'maintainer', 'readonly'],
+          },
+        },
+        scope: 'openid profile email',
+        sid: 'test-sid',
+        email_verified: true,
+        email: 'test@example.com',
+        name: 'Test User',
+        preferred_username: 'test-user',
       };
       if (typeof next === 'function') {
         return next();
@@ -44,21 +70,97 @@ jest.mock('../../src/auth/apiAuth', () => ({
     .fn()
     .mockImplementation(
       (role: string) => (req: NextApiRequest, res: NextApiResponse, next: () => void) => {
+        // Role is intentionally unused in this mock
+        void role;
         if (typeof next === 'function') {
           return next();
         }
         return (handler: (req: NextApiRequest, res: NextApiResponse) => void) => handler(req, res);
       }
     ),
-  withApiAuth: jest.fn().mockImplementation((handler: any, roles?: string[]) => {
-    return async (req: NextApiRequest, res: NextApiResponse) => {
-      (req as any).user = {
-        id: 'user-123',
-        roles: ['owner', 'maintainer', 'readonly'],
+  createApi: {
+    readWrite: jest.fn((handlers, options) => {
+      return async (req: NextApiRequest, res: NextApiResponse) => {
+        // Run setup if provided
+        if (options?.setup) {
+          await options.setup();
+        }
+
+        const authenticatedReq = req as AuthenticatedRequest;
+        authenticatedReq.user = {
+          sub: 'user-123',
+          auth_time: Date.now(),
+          typ: 'Bearer',
+          azp: 'scaledtest-client',
+          session_state: 'test-session',
+          acr: '1',
+          realm_access: { roles: ['owner', 'maintainer', 'readonly'] },
+          resource_access: {
+            'scaledtest-client': {
+              roles: ['owner', 'maintainer', 'readonly'],
+            },
+          },
+          scope: 'openid profile email',
+          sid: 'test-sid',
+          email_verified: true,
+          email: 'test@example.com',
+          name: 'Test User',
+          preferred_username: 'test-user',
+        };
+
+        const method = req.method?.toUpperCase() || 'GET';
+        const handler = handlers[method as keyof typeof handlers];
+
+        if (handler) {
+          const reqLogger = {
+            info: jest.fn(),
+            error: jest.fn(),
+            warn: jest.fn(),
+            debug: jest.fn(),
+          };
+          return handler(authenticatedReq, res, reqLogger);
+        } else {
+          const supportedMethods = Object.keys(handlers).join(', ');
+          return res.status(405).json({
+            success: false,
+            error: `Method not allowed. Supported methods: ${supportedMethods}`,
+          });
+        }
       };
-      return handler(req, res);
-    };
-  }),
+    }),
+  },
+  withApiAuth: jest
+    .fn()
+    .mockImplementation(
+      (handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>, roles?: string[]) => {
+        // Roles parameter is intentionally unused in this mock
+        void roles;
+        return async (req: NextApiRequest, res: NextApiResponse) => {
+          const authenticatedReq = req as AuthenticatedRequest;
+          authenticatedReq.user = {
+            sub: 'user-123',
+            auth_time: Date.now(),
+            typ: 'Bearer',
+            azp: 'scaledtest-client',
+            session_state: 'test-session',
+            acr: '1',
+            realm_access: { roles: ['owner', 'maintainer', 'readonly'] },
+            resource_access: {
+              'scaledtest-client': {
+                roles: ['owner', 'maintainer', 'readonly'],
+              },
+            },
+            scope: 'openid profile email',
+            sid: 'test-sid',
+            email_verified: true,
+            email: 'test@example.com',
+            name: 'Test User',
+            preferred_username: 'test-user',
+          };
+          return handler(req, res);
+        };
+      }
+    ),
 }));
 
 jest.mock('../../src/auth/keycloak', () => ({
@@ -70,7 +172,6 @@ jest.mock('../../src/auth/keycloak', () => ({
 }));
 
 import { getAuthToken } from '../utils/auth';
-import opensearchClient, { ensureCtrfReportsIndexExists } from '../../src/lib/opensearch';
 import testReportsHandler from '../../src/pages/api/test-reports';
 
 jest.mock('../utils/auth');
@@ -145,18 +246,20 @@ describe('CTRF Reports API Integration Tests', () => {
 
     mockGetAuthToken.mockResolvedValue('mocked-token');
 
-    mockOpensearchClient.indices = {
-      exists: jest.fn().mockImplementation(() => {
-        const promise = Promise.resolve({ body: true });
-        (promise as any).abort = jest.fn();
-        return promise;
-      }),
-      create: jest.fn().mockImplementation(() => {
-        const promise = Promise.resolve({ body: {} });
-        (promise as any).abort = jest.fn();
-        return promise;
-      }),
-    } as any;
+    // Mock only the methods we need
+    mockOpensearchClient.indices.exists = jest.fn().mockImplementation(() => {
+      const promise = Promise.resolve({ body: true }) as AbortablePromise<{ body: boolean }>;
+      promise.abort = jest.fn();
+      return promise;
+    });
+
+    mockOpensearchClient.indices.create = jest.fn().mockImplementation(() => {
+      const promise = Promise.resolve({ body: {} }) as AbortablePromise<{
+        body: Record<string, unknown>;
+      }>;
+      promise.abort = jest.fn();
+      return promise;
+    });
 
     mockOpensearchClient.index = jest.fn().mockImplementation(() => {
       const promise = Promise.resolve({
@@ -165,10 +268,10 @@ describe('CTRF Reports API Integration Tests', () => {
           _index: 'ctrf-reports',
           result: 'created',
         },
-      });
-      (promise as any).abort = jest.fn();
+      }) as AbortablePromise<{ body: { _id: string; _index: string; result: string } }>;
+      promise.abort = jest.fn();
       return promise;
-    }) as jest.Mock;
+    });
 
     mockOpensearchClient.search = jest.fn().mockImplementation(() => {
       const promise = Promise.resolve({
@@ -183,10 +286,17 @@ describe('CTRF Reports API Integration Tests', () => {
             ],
           },
         },
-      });
-      (promise as any).abort = jest.fn();
+      }) as AbortablePromise<{
+        body: {
+          hits: {
+            total: { value: number };
+            hits: Array<{ _id: string; _source: unknown }>;
+          };
+        };
+      }>;
+      promise.abort = jest.fn();
       return promise;
-    }) as jest.Mock;
+    });
   });
 
   describe('POST /api/test-reports', () => {
@@ -291,8 +401,8 @@ describe('CTRF Reports API Integration Tests', () => {
 
     it('should handle OpenSearch connection errors', async () => {
       (mockOpensearchClient.index as jest.Mock).mockImplementationOnce(() => {
-        const promise = Promise.reject(new Error('ECONNREFUSED'));
-        (promise as any).abort = jest.fn();
+        const promise = Promise.reject(new Error('ECONNREFUSED')) as AbortablePromise<never>;
+        promise.abort = jest.fn();
         return promise;
       });
 
@@ -314,8 +424,8 @@ describe('CTRF Reports API Integration Tests', () => {
 
     it('should handle generic errors', async () => {
       (mockOpensearchClient.index as jest.Mock).mockImplementationOnce(() => {
-        const promise = Promise.reject(new Error('Generic error'));
-        (promise as any).abort = jest.fn();
+        const promise = Promise.reject(new Error('Generic error')) as AbortablePromise<never>;
+        promise.abort = jest.fn();
         return promise;
       });
 
@@ -464,8 +574,8 @@ describe('CTRF Reports API Integration Tests', () => {
 
     it('should handle OpenSearch connection errors for GET', async () => {
       (mockOpensearchClient.search as jest.Mock).mockImplementationOnce(() => {
-        const promise = Promise.reject(new Error('ECONNREFUSED'));
-        (promise as any).abort = jest.fn();
+        const promise = Promise.reject(new Error('ECONNREFUSED')) as AbortablePromise<never>;
+        promise.abort = jest.fn();
         return promise;
       });
 
@@ -497,16 +607,14 @@ describe('CTRF Reports API Integration Tests', () => {
       expect(res.status).toHaveBeenCalledWith(405);
       expect(res.json).toHaveBeenCalledWith({
         success: false,
-        error: 'Method not allowed. Supported methods: POST, GET',
+        error: 'Method not allowed. Supported methods: GET, POST',
       });
     });
   });
 
   describe('Index creation', () => {
     it('should create OpenSearch index if it does not exist', async () => {
-      // Get the ensureCtrfReportsIndexExists function from the mock
-      const { ensureCtrfReportsIndexExists } = require('../../src/lib/opensearch');
-
+      // Check that the ensureCtrfReportsIndexExists function is called during the test
       const ctrfReport = generateCtrfReport();
       const req = mockReq({
         method: 'POST',

@@ -1,5 +1,4 @@
 import supertest from 'supertest';
-import { v4 as uuidv4 } from 'uuid';
 import {
   generateCtrfReport,
   generateMinimalCtrfReport,
@@ -8,6 +7,7 @@ import {
 } from '../utils/ctrfTestDataGenerator';
 import { getAuthHeader } from '../utils/auth';
 import { Status } from '../../src/schemas/ctrf/ctrf';
+import { StoredReport } from '../../src/types/database';
 
 describe('CTRF Reports API System Tests', () => {
   let authHeaders: Record<string, string>;
@@ -16,14 +16,9 @@ describe('CTRF Reports API System Tests', () => {
   const api = supertest(API_URL);
 
   beforeAll(async () => {
-    try {
-      console.log(`Testing CTRF API against ${API_URL}`);
-      authHeaders = await getAuthHeader();
-      console.log('Successfully authenticated with Keycloak for CTRF tests');
-    } catch (error) {
-      console.error('Failed to get auth token for CTRF tests:', error);
-      throw error;
-    }
+    // Testing CTRF API against specified URL
+    authHeaders = await getAuthHeader();
+    // Successfully authenticated with Keycloak for CTRF tests
   }, 30000);
 
   describe('CTRF Report Storage', () => {
@@ -262,7 +257,7 @@ describe('CTRF Reports API System Tests', () => {
   });
 
   describe('CTRF Report Retrieval', () => {
-    let storedReportIds: string[] = [];
+    const storedReportIds: string[] = [];
 
     beforeAll(async () => {
       const reports = [
@@ -474,14 +469,14 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: false,
-        error: 'Method not allowed. Supported methods: POST, GET',
+        error: 'Method not allowed. Supported methods: GET, POST',
       });
     });
 
     it('should require authentication', async () => {
       const ctrfReport = generateCtrfReport();
 
-      const response = await api.post('/api/test-reports').send(ctrfReport).expect(401);
+      await api.post('/api/test-reports').send(ctrfReport).expect(401);
     });
   });
 
@@ -589,7 +584,9 @@ describe('CTRF Reports API System Tests', () => {
 
       const retrieveResponse = await api.get('/api/test-reports').set(authHeaders).expect(200);
 
-      const storedReport = retrieveResponse.body.reports.find((r: any) => r.reportId === reportId);
+      const storedReport = retrieveResponse.body.reports.find(
+        (r: StoredReport) => r.reportId === reportId
+      );
 
       expect(storedReport).toBeDefined();
       expect(storedReport.reportFormat).toBe(originalReport.reportFormat);

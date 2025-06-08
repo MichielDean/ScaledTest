@@ -1,11 +1,12 @@
-import { describe, beforeEach, afterEach, it, expect } from '@jest/globals';
+import { describe, beforeEach, afterEach, it } from '@jest/globals';
 import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
+import type { Page } from 'playwright';
 
 // For Jest-Playwright integration
-declare const page: any;
+declare const page: Page;
 
 describe('Registration Tests', () => {
   let loginPage: LoginPage;

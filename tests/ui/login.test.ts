@@ -3,9 +3,10 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { TestUsers } from './models/TestUsers';
+import type { Page } from 'playwright';
 
 // For Jest-Playwright integration
-declare const page: any;
+declare const page: Page;
 
 describe('Authentication Tests', () => {
   let loginPage: LoginPage;

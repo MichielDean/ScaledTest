@@ -2,18 +2,13 @@
 import axios from 'axios';
 import * as fs from 'fs';
 import * as path from 'path';
+import { KeycloakTokenResponse, KeycloakConfig } from '../../src/types/auth';
 
-interface KeycloakTokenResponse {
-  access_token: string;
-  expires_in: number;
-  refresh_token: string;
-  refresh_expires_in: number;
-  token_type: string;
-  scope: string;
-}
+// Re-export auth interfaces from the centralized location
+export type { KeycloakTokenResponse, KeycloakConfig } from '../../src/types/auth';
 
 // Load Keycloak configuration
-const loadKeycloakConfig = (): any => {
+const loadKeycloakConfig = (): KeycloakConfig => {
   const configPath = path.resolve(process.cwd(), 'public', 'keycloak.json');
   if (!fs.existsSync(configPath)) {
     throw new Error('Keycloak configuration not found');
@@ -47,8 +42,10 @@ export const getAuthToken = async (
 
     return response.data.access_token;
   } catch (error) {
-    console.error('Error getting auth token:', error);
-    throw new Error('Failed to authenticate test user');
+    // In test environments, errors should be thrown rather than logged to console
+    throw new Error(
+      `Failed to authenticate test user: ${error instanceof Error ? error.message : 'Unknown error'}`
+    );
   }
 };
 

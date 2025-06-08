@@ -5,19 +5,15 @@ import { BasePage } from './BasePage';
  * Page object representing the dashboard page
  */
 export class DashboardPage extends BasePage {
-  readonly userProfileSection: Locator;
   readonly contentSection: Locator;
   readonly adminActionsSection: Locator;
   readonly editContentButton: Locator;
-  readonly userRolesList: Locator;
 
   constructor(page: Page) {
     super(page);
-    this.userProfileSection = page.locator('#user-profile-section');
     this.contentSection = page.locator('#content-section');
     this.adminActionsSection = page.locator('#admin-actions-section');
     this.editContentButton = page.locator('#edit-content-button');
-    this.userRolesList = page.locator('#user-roles-list');
   }
 
   /**
@@ -29,10 +25,15 @@ export class DashboardPage extends BasePage {
 
   /**
    * Check if the dashboard has loaded properly
+   * Updated to check for elements that actually exist on the dashboard page
    */
   async expectDashboardLoaded() {
-    await expect(this.userProfileSection).toBeVisible();
+    // Check for the main content section which should always be visible
     await expect(this.contentSection).toBeVisible();
+
+    // Check for the dashboard title or navigation section that should be present
+    const dashboardTitle = this.page.locator('h1').filter({ hasText: 'Dashboard' });
+    await expect(dashboardTitle).toBeVisible();
   }
 
   /**
@@ -65,14 +66,5 @@ export class DashboardPage extends BasePage {
    */
   async expectAdminActionsNotVisible() {
     await expect(this.adminActionsSection).not.toBeVisible();
-  }
-  /**
-   * Check if a specific role is displayed in the user profile
-   */
-  async expectHasRole(role: string) {
-    // Use the user-roles-list element and look for a role-specific ID element
-    const formattedRole = role.toLowerCase().replace('-', '');
-    const roleLocator = this.page.locator(`#role-${formattedRole}`);
-    await expect(roleLocator).toBeVisible();
   }
 }

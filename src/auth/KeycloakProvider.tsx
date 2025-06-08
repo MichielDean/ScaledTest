@@ -1,4 +1,3 @@
-// filepath: c:\Users\mokey\source\ScaledTest\src\auth\KeycloakProvider.tsx
 import React, {
   createContext,
   useContext,
@@ -65,7 +64,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
       try {
         setLoading(true);
 
-        // Update keycloak.json with current environment variables
         updateKeycloakConfig();
 
         const keycloakInstance = initKeycloak();
@@ -144,7 +142,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
                 'Failed to refresh token'
               );
 
-              // Clear stored tokens on refresh failure
               clearTokens();
 
               // Handle logout locally instead of calling the logout function
@@ -165,7 +162,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           setIsAuthenticated(true);
           setToken(keycloakInstance.token);
 
-          // Store tokens on successful authentication
           if (keycloakInstance.token && keycloakInstance.refreshToken) {
             storeTokens(keycloakInstance.token, keycloakInstance.refreshToken);
           }
@@ -173,7 +169,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
 
         keycloakInstance.onAuthError = () => {
           setError('Authentication error');
-          // Clear stored tokens on auth error
           clearTokens();
         };
 
@@ -182,7 +177,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           setToken(undefined);
           setUserProfile(null);
 
-          // Clear stored tokens on logout
           clearTokens();
         };
       } catch (err) {
@@ -193,7 +187,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           clientId: keycloakConfig.clientId,
         });
 
-        // Clear stored tokens on init error
         clearTokens();
       } finally {
         setLoading(false);
@@ -235,7 +228,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
 
   const logout = useCallback(() => {
     if (keycloak) {
-      // Clear stored tokens
       clearTokens();
 
       // Redirect to login page immediately instead of waiting for Keycloak
