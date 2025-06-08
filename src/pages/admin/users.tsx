@@ -1,6 +1,6 @@
 import { NextPage } from 'next';
 import Head from 'next/head';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../../auth/KeycloakProvider';
 import { withAuth } from '../../auth/withAuth';
@@ -31,7 +31,7 @@ const UserManagement: NextPage = () => {
   }, [authLoading, isAuthenticated, hasRole, router]);
 
   // Fetch all users from our server-side API endpoint
-  const fetchUsers = async () => {
+  const fetchUsers = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
@@ -59,7 +59,7 @@ const UserManagement: NextPage = () => {
     } finally {
       setLoading(false);
     }
-  };
+  }, [token]);
 
   // Update user role through our server-side API endpoint
   const updateUserRole = async (userId: string, grantMaintainer: boolean) => {
@@ -110,7 +110,7 @@ const UserManagement: NextPage = () => {
     if (keycloak) {
       fetchUsers();
     }
-  }, [keycloak]);
+  }, [keycloak, fetchUsers]);
 
   return (
     <div>
