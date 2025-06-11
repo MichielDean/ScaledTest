@@ -56,7 +56,6 @@ const Register: NextPage = () => {
     return true;
   };
 
-  // Handle registration form submission
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -145,7 +144,7 @@ const Register: NextPage = () => {
 
       <Header />
 
-      <main className="container">
+      <main id="main-content" className="container">
         <div className="form-container">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Create Account</h1>
           <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
@@ -155,6 +154,8 @@ const Register: NextPage = () => {
           {error && (
             <div
               id="registerError"
+              role="alert"
+              aria-live="polite"
               style={{
                 backgroundColor: '#ffebee',
                 color: '#c62828',
@@ -240,7 +241,7 @@ const Register: NextPage = () => {
 
             <p style={{ textAlign: 'center', margin: '1rem 0' }}>
               Already have an account?{' '}
-              <Link href="/login">
+              <Link href="/login" aria-label="Go to login page">
                 <span id="loginLink" style={{ color: 'var(--primary-color)', cursor: 'pointer' }}>
                   Sign In
                 </span>

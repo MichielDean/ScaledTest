@@ -16,7 +16,6 @@ const Dashboard: NextPage = () => {
   const [newContent, setNewContent] = useState<string>('');
   const [showAnalytics, setShowAnalytics] = useState<boolean>(false);
 
-  // Initialize content on component mount
   useEffect(() => {
     const defaultContent =
       'This is some sample content that can be viewed by all authenticated users.';
@@ -36,7 +35,6 @@ const Dashboard: NextPage = () => {
     // This function is kept for compatibility but we're now using individual component calls
   };
 
-  // Handle content update
   const handleUpdateContent = () => {
     setContent(newContent);
     setIsEditing(false);
@@ -60,23 +58,33 @@ const Dashboard: NextPage = () => {
 
       <Header />
 
-      <main className={styles.main}>
+      <main id="main-content" className={styles.main}>
         <h1 className={styles.title}>Dashboard</h1>
 
         {/* Navigation to Other Dashboards */}
         <div className={`card ${styles.dashboardNavigation}`}>
           <h2 className={styles.navigationTitle}>Available Dashboards</h2>
           <div className={styles.navigationButtons}>
-            <Link href="/test-results-dashboard" className={styles.dashboardLink}>
+            <Link
+              href="/test-results-dashboard"
+              className={styles.dashboardLink}
+              aria-label="Go to test results dashboard"
+            >
               🌟 Test Results Dashboard
             </Link>
             <button
               onClick={() => setShowAnalytics(!showAnalytics)}
               className={`${styles.toggleButton} ${showAnalytics ? styles.active : styles.inactive}`}
+              aria-label={showAnalytics ? 'Hide analytics dashboard' : 'Show analytics dashboard'}
+              aria-expanded={showAnalytics}
             >
               📊 Analytics Dashboard (OpenSearch)
             </button>
-            <button disabled className={styles.disabledButton}>
+            <button
+              disabled
+              className={styles.disabledButton}
+              aria-label="Performance dashboard feature is coming soon"
+            >
               📈 Performance Dashboard (Coming Soon)
             </button>
           </div>
@@ -90,7 +98,11 @@ const Dashboard: NextPage = () => {
                 <h2>📊 Analytics Dashboard</h2>
                 <p>Real-time analytics from OpenSearch test data</p>
               </div>
-              <button onClick={() => setShowAnalytics(false)} className={styles.hideButton}>
+              <button
+                onClick={() => setShowAnalytics(false)}
+                className={styles.hideButton}
+                aria-label="Hide analytics dashboard"
+              >
                 Hide Analytics
               </button>
             </div>
@@ -107,7 +119,11 @@ const Dashboard: NextPage = () => {
           <div className={styles.contentHeader}>
             <h2>Content Section</h2>
             {(hasRole(UserRole.MAINTAINER) || hasRole(UserRole.OWNER)) && !isEditing && (
-              <button id="edit-content-button" onClick={() => setIsEditing(true)}>
+              <button
+                id="edit-content-button"
+                onClick={() => setIsEditing(true)}
+                aria-label="Edit content section"
+              >
                 Edit Content
               </button>
             )}
@@ -121,7 +137,11 @@ const Dashboard: NextPage = () => {
                 className={styles.contentTextarea}
               />
               <div className={styles.contentActions}>
-                <button onClick={handleUpdateContent} className={styles.saveButton}>
+                <button
+                  onClick={handleUpdateContent}
+                  className={styles.saveButton}
+                  aria-label="Save content changes"
+                >
                   Save Changes
                 </button>
                 <button
@@ -130,6 +150,7 @@ const Dashboard: NextPage = () => {
                     setNewContent(content);
                   }}
                   className={styles.cancelButton}
+                  aria-label="Cancel editing and discard changes"
                 >
                   Cancel
                 </button>

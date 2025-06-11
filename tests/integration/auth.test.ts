@@ -1,4 +1,3 @@
-// tests/integration/auth.test.ts
 import { getAuthToken } from '../utils/auth';
 import axios from 'axios';
 

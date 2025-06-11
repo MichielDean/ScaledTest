@@ -1,4 +1,3 @@
-// tests/utils/mockApiAuth.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UserRole } from '../../src/auth/keycloak';
 import { AuthenticatedRequest } from '../../src/auth/apiAuth';
