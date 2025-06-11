@@ -1,4 +1,3 @@
-// tests/unit/apiAuth.test.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { withApiAuth } from '../../src/auth/apiAuth';
 import { UserRole } from '../../src/auth/keycloak';
@@ -26,7 +25,6 @@ describe('API Authentication Middleware', () => {
   beforeEach(() => {
     jest.clearAllMocks();
 
-    // Set up request and response mocks
     mockRequest = {
       headers: {},
       method: 'GET',

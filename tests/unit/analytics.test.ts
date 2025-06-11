@@ -1,4 +1,3 @@
-// tests/unit/analytics.test.ts
 import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 setupOpenSearchTestEnv();
 

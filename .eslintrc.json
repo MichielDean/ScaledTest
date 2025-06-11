@@ -19,5 +19,20 @@
     "prettier/prettier": "error",
     "no-console": "error"
   },
+  "overrides": [
+    {
+      "files": ["tests/jest-playwright-setup.js", "tests/utils/closeHandles.js"],
+      "rules": {
+        "@typescript-eslint/no-require-imports": "off",
+        "no-console": "off"
+      }
+    },
+    {
+      "files": ["tests/**/*.test.ts", "tests/**/*.test.js"],
+      "rules": {
+        "no-console": "off"
+      }
+    }
+  ],
   "ignorePatterns": ["node_modules/", ".next/", "out/", "build/"]
 }

@@ -1,4 +1,3 @@
-// tests/unit/opensearch.test.ts
 import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 setupOpenSearchTestEnv();
 

@@ -94,7 +94,6 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
           initOptions.refreshToken = storedRefreshToken;
         }
 
-        // Initialize Keycloak with options
         await keycloakInstance.init(initOptions);
 
         setKeycloak(keycloakInstance);

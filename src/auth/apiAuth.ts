@@ -98,15 +98,8 @@ export function withApiAuth(
 ) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
     try {
-      // Debug logging
-      logger.info('Middleware called for:', req.url);
-      logger.info('Method:', req.method);
-      logger.info('Required roles:', requiredRoles);
-
       // Extract the bearer token from the Authorization header
       const authHeader = req.headers.authorization;
-      logger.info('Auth header present:', !!authHeader);
-      logger.info('Auth header value:', authHeader ? authHeader.substring(0, 20) + '...' : 'NONE');
 
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
         logger.warn('No valid bearer token found');
@@ -117,13 +110,10 @@ export function withApiAuth(
       }
 
       const token = authHeader.split(' ')[1];
-      logger.info('Token extracted, length:', token ? token.length : 0);
 
       try {
         // Verify the token
-        logger.info('Verifying token...');
         const payload = await verifyToken(token);
-        logger.info('Token verified successfully');
         logger.info('User payload:', {
           sub: payload.sub,
           preferred_username: payload.preferred_username,

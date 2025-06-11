@@ -17,7 +17,7 @@ const Profile: NextPage = () => {
 
       <Header />
 
-      <main className={styles.main}>
+      <main id="main-content" className={styles.main}>
         <h1 className={styles.title}>User Profile</h1>
 
         <div id="user-profile-section" className={`card ${styles.userProfileSection}`}>

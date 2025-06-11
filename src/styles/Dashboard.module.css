@@ -31,7 +31,7 @@
 .dashboardLink {
   display: inline-block;
   padding: 12px 24px;
-  background-color: #007bff;
+  background-color: #0056b3;
   color: white;
   text-decoration: none;
   border-radius: 6px;
@@ -40,7 +40,7 @@
 }
 
 .dashboardLink:hover {
-  background-color: #0056b3;
+  background-color: #004085;
   color: white;
 }
 
@@ -55,11 +55,11 @@
 }
 
 .toggleButton.active {
-  background-color: #28a745;
+  background-color: #218838;
 }
 
 .toggleButton.inactive {
-  background-color: #17a2b8;
+  background-color: #117a8b;
 }
 
 .toggleButton:hover {

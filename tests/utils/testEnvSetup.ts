@@ -1,4 +1,3 @@
-// tests/utils/testEnvSetup.ts
 import { testLogger } from '../../src/utils/logger';
 
 /**
@@ -6,7 +5,6 @@ import { testLogger } from '../../src/utils/logger';
  * that need OpenSearch configuration
  */
 export function setupOpenSearchTestEnv() {
-  // Set up required OpenSearch environment variables for tests
   process.env.OPENSEARCH_HOST = process.env.OPENSEARCH_HOST || 'http://localhost:9200';
   process.env.OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME || 'admin';
   process.env.OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'admin';

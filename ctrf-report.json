@@ -4,41 +4,96 @@
       "name": "jest"
     },
     "summary": {
-      "tests": 188,
-      "passed": 188,
+      "tests": 202,
+      "passed": 202,
       "failed": 0,
       "pending": 0,
       "skipped": 0,
       "other": 0,
-      "start": 1749402493302,
-      "stop": 1749402523911
+      "start": 1749607567575,
+      "stop": 1749607601308
     },
     "tests": [
       {
-        "name": "Validation Schemas HttpMethodSchema Validation should validate valid HTTP methods",
-        "duration": 19,
+        "name": "OpenSearch Client Configuration should create a properly configured OpenSearch client",
+        "duration": 15,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts > Validation Schemas > HttpMethodSchema Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Configuration"
       },
       {
-        "name": "Validation Schemas HttpMethodSchema Validation should reject invalid HTTP methods",
-        "duration": 14,
+        "name": "OpenSearch Client Health Check should check cluster health",
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts > Validation Schemas > HttpMethodSchema Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Health Check"
+      },
+      {
+        "name": "OpenSearch Client Health Check should handle health check errors",
+        "duration": 27,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Health Check"
+      },
+      {
+        "name": "OpenSearch Client Index Creation should create CTRF reports index if it does not exist",
+        "duration": 3,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Index Creation"
+      },
+      {
+        "name": "OpenSearch Client Index Creation should not create CTRF reports index if it already exists",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Index Creation"
+      },
+      {
+        "name": "OpenSearch Client Document Operations should index CTRF reports",
+        "duration": 4,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Document Operations"
+      },
+      {
+        "name": "OpenSearch Client Document Operations should search for CTRF reports",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Document Operations"
       },
       {
         "name": "Analytics API Integration Tests Test Trends Integration (/api/analytics/test-trends) should successfully fetch and transform test trends data from OpenSearch",
-        "duration": 16,
+        "duration": 22,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -49,7 +104,7 @@
       },
       {
         "name": "Analytics API Integration Tests Test Trends Integration (/api/analytics/test-trends) should handle OpenSearch connection failures gracefully",
-        "duration": 2,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -60,7 +115,7 @@
       },
       {
         "name": "Analytics API Integration Tests Test Trends Integration (/api/analytics/test-trends) should handle missing index gracefully",
-        "duration": 3,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -82,7 +137,7 @@
       },
       {
         "name": "Analytics API Integration Tests Error Analysis Integration (/api/analytics/error-analysis) should successfully fetch error analysis data from OpenSearch",
-        "duration": 29,
+        "duration": 5,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -115,7 +170,7 @@
       },
       {
         "name": "Analytics API Integration Tests Test Suite Overview Integration (/api/analytics/test-suite-overview) should successfully aggregate test suite data from OpenSearch",
-        "duration": 13,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -126,7 +181,7 @@
       },
       {
         "name": "Analytics API Integration Tests OpenSearch Health Integration (/api/analytics/opensearch-health) should successfully check OpenSearch health status",
-        "duration": 4,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -170,7 +225,7 @@
       },
       {
         "name": "Analytics API Integration Tests Performance and Rate Limiting should handle large datasets efficiently in test trends",
-        "duration": 5,
+        "duration": 4,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -181,7 +236,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Empty Data Scenarios should handle empty test trends data gracefully",
-        "duration": 2,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -214,7 +269,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Empty Data Scenarios should handle empty test duration data gracefully",
-        "duration": 1,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -236,7 +291,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Malformed Data Scenarios should handle malformed OpenSearch response for test trends",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -247,7 +302,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Malformed Data Scenarios should handle malformed error analysis response",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -258,7 +313,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios HTTP Method Validation should reject POST requests to test trends endpoint",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -269,7 +324,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios HTTP Method Validation should reject PUT requests to error analysis endpoint",
-        "duration": 1,
+        "duration": 41,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -313,17 +368,6 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Query Parameter Edge Cases should handle zero days parameter for test trends",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > Query Parameter Edge Cases"
-      },
-      {
-        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Query Parameter Edge Cases should handle days parameter exceeding maximum for test trends",
         "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
@@ -334,8 +378,19 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > Query Parameter Edge Cases"
       },
       {
-        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Query Parameter Edge Cases should handle non-numeric days parameter for test trends",
+        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Query Parameter Edge Cases should handle days parameter exceeding maximum for test trends",
         "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > Query Parameter Edge Cases"
+      },
+      {
+        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Query Parameter Edge Cases should handle non-numeric days parameter for test trends",
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -357,17 +412,6 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios OpenSearch Timeout and Network Issues should handle OpenSearch network errors for error analysis",
-        "duration": 2,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > OpenSearch Timeout and Network Issues"
-      },
-      {
-        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios OpenSearch Timeout and Network Issues should handle OpenSearch service unavailable errors",
         "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
@@ -378,8 +422,19 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > OpenSearch Timeout and Network Issues"
       },
       {
+        "name": "Analytics API Integration Tests Edge Cases and Error Scenarios OpenSearch Timeout and Network Issues should handle OpenSearch service unavailable errors",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Edge Cases and Error Scenarios > OpenSearch Timeout and Network Issues"
+      },
+      {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Concurrent Request Handling should handle multiple concurrent requests to different endpoints",
-        "duration": 2,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -390,7 +445,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Concurrent Request Handling should handle concurrent requests to the same endpoint",
-        "duration": 2,
+        "duration": 5,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -412,7 +467,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Response Format Validation should ensure consistent error response format across all endpoints",
-        "duration": 3,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -423,7 +478,7 @@
       },
       {
         "name": "Analytics API Integration Tests Edge Cases and Error Scenarios Extreme Data Scenarios should handle very long error messages in error analysis",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -467,7 +522,7 @@
       },
       {
         "name": "Analytics API Integration Tests OpenSearch Integration Patterns should handle OpenSearch cluster state changes during request",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -499,63 +554,8 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\analytics.test.ts > Analytics API Integration Tests > Cross-Endpoint Consistency"
       },
       {
-        "name": "API Endpoints CTRF Reports API should store a valid CTRF report via POST",
-        "duration": 25,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
-      },
-      {
-        "name": "API Endpoints CTRF Reports API should validate CTRF report structure",
-        "duration": 2,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
-      },
-      {
-        "name": "API Endpoints CTRF Reports API should get CTRF reports via GET",
-        "duration": 3,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
-      },
-      {
-        "name": "API Endpoints CTRF Reports API should apply filters when getting CTRF reports",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
-      },
-      {
-        "name": "API Endpoints CTRF Reports API should reject unsupported methods",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
-      },
-      {
         "name": "Authentication Integration Keycloak Token Service should successfully obtain an auth token for valid credentials",
-        "duration": 14,
+        "duration": 23,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -566,7 +566,7 @@
       },
       {
         "name": "Authentication Integration Keycloak Token Service should throw an error when authentication fails",
-        "duration": 10,
+        "duration": 7,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -587,52 +587,162 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\auth.test.ts > Authentication Integration > Keycloak Token Service"
       },
       {
-        "name": "API Authentication Middleware Authentication Validation should return 401 when no authorization header is present",
-        "duration": 4,
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should store a valid CTRF report successfully",
+        "duration": 20,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authentication Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
       },
       {
-        "name": "API Authentication Middleware Authentication Validation should return 401 when token is invalid",
-        "duration": 15,
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle minimal CTRF report",
+        "duration": 6,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authentication Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
       },
       {
-        "name": "API Authentication Middleware Authorization Validation should return 403 when user lacks required role",
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should auto-generate reportId and timestamp if missing",
+        "duration": 3,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should reject invalid CTRF report with validation error",
+        "duration": 3,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle OpenSearch connection errors",
         "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authorization Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
       },
       {
-        "name": "API Authentication Middleware Authorization Validation should call handler when user has required role",
+        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle generic errors",
         "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authorization Validation"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should retrieve CTRF reports successfully",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle query filters for status",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle query filters for tool and environment",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle pagination parameters",
+        "duration": 0,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should limit maximum page size",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle OpenSearch connection errors for GET",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests Method validation should reject unsupported HTTP methods",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > Method validation"
+      },
+      {
+        "name": "CTRF Reports API Integration Tests Index creation should create OpenSearch index if it does not exist",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > Index creation"
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should store a valid CTRF report",
-        "duration": 21,
+        "duration": 23,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -643,7 +753,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should generate reportId if missing",
-        "duration": 4,
+        "duration": 6,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -654,7 +764,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should generate timestamp if missing",
-        "duration": 2,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -665,7 +775,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should return 400 for invalid report schema",
-        "duration": 2,
+        "duration": 6,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -676,7 +786,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should return 503 if OpenSearch connection fails (ECONNREFUSED)",
-        "duration": 1,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -687,7 +797,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests POST /api/test-reports should return 500 for other OpenSearch errors",
-        "duration": 1,
+        "duration": 4,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -709,7 +819,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests GET /api/test-reports should retrieve reports with default pagination",
-        "duration": 2,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -720,7 +830,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests GET /api/test-reports should handle custom pagination",
-        "duration": 1,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -764,7 +874,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests GET /api/test-reports should filter by environment",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -775,7 +885,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests GET /api/test-reports should combine multiple filters",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -841,7 +951,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Global Error Handling should return 500 if ensureCtrfReportsIndexExists throws an unexpected error",
-        "duration": 1,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -852,7 +962,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Optional CTRF Fields Validation should handle tool version and URL fields",
-        "duration": 1,
+        "duration": 4,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -863,7 +973,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Optional CTRF Fields Validation should validate test-level optional fields are preserved",
-        "duration": 2,
+        "duration": 8,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -874,7 +984,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Security and Input Sanitization should handle XSS attempts in test names and messages",
-        "duration": 4,
+        "duration": 17,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -885,7 +995,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Security and Input Sanitization should reject oversized report payloads",
-        "duration": 58,
+        "duration": 101,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -896,7 +1006,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Security and Input Sanitization should handle special characters and Unicode in test data",
-        "duration": 1,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -907,7 +1017,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Boundary Condition Testing should handle reports with maximum test count (1000+ tests)",
-        "duration": 85,
+        "duration": 55,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -918,7 +1028,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Boundary Condition Testing should handle extremely long test names",
-        "duration": 1,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -940,7 +1050,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Boundary Condition Testing should handle deeply nested extra fields",
-        "duration": 2,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -973,7 +1083,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Data Integrity and Consistency should preserve timestamp ordering and consistency",
-        "duration": 3,
+        "duration": 4,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -984,7 +1094,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Role-Based Authorization should allow READONLY users to GET reports",
-        "duration": 7,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -995,7 +1105,7 @@
       },
       {
         "name": "CTRF Reports API Unit Tests Role-Based Authorization should block READONLY users from POST operations",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1027,239 +1137,63 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\ctrf-reports.test.ts > CTRF Reports API Unit Tests > Role-Based Authorization"
       },
       {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should store a valid CTRF report successfully",
-        "duration": 38,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle minimal CTRF report",
-        "duration": 6,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should auto-generate reportId and timestamp if missing",
-        "duration": 2,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should reject invalid CTRF report with validation error",
-        "duration": 2,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle OpenSearch connection errors",
+        "name": "API Endpoints CTRF Reports API should store a valid CTRF report via POST",
         "duration": 7,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
       },
       {
-        "name": "CTRF Reports API Integration Tests POST /api/test-reports should handle generic errors",
+        "name": "API Endpoints CTRF Reports API should validate CTRF report structure",
         "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > POST /api/test-reports"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
       },
       {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should retrieve CTRF reports successfully",
-        "duration": 3,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle query filters for status",
-        "duration": 4,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle query filters for tool and environment",
+        "name": "API Endpoints CTRF Reports API should get CTRF reports via GET",
         "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
       },
       {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle pagination parameters",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should limit maximum page size",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests GET /api/test-reports should handle OpenSearch connection errors for GET",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > GET /api/test-reports"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests Method validation should reject unsupported HTTP methods",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > Method validation"
-      },
-      {
-        "name": "CTRF Reports API Integration Tests Index creation should create OpenSearch index if it does not exist",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\ctrf-reports.test.ts > CTRF Reports API Integration Tests > Index creation"
-      },
-      {
-        "name": "OpenSearch Client Configuration should create a properly configured OpenSearch client",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Configuration"
-      },
-      {
-        "name": "OpenSearch Client Health Check should check cluster health",
+        "name": "API Endpoints CTRF Reports API should apply filters when getting CTRF reports",
         "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Health Check"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
       },
       {
-        "name": "OpenSearch Client Health Check should handle health check errors",
-        "duration": 25,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Health Check"
-      },
-      {
-        "name": "OpenSearch Client Index Creation should create CTRF reports index if it does not exist",
+        "name": "API Endpoints CTRF Reports API should reject unsupported methods",
         "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts",
         "retries": 0,
         "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Index Creation"
-      },
-      {
-        "name": "OpenSearch Client Index Creation should not create CTRF reports index if it already exists",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Index Creation"
-      },
-      {
-        "name": "OpenSearch Client Document Operations should index CTRF reports",
-        "duration": 2,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Document Operations"
-      },
-      {
-        "name": "OpenSearch Client Document Operations should search for CTRF reports",
-        "duration": 1,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\opensearch.test.ts > OpenSearch Client > Document Operations"
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\integration\\api.test.ts > API Endpoints > CTRF Reports API"
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return test trends data with default 30 days",
-        "duration": 2,
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1270,7 +1204,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return test trends data with custom days parameter",
-        "duration": 15,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1281,7 +1215,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return 400 for invalid days parameter (too low)",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1303,7 +1237,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return 400 for non-numeric days parameter",
-        "duration": 1,
+        "duration": 6,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1314,7 +1248,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return 503 when OpenSearch is not connected",
-        "duration": 2,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1325,7 +1259,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should return 404 when OpenSearch index does not exist",
-        "duration": 1,
+        "duration": 0,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1347,7 +1281,7 @@
       },
       {
         "name": "Analytics API Endpoints Test Trends API (/api/analytics/test-trends) should handle OpenSearch connection errors",
-        "duration": 0,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1358,7 +1292,7 @@
       },
       {
         "name": "Analytics API Endpoints Error Analysis API (/api/analytics/error-analysis) should return error analysis data successfully",
-        "duration": 1,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1369,7 +1303,7 @@
       },
       {
         "name": "Analytics API Endpoints Error Analysis API (/api/analytics/error-analysis) should return 503 when OpenSearch is not connected",
-        "duration": 4,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1424,7 +1358,7 @@
       },
       {
         "name": "Analytics API Endpoints OpenSearch Health API (/api/analytics/opensearch-health) should handle OpenSearch health check errors",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1446,17 +1380,6 @@
       },
       {
         "name": "Analytics API Endpoints HTTP Method Validation should return 405 for non-GET requests on error-analysis",
-        "duration": 0,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\analytics.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\analytics.test.ts > Analytics API Endpoints > HTTP Method Validation"
-      },
-      {
-        "name": "Analytics API Endpoints HTTP Method Validation should return 405 for non-GET requests on flaky-tests",
         "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
@@ -1467,8 +1390,41 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\analytics.test.ts > Analytics API Endpoints > HTTP Method Validation"
       },
       {
-        "name": "OpenSearch Client Connection Management should report successful connection when cluster health is good",
+        "name": "Analytics API Endpoints HTTP Method Validation should return 405 for non-GET requests on flaky-tests",
+        "duration": 0,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\analytics.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\analytics.test.ts > Analytics API Endpoints > HTTP Method Validation"
+      },
+      {
+        "name": "Validation Schemas HttpMethodSchema Validation should validate valid HTTP methods",
+        "duration": 3,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts > Validation Schemas > HttpMethodSchema Validation"
+      },
+      {
+        "name": "Validation Schemas HttpMethodSchema Validation should reject invalid HTTP methods",
         "duration": 2,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\validationSchemas.test.ts > Validation Schemas > HttpMethodSchema Validation"
+      },
+      {
+        "name": "OpenSearch Client Connection Management should report successful connection when cluster health is good",
+        "duration": 3,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1479,7 +1435,7 @@
       },
       {
         "name": "OpenSearch Client Connection Management should report failed connection when cluster health check fails",
-        "duration": 12,
+        "duration": 13,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1490,7 +1446,7 @@
       },
       {
         "name": "OpenSearch Client Index Management should create CTRF reports index if it does not exist",
-        "duration": 3,
+        "duration": 2,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1501,7 +1457,7 @@
       },
       {
         "name": "OpenSearch Client Index Management should not create CTRF reports index if it already exists",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1512,7 +1468,7 @@
       },
       {
         "name": "OpenSearch Client Index Management should throw an error if index check fails",
-        "duration": 6,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1534,7 +1490,7 @@
       },
       {
         "name": "OpenSearch Client Client Configuration should create a client with the correct configuration",
-        "duration": 0,
+        "duration": 1,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1544,8 +1500,52 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\opensearch.test.ts > OpenSearch Client > Client Configuration"
       },
       {
+        "name": "API Authentication Middleware Authentication Validation should return 401 when no authorization header is present",
+        "duration": 2,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authentication Validation"
+      },
+      {
+        "name": "API Authentication Middleware Authentication Validation should return 401 when token is invalid",
+        "duration": 12,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authentication Validation"
+      },
+      {
+        "name": "API Authentication Middleware Authorization Validation should return 403 when user lacks required role",
+        "duration": 1,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authorization Validation"
+      },
+      {
+        "name": "API Authentication Middleware Authorization Validation should call handler when user has required role",
+        "duration": 0,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\unit\\apiAuth.test.ts > API Authentication Middleware > Authorization Validation"
+      },
+      {
         "name": "CTRF Reports API System Tests CTRF Report Storage should store a complete CTRF report successfully",
-        "duration": 710,
+        "duration": 1942,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1556,7 +1556,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Storage should store a minimal CTRF report",
-        "duration": 322,
+        "duration": 361,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1567,7 +1567,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Storage should auto-generate missing reportId and timestamp",
-        "duration": 149,
+        "duration": 229,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1578,7 +1578,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Storage should handle reports with various test statuses",
-        "duration": 104,
+        "duration": 225,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1589,7 +1589,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Storage should handle reports with rich test metadata",
-        "duration": 171,
+        "duration": 645,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1600,7 +1600,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should retrieve all reports without filters",
-        "duration": 159,
+        "duration": 218,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1611,7 +1611,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should filter reports by test status",
-        "duration": 282,
+        "duration": 174,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1622,7 +1622,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should filter reports by tool name",
-        "duration": 96,
+        "duration": 244,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1633,7 +1633,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should filter reports by environment",
-        "duration": 74,
+        "duration": 103,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1644,7 +1644,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should handle pagination",
-        "duration": 82,
+        "duration": 228,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1655,7 +1655,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should respect maximum page size limit",
-        "duration": 69,
+        "duration": 164,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1666,7 +1666,7 @@
       },
       {
         "name": "CTRF Reports API System Tests CTRF Report Retrieval should combine multiple filters",
-        "duration": 70,
+        "duration": 180,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1677,7 +1677,7 @@
       },
       {
         "name": "CTRF Reports API System Tests Error Handling should reject invalid CTRF reports",
-        "duration": 74,
+        "duration": 116,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1688,7 +1688,7 @@
       },
       {
         "name": "CTRF Reports API System Tests Error Handling should reject requests with missing required fields",
-        "duration": 59,
+        "duration": 201,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1699,7 +1699,7 @@
       },
       {
         "name": "CTRF Reports API System Tests Error Handling should reject unsupported HTTP methods",
-        "duration": 62,
+        "duration": 167,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1710,7 +1710,7 @@
       },
       {
         "name": "CTRF Reports API System Tests Error Handling should require authentication",
-        "duration": 63,
+        "duration": 92,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1721,17 +1721,6 @@
       },
       {
         "name": "CTRF Reports API System Tests Performance and Scalability should handle large CTRF reports",
-        "duration": 102,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts > CTRF Reports API System Tests > Performance and Scalability"
-      },
-      {
-        "name": "CTRF Reports API System Tests Performance and Scalability should handle concurrent report submissions",
         "duration": 309,
         "status": "passed",
         "rawStatus": "passed",
@@ -1742,8 +1731,19 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts > CTRF Reports API System Tests > Performance and Scalability"
       },
       {
+        "name": "CTRF Reports API System Tests Performance and Scalability should handle concurrent report submissions",
+        "duration": 545,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts > CTRF Reports API System Tests > Performance and Scalability"
+      },
+      {
         "name": "CTRF Reports API System Tests Data Integrity should preserve all report data through storage and retrieval",
-        "duration": 228,
+        "duration": 346,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1753,63 +1753,8 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\system\\ctrf-reports.test.ts > CTRF Reports API System Tests > Data Integrity"
       },
       {
-        "name": "Authentication Tests Login Functionality should redirect to dashboard after successful login",
-        "duration": 2434,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
-      },
-      {
-        "name": "Authentication Tests Login Functionality should show user as logged in after successful login",
-        "duration": 1591,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
-      },
-      {
-        "name": "Authentication Tests Login Functionality should show error message with invalid credentials",
-        "duration": 316,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
-      },
-      {
-        "name": "Authentication Tests Logout Functionality should redirect to login page after logout",
-        "duration": 1532,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Logout Functionality"
-      },
-      {
-        "name": "Authentication Tests Logout Functionality should show user as logged out after logout",
-        "duration": 1549,
-        "status": "passed",
-        "rawStatus": "passed",
-        "type": "unit",
-        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
-        "retries": 0,
-        "flaky": false,
-        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Logout Functionality"
-      },
-      {
         "name": "Registration Tests Registration and Auto-Login Flow should register a new user and automatically log them in",
-        "duration": 3866,
+        "duration": 4165,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1820,7 +1765,7 @@
       },
       {
         "name": "Registration Tests Registration and Auto-Login Flow should show error when registering with an existing email",
-        "duration": 3281,
+        "duration": 3600,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1831,7 +1776,7 @@
       },
       {
         "name": "Registration Tests Registration and Auto-Login Flow should validate password confirmation",
-        "duration": 356,
+        "duration": 367,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1841,8 +1786,63 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\register.test.ts > Registration Tests > Registration and Auto-Login Flow"
       },
       {
+        "name": "Authentication Tests Login Functionality should redirect to dashboard after successful login",
+        "duration": 2861,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
+      },
+      {
+        "name": "Authentication Tests Login Functionality should show user as logged in after successful login",
+        "duration": 2053,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
+      },
+      {
+        "name": "Authentication Tests Login Functionality should show error message with invalid credentials",
+        "duration": 570,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Login Functionality"
+      },
+      {
+        "name": "Authentication Tests Logout Functionality should redirect to login page after logout",
+        "duration": 1863,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Logout Functionality"
+      },
+      {
+        "name": "Authentication Tests Logout Functionality should show user as logged out after logout",
+        "duration": 1584,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\login.test.ts > Authentication Tests > Logout Functionality"
+      },
+      {
         "name": "Navigation Tests Owner user navigation should navigate from dashboard to user management page",
-        "duration": 2854,
+        "duration": 3116,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1853,7 +1853,7 @@
       },
       {
         "name": "Navigation Tests Owner user navigation should navigate from user management back to dashboard",
-        "duration": 1979,
+        "duration": 2198,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1864,7 +1864,7 @@
       },
       {
         "name": "Navigation Tests Owner user navigation should successfully logout and redirect to login page",
-        "duration": 1482,
+        "duration": 1889,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1875,7 +1875,7 @@
       },
       {
         "name": "Navigation Tests Unauthenticated user navigation should redirect to login page when accessing dashboard",
-        "duration": 305,
+        "duration": 332,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1886,7 +1886,7 @@
       },
       {
         "name": "Navigation Tests Unauthenticated user navigation should redirect to login page when accessing user management",
-        "duration": 264,
+        "duration": 310,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1897,7 +1897,7 @@
       },
       {
         "name": "Navigation Tests Maintainer user navigation should redirect to unauthorized page when accessing admin pages",
-        "duration": 1683,
+        "duration": 1697,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1907,8 +1907,162 @@
         "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\navigation.test.ts > Navigation Tests > Maintainer user navigation"
       },
       {
+        "name": "Accessibility Tests Public Pages Accessibility should have no accessibility violations on home-page",
+        "duration": 2431,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Public Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Public Pages Accessibility should have no accessibility violations on login-page",
+        "duration": 1391,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Public Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Public Pages Accessibility should have no accessibility violations on register-page",
+        "duration": 1440,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Public Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Public Pages Accessibility should have no accessibility violations on unauthorized-page",
+        "duration": 1210,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Public Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Authenticated Pages Accessibility should have no accessibility violations on dashboard-page (authenticated)",
+        "duration": 2588,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Authenticated Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Authenticated Pages Accessibility should have no accessibility violations on profile-page (authenticated)",
+        "duration": 2406,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Authenticated Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Authenticated Pages Accessibility should have no accessibility violations on test-results-dashboard (authenticated)",
+        "duration": 2454,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Authenticated Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Authenticated Pages Accessibility should have no accessibility violations on simple-test-dashboard (authenticated)",
+        "duration": 2422,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Authenticated Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Authenticated Pages Accessibility should have no accessibility violations on admin-users-page (authenticated)",
+        "duration": 2600,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Authenticated Pages Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Specific Accessibility Features should have proper heading hierarchy on home page",
+        "duration": 1007,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Specific Accessibility Features"
+      },
+      {
+        "name": "Accessibility Tests Specific Accessibility Features should have proper form accessibility on login page",
+        "duration": 989,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Specific Accessibility Features"
+      },
+      {
+        "name": "Accessibility Tests Specific Accessibility Features should have proper navigation accessibility",
+        "duration": 988,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Specific Accessibility Features"
+      },
+      {
+        "name": "Accessibility Tests Application Flow Accessibility should maintain accessibility across user registration flow",
+        "duration": 1682,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Application Flow Accessibility"
+      },
+      {
+        "name": "Accessibility Tests Application Flow Accessibility should maintain accessibility across authenticated user flow",
+        "duration": 3489,
+        "status": "passed",
+        "rawStatus": "passed",
+        "type": "unit",
+        "filePath": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts",
+        "retries": 0,
+        "flaky": false,
+        "suite": "C:\\Users\\mokey\\source\\ScaledTest\\tests\\ui\\accessibility.test.ts > Accessibility Tests > Application Flow Accessibility"
+      },
+      {
         "name": "Role-based Access Tests Read-only User Access should see correct role assignment",
-        "duration": 2707,
+        "duration": 2839,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1919,7 +2073,7 @@
       },
       {
         "name": "Role-based Access Tests Read-only User Access should not have content editing permissions",
-        "duration": 1740,
+        "duration": 2062,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1930,7 +2084,7 @@
       },
       {
         "name": "Role-based Access Tests Read-only User Access should not see admin actions on dashboard",
-        "duration": 1481,
+        "duration": 2029,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1952,7 +2106,7 @@
       },
       {
         "name": "Role-based Access Tests Read-only User Access should be denied access to user management page",
-        "duration": 1634,
+        "duration": 1714,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1963,7 +2117,7 @@
       },
       {
         "name": "Role-based Access Tests Maintainer User Access should see correct role assignments",
-        "duration": 1677,
+        "duration": 1668,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1974,7 +2128,7 @@
       },
       {
         "name": "Role-based Access Tests Maintainer User Access should have content editing permissions",
-        "duration": 1474,
+        "duration": 1556,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1985,7 +2139,7 @@
       },
       {
         "name": "Role-based Access Tests Maintainer User Access should not see admin actions on dashboard",
-        "duration": 1491,
+        "duration": 1541,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -1996,7 +2150,7 @@
       },
       {
         "name": "Role-based Access Tests Maintainer User Access should not have admin menu access",
-        "duration": 1468,
+        "duration": 1506,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2007,7 +2161,7 @@
       },
       {
         "name": "Role-based Access Tests Maintainer User Access should be denied access to user management page",
-        "duration": 1621,
+        "duration": 1711,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2018,7 +2172,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should see correct role assignments",
-        "duration": 1650,
+        "duration": 1662,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2029,7 +2183,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should have content editing permissions",
-        "duration": 1452,
+        "duration": 1542,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2040,7 +2194,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should see admin actions on dashboard",
-        "duration": 1481,
+        "duration": 1513,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2051,7 +2205,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should have admin menu access",
-        "duration": 1465,
+        "duration": 1560,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2062,7 +2216,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should have access to user management page",
-        "duration": 1616,
+        "duration": 1753,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",
@@ -2073,7 +2227,7 @@
       },
       {
         "name": "Role-based Access Tests Owner User Access should see all users listed in user management",
-        "duration": 1587,
+        "duration": 1742,
         "status": "passed",
         "rawStatus": "passed",
         "type": "unit",

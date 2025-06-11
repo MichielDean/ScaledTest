@@ -18,6 +18,7 @@ import {
   OpenSearchErrorApiResponse,
   OpenSearchHealth,
 } from '../../types/opensearch';
+import styles from '../../styles/Charts.module.css';
 
 interface TestTrendsProps {
   days?: number;
@@ -99,12 +100,12 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
 
   if (loading) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="flex items-center justify-center h-64">
+      <div className={styles.card}>
+        <div className={styles.loadingContent}>
           <div className="text-center">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-            <p className="text-gray-600">Loading trends from OpenSearch...</p>
-            <p className="text-sm text-gray-400 mt-2">Analyzing {selectedDays} days of data</p>
+            <div className={styles.loadingSpinner}></div>
+            <p className={styles.loadingText}>Loading trends from OpenSearch...</p>
+            <p className={styles.loadingSubtext}>Analyzing {selectedDays} days of data</p>
           </div>
         </div>
       </div>
@@ -112,14 +113,11 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
   }
   if (error) {
     return (
-      <div className="bg-white p-6 rounded-lg shadow-md">
-        <div className="text-center py-8">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">⚠️ OpenSearch Connection Error</h3>
-          <p className="text-red-600 mb-4">{error}</p>
-          <button
-            onClick={fetchTestTrendsData}
-            className="bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-          >
+      <div className={styles.card}>
+        <div className={styles.errorContent}>
+          <h3 className={styles.errorTitle}>⚠️ OpenSearch Connection Error</h3>
+          <p className={styles.errorMessage}>{error}</p>
+          <button onClick={fetchTestTrendsData} className={styles.retryButton}>
             Retry OpenSearch Query
           </button>
         </div>
@@ -127,54 +125,45 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
     );
   }
   return (
-    <div className="space-y-6" style={{ width: '100%', maxWidth: 'none' }}>
+    <div className={`space-y-6 ${styles.chartContainer}`}>
       {' '}
       {/* OpenSearch Data Source Indicator */}
-      <div
-        className="bg-blue-50 border border-blue-200 rounded-lg p-4"
-        style={{ width: '100%', maxWidth: 'none' }}
-      >
-        <div className="flex items-center justify-between">
+      <div className={styles.dataSourceIndicator}>
+        <div className={styles.dataSourceHeader}>
           <div className="flex items-center">
-            <div className="ml-3">
-              <h4 className="text-sm font-medium text-blue-800">📊 Data Source: OpenSearch</h4>
-              <p className="text-sm text-blue-600">
+            <div className={styles.dataSourceInfo}>
+              <h4 className={styles.dataSourceTitle}>📊 Data Source: OpenSearch</h4>
+              <p className={styles.dataSourceDetails}>
                 Index: ctrf-reports | Time Range: {selectedDays} days | Documents:{' '}
                 {opensearchHealth?.documentsCount || 0}
               </p>
             </div>
           </div>
-          <div className="flex items-center space-x-2">
+          <div className={styles.dataSourceControls}>
             <select
               value={selectedDays}
               onChange={e => setSelectedDays(parseInt(e.target.value))}
-              className="border border-gray-300 rounded px-3 py-1 text-sm"
+              className={styles.timeRangeSelect}
             >
               <option value={7}>Last 7 days</option>
               <option value={14}>Last 14 days</option>
               <option value={30}>Last 30 days</option>
               <option value={90}>Last 90 days</option>
             </select>
-            <button
-              onClick={fetchTestTrendsData}
-              className="bg-blue-600 text-white px-3 py-1 text-sm rounded hover:bg-blue-700 transition-colors"
-            >
+            <button onClick={fetchTestTrendsData} className={styles.refreshButton}>
               Refresh
             </button>
           </div>
         </div>
       </div>{' '}
       {data.length === 0 ? (
-        <div className="bg-white p-6 rounded-lg shadow-md text-center">
-          <h3 className="text-lg font-medium text-gray-900 mb-2">📊 No Test Data Found</h3>
-          <p className="text-gray-600 mb-2">
+        <div className={`${styles.card} ${styles.noDataContainer}`}>
+          <h3 className={styles.noDataTitle}>📊 No Test Data Found</h3>
+          <p className={styles.noDataMessage}>
             No test trend data found in OpenSearch for the selected time range.
           </p>
-          <p className="text-sm text-gray-400">Upload test reports to see historical trends.</p>
-          <button
-            onClick={fetchTestTrendsData}
-            className="mt-4 bg-blue-600 text-white px-4 py-2 rounded hover:bg-blue-700 transition-colors"
-          >
+          <p className={styles.noDataSubtext}>Upload test reports to see historical trends.</p>
+          <button onClick={fetchTestTrendsData} className={styles.checkAgainButton}>
             Check Again
           </button>
         </div>
@@ -182,11 +171,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
         <>
           {' '}
           {/* Test Results Trends Line Chart */}
-          <div
-            className="bg-white p-6 rounded-lg shadow-md"
-            style={{ width: '100%', maxWidth: 'none' }}
-          >
-            <h3 className="text-xl font-bold mb-4 text-gray-800">📈 Test Results Trends</h3>
+          <div className={`${styles.card} ${styles.chartContainer}`}>
+            <h3 className={styles.chartTitle}>📈 Test Results Trends</h3>
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -270,11 +256,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
             </ResponsiveContainer>
           </div>{' '}
           {/* Pass Rate Area Chart */}
-          <div
-            className="bg-white p-6 rounded-lg shadow-md"
-            style={{ width: '100%', maxWidth: 'none' }}
-          >
-            <h3 className="text-xl font-bold mb-4 text-gray-800">🎯 Pass Rate Trend</h3>
+          <div className={`${styles.card} ${styles.chartContainer}`}>
+            <h3 className={styles.chartTitle}>🎯 Pass Rate Trend</h3>
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -306,8 +289,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
             </ResponsiveContainer>
           </div>{' '}
           {/* Summary Statistics */}
-          <div className="bg-white p-6 rounded-lg shadow-md">
-            <h3 className="text-xl font-bold mb-4 text-gray-800">📊 Trend Summary</h3>
+          <div className={styles.card}>
+            <h3 className={styles.chartTitle}>📊 Trend Summary</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
               <div className="text-center p-4 bg-blue-50 rounded-lg">
                 <div className="text-2xl font-bold text-blue-600">

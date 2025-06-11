@@ -6,7 +6,6 @@ import Header from '../components/Header';
 
 const Unauthorized: NextPage = () => {
   const router = useRouter();
-  // Get the returnUrl from the query parameters if available
   const { returnUrl } = router.query;
 
   return (
@@ -17,9 +16,9 @@ const Unauthorized: NextPage = () => {
 
       <Header />
 
-      <main className="container">
+      <main id="main-content" className="container">
         <div className="card" style={{ textAlign: 'center' }}>
-          <h1 id="unauthorized-title" style={{ color: '#ff6b6b', marginBottom: '1rem' }}>
+          <h1 id="unauthorized-title" style={{ color: '#dc3545', marginBottom: '1rem' }}>
             Access Denied
           </h1>
 
@@ -28,15 +27,22 @@ const Unauthorized: NextPage = () => {
           </p>
 
           <div>
-            <Link href="/">
-              <button style={{ display: 'inline-block', marginRight: '1rem' }}>
+            <Link href="/" aria-label="Return to home page">
+              <button
+                style={{ display: 'inline-block', marginRight: '1rem' }}
+                aria-label="Return to home page"
+              >
                 Return to Home
               </button>
             </Link>
 
             {returnUrl && typeof returnUrl === 'string' && (
-              <Link href="/dashboard">
-                <button id="return-to-previous" style={{ display: 'inline-block' }}>
+              <Link href="/dashboard" aria-label="Go to dashboard page">
+                <button
+                  id="return-to-previous"
+                  style={{ display: 'inline-block' }}
+                  aria-label="Go to dashboard page"
+                >
                   Go to Dashboard
                 </button>
               </Link>

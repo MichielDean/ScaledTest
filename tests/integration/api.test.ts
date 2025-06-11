@@ -1,4 +1,3 @@
-// tests/integration/api.test.ts
 import { NextApiRequest, NextApiResponse } from 'next';
 import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
 
@@ -95,10 +94,8 @@ Object.defineProperty(global, 'crypto', {
   },
 });
 
-// Import API handlers
 import ctrfReportsHandler from '../../src/pages/api/test-reports';
 
-// Create a mock for NextApiRequest and NextApiResponse
 const mockReq = (
   method: string,
   body: Record<string, unknown> = {},

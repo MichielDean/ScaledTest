@@ -1,4 +1,3 @@
-// src/config/keycloak.ts
 /**
  * Centralized Keycloak Configuration
  *

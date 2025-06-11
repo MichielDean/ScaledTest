@@ -1,5 +1,3 @@
-// tests/integration/opensearch.test.ts
-
 // Import the environment setup (will run before importing anything else)
 import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 setupOpenSearchTestEnv();

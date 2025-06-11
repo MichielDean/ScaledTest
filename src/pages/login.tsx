@@ -16,7 +16,6 @@ const Login: NextPage = () => {
   const [error, setError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
 
-  // Get the returnUrl from the query parameters
   const { returnUrl } = router.query;
   const sanitizeUrl = (url: string): string => {
     try {
@@ -40,7 +39,6 @@ const Login: NextPage = () => {
     }
   }, [isAuthenticated, loading, redirectPath, router]);
 
-  // Handle login form submission
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setLoggingIn(true);
@@ -117,13 +115,15 @@ const Login: NextPage = () => {
 
       <Header />
 
-      <main className="container">
+      <main id="main-content" className="container">
         <div className="form-container">
           <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Sign In</h1>
 
           {error && (
             <div
               id="loginError"
+              role="alert"
+              aria-live="polite"
               style={{
                 backgroundColor: '#ffebee',
                 color: '#c62828',
@@ -149,6 +149,9 @@ const Login: NextPage = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 placeholder="Enter your email"
                 required
+                aria-required="true"
+                aria-describedby={error ? 'loginError' : undefined}
+                autoComplete="username"
               />
             </div>
 
@@ -161,6 +164,9 @@ const Login: NextPage = () => {
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 placeholder="Enter your password"
                 required
+                aria-required="true"
+                aria-describedby={error ? 'loginError' : undefined}
+                autoComplete="current-password"
               />
             </div>
 
@@ -175,7 +181,7 @@ const Login: NextPage = () => {
 
             <p style={{ textAlign: 'center', margin: '1rem 0' }}>
               Don&apos;t have an account?{' '}
-              <Link href="/register">
+              <Link href="/register" aria-label="Go to registration page">
                 <span
                   id="registerLink"
                   style={{ color: 'var(--primary-color)', cursor: 'pointer' }}
