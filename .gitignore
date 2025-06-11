@@ -35,6 +35,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# temporary/build artifacts
+temp/
+
 # CTRF test reports
 ctrf-report.json
 ctrf-report-*.json

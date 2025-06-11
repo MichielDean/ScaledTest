@@ -1,4 +1,3 @@
-// tests/unit/validationSchemas.test.ts
 import { HttpMethodSchema } from '../../src/types/validation';
 import { HttpMethod } from '../../src/types/common';
 

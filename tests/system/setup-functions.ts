@@ -1,5 +1,3 @@
-// tests/system/setup-functions.ts
-// This file contains the original setup functions from setup.ts
 import { execSync } from 'child_process';
 import { spawn } from 'child_process';
 import waitOn from 'wait-on';

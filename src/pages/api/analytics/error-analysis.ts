@@ -6,6 +6,33 @@ import {
   getOpenSearchHealthStatus,
 } from '../../../lib/opensearchAnalytics';
 
+type SuccessResponse = {
+  success: true;
+  data: Array<{
+    errorMessage: string;
+    count: number;
+    affectedTests: string[];
+  }>;
+  meta: {
+    source: 'OpenSearch';
+    index: 'ctrf-reports';
+    timestamp: string;
+    opensearchHealth: {
+      connected: boolean;
+      indexExists: boolean;
+      documentsCount: number;
+      clusterHealth: string;
+    };
+  };
+};
+
+type ErrorResponse = {
+  success: false;
+  error: string;
+  source: 'OpenSearch';
+  details?: unknown;
+};
+
 /**
  * Handle GET requests - retrieve error analysis data from OpenSearch
  *
@@ -14,7 +41,7 @@ import {
  * Uses nested aggregations to group by error messages and affected tests
  * All data is sourced directly from OpenSearch - no local database is used
  */
-const handleGet: MethodHandler = async (req, res, reqLogger) => {
+const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, res, reqLogger) => {
   try {
     reqLogger.info('Fetching error analysis from OpenSearch');
 

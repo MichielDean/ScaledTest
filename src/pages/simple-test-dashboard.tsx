@@ -150,6 +150,7 @@ const SimpleTestDashboard: NextPage = () => {
       <Header />
 
       <main
+        id="main-content"
         style={{
           padding: '2rem',
           maxWidth: '1000px',

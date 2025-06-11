@@ -1,4 +1,3 @@
-// src/utils/updateKeycloakJson.ts
 import { keycloakJsonConfig } from '../config/keycloak';
 import fs from 'fs';
 import path from 'path';

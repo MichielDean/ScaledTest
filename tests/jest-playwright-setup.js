@@ -3,10 +3,9 @@
  * This replaces jest-playwright-preset with a simplified implementation
  */
 
-// CommonJS imports are required in this Jest setup file
-const { chromium } = require('playwright'); // eslint-disable-line @typescript-eslint/no-require-imports
-const path = require('path'); // eslint-disable-line @typescript-eslint/no-require-imports
-const fs = require('fs'); // eslint-disable-line @typescript-eslint/no-require-imports
+const { chromium } = require('playwright');
+const path = require('path');
+const fs = require('fs');
 
 // Deep merge utility function
 function deepMerge(target, source) {
@@ -42,11 +41,10 @@ function loadConfig() {
 
   if (fs.existsSync(configPath)) {
     try {
-      const userConfig = require(configPath); // eslint-disable-line @typescript-eslint/no-require-imports
+      const userConfig = require(configPath);
       return deepMerge(defaultConfig, userConfig);
     } catch (error) {
-      // Console logging is needed for test setup debugging
-      console.warn('Failed to load jest-playwright config, using defaults:', error.message); // eslint-disable-line no-console
+      console.warn('Failed to load jest-playwright config, using defaults:', error.message);
     }
   }
 
@@ -62,15 +60,12 @@ const setupPlaywright = async () => {
     ...config.launchOptions,
   });
 
-  // Create context
   global.context = await global.browser.newContext({
     ...config.contextOptions,
   });
 
-  // Create page
   global.page = await global.context.newPage();
 
-  // Set additional globals
   global.browserName = 'chromium';
   global.deviceName = null;
 
@@ -122,22 +117,16 @@ const teardownPlaywright = async () => {
   }
 };
 
-// Setup before each test file
-// Jest globals are available in test environment
 global.beforeAll(async () => {
-  // eslint-disable-line no-undef
   await setupPlaywright();
 });
 
 // Teardown after each test file
 global.afterAll(async () => {
-  // eslint-disable-line no-undef
   await teardownPlaywright();
 });
 
-// Setup before each test
 global.beforeEach(async () => {
-  // eslint-disable-line no-undef
   // Reset page for each test to ensure clean state
   if (global.jestPlaywright && global.jestPlaywright.resetPage) {
     await global.jestPlaywright.resetPage();
