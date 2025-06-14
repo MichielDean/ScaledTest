@@ -1,0 +1,24 @@
+.centeredCard {
+  text-align: center;
+}
+
+.errorTitle {
+  color: var(--color-danger);
+  margin-bottom: var(--spacing-lg);
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+}
+
+.description {
+  font-size: var(--font-size-lg);
+  margin-bottom: var(--spacing-2xl);
+  color: var(--color-text-secondary);
+}
+
+.buttonContainer {
+  display: flex;
+  justify-content: center;
+  gap: var(--spacing-lg);
+}
+
+/* Note: Action button styles are imported from shared/buttons.module.css */

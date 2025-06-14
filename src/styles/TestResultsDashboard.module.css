@@ -1,0 +1,314 @@
+/* Test Results Dashboard Component Styles */
+.mainContent {
+  padding: var(--spacing-2xl);
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.header {
+  margin-bottom: var(--spacing-2xl);
+  text-align: center;
+}
+
+.title {
+  font-size: var(--font-size-4xl);
+  color: var(--color-primary);
+  margin-bottom: var(--spacing-sm);
+  font-weight: var(--font-weight-semibold);
+  background: linear-gradient(135deg, var(--color-primary), var(--color-primary-dark));
+  background-clip: text;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+.subtitle {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-lg);
+}
+
+.sectionTitle {
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Overview section styles */
+.overviewTitle {
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Stat card variants */
+.statCardGray {
+  background-color: var(--color-gray-50);
+}
+
+.statCardGreen {
+  background-color: var(--color-success-bg);
+}
+
+.statCardRed {
+  background-color: var(--color-danger-bg);
+}
+
+.statCardYellow {
+  background-color: var(--color-warning-bg);
+}
+
+.statCardBlue {
+  background-color: var(--color-info-bg);
+}
+
+/* Stat number variants */
+.statNumberGray {
+  color: var(--color-gray-600);
+}
+
+.statNumberGreen {
+  color: var(--color-success-dark);
+}
+
+.statNumberRed {
+  color: var(--color-danger-dark);
+}
+
+.statNumberYellow {
+  color: var(--color-warning-dark);
+}
+
+.statNumberBlue {
+  color: var(--color-info-dark);
+}
+
+/* Stat label variants */
+.statLabelGray {
+  color: var(--color-text-secondary);
+}
+
+.statLabelGreen {
+  color: var(--color-success-dark);
+}
+
+.statLabelRed {
+  color: var(--color-danger-dark);
+}
+
+.statLabelYellow {
+  color: var(--color-warning-dark);
+}
+
+.statLabelBlue {
+  color: var(--color-info-dark);
+}
+
+/* Filter section styles */
+.filtersTitle {
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-lg);
+  font-weight: var(--font-weight-medium);
+}
+
+.filtersGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--spacing-lg);
+}
+
+.filterLabel {
+  display: block;
+  margin-bottom: var(--spacing-sm);
+  font-weight: var(--font-weight-medium);
+  color: var(--color-text-primary);
+}
+
+.filterInput {
+  width: 100%;
+  padding: var(--spacing-sm);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
+  font-size: var(--font-size-sm);
+  transition: var(--transition-normal);
+}
+
+.filterInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
+}
+
+/* Loading and error states */
+.loadingContainer {
+  text-align: center;
+  padding: var(--spacing-2xl);
+}
+
+.loadingText {
+  font-size: var(--font-size-lg);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-lg);
+}
+
+.loadingSubtext {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm);
+}
+
+.errorTitle {
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-sm);
+}
+
+.errorText {
+  margin-bottom: var(--spacing-lg);
+}
+
+/* Table styles */
+.resultsTitle {
+  margin-bottom: var(--spacing-xl);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
+.tableContainer {
+  overflow-x: auto;
+}
+
+.toolName {
+  font-weight: var(--font-weight-medium);
+}
+
+.toolVersion {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.testMetrics {
+  display: flex;
+  gap: var(--spacing-xs);
+  flex-wrap: wrap;
+}
+
+.testTime {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+  margin-top: var(--spacing-xs);
+}
+
+.environmentName {
+  font-weight: var(--font-weight-medium);
+}
+
+.environmentType {
+  font-size: var(--font-size-sm);
+}
+
+.storedAt {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.viewButton {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+}
+
+.paginationText {
+  color: var(--color-text-secondary);
+  font-weight: var(--font-weight-medium);
+}
+
+/* Modal styles */
+.modalHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-xl);
+}
+
+.modalCloseButton {
+  background-color: var(--color-gray-500);
+  color: white;
+  border: none;
+  border-radius: 50%;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--font-size-lg);
+  font-weight: bold;
+  transition: var(--transition-normal);
+}
+
+.modalCloseButton:hover {
+  background-color: var(--color-gray-600);
+}
+
+.modalCloseButton:focus {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.overviewSection {
+  margin-bottom: var(--spacing-lg);
+}
+
+.overviewGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--spacing-lg);
+}
+
+.testsListTitle {
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-primary);
+}
+
+.testsListContainer {
+  max-height: 400px;
+  overflow: auto;
+}
+
+.testItem {
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: var(--spacing-sm);
+}
+
+.testItemContent {
+  flex: 1;
+}
+
+.testItemTitle {
+  font-weight: var(--font-weight-medium);
+  margin-bottom: var(--spacing-xs);
+}
+
+.testItemPath {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.testItemMeta {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+}
+
+.testItemDuration {
+  font-size: var(--font-size-xs);
+  color: var(--color-text-secondary);
+}
+
+.testItemError {
+  margin-top: var(--spacing-sm);
+}

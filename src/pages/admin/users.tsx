@@ -9,6 +9,9 @@ import Header from '../../components/Header';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../utils/logger';
 import { UserWithRoles } from '../../types/user';
+import styles from '../../styles/AdminUsers.module.css';
+import sharedButtons from '../../styles/shared/buttons.module.css';
+import sharedAlerts from '../../styles/shared/alerts.module.css';
 
 const UserManagement: NextPage = () => {
   const { keycloak, isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
@@ -120,36 +123,18 @@ const UserManagement: NextPage = () => {
 
       <Header />
 
-      <main id="main-content" className="container" style={{ padding: '2rem' }}>
+      <main id="main-content" className={`container ${styles.mainContent}`}>
         <h1 id="page-title">User Management</h1>
         <p>Manage user roles and permissions</p>
 
         {error && (
-          <div
-            id="error-message"
-            style={{
-              padding: '1rem',
-              backgroundColor: '#f8d7da',
-              color: '#721c24',
-              borderRadius: '0.25rem',
-              marginBottom: '1rem',
-            }}
-          >
+          <div id="error-message" className={sharedAlerts.errorMessage}>
             {error}
           </div>
         )}
 
         {successMessage && (
-          <div
-            id="success-message"
-            style={{
-              padding: '1rem',
-              backgroundColor: '#d4edda',
-              color: '#155724',
-              borderRadius: '0.25rem',
-              marginBottom: '1rem',
-            }}
-          >
+          <div id="success-message" className={sharedAlerts.successMessage}>
             {successMessage}
           </div>
         )}
@@ -169,75 +154,38 @@ const UserManagement: NextPage = () => {
               role="table"
               aria-labelledby="users-table-caption"
               aria-describedby="users-table-description"
-              style={{
-                width: '100%',
-                borderCollapse: 'collapse',
-                marginTop: '1rem',
-                border: '1px solid #ddd',
-              }}
+              className={styles.usersTable}
             >
               <caption id="users-table-description" className="sr-only">
                 Table showing all registered users with their email, name, assigned roles, and
                 available actions. Use Tab to navigate between table cells and buttons.
               </caption>
               <thead>
-                <tr style={{ backgroundColor: '#f2f2f2' }}>
-                  <th
-                    scope="col"
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'left',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
+                <tr className={styles.tableHeader}>
+                  <th scope="col" className={styles.tableHeaderCell}>
                     Email
                   </th>
-                  <th
-                    scope="col"
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'left',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
+                  <th scope="col" className={styles.tableHeaderCell}>
                     Name
                   </th>
-                  <th
-                    scope="col"
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'left',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
+                  <th scope="col" className={styles.tableHeaderCell}>
                     Roles
                   </th>
-                  <th
-                    scope="col"
-                    style={{
-                      padding: '0.75rem',
-                      textAlign: 'center',
-                      borderBottom: '2px solid #ddd',
-                    }}
-                  >
+                  <th scope="col" className={styles.tableHeaderCellCenter}>
                     Actions
                   </th>
                 </tr>
               </thead>
               <tbody>
                 {users.map(user => (
-                  <tr
-                    key={user.id}
-                    id={`user-row-${user.id}`}
-                    style={{ borderBottom: '1px solid #ddd' }}
-                  >
-                    <td style={{ padding: '0.75rem' }}>{user.email}</td>
-                    <td style={{ padding: '0.75rem' }}>
+                  <tr key={user.id} id={`user-row-${user.id}`} className={styles.tableRow}>
+                    <td className={styles.tableCell}>{user.email}</td>
+                    <td className={styles.tableCell}>
                       <span>
                         {user.firstName || ''} {user.lastName || ''}
                       </span>
                     </td>
-                    <td style={{ padding: '0.75rem' }}>
+                    <td className={styles.tableCell}>
                       <div role="list" aria-label="User roles">
                         {user.roles.length > 0 ? (
                           user.roles.map(role => (
@@ -245,7 +193,7 @@ const UserManagement: NextPage = () => {
                               key={`${user.id}-${role}`}
                               id={`user-role-${user.id}-${role.toLowerCase()}`}
                               role="listitem"
-                              style={{ display: 'inline-block', marginRight: '0.5rem' }}
+                              className={styles.roleTag}
                             >
                               {role}
                             </span>
@@ -255,18 +203,11 @@ const UserManagement: NextPage = () => {
                         )}
                       </div>
                     </td>
-                    <td style={{ padding: '0.75rem', textAlign: 'center' }}>
+                    <td className={styles.tableCellCenter}>
                       {user.isMaintainer ? (
                         <button
                           onClick={() => updateUserRole(user.id, false)}
-                          style={{
-                            backgroundColor: '#c82333',
-                            color: 'white',
-                            border: 'none',
-                            padding: '0.375rem 0.75rem',
-                            borderRadius: '0.25rem',
-                            cursor: 'pointer',
-                          }}
+                          className={sharedButtons.revokeButton}
                           tabIndex={0}
                           aria-label={`Revoke maintainer role from ${user.email}`}
                           aria-describedby={`user-role-maintainer-${user.id}`}
@@ -276,14 +217,7 @@ const UserManagement: NextPage = () => {
                       ) : (
                         <button
                           onClick={() => updateUserRole(user.id, true)}
-                          style={{
-                            backgroundColor: '#218838',
-                            color: 'white',
-                            border: 'none',
-                            padding: '0.375rem 0.75rem',
-                            borderRadius: '0.25rem',
-                            cursor: 'pointer',
-                          }}
+                          className={sharedButtons.grantButton}
                           tabIndex={0}
                           aria-label={`Grant maintainer role to ${user.email}`}
                           aria-describedby={`user-role-maintainer-${user.id}`}
@@ -301,9 +235,7 @@ const UserManagement: NextPage = () => {
               </tbody>
             </table>
 
-            {users.length === 0 && (
-              <div style={{ textAlign: 'center', marginTop: '2rem' }}>No users found</div>
-            )}
+            {users.length === 0 && <div className={styles.noUsers}>No users found</div>}
           </div>
         )}
       </main>

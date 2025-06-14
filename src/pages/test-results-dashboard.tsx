@@ -6,6 +6,7 @@ import withAuth from '../auth/withAuth';
 import { UserRole } from '../auth/keycloak';
 import { useAuth } from '../auth/KeycloakProvider';
 import { TestReport, TestReportsResponse, DashboardFilters } from '../types/dashboard';
+import styles from '../styles/TestResultsDashboard.module.css';
 
 const TestResultsDashboard: NextPage = () => {
   const { token } = useAuth();
@@ -126,102 +127,55 @@ const TestResultsDashboard: NextPage = () => {
       </Head>
       <Header />
 
-      <main
-        role="main"
-        id="main-content"
-        className="test-dashboard"
-        style={{ padding: '2rem', maxWidth: '1200px', margin: '0 auto' }}
-      >
-        <div style={{ marginBottom: '2rem' }}>
-          <h1
-            style={{
-              marginBottom: '0.5rem',
-              background: 'linear-gradient(135deg, #007bff, #0056b3)',
-              backgroundClip: 'text',
-              WebkitBackgroundClip: 'text',
-              WebkitTextFillColor: 'transparent',
-              fontSize: '2.5rem',
-              fontWeight: '700',
-              textAlign: 'center',
-              color: '#343a40',
-            }}
-          >
-            🧪 Test Results Dashboard
-          </h1>
-          <p style={{ color: '#6c757d', fontSize: '1.1rem', textAlign: 'center' }}>
-            Monitor and analyze your CTRF test execution results
-          </p>
+      <main role="main" id="main-content" className={`test-dashboard ${styles.mainContent}`}>
+        <div className={styles.header}>
+          <h1 className={styles.title}>🧪 Test Results Dashboard</h1>
+          <p className={styles.subtitle}>Monitor and analyze your CTRF test execution results</p>
         </div>
         {/* Summary Statistics */}
         <div className="card">
-          <h2 style={{ marginBottom: '1.5rem', color: '#343a40' }}>📊 Overview</h2>
+          <h2 className={styles.overviewTitle}>📊 Overview</h2>
           <div className="test-stats-grid">
-            <div className="test-stat-card" style={{ backgroundColor: '#f8f9fa' }}>
-              <div className="test-stat-number" style={{ color: '#495057' }}>
+            <div className={`test-stat-card ${styles.statCardGray}`}>
+              <div className={`test-stat-number ${styles.statNumberGray}`}>
                 {summaryStats.tests}
               </div>
-              <div className="test-stat-label" style={{ color: '#6c757d' }}>
-                Total Tests
-              </div>
+              <div className={`test-stat-label ${styles.statLabelGray}`}>Total Tests</div>
             </div>
-            <div className="test-stat-card" style={{ backgroundColor: '#d4edda' }}>
-              <div className="test-stat-number" style={{ color: '#155724' }}>
+            <div className={`test-stat-card ${styles.statCardGreen}`}>
+              <div className={`test-stat-number ${styles.statNumberGreen}`}>
                 {summaryStats.passed}
               </div>
-              <div className="test-stat-label" style={{ color: '#155724' }}>
-                Passed
-              </div>
+              <div className={`test-stat-label ${styles.statLabelGreen}`}>Passed</div>
             </div>
-            <div className="test-stat-card" style={{ backgroundColor: '#f8d7da' }}>
-              <div className="test-stat-number" style={{ color: '#721c24' }}>
+            <div className={`test-stat-card ${styles.statCardRed}`}>
+              <div className={`test-stat-number ${styles.statNumberRed}`}>
                 {summaryStats.failed}
               </div>
-              <div className="test-stat-label" style={{ color: '#721c24' }}>
-                Failed
-              </div>
+              <div className={`test-stat-label ${styles.statLabelRed}`}>Failed</div>
             </div>
-            <div className="test-stat-card" style={{ backgroundColor: '#fff3cd' }}>
-              <div className="test-stat-number" style={{ color: '#856404' }}>
+            <div className={`test-stat-card ${styles.statCardYellow}`}>
+              <div className={`test-stat-number ${styles.statNumberYellow}`}>
                 {summaryStats.skipped}
               </div>
-              <div className="test-stat-label" style={{ color: '#856404' }}>
-                Skipped
-              </div>
+              <div className={`test-stat-label ${styles.statLabelYellow}`}>Skipped</div>
             </div>
-            <div className="test-stat-card" style={{ backgroundColor: '#d1ecf1' }}>
-              <div className="test-stat-number" style={{ color: '#0c5460' }}>
-                {reports.length}
-              </div>
-              <div className="test-stat-label" style={{ color: '#0c5460' }}>
-                Reports
-              </div>
+            <div className={`test-stat-card ${styles.statCardBlue}`}>
+              <div className={`test-stat-number ${styles.statNumberBlue}`}>{reports.length}</div>
+              <div className={`test-stat-label ${styles.statLabelBlue}`}>Reports</div>
             </div>
           </div>
         </div>{' '}
         {/* Filters */}
         <div className="card test-filters">
-          <h3 style={{ marginBottom: '1rem', color: '#343a40' }}>🔍 Filters</h3>
-          <div
-            style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-              gap: '1rem',
-            }}
-          >
+          <h3 className={styles.filtersTitle}>🔍 Filters</h3>
+          <div className={styles.filtersGrid}>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Status:
-              </label>
+              <label className={styles.filterLabel}>Status:</label>
               <select
                 value={filters.status}
                 onChange={e => handleFilterChange('status', e.target.value)}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
+                className={styles.filterInput}
               >
                 <option value="">All Statuses</option>
                 <option value="passed">Passed</option>
@@ -231,55 +185,31 @@ const TestResultsDashboard: NextPage = () => {
               </select>
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Tool:
-              </label>
+              <label className={styles.filterLabel}>Tool:</label>
               <input
                 type="text"
                 value={filters.tool}
                 onChange={e => handleFilterChange('tool', e.target.value)}
                 placeholder="e.g., Jest, Cypress, Playwright"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
+                className={styles.filterInput}
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Environment:
-              </label>
+              <label className={styles.filterLabel}>Environment:</label>
               <input
                 type="text"
                 value={filters.environment}
                 onChange={e => handleFilterChange('environment', e.target.value)}
                 placeholder="e.g., staging, production"
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
+                className={styles.filterInput}
               />
             </div>
             <div>
-              <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                Per Page:
-              </label>
+              <label className={styles.filterLabel}>Per Page:</label>
               <select
                 value={filters.size}
                 onChange={e => handleFilterChange('size', parseInt(e.target.value))}
-                style={{
-                  width: '100%',
-                  padding: '8px',
-                  border: '1px solid #ddd',
-                  borderRadius: '4px',
-                  fontSize: '14px',
-                }}
+                className={styles.filterInput}
               >
                 <option value={5}>5</option>
                 <option value={10}>10</option>
@@ -291,30 +221,16 @@ const TestResultsDashboard: NextPage = () => {
         </div>{' '}
         {/* Loading and Error States */}
         {loading && (
-          <div
-            className="card"
-            role="status"
-            aria-live="polite"
-            style={{ textAlign: 'center', padding: '2rem' }}
-          >
+          <div className={`card ${styles.loadingContainer}`} role="status" aria-live="polite">
             <div className="loading-spinner"></div>
-            <div
-              className="loading-text"
-              style={{ fontSize: '1.2rem', color: '#6c757d', marginTop: '1rem' }}
-            >
-              Loading test reports...
-            </div>
-            <div className="loading-subtext" style={{ color: '#6c757d', fontSize: '0.9rem' }}>
-              Please wait while we fetch the latest data
-            </div>
+            <div className={styles.loadingText}>Loading test reports...</div>
+            <div className={styles.loadingSubtext}>Please wait while we fetch the latest data</div>
           </div>
         )}
         {error && (
           <div className="error-card" role="alert" aria-live="assertive">
-            <h2 style={{ fontWeight: '500', marginBottom: '0.5rem' }}>
-              ❌ Error loading test reports
-            </h2>
-            <p style={{ marginBottom: '1rem' }}>{error}</p>
+            <h2 className={styles.errorTitle}>❌ Error loading test reports</h2>
+            <p className={styles.errorText}>{error}</p>
             <button
               onClick={fetchReports}
               className="refresh-button"
@@ -328,74 +244,59 @@ const TestResultsDashboard: NextPage = () => {
         {!loading && !error && (
           <section aria-labelledby="overview-heading">
             <div className="card">
-              <h2 id="overview-heading" style={{ marginBottom: '1.5rem', color: '#343a40' }}>
+              <h2 id="overview-heading" className={styles.overviewTitle}>
                 📊 Overview
               </h2>
               <div className="test-stats-grid" role="group" aria-label="Test statistics summary">
                 <div
-                  className="test-stat-card"
-                  style={{ backgroundColor: '#f8f9fa' }}
+                  className={`test-stat-card ${styles.statCardGray}`}
                   role="img"
                   aria-label={`Total tests: ${summaryStats.tests}`}
                 >
-                  <div className="test-stat-number" style={{ color: '#495057' }}>
+                  <div className={`test-stat-number ${styles.statNumberGray}`}>
                     {summaryStats.tests}
                   </div>
-                  <div className="test-stat-label" style={{ color: '#6c757d' }}>
-                    Total Tests
-                  </div>
+                  <div className={`test-stat-label ${styles.statLabelGray}`}>Total Tests</div>
                 </div>
                 <div
-                  className="test-stat-card"
-                  style={{ backgroundColor: '#d4edda' }}
+                  className={`test-stat-card ${styles.statCardGreen}`}
                   role="img"
                   aria-label={`Passed tests: ${summaryStats.passed}`}
                 >
-                  <div className="test-stat-number" style={{ color: '#155724' }}>
+                  <div className={`test-stat-number ${styles.statNumberGreen}`}>
                     {summaryStats.passed}
                   </div>
-                  <div className="test-stat-label" style={{ color: '#155724' }}>
-                    Passed
-                  </div>
+                  <div className={`test-stat-label ${styles.statLabelGreen}`}>Passed</div>
                 </div>
                 <div
-                  className="test-stat-card"
-                  style={{ backgroundColor: '#f8d7da' }}
+                  className={`test-stat-card ${styles.statCardRed}`}
                   role="img"
                   aria-label={`Failed tests: ${summaryStats.failed}`}
                 >
-                  <div className="test-stat-number" style={{ color: '#721c24' }}>
+                  <div className={`test-stat-number ${styles.statNumberRed}`}>
                     {summaryStats.failed}
                   </div>
-                  <div className="test-stat-label" style={{ color: '#721c24' }}>
-                    Failed
-                  </div>
+                  <div className={`test-stat-label ${styles.statLabelRed}`}>Failed</div>
                 </div>
                 <div
-                  className="test-stat-card"
-                  style={{ backgroundColor: '#fff3cd' }}
+                  className={`test-stat-card ${styles.statCardYellow}`}
                   role="img"
                   aria-label={`Skipped tests: ${summaryStats.skipped}`}
                 >
-                  <div className="test-stat-number" style={{ color: '#856404' }}>
+                  <div className={`test-stat-number ${styles.statNumberYellow}`}>
                     {summaryStats.skipped}
                   </div>
-                  <div className="test-stat-label" style={{ color: '#856404' }}>
-                    Skipped
-                  </div>
+                  <div className={`test-stat-label ${styles.statLabelYellow}`}>Skipped</div>
                 </div>
                 <div
-                  className="test-stat-card"
-                  style={{ backgroundColor: '#d1ecf1' }}
+                  className={`test-stat-card ${styles.statCardBlue}`}
                   role="img"
                   aria-label={`Total reports: ${reports.length}`}
                 >
-                  <div className="test-stat-number" style={{ color: '#0c5460' }}>
+                  <div className={`test-stat-number ${styles.statNumberBlue}`}>
                     {reports.length}
                   </div>
-                  <div className="test-stat-label" style={{ color: '#0c5460' }}>
-                    Reports
-                  </div>
+                  <div className={`test-stat-label ${styles.statLabelBlue}`}>Reports</div>
                 </div>
               </div>
             </div>
@@ -405,32 +306,18 @@ const TestResultsDashboard: NextPage = () => {
         {!loading && !error && (
           <section aria-labelledby="filters-heading">
             <div className="card test-filters">
-              <h2 id="filters-heading" style={{ marginBottom: '1rem', color: '#343a40' }}>
+              <h2 id="filters-heading" className={styles.filtersTitle}>
                 🔍 Filters
               </h2>
               <fieldset>
                 <legend className="sr-only">Filter test reports</legend>
-                <div
-                  style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
-                    gap: '1rem',
-                  }}
-                >
+                <div className={styles.filtersGrid}>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                      Status:
-                    </label>
+                    <label className={styles.filterLabel}>Status:</label>
                     <select
                       value={filters.status}
                       onChange={e => handleFilterChange('status', e.target.value)}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                      }}
+                      className={styles.filterInput}
                     >
                       <option value="">All Statuses</option>
                       <option value="passed">Passed</option>
@@ -440,55 +327,31 @@ const TestResultsDashboard: NextPage = () => {
                     </select>
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                      Tool:
-                    </label>
+                    <label className={styles.filterLabel}>Tool:</label>
                     <input
                       type="text"
                       value={filters.tool}
                       onChange={e => handleFilterChange('tool', e.target.value)}
                       placeholder="e.g., Jest, Cypress, Playwright"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                      }}
+                      className={styles.filterInput}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                      Environment:
-                    </label>
+                    <label className={styles.filterLabel}>Environment:</label>
                     <input
                       type="text"
                       value={filters.environment}
                       onChange={e => handleFilterChange('environment', e.target.value)}
                       placeholder="e.g., staging, production"
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                      }}
+                      className={styles.filterInput}
                     />
                   </div>
                   <div>
-                    <label style={{ display: 'block', marginBottom: '0.5rem', fontWeight: '500' }}>
-                      Per Page:
-                    </label>
+                    <label className={styles.filterLabel}>Per Page:</label>
                     <select
                       value={filters.size}
                       onChange={e => handleFilterChange('size', parseInt(e.target.value))}
-                      style={{
-                        width: '100%',
-                        padding: '8px',
-                        border: '1px solid #ddd',
-                        borderRadius: '4px',
-                        fontSize: '14px',
-                      }}
+                      className={styles.filterInput}
                     >
                       <option value={5}>5</option>
                       <option value={10}>10</option>
@@ -505,11 +368,11 @@ const TestResultsDashboard: NextPage = () => {
         {!loading && !error && reports.length > 0 && (
           <section aria-labelledby="results-heading">
             <div className="card">
-              <h2 id="results-heading" style={{ marginBottom: '1.5rem', color: '#343a40' }}>
+              <h2 id="results-heading" className={styles.resultsTitle}>
                 📋 Test Reports
               </h2>
               <div
-                style={{ overflowX: 'auto' }}
+                className={styles.tableContainer}
                 role="region"
                 aria-labelledby="results-heading"
                 tabIndex={0}
@@ -557,14 +420,14 @@ const TestResultsDashboard: NextPage = () => {
                         >
                           <td headers="tool-header">
                             <div
-                              style={{ fontWeight: '500' }}
+                              className={styles.toolName}
                               aria-label={`Tool: ${report.results.tool.name}`}
                             >
                               {report.results.tool.name}
                             </div>
                             {report.results.tool.version && (
                               <div
-                                style={{ fontSize: '12px', color: '#6c757d' }}
+                                className={styles.toolVersion}
                                 aria-label={`Version: ${report.results.tool.version}`}
                               >
                                 v{report.results.tool.version}
@@ -573,7 +436,7 @@ const TestResultsDashboard: NextPage = () => {
                           </td>
                           <td headers="tests-header">
                             <div
-                              style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}
+                              className={styles.testMetrics}
                               role="group"
                               aria-label={`Test results: ${report.results.summary.passed} passed, ${report.results.summary.failed} failed, ${report.results.summary.skipped} skipped`}
                             >
@@ -601,7 +464,7 @@ const TestResultsDashboard: NextPage = () => {
                               )}
                             </div>
                             <div
-                              style={{ fontSize: '12px', color: '#6c757d', marginTop: '4px' }}
+                              className={styles.testTime}
                               aria-label={`Total tests: ${report.results.summary.tests}`}
                             >
                               {report.results.summary.tests} total
@@ -617,7 +480,7 @@ const TestResultsDashboard: NextPage = () => {
                           </td>
                           <td headers="duration-header">
                             <div
-                              style={{ fontWeight: '500' }}
+                              className={styles.environmentName}
                               aria-label={`Test duration: ${formatDuration(duration)}`}
                             >
                               {formatDuration(duration)}
@@ -625,7 +488,7 @@ const TestResultsDashboard: NextPage = () => {
                           </td>
                           <td headers="environment-header">
                             <div
-                              style={{ fontSize: '14px' }}
+                              className={styles.environmentType}
                               aria-label={`Environment: ${report.results.environment?.testEnvironment || 'Not specified'}`}
                             >
                               {report.results.environment?.testEnvironment || 'N/A'}
@@ -633,7 +496,7 @@ const TestResultsDashboard: NextPage = () => {
                           </td>
                           <td headers="stored-header">
                             <div
-                              style={{ fontSize: '12px', color: '#6c757d' }}
+                              className={styles.storedAt}
                               aria-label={`Stored at: ${formatDate(report.storedAt)}`}
                             >
                               {formatDate(report.storedAt)}
@@ -642,8 +505,7 @@ const TestResultsDashboard: NextPage = () => {
                           <td headers="actions-header">
                             <button
                               onClick={() => setSelectedReport(report)}
-                              className="refresh-button"
-                              style={{ padding: '6px 12px', fontSize: '12px' }}
+                              className={`refresh-button ${styles.viewButton}`}
                               aria-label={`View detailed results for ${report.results.tool.name} test report`}
                               tabIndex={0}
                             >
@@ -668,7 +530,7 @@ const TestResultsDashboard: NextPage = () => {
             >
               Previous
             </button>
-            <span style={{ color: '#6c757d', fontWeight: '500' }}>
+            <span className={styles.paginationText}>
               Page {filters.page} of {Math.ceil(totalReports / filters.size)}
             </span>
             <button
@@ -690,27 +552,11 @@ const TestResultsDashboard: NextPage = () => {
           >
             <div className="focus-trap-sentinel" tabIndex={0}></div>
             <div className="test-modal-content focus-trap">
-              <div
-                style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  alignItems: 'center',
-                  marginBottom: '1.5rem',
-                }}
-              >
+              <div className={styles.modalHeader}>
                 <h2 id="modal-title">🔍 Test Report Details</h2>
                 <button
                   onClick={() => setSelectedReport(null)}
-                  style={{
-                    backgroundColor: '#6c757d',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '50%',
-                    width: '32px',
-                    height: '32px',
-                    cursor: 'pointer',
-                    fontSize: '18px',
-                  }}
+                  className={styles.modalCloseButton}
                   aria-label="Close modal dialog"
                   autoFocus
                 >
@@ -725,18 +571,11 @@ const TestResultsDashboard: NextPage = () => {
 
               {/* Report Overview */}
               <section aria-labelledby="overview-section">
-                <div
-                  style={{
-                    marginBottom: '2rem',
-                    padding: '1rem',
-                    backgroundColor: '#f8f9fa',
-                    borderRadius: '6px',
-                  }}
-                >
+                <div className={styles.overviewSection}>
                   <h3 id="overview-section" style={{ marginBottom: '1rem' }}>
                     Report Overview
                   </h3>
-                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
+                  <div className={styles.overviewGrid}>
                     <div>
                       <strong>Tool:</strong> {selectedReport.results.tool.name}
                       {selectedReport.results.tool.version &&

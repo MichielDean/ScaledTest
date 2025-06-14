@@ -1,0 +1,67 @@
+/* Shared alert and message styles */
+
+.alert {
+  padding: 1rem;
+  border-radius: 0.25rem;
+  margin-bottom: 1rem;
+  border: 1px solid transparent;
+}
+
+.alertError {
+  background-color: #fee2e2;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+
+.alertSuccess {
+  background-color: #dcfce7;
+  color: #16a34a;
+  border-color: #bbf7d0;
+}
+
+.alertWarning {
+  background-color: #fef3c7;
+  color: #d97706;
+  border-color: #fde68a;
+}
+
+.alertInfo {
+  background-color: #dbeafe;
+  color: #2563eb;
+  border-color: #bfdbfe;
+}
+
+/* Legacy compatibility - map to new alert classes */
+.errorMessage {
+  composes: alert alertError;
+}
+
+.successMessage {
+  composes: alert alertSuccess;
+}
+
+.errorAlert {
+  composes: alert alertError;
+}
+
+/* Enhanced error container for dashboard-style errors */
+.errorContainer {
+  composes: alert alertError;
+  text-align: center;
+  padding: 3rem;
+  background-color: #fef2f2;
+  border: 1px solid #fecaca;
+  border-radius: 8px;
+  margin: 2rem 0;
+}
+
+.errorTitle {
+  font-weight: 500;
+  margin-bottom: 0.5rem;
+}
+
+.errorSubtext {
+  color: #dc3545;
+  margin-top: 0.5rem;
+  font-size: 0.9rem;
+}
