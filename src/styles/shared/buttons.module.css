@@ -59,12 +59,12 @@
 }
 
 .buttonSuccess {
-  background-color: #16a34a;
+  background-color: var(--color-success-dark, #15803d);
   color: white;
 }
 
 .buttonSuccess:hover:not(:disabled) {
-  background-color: #15803d;
+  background-color: #134e2a;
 }
 
 .buttonWarning {

@@ -43,7 +43,7 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
   try {
     reqLogger.info('Fetching test suite overview data from OpenSearch');
 
-    // Get OpenSearch health status first
+    // Get OpenSearch health status first (for connection check only)
     const healthStatus = await getOpenSearchHealthStatus();
 
     if (!healthStatus.connected) {
@@ -55,16 +55,7 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
       });
     }
 
-    if (!healthStatus.indexExists) {
-      return res.status(404).json({
-        success: false,
-        error: 'OpenSearch index does not exist',
-        source: 'OpenSearch',
-        details: 'The ctrf-reports index has not been created yet',
-      });
-    }
-
-    // Fetch data from OpenSearch
+    // Fetch data from OpenSearch (index will be auto-created if needed)
     const data = await getTestSuiteOverviewFromOpenSearch();
 
     reqLogger.info(

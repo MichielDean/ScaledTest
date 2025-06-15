@@ -128,13 +128,23 @@ const UserManagement: NextPage = () => {
         <p>Manage user roles and permissions</p>
 
         {error && (
-          <div id="error-message" className={sharedAlerts.errorMessage}>
+          <div
+            id="error-message"
+            className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
+            role="alert"
+            aria-live="polite"
+          >
             {error}
           </div>
         )}
 
         {successMessage && (
-          <div id="success-message" className={sharedAlerts.successMessage}>
+          <div
+            id="success-message"
+            className={`${sharedAlerts.alert} ${sharedAlerts.alertSuccess}`}
+            role="alert"
+            aria-live="polite"
+          >
             {successMessage}
           </div>
         )}

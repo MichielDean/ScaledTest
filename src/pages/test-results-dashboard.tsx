@@ -127,7 +127,7 @@ const TestResultsDashboard: NextPage = () => {
       </Head>
       <Header />
 
-      <main role="main" id="main-content" className={`test-dashboard ${styles.mainContent}`}>
+      <main role="main" id="main-content" className={styles.mainContent}>
         <div className={styles.header}>
           <h1 className={styles.title}>🧪 Test Results Dashboard</h1>
           <p className={styles.subtitle}>Monitor and analyze your CTRF test execution results</p>

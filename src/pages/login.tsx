@@ -127,7 +127,7 @@ const Login: NextPage = () => {
               id="loginError"
               role="alert"
               aria-live="polite"
-              className={sharedAlerts.errorAlert}
+              className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
               data-testid="login-error"
             >
               {error}

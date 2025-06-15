@@ -72,33 +72,50 @@ const setupPlaywright = async () => {
   // Add helper functions that some tests might expect
   global.jestPlaywright = {
     resetPage: async () => {
-      if (global.page) {
-        await global.page.close();
+      try {
+        if (global.page) {
+          await global.page.close().catch(() => {});
+        }
+        global.page = await global.context.newPage();
+      } catch (error) {
+        console.warn('Error resetting page:', error.message);
+        // Fallback: recreate the entire context
+        await global.jestPlaywright.resetContext();
       }
-      global.page = await global.context.newPage();
     },
     resetContext: async (newOptions = {}) => {
-      if (global.context) {
-        await global.context.close();
+      try {
+        if (global.context) {
+          await global.context.close().catch(() => {});
+        }
+        global.context = await global.browser.newContext({
+          ...config.contextOptions,
+          ...newOptions,
+        });
+        global.page = await global.context.newPage();
+      } catch (error) {
+        console.warn('Error resetting context:', error.message);
+        // Fallback: recreate the entire browser
+        await global.jestPlaywright.resetBrowser(newOptions);
       }
-      global.context = await global.browser.newContext({
-        ...config.contextOptions,
-        ...newOptions,
-      });
-      global.page = await global.context.newPage();
     },
     resetBrowser: async (newOptions = {}) => {
-      if (global.browser) {
-        await global.browser.close();
+      try {
+        if (global.browser) {
+          await global.browser.close().catch(() => {});
+        }
+        global.browser = await chromium.launch({
+          ...config.launchOptions,
+        });
+        global.context = await global.browser.newContext({
+          ...config.contextOptions,
+          ...newOptions,
+        });
+        global.page = await global.context.newPage();
+      } catch (error) {
+        console.error('Error resetting browser:', error.message);
+        throw error;
       }
-      global.browser = await chromium.launch({
-        ...config.launchOptions,
-      });
-      global.context = await global.browser.newContext({
-        ...config.contextOptions,
-        ...newOptions,
-      });
-      global.page = await global.context.newPage();
     },
   };
 };
@@ -106,15 +123,34 @@ const setupPlaywright = async () => {
 // Global teardown function to run after each test file
 const teardownPlaywright = async () => {
   // Clean up Playwright resources
-  if (global.page) {
-    await global.page.close().catch(() => {});
+  try {
+    if (global.page) {
+      await global.page.close().catch(() => {});
+    }
+  } catch (error) {
+    console.warn('Error closing page:', error.message);
   }
-  if (global.context) {
-    await global.context.close().catch(() => {});
+
+  try {
+    if (global.context) {
+      await global.context.close().catch(() => {});
+    }
+  } catch (error) {
+    console.warn('Error closing context:', error.message);
   }
-  if (global.browser) {
-    await global.browser.close().catch(() => {});
+
+  try {
+    if (global.browser) {
+      await global.browser.close().catch(() => {});
+    }
+  } catch (error) {
+    console.warn('Error closing browser:', error.message);
   }
+
+  // Clear globals
+  global.page = null;
+  global.context = null;
+  global.browser = null;
 };
 
 global.beforeAll(async () => {
@@ -128,7 +164,18 @@ global.afterAll(async () => {
 
 global.beforeEach(async () => {
   // Reset page for each test to ensure clean state
-  if (global.jestPlaywright && global.jestPlaywright.resetPage) {
-    await global.jestPlaywright.resetPage();
+  try {
+    if (global.jestPlaywright && global.jestPlaywright.resetPage) {
+      await global.jestPlaywright.resetPage();
+    }
+  } catch (error) {
+    console.warn('Error in beforeEach reset:', error.message);
+    // Try to reinitialize if reset fails
+    try {
+      await setupPlaywright();
+    } catch (setupError) {
+      console.error('Failed to reinitialize Playwright in beforeEach:', setupError.message);
+      throw setupError;
+    }
   }
 });

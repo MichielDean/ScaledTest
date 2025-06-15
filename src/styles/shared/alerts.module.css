@@ -31,19 +31,6 @@
   border-color: #bfdbfe;
 }
 
-/* Legacy compatibility - map to new alert classes */
-.errorMessage {
-  composes: alert alertError;
-}
-
-.successMessage {
-  composes: alert alertSuccess;
-}
-
-.errorAlert {
-  composes: alert alertError;
-}
-
 /* Enhanced error container for dashboard-style errors */
 .errorContainer {
   composes: alert alertError;

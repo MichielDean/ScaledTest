@@ -157,7 +157,7 @@ const Register: NextPage = () => {
               id="registerError"
               role="alert"
               aria-live="polite"
-              className={sharedAlerts.errorAlert}
+              className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
             >
               {error}
             </div>
