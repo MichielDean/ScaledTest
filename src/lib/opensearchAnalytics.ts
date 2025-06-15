@@ -198,7 +198,8 @@ export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOve
 
 /**
  * Get test trends data from OpenSearch
- * Shows test results over time using the storedAt timestamp
+ * Shows test results over time using CTRF summary.start timestamp (actual test execution time)
+ * Data is aggregated by hour to show multiple results per day on the same line graph
  */
 export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<TestTrendsData[]> {
   return withIndexEnsured(async () => {
@@ -211,7 +212,7 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
           size: 0,
           query: {
             range: {
-              storedAt: {
+              'results.summary.start': {
                 gte: `now-${days}d/d`,
               },
             },
@@ -219,9 +220,9 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
           aggs: {
             trends: {
               date_histogram: {
-                field: 'storedAt',
-                calendar_interval: 'day',
-                format: 'yyyy-MM-dd',
+                field: 'results.summary.start',
+                calendar_interval: 'hour',
+                format: 'yyyy-MM-dd HH:mm',
               },
               aggs: {
                 total_tests: {
@@ -253,17 +254,20 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
       const buckets =
         (response.body.aggregations?.trends as { buckets: DateBucket[] })?.buckets || [];
 
-      const data: TestTrendsData[] = buckets.map((bucket: DateBucket) => ({
-        date: bucket.key_as_string,
-        total: bucket.total_tests?.value || 0,
-        passed: bucket.passed_tests?.value || 0,
-        failed: bucket.failed_tests?.value || 0,
-        skipped: bucket.skipped_tests?.value || 0,
-        passRate:
-          bucket.total_tests?.value > 0
-            ? ((bucket.passed_tests?.value || 0) / bucket.total_tests.value) * 100
-            : 0,
-      }));
+      // Filter out buckets with no actual test data to avoid empty dots on charts
+      const data: TestTrendsData[] = buckets
+        .filter((bucket: DateBucket) => (bucket.total_tests?.value || 0) > 0)
+        .map((bucket: DateBucket) => ({
+          date: bucket.key_as_string,
+          total: bucket.total_tests?.value || 0,
+          passed: bucket.passed_tests?.value || 0,
+          failed: bucket.failed_tests?.value || 0,
+          skipped: bucket.skipped_tests?.value || 0,
+          passRate:
+            bucket.total_tests?.value > 0
+              ? ((bucket.passed_tests?.value || 0) / bucket.total_tests.value) * 100
+              : 0,
+        }));
 
       logger.info(
         { dataPoints: data.length },

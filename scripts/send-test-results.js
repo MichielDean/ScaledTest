@@ -103,22 +103,33 @@ function enhanceReport(reportData) {
 
 /**
  * Sends CTRF test results to the application's API
+ * @param {Object} customReportData - Optional custom report data to send instead of reading from file
  */
-async function sendTestResults() {
-  const ctrfReportPath = path.join(process.cwd(), 'ctrf-report.json');
+async function sendTestResults(customReportData = null) {
+  let reportData;
 
-  // Check if the CTRF report exists
-  if (!fs.existsSync(ctrfReportPath)) {
-    console.error('❌ CTRF report not found at:', ctrfReportPath);
-    console.error(
-      'Make sure tests have been run and the jest-ctrf-json-reporter has generated the report.'
-    );
-    process.exit(1);
+  if (customReportData) {
+    // Use provided custom data
+    reportData = customReportData;
+    console.log('📊 Using provided demo data...');
+  } else {
+    // Read from file as before
+    const ctrfReportPath = path.join(process.cwd(), 'ctrf-report.json');
+
+    // Check if the CTRF report exists
+    if (!fs.existsSync(ctrfReportPath)) {
+      console.error('❌ CTRF report not found at:', ctrfReportPath);
+      console.error(
+        'Make sure tests have been run and the jest-ctrf-json-reporter has generated the report.'
+      );
+      process.exit(1);
+    }
+
+    // Read and enhance the CTRF report
+    reportData = JSON.parse(fs.readFileSync(ctrfReportPath, 'utf8'));
   }
 
   try {
-    // Read and enhance the CTRF report
-    const reportData = JSON.parse(fs.readFileSync(ctrfReportPath, 'utf8'));
     const enhancedReport = enhanceReport(reportData);
 
     console.log('📊 Preparing to send test results to API...');
@@ -231,4 +242,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { sendTestResults };
+module.exports = { sendTestResults, enhanceReport };

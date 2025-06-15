@@ -117,7 +117,7 @@ describe('Analytics API Endpoints', () => {
   describe('Test Trends API (/api/analytics/test-trends)', () => {
     const mockTestTrendsData = [
       {
-        date: '2025-06-08',
+        date: '2025-06-08 10:00',
         total: 100,
         passed: 90,
         failed: 8,
@@ -125,7 +125,7 @@ describe('Analytics API Endpoints', () => {
         passRate: 90.0,
       },
       {
-        date: '2025-06-07',
+        date: '2025-06-08 16:30',
         total: 95,
         passed: 85,
         failed: 7,

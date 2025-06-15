@@ -19,7 +19,11 @@ export const generateMockTestTrendsData = (days: number = 7): TestTrendsData[] =
     const passRate = Math.round((passed / total) * 100);
 
     data.push({
-      date: date.toISOString().split('T')[0], // YYYY-MM-DD format
+      date:
+        date.toISOString().split('T')[0] +
+        ' ' +
+        String(Math.floor(Math.random() * 24)).padStart(2, '0') +
+        ':00', // YYYY-MM-DD HH:MM format for hourly data
       total,
       passed,
       failed,
@@ -46,7 +50,7 @@ export const generateEmptyTestTrendsData = (): TestTrendsData[] => {
 export const generateSingleDataPoint = (): TestTrendsData[] => {
   return [
     {
-      date: '2024-01-15',
+      date: '2024-01-15 14:00',
       total: 75,
       passed: 65,
       failed: 8,
@@ -64,7 +68,7 @@ export const generateSingleDataPoint = (): TestTrendsData[] => {
 export const generateZeroValueData = (): TestTrendsData[] => {
   return [
     {
-      date: '2024-01-15',
+      date: '2024-01-15 09:00',
       total: 0,
       passed: 0,
       failed: 0,
@@ -74,7 +78,7 @@ export const generateZeroValueData = (): TestTrendsData[] => {
       skipRate: 0,
     },
     {
-      date: '2024-01-16',
+      date: '2024-01-16 10:00',
       total: 0,
       passed: 0,
       failed: 0,
@@ -92,7 +96,7 @@ export const generateZeroValueData = (): TestTrendsData[] => {
 export const generatePerfectPassRateData = (): TestTrendsData[] => {
   return [
     {
-      date: '2024-01-15',
+      date: '2024-01-15 11:00',
       total: 50,
       passed: 50,
       failed: 0,
@@ -102,7 +106,7 @@ export const generatePerfectPassRateData = (): TestTrendsData[] => {
       skipRate: 0,
     },
     {
-      date: '2024-01-16',
+      date: '2024-01-16 13:30',
       total: 60,
       passed: 60,
       failed: 0,
@@ -120,7 +124,7 @@ export const generatePerfectPassRateData = (): TestTrendsData[] => {
 export const generateVariedTestTrendsData = (): TestTrendsData[] => {
   return [
     {
-      date: '2024-01-10',
+      date: '2024-01-10 09:00',
       total: 45,
       passed: 35,
       failed: 8,
@@ -130,7 +134,7 @@ export const generateVariedTestTrendsData = (): TestTrendsData[] => {
       skipRate: 4,
     },
     {
-      date: '2024-01-11',
+      date: '2024-01-10 15:30',
       total: 52,
       passed: 47,
       failed: 3,
@@ -140,7 +144,7 @@ export const generateVariedTestTrendsData = (): TestTrendsData[] => {
       skipRate: 4,
     },
     {
-      date: '2024-01-12',
+      date: '2024-01-11 10:15',
       total: 48,
       passed: 40,
       failed: 6,
@@ -150,7 +154,7 @@ export const generateVariedTestTrendsData = (): TestTrendsData[] => {
       skipRate: 4,
     },
     {
-      date: '2024-01-13',
+      date: '2024-01-11 16:45',
       total: 55,
       passed: 50,
       failed: 4,
@@ -160,7 +164,7 @@ export const generateVariedTestTrendsData = (): TestTrendsData[] => {
       skipRate: 2,
     },
     {
-      date: '2024-01-14',
+      date: '2024-01-12 11:20',
       total: 50,
       passed: 45,
       failed: 3,
