@@ -259,6 +259,13 @@
   margin-bottom: var(--spacing-lg);
 }
 
+.overviewSectionTitle {
+  margin-bottom: var(--spacing-lg);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
+}
+
 .overviewGrid {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -268,20 +275,24 @@
 .testsListTitle {
   margin-bottom: var(--spacing-lg);
   color: var(--color-text-primary);
+  font-size: var(--font-size-xl);
+  font-weight: var(--font-weight-medium);
 }
 
 .testsListContainer {
   max-height: 400px;
   overflow: auto;
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius);
 }
 
-.testItem {
-  padding: var(--spacing-sm);
-  border-bottom: 1px solid var(--color-border);
+.testItemContainer {
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
-  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-sm);
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .testItemContent {
@@ -291,9 +302,10 @@
 .testItemTitle {
   font-weight: var(--font-weight-medium);
   margin-bottom: var(--spacing-xs);
+  color: var(--color-text-primary);
 }
 
-.testItemPath {
+.testItemSuite {
   font-size: var(--font-size-xs);
   color: var(--color-text-secondary);
 }
@@ -309,6 +321,6 @@
   color: var(--color-text-secondary);
 }
 
-.testItemError {
+.testItemTags {
   margin-top: var(--spacing-sm);
 }

@@ -522,7 +522,6 @@ export async function getFlakyTestsFromOpenSearch(): Promise<FlakyTestData[]> {
             totalRuns,
             passed,
             failed,
-            failures: failed, // Alias for backward compatibility
             skipped,
             flakyScore,
             avgDuration: Math.round(avgDuration),

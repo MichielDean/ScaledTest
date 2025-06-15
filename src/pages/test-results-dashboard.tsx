@@ -52,7 +52,7 @@ const TestResultsDashboard: NextPage = () => {
       const data: TestReportsResponse = await response.json();
 
       if (data.success) {
-        setReports(data.reports);
+        setReports(data.data);
         setTotalReports(data.total);
       } else {
         throw new Error('API returned unsuccessful response');
@@ -572,7 +572,7 @@ const TestResultsDashboard: NextPage = () => {
               {/* Report Overview */}
               <section aria-labelledby="overview-section">
                 <div className={styles.overviewSection}>
-                  <h3 id="overview-section" style={{ marginBottom: '1rem' }}>
+                  <h3 id="overview-section" className={styles.overviewSectionTitle}>
                     Report Overview
                   </h3>
                   <div className={styles.overviewGrid}>
@@ -602,38 +602,27 @@ const TestResultsDashboard: NextPage = () => {
                       <strong>Stored:</strong> {formatDate(selectedReport.storedAt)}
                     </div>
                   </div>
-                </div>{' '}
+                </div>
                 {/* Individual Tests */}
                 <div>
-                  <h3 style={{ marginBottom: '1rem', color: '#343a40' }}>
+                  <h3 className={styles.testsListTitle}>
                     Individual Tests ({selectedReport.results.tests.length})
                   </h3>
-                  <div style={{ maxHeight: '400px', overflow: 'auto' }}>
+                  <div className={styles.testsListContainer}>
                     {selectedReport.results.tests.map((test, index) => (
                       <div key={index} className={`test-item ${test.status}`}>
-                        <div
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'flex-start',
-                            marginBottom: '0.5rem',
-                          }}
-                        >
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontWeight: '500', marginBottom: '0.25rem' }}>
-                              {test.name}
-                            </div>
+                        <div className={styles.testItemContainer}>
+                          <div className={styles.testItemContent}>
+                            <div className={styles.testItemTitle}>{test.name}</div>
                             {test.suite && (
-                              <div style={{ fontSize: '12px', color: '#6c757d' }}>
-                                Suite: {test.suite}
-                              </div>
+                              <div className={styles.testItemSuite}>Suite: {test.suite}</div>
                             )}
                           </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '1rem' }}>
+                          <div className={styles.testItemMeta}>
                             <span className={`status-badge status-${test.status}`}>
                               {test.status.toUpperCase()}
                             </span>
-                            <span style={{ fontSize: '12px', color: '#6c757d' }}>
+                            <span className={styles.testItemDuration}>
                               {formatDuration(test.duration)}
                             </span>
                           </div>
@@ -654,7 +643,7 @@ const TestResultsDashboard: NextPage = () => {
                         )}
 
                         {test.tags && test.tags.length > 0 && (
-                          <div style={{ marginTop: '0.5rem' }}>
+                          <div className={styles.testItemTags}>
                             {test.tags.map((tag, tagIndex) => (
                               <span key={tagIndex} className="test-tag">
                                 {tag}
@@ -664,7 +653,7 @@ const TestResultsDashboard: NextPage = () => {
                         )}
                       </div>
                     ))}
-                  </div>{' '}
+                  </div>
                 </div>
               </section>
             </div>
