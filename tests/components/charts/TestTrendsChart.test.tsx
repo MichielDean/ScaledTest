@@ -1,5 +1,5 @@
 import React from 'react';
-import { render, screen, waitFor, fireEvent, within } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import TestTrendsChart from '../../../src/components/charts/TestTrendsChart';
 import {
@@ -15,24 +15,24 @@ import {
 
 // Mock Recharts components for testing
 jest.mock('recharts', () => ({
-  LineChart: ({ children, data }: any) => (
+  LineChart: ({ children, data }: React.PropsWithChildren<{ data: unknown }>) => (
     <div data-testid="line-chart" data-chart-data={JSON.stringify(data)}>
       {children}
     </div>
   ),
-  Line: ({ dataKey, name, stroke }: any) => (
+  Line: ({ dataKey, name, stroke }: { dataKey: string; name: string; stroke: string }) => (
     <div data-testid={`line-${dataKey}`} data-name={name} data-stroke={stroke} />
   ),
-  AreaChart: ({ children, data }: any) => (
+  AreaChart: ({ children, data }: React.PropsWithChildren<{ data: unknown }>) => (
     <div data-testid="area-chart" data-chart-data={JSON.stringify(data)}>
       {children}
     </div>
   ),
-  Area: ({ dataKey, stroke, fill }: any) => (
+  Area: ({ dataKey, stroke, fill }: { dataKey: string; stroke: string; fill: string }) => (
     <div data-testid={`area-${dataKey}`} data-stroke={stroke} data-fill={fill} />
   ),
-  XAxis: ({ dataKey }: any) => <div data-testid="x-axis" data-datakey={dataKey} />,
-  YAxis: ({ yAxisId, label }: any) => (
+  XAxis: ({ dataKey }: { dataKey: string }) => <div data-testid="x-axis" data-datakey={dataKey} />,
+  YAxis: ({ yAxisId, label }: { yAxisId?: string; label?: string | { value: string } }) => (
     <div
       data-testid={`y-axis-${yAxisId || 'default'}`}
       data-label={typeof label === 'object' ? label.value : label}
@@ -41,7 +41,7 @@ jest.mock('recharts', () => ({
   CartesianGrid: () => <div data-testid="cartesian-grid" />,
   Tooltip: () => <div data-testid="tooltip" />,
   Legend: () => <div data-testid="legend" />,
-  ResponsiveContainer: ({ children }: any) => (
+  ResponsiveContainer: ({ children }: React.PropsWithChildren) => (
     <div data-testid="responsive-container">{children}</div>
   ),
 }));

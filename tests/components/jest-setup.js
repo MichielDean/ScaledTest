@@ -1,3 +1,4 @@
+/* eslint-env jest */
 // Jest setup for components - add polyfills and globals needed for jsdom environment
 
 // Add setImmediate polyfill for jsdom environment

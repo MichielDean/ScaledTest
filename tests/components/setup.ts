@@ -36,8 +36,7 @@ jest.mock('next/link', () => {
   }: {
     children: React.ReactNode;
     href: string;
-    [key: string]: any;
-  }) {
+  } & Omit<React.AnchorHTMLAttributes<HTMLAnchorElement>, 'href'>) {
     return React.createElement('a', { href, ...props }, children);
   };
 });
