@@ -130,7 +130,8 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
  * GET /api/analytics/test-trends?days=30
  *
  * This endpoint provides test result trends over time from the OpenSearch 'ctrf-reports' index
- * Uses the storedAt timestamp to create daily aggregations
+ * Uses CTRF summary.start timestamp to create hourly aggregations based on actual test execution time
+ * This allows multiple test results on the same day to be displayed separately on the line graph
  * All data is sourced directly from OpenSearch - no local database is used
  */
 

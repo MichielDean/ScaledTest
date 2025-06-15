@@ -18,6 +18,7 @@
     "test:integration": "jest --selectProjects Integration",
     "test:system": "jest --selectProjects System",
     "send-test-results": "node scripts/send-test-results.js",
+    "demo-data": "node scripts/generate-demo-data.js",
     "generate-ctrf:types": "npx json2ts -i src/schemas/ctrf/ctrf-schema.json -o src/schemas/ctrf/ctrf.ts --inferStringEnumKeysFromValues --enableConstEnums",
     "prepare": "husky",
     "postinstall": "husky && npx playwright install chromium"

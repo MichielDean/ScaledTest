@@ -21,7 +21,7 @@ export interface DashboardFilters extends BaseFilters {
 
 // Types for analytics components
 export interface TestTrendsData extends AnalyticsDataWithRates {
-  date: string;
+  date: string; // Date-time string in format 'yyyy-MM-dd HH:mm' for hourly trends
 }
 
 export interface TestDurationData {
