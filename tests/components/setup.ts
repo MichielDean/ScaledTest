@@ -150,13 +150,6 @@ jest.mock('../../src/styles/Charts.module.css', () => ({
   chartTitle: 'chartTitle',
 }));
 
-// Mock window.ResizeObserver for Recharts
-global.ResizeObserver = jest.fn().mockImplementation(() => ({
-  observe: jest.fn(),
-  unobserve: jest.fn(),
-  disconnect: jest.fn(),
-}));
-
 // Mock crypto for test environment
 Object.defineProperty(global, 'crypto', {
   value: {
