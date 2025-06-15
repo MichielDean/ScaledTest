@@ -61,7 +61,7 @@ const mockTrendsResponse = {
       trends: {
         buckets: [
           {
-            key_as_string: '2025-06-08',
+            key_as_string: '2025-06-08 09:00',
             doc_count: 100,
             total_tests: { value: 100 },
             passed_tests: { value: 90 },
@@ -69,7 +69,7 @@ const mockTrendsResponse = {
             skipped_tests: { value: 2 },
           },
           {
-            key_as_string: '2025-06-07',
+            key_as_string: '2025-06-08 15:30',
             doc_count: 95,
             total_tests: { value: 95 },
             passed_tests: { value: 85 },
@@ -286,7 +286,7 @@ describe('Analytics API Integration Tests', () => {
             size: 0,
             query: expect.objectContaining({
               range: expect.objectContaining({
-                storedAt: expect.objectContaining({
+                'results.summary.start': expect.objectContaining({
                   gte: expect.stringMatching(/now-\d+d\/d/),
                 }),
               }),
@@ -294,9 +294,9 @@ describe('Analytics API Integration Tests', () => {
             aggs: expect.objectContaining({
               trends: expect.objectContaining({
                 date_histogram: expect.objectContaining({
-                  field: 'storedAt',
-                  calendar_interval: 'day',
-                  format: 'yyyy-MM-dd',
+                  field: 'results.summary.start',
+                  calendar_interval: 'hour',
+                  format: 'yyyy-MM-dd HH:mm',
                 }),
                 aggs: expect.any(Object),
               }),

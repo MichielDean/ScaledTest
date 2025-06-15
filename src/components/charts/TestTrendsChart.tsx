@@ -182,14 +182,23 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
               </div>
             )}
             <ResponsiveContainer width="100%" height={400}>
-              <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   angle={-45}
                   textAnchor="end"
-                  height={60}
+                  height={80}
+                  tickFormatter={value => {
+                    // Format date-time for display: show date + time for multiple entries per day
+                    const date = new Date(value);
+                    return (
+                      date.toLocaleDateString() +
+                      ' ' +
+                      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    );
+                  }}
                 />
                 <YAxis
                   yAxisId="left"
@@ -204,7 +213,10 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   domain={[0, 100]}
                 />
                 <Tooltip
-                  labelFormatter={label => `Date: ${label}`}
+                  labelFormatter={label => {
+                    const date = new Date(label);
+                    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                  }}
                   formatter={(value, name) => [name === 'Pass Rate %' ? `${value}%` : value, name]}
                 />
                 <Legend />
@@ -274,14 +286,23 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
               </div>
             )}
             <ResponsiveContainer width="100%" height={300}>
-              <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
+              <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 80 }}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis
                   dataKey="date"
-                  tick={{ fontSize: 12 }}
+                  tick={{ fontSize: 11 }}
                   angle={-45}
                   textAnchor="end"
-                  height={60}
+                  height={80}
+                  tickFormatter={value => {
+                    // Format date-time for display: show date + time for multiple entries per day
+                    const date = new Date(value);
+                    return (
+                      date.toLocaleDateString() +
+                      ' ' +
+                      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+                    );
+                  }}
                 />
                 <YAxis
                   tick={{ fontSize: 12 }}
@@ -289,7 +310,10 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   domain={[0, 100]}
                 />
                 <Tooltip
-                  labelFormatter={label => `Date: ${label}`}
+                  labelFormatter={label => {
+                    const date = new Date(label);
+                    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+                  }}
                   formatter={value => [`${value}%`, 'Pass Rate']}
                 />
                 <Area

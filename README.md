@@ -9,6 +9,7 @@ A comprehensive platform for test result management and reporting built with Nex
 - **Role-Based Access Control (RBAC)**: Powered by Keycloak authentication
 - **Test Report Generation**: Generate standardized CTRF test reports
 - **OpenSearch Integration**: Fast searching and analytics of test data
+- **Demo Data Generation**: Create realistic test data for dashboard visualization
 - **Comprehensive Testing Suite**: Unit, integration, and system tests with Jest and Playwright
 
 ## Prerequisites
@@ -125,6 +126,47 @@ The Test Results Dashboard provides:
 - Performance trend analysis
 - CTRF-compliant report generation
 - Test result comparison features
+
+## Demo Data Generation
+
+ScaledTest includes a powerful demo data generator for testing dashboard visualizations:
+
+```bash
+# Generate random test reports (recommended for variety)
+npm run demo-data
+
+# Generate 5 random reports with different scenarios
+npm run demo-data random 5
+
+# Generate specific scenarios
+npm run demo-data improving 3    # Shows test quality improvement
+npm run demo-data flaky 2        # Shows unreliable tests
+npm run demo-data stable 1       # Shows consistent performance
+
+# List all available scenarios
+npm run demo-data list
+
+# Get help
+npm run demo-data help
+```
+
+### Available Demo Scenarios
+
+- **random**: Mixed scenarios with varied tools, environments, and performance
+- **improving**: Gradual improvement in test quality over time
+- **declining**: Quality regression scenario (useful for alerts testing)
+- **stable**: Consistent high-performance test suite
+- **flaky**: Inconsistent results with high variability
+- **large**: Enterprise-scale test suite with multiple components
+
+The demo data generator creates realistic test reports with:
+
+- Multiple test types (unit, integration, e2e, accessibility)
+- Realistic test names and error messages
+- Various performance profiles (fast, normal, slow)
+- Time-distributed reports for trend analysis
+
+See the [Demo Data Guide](docs/DEMO_DATA_GUIDE.md) for detailed information.
 
 ## Environment Configuration
 
