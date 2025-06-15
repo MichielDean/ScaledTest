@@ -8,6 +8,9 @@ import Header from '../components/Header';
 import axios, { AxiosError } from 'axios';
 import { authLogger as logger } from '../utils/logger';
 import { RegisterResponse } from '../types/api';
+import styles from '../styles/Register.module.css';
+import sharedAlerts from '../styles/shared/alerts.module.css';
+import sharedButtons from '../styles/shared/buttons.module.css';
 
 const Register: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -128,7 +131,7 @@ const Register: NextPage = () => {
       <div>
         <Header />
         <div className="container">
-          <div className="card" style={{ textAlign: 'center' }}>
+          <div className={`card ${styles.centeredCard}`}>
             <h2>Loading...</h2>
           </div>
         </div>
@@ -146,23 +149,15 @@ const Register: NextPage = () => {
 
       <main id="main-content" className="container">
         <div className="form-container">
-          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Create Account</h1>
-          <p style={{ marginBottom: '1rem', textAlign: 'center' }}>
-            Enter your email address to create an account
-          </p>
+          <h1 className={styles.title}>Create Account</h1>
+          <p className={styles.subtitle}>Enter your email address to create an account</p>
 
           {error && (
             <div
               id="registerError"
               role="alert"
               aria-live="polite"
-              style={{
-                backgroundColor: '#ffebee',
-                color: '#c62828',
-                padding: '10px',
-                borderRadius: '4px',
-                marginBottom: '1rem',
-              }}
+              className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
             >
               {error}
             </div>
@@ -181,8 +176,8 @@ const Register: NextPage = () => {
               />
             </div>
 
-            <div className="form-row" style={{ display: 'flex', gap: '1rem' }}>
-              <div className="form-group" style={{ flex: 1 }}>
+            <div className={styles.formRow}>
+              <div className={`form-group ${styles.formGroupFlex}`}>
                 <label htmlFor="firstName">First Name</label>
                 <input
                   type="text"
@@ -193,7 +188,7 @@ const Register: NextPage = () => {
                 />
               </div>
 
-              <div className="form-group" style={{ flex: 1 }}>
+              <div className={`form-group ${styles.formGroupFlex}`}>
                 <label htmlFor="lastName">Last Name</label>
                 <input
                   type="text"
@@ -233,16 +228,16 @@ const Register: NextPage = () => {
             <button
               id="registerButton"
               type="submit"
-              style={{ width: '100%', marginTop: '1rem' }}
+              className={sharedButtons.submitButton}
               disabled={registering}
             >
               {registering ? 'Creating Account...' : 'Create Account'}
             </button>
 
-            <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+            <p className={styles.loginText}>
               Already have an account?{' '}
               <Link href="/login" aria-label="Go to login page">
-                <span id="loginLink" style={{ color: 'var(--primary-color)', cursor: 'pointer' }}>
+                <span id="loginLink" className={styles.loginLink}>
                   Sign In
                 </span>
               </Link>

@@ -1,0 +1,151 @@
+/* Shared card and container styles */
+
+.card {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.cardLarge {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 2rem;
+  margin-bottom: 2rem;
+}
+
+.cardBordered {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 8px;
+  padding: 1.5rem;
+  margin-bottom: 1rem;
+}
+
+.cardFlat {
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 4px;
+  padding: 1rem;
+}
+
+/* Card headers */
+.cardHeader {
+  margin-bottom: 1.5rem;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.cardTitle {
+  margin: 0 0 0.5rem 0;
+  font-size: 1.5rem;
+  font-weight: 500;
+  color: #1e293b;
+}
+
+.cardSubtitle {
+  margin: 0;
+  color: #64748b;
+  font-size: 1rem;
+}
+
+/* Stat cards for dashboards */
+.statCard {
+  text-align: center;
+  padding: 1rem;
+  border-radius: 6px;
+  border: 1px solid #e5e7eb;
+  background: white;
+}
+
+.statNumber {
+  font-size: 2rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.statNumberLarge {
+  font-size: 2.5rem;
+  font-weight: 700;
+  margin-bottom: 0.25rem;
+}
+
+.statLabel {
+  font-size: 0.9rem;
+  color: #64748b;
+}
+
+/* Stat card variants */
+.statCardGray {
+  background-color: #f8f9fa;
+}
+
+.statCardGreen {
+  background-color: #dcfce7;
+}
+
+.statCardRed {
+  background-color: #fee2e2;
+}
+
+.statCardYellow {
+  background-color: #fef3c7;
+}
+
+.statCardBlue {
+  background-color: #dbeafe;
+}
+
+/* Stat number color variants */
+.statNumberGray {
+  color: #495057;
+}
+
+.statNumberGreen {
+  color: #16a34a;
+}
+
+.statNumberRed {
+  color: #dc2626;
+}
+
+.statNumberYellow {
+  color: #d97706;
+}
+
+.statNumberBlue {
+  color: #2563eb;
+}
+
+/* Stat label color variants */
+.statLabelGray {
+  color: #6c757d;
+}
+
+.statLabelGreen {
+  color: #16a34a;
+}
+
+.statLabelRed {
+  color: #dc2626;
+}
+
+.statLabelYellow {
+  color: #d97706;
+}
+
+.statLabelBlue {
+  color: #2563eb;
+}
+
+/* Legacy compatibility */
+.overview {
+  composes: cardLarge;
+}
+
+.centeredCard {
+  composes: card;
+  text-align: center;
+}

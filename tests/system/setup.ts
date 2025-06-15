@@ -72,6 +72,35 @@ export async function setupKeycloak(): Promise<void> {
 export async function startNextApp(): Promise<void> {
   testLogger.info('Starting Next.js application...');
 
+  // Check if port 3000 is already in use and clean it up
+  if (process.platform === 'win32') {
+    try {
+      const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
+      const result = execSync(`powershell -Command "${findCommand}"`, {
+        encoding: 'utf8',
+        timeout: 5000,
+      }).trim();
+
+      if (result) {
+        const pids = result.split('\n').filter(pid => pid.trim());
+        for (const pid of pids) {
+          if (pid.trim()) {
+            testLogger.info(`Cleaning up existing process on port 3000, PID: ${pid.trim()}`);
+            try {
+              execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 5000 });
+            } catch (killError) {
+              testLogger.warn({ err: killError }, `Failed to kill existing PID ${pid.trim()}`);
+            }
+          }
+        }
+        // Wait for port to be released
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    } catch {
+      testLogger.info('No existing processes found on port 3000');
+    }
+  }
+
   // Use next start to run the production build
   // You might want to build the app first if it's not already built
   try {
@@ -92,16 +121,58 @@ export async function startNextApp(): Promise<void> {
       testLogger.error(`Next.js error: ${data.toString().trim()}`);
     });
 
-    // Wait for Next.js to be ready
-    testLogger.info('Waiting for Next.js to be ready...');
-    await waitOn({
-      resources: ['http://localhost:3000'],
-      timeout: 30000, // 30 seconds timeout
+    // Handle process exit
+    nextAppProcess.on('exit', (code, signal) => {
+      testLogger.info(`Next.js process exited with code ${code} and signal ${signal}`);
     });
+
+    nextAppProcess.on('error', error => {
+      testLogger.error({ err: error }, 'Next.js process error');
+    });
+
+    // Wait for Next.js to be ready with retry logic
+    testLogger.info('Waiting for Next.js to be ready...');
+
+    let retries = 0;
+    const maxRetries = 6; // 60 seconds total
+
+    while (retries < maxRetries) {
+      try {
+        await waitOn({
+          resources: ['http://localhost:3000'],
+          timeout: 10000, // 10 seconds per attempt
+        });
+        break; // Success, exit the retry loop
+      } catch (waitError) {
+        retries++;
+        testLogger.warn(
+          { err: waitError, attempt: retries },
+          `Attempt ${retries} failed, retrying...`
+        );
+
+        if (retries >= maxRetries) {
+          const errorMessage = waitError instanceof Error ? waitError.message : String(waitError);
+          throw new Error(`Next.js failed to start after ${maxRetries} attempts: ${errorMessage}`);
+        }
+
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 2000));
+      }
+    }
 
     testLogger.info('Next.js application is ready');
   } catch (error) {
     testLogger.error({ err: error }, 'Failed to start Next.js application');
+
+    // Cleanup if startup failed
+    if (nextAppProcess && !nextAppProcess.killed) {
+      try {
+        nextAppProcess.kill('SIGTERM');
+      } catch (killError) {
+        testLogger.warn({ err: killError }, 'Failed to cleanup failed Next.js process');
+      }
+    }
+
     throw error;
   }
 }

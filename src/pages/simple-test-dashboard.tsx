@@ -6,6 +6,7 @@ import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { UserRole } from '../auth/keycloak';
 import { useAuth } from '../auth/KeycloakProvider';
+import styles from '../styles/SimpleTestDashboard.module.css';
 
 // Simplified types for the basic dashboard
 interface SimpleTestSummary {
@@ -149,93 +150,33 @@ const SimpleTestDashboard: NextPage = () => {
 
       <Header />
 
-      <main
-        id="main-content"
-        style={{
-          padding: '2rem',
-          maxWidth: '1000px',
-          margin: '0 auto',
-          fontFamily: 'system-ui, -apple-system, sans-serif',
-        }}
-      >
+      <main id="main-content" className={styles.mainContent}>
         {/* Header */}
-        <div style={{ marginBottom: '2rem', textAlign: 'center' }}>
-          <h1
-            style={{
-              fontSize: '2.5rem',
-              color: '#2563eb',
-              marginBottom: '0.5rem',
-              fontWeight: '600',
-            }}
-          >
-            🧪 Simple Test Dashboard
-          </h1>
-          <p
-            style={{
-              color: '#64748b',
-              fontSize: '1.1rem',
-              margin: 0,
-            }}
-          >
-            Quick overview of your test execution results
-          </p>
+        <div className={styles.header}>
+          <h1 className={styles.title}>🧪 Simple Test Dashboard</h1>
+          <p className={styles.subtitle}>Quick overview of your test execution results</p>
         </div>
 
         {loading && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '3rem',
-              color: '#64748b',
-              fontSize: '1.1rem',
-            }}
-          >
+          <div className={styles.loading}>
             <div>⏳ Loading test data...</div>
           </div>
         )}
 
         {error && (
-          <div
-            style={{
-              background: '#fef2f2',
-              border: '1px solid #fecaca',
-              borderRadius: '8px',
-              padding: '1rem',
-              color: '#dc2626',
-              textAlign: 'center',
-              margin: '2rem 0',
-            }}
-          >
-            <div style={{ fontWeight: '500' }}>❌ Error</div>
+          <div className={styles.errorContainer}>
+            <div className={styles.errorTitle}>❌ Error</div>
             <div>{error}</div>
-            <button
-              onClick={fetchReports}
-              style={{
-                background: '#dc2626',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                padding: '0.5rem 1rem',
-                marginTop: '1rem',
-                cursor: 'pointer',
-              }}
-            >
+            <button onClick={fetchReports} className={styles.retryButton}>
               Retry
             </button>
           </div>
         )}
 
         {!loading && !error && reports.length === 0 && (
-          <div
-            style={{
-              textAlign: 'center',
-              padding: '3rem',
-              color: '#64748b',
-              fontSize: '1.1rem',
-            }}
-          >
+          <div className={styles.noData}>
             <div>📊 No test reports found</div>
-            <div style={{ fontSize: '0.9rem', marginTop: '0.5rem' }}>
+            <div className={styles.errorMessage}>
               Submit your first test report to see data here
             </div>
           </div>
@@ -244,233 +185,109 @@ const SimpleTestDashboard: NextPage = () => {
         {!loading && !error && reports.length > 0 && (
           <>
             {/* Overall Stats */}
-            <div
-              style={{
-                background: 'white',
-                borderRadius: '12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                padding: '2rem',
-                marginBottom: '2rem',
-              }}
-            >
-              <h2
-                style={{
-                  margin: '0 0 1.5rem 0',
-                  color: '#1e293b',
-                  fontSize: '1.5rem',
-                  fontWeight: '500',
-                }}
-              >
-                📈 Overall Results
-              </h2>
+            <div className={styles.overview}>
+              <h2 className={styles.overviewTitle}>📈 Overall Results</h2>
 
-              <div
-                style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fit, minmax(140px, 1fr))',
-                  gap: '1rem',
-                }}
-              >
-                <div style={{ textAlign: 'center' }}>
-                  <div
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '700',
-                      color: '#1e293b',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
+              <div className={styles.statsGrid}>
+                <div className={`${styles.statCard} ${styles.statCardTotal}`}>
+                  <div className={`${styles.statNumber} ${styles.statNumberTotal}`}>
                     {overallStats.total}
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Total Tests</div>
+                  <div className={`${styles.statLabel} ${styles.statLabelTotal}`}>Total Tests</div>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
-                  <div
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '700',
-                      color: '#059669',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
+                <div className={`${styles.statCard} ${styles.statCardPassed}`}>
+                  <div className={`${styles.statNumber} ${styles.statNumberPassed}`}>
                     {overallStats.passed}
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Passed</div>
+                  <div className={`${styles.statLabel} ${styles.statLabelPassed}`}>Passed</div>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
-                  <div
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '700',
-                      color: '#dc2626',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
+                <div className={`${styles.statCard} ${styles.statCardFailed}`}>
+                  <div className={`${styles.statNumber} ${styles.statNumberFailed}`}>
                     {overallStats.failed}
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Failed</div>
+                  <div className={`${styles.statLabel} ${styles.statLabelFailed}`}>Failed</div>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
-                  <div
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '700',
-                      color: '#d97706',
-                      marginBottom: '0.25rem',
-                    }}
-                  >
+                <div className={`${styles.statCard} ${styles.statCardSkipped}`}>
+                  <div className={`${styles.statNumber} ${styles.statNumberSkipped}`}>
                     {overallStats.skipped}
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Skipped</div>
+                  <div className={`${styles.statLabel} ${styles.statLabelSkipped}`}>Skipped</div>
                 </div>
 
-                <div style={{ textAlign: 'center' }}>
+                <div className={`${styles.statCard} ${styles.statCardTotal}`}>
                   <div
-                    style={{
-                      fontSize: '2.5rem',
-                      fontWeight: '700',
-                      color:
-                        overallStats.successRate >= 80
-                          ? '#059669'
-                          : overallStats.successRate >= 60
-                            ? '#d97706'
-                            : '#dc2626',
-                      marginBottom: '0.25rem',
-                    }}
+                    className={`${styles.statNumber} ${
+                      overallStats.successRate >= 80
+                        ? styles.successRateGood
+                        : overallStats.successRate >= 60
+                          ? styles.successRateWarning
+                          : styles.successRatePoor
+                    }`}
                   >
                     {overallStats.successRate}%
                   </div>
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>Success Rate</div>
+                  <div className={`${styles.statLabel} ${styles.statLabelTotal}`}>Success Rate</div>
                 </div>
               </div>
             </div>
 
             {/* Recent Reports */}
-            <div
-              style={{
-                background: 'white',
-                borderRadius: '12px',
-                boxShadow: '0 1px 3px rgba(0,0,0,0.1)',
-                padding: '2rem',
-              }}
-            >
-              <h2
-                style={{
-                  margin: '0 0 1.5rem 0',
-                  color: '#1e293b',
-                  fontSize: '1.5rem',
-                  fontWeight: '500',
-                }}
-              >
-                📋 Recent Test Reports
-              </h2>
+            <div className={styles.overview}>
+              <h2 className={styles.overviewTitle}>📋 Recent Test Reports</h2>
 
-              <div style={{ display: 'flex', flexDirection: 'column', gap: '1rem' }}>
+              <div className={styles.reportsContainer}>
                 {reports.slice(0, 10).map(report => (
-                  <div
-                    key={report._id}
-                    style={{
-                      background: '#f8fafc',
-                      border: '1px solid #e2e8f0',
-                      borderRadius: '8px',
-                      padding: '1rem',
-                      display: 'grid',
-                      gridTemplateColumns: '1fr auto auto auto',
-                      alignItems: 'center',
-                      gap: '1rem',
-                    }}
-                  >
-                    <div>
-                      <div
-                        style={{
-                          fontWeight: '500',
-                          color: '#1e293b',
-                          marginBottom: '0.25rem',
-                        }}
-                      >
+                  <div key={report._id} className={styles.reportCard}>
+                    <div className={styles.reportInfo}>
+                      <div className={styles.reportTitle}>
                         {report.tool} • {report.environment}
                       </div>
-                      <div
-                        style={{
-                          fontSize: '0.85rem',
-                          color: '#64748b',
-                        }}
-                      >
-                        {formatDate(report.executedAt)}
-                      </div>
+                      <div className={styles.reportDate}>{formatDate(report.executedAt)}</div>
                     </div>
 
-                    <div style={{ textAlign: 'center' }}>
-                      <div
-                        style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: '#1e293b',
-                        }}
-                      >
-                        {report.summary.total}
-                      </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Total</div>
+                    <div className={styles.reportStatItem}>
+                      <div className={styles.reportStatNumber}>{report.summary.total}</div>
+                      <div className={styles.reportStatLabel}>Total</div>
                     </div>
 
-                    <div style={{ textAlign: 'center' }}>
+                    <div className={styles.reportStatItem}>
                       <div
-                        style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color: report.summary.failed > 0 ? '#dc2626' : '#059669',
-                        }}
+                        className={
+                          report.summary.failed > 0
+                            ? styles.reportStatNumberDanger
+                            : styles.reportStatNumberSuccess
+                        }
                       >
                         {report.summary.passed}/{report.summary.total}
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Passed</div>
+                      <div className={styles.reportStatLabel}>Passed</div>
                     </div>
 
-                    <div style={{ textAlign: 'center' }}>
+                    <div className={styles.reportStatItem}>
                       <div
-                        style={{
-                          fontSize: '1.25rem',
-                          fontWeight: '600',
-                          color:
-                            report.summary.successRate >= 80
-                              ? '#059669'
-                              : report.summary.successRate >= 60
-                                ? '#d97706'
-                                : '#dc2626',
-                        }}
+                        className={
+                          report.summary.successRate >= 80
+                            ? styles.reportStatNumberGood
+                            : report.summary.successRate >= 60
+                              ? styles.reportStatNumberWarning
+                              : styles.reportStatNumberPoor
+                        }
                       >
                         {report.summary.successRate}%
                       </div>
-                      <div style={{ fontSize: '0.75rem', color: '#64748b' }}>Success</div>
+                      <div className={styles.reportStatLabel}>Success</div>
                     </div>
                   </div>
                 ))}
               </div>
 
               {reports.length > 10 && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    marginTop: '1.5rem',
-                    paddingTop: '1rem',
-                    borderTop: '1px solid #e2e8f0',
-                  }}
-                >
-                  <div style={{ color: '#64748b', fontSize: '0.9rem' }}>
-                    Showing 10 of {reports.length} reports
-                  </div>
-                  <Link
-                    href="/test-results-dashboard"
-                    style={{
-                      color: '#2563eb',
-                      textDecoration: 'none',
-                      fontSize: '0.9rem',
-                      fontWeight: '500',
-                    }}
-                  >
+                <div className={styles.viewAllSection}>
+                  <div className={styles.viewAllText}>Showing 10 of {reports.length} reports</div>
+                  <Link href="/test-results-dashboard" className={styles.viewAllLink}>
                     View all reports →
                   </Link>
                 </div>

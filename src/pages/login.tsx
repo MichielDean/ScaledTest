@@ -7,6 +7,9 @@ import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
 import { AxiosError } from 'axios';
 import { authLogger as logger } from '../utils/logger';
+import styles from '../styles/Login.module.css';
+import sharedAlerts from '../styles/shared/alerts.module.css';
+import sharedButtons from '../styles/shared/buttons.module.css';
 
 const Login: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();
@@ -117,22 +120,14 @@ const Login: NextPage = () => {
 
       <main id="main-content" className="container">
         <div className="form-container">
-          <h1 style={{ marginBottom: '1.5rem', textAlign: 'center' }}>Sign In</h1>
+          <h1 className={styles.title}>Sign In</h1>
 
           {error && (
             <div
               id="loginError"
               role="alert"
               aria-live="polite"
-              style={{
-                backgroundColor: '#ffebee',
-                color: '#c62828',
-                padding: '10px',
-                borderRadius: '4px',
-                marginBottom: '1rem',
-                border: '1px solid #c62828',
-                display: 'block',
-              }}
+              className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
               data-testid="login-error"
             >
               {error}
@@ -173,19 +168,16 @@ const Login: NextPage = () => {
             <button
               id="signInButton"
               type="submit"
-              style={{ width: '100%', marginTop: '1rem' }}
+              className={sharedButtons.submitButton}
               disabled={loggingIn}
             >
               {loggingIn ? 'Signing in...' : 'Sign In'}
             </button>
 
-            <p style={{ textAlign: 'center', margin: '1rem 0' }}>
+            <p className={styles.registerText}>
               Don&apos;t have an account?{' '}
               <Link href="/register" aria-label="Go to registration page">
-                <span
-                  id="registerLink"
-                  style={{ color: 'var(--primary-color)', cursor: 'pointer' }}
-                >
+                <span id="registerLink" className={styles.registerLink}>
                   Register
                 </span>
               </Link>

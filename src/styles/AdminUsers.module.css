@@ -1,0 +1,85 @@
+/* Component-specific styles using shared design tokens */
+.mainContent {
+  padding: var(--spacing-2xl, 2rem);
+}
+
+/* Note: Alert and button styles are imported from shared modules in the component */
+
+.usersTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-lg, 1rem);
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.tableHeader {
+  background-color: var(--color-gray-50);
+}
+
+.tableHeaderCell {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: left;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableHeaderCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.tableRow:hover {
+  background-color: var(--color-gray-50);
+}
+
+.tableCell {
+  padding: var(--spacing-md, 0.75rem);
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.tableCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.roleTag {
+  display: inline-block;
+  margin-right: var(--spacing-sm, 0.5rem);
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background-color: var(--color-gray-100);
+  color: var(--color-gray-700);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: var(--font-weight-medium, 500);
+}
+
+/* Note: Button styles (grantButton, revokeButton) are imported from shared/buttons.module.css */
+
+.noUsers {
+  text-align: center;
+  margin-top: var(--spacing-2xl, 2rem);
+  padding: var(--spacing-3xl, 3rem);
+  color: var(--color-gray-500);
+  font-style: italic;
+  background-color: var(--color-gray-50);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+}

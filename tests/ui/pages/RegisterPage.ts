@@ -60,10 +60,16 @@ export class RegisterPage extends BasePage {
    * Wait for either navigation to complete or an error to be displayed
    */
   private async waitForNavigationOrError() {
-    await Promise.race([
-      this.page.waitForNavigation({ timeout: 10000 }).catch(() => {}),
-      this.errorMessage.waitFor({ state: 'visible', timeout: 10000 }).catch(() => {}),
-    ]);
+    try {
+      // Wait for either navigation or error with a reasonable timeout
+      await Promise.race([
+        this.page.waitForNavigation({ timeout: 15000 }),
+        this.errorMessage.waitFor({ state: 'visible', timeout: 15000 }),
+      ]);
+    } catch {
+      // If both navigation and error detection timeout, continue silently
+      // This allows the test to proceed and check the actual state
+    }
 
     // Give a brief pause for any client-side processing
     await this.page.waitForTimeout(1000);

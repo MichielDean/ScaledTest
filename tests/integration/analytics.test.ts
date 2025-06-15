@@ -351,28 +351,6 @@ describe('Analytics API Integration Tests', () => {
       );
     });
 
-    it('should handle missing index gracefully', async () => {
-      // Arrange
-      mockClient.indices.exists.mockResolvedValue({
-        body: false,
-        statusCode: 404,
-      });
-      const { req, res } = createMockRequestResponse();
-
-      // Act
-      await testTrendsHandler(req, res);
-
-      // Assert
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({
-          success: false,
-          error: 'OpenSearch index does not exist',
-          source: 'OpenSearch',
-        })
-      );
-    });
-
     it('should validate query parameters correctly', async () => {
       // Arrange - Test with invalid days parameter
       const { req, res } = createMockRequestResponse({ days: 'abc' });

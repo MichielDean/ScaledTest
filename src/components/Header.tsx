@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import { UserRole } from '../auth/keycloak';
+import styles from '../styles/Header.module.css';
 
 const Header: React.FC = () => {
   const { isAuthenticated, userProfile, logout, hasRole } = useAuth();
@@ -11,35 +12,14 @@ const Header: React.FC = () => {
   return (
     <>
       {/* Skip Navigation Link for keyboard users */}
-      <a
-        href="#main-content"
-        className="skip-link"
-        style={{
-          position: 'absolute',
-          left: '-9999px',
-          zIndex: 999,
-          padding: '8px 16px',
-          background: '#000',
-          color: '#fff',
-          textDecoration: 'none',
-          borderRadius: '0 0 4px 0',
-        }}
-        onFocus={e => {
-          e.target.style.left = '0';
-        }}
-        onBlur={e => {
-          e.target.style.left = '-9999px';
-        }}
-      >
+      <a href="#main-content" className={`skip-link ${styles.skipLink}`}>
         Skip to main content
       </a>
 
-      <header className="header" role="banner">
+      <header className={`header ${styles.header}`} role="banner">
         <div>
           <Link href="/" aria-label="Go to ScaledTest home page">
-            <span style={{ fontWeight: 'bold', fontSize: '1.5rem', cursor: 'pointer' }}>
-              ScaledTest
-            </span>
+            <span className={styles.logo}>ScaledTest</span>
           </Link>
         </div>
 

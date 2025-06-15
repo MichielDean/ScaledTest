@@ -8,7 +8,6 @@ export interface TestReport extends CtrfSchema {
 }
 
 export interface TestReportsResponse extends SuccessApiResponse<TestReport[]> {
-  reports: TestReport[]; // Alias for backward compatibility with existing components
   total: number;
 }
 
@@ -50,10 +49,9 @@ export interface FlakyTestData {
   totalRuns: number;
   passed: number;
   failed: number;
-  failures: number; // Alias for failed for backward compatibility
   skipped: number;
   flakyScore: number;
   avgDuration: number;
   isMarkedFlaky: boolean;
-  isFlaky: boolean; // Computed flaky status
+  isFlaky: boolean;
 }

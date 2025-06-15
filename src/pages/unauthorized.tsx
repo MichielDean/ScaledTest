@@ -3,6 +3,8 @@ import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
 import Header from '../components/Header';
+import styles from '../styles/Unauthorized.module.css';
+import sharedButtons from '../styles/shared/buttons.module.css';
 
 const Unauthorized: NextPage = () => {
   const router = useRouter();
@@ -17,21 +19,16 @@ const Unauthorized: NextPage = () => {
       <Header />
 
       <main id="main-content" className="container">
-        <div className="card" style={{ textAlign: 'center' }}>
-          <h1 id="unauthorized-title" style={{ color: '#dc3545', marginBottom: '1rem' }}>
+        <div className={`card ${styles.centeredCard}`}>
+          <h1 id="unauthorized-title" className={styles.errorTitle}>
             Access Denied
           </h1>
 
-          <p style={{ fontSize: '1.2rem', marginBottom: '2rem' }}>
-            You do not have permission to access this page.
-          </p>
+          <p className={styles.description}>You do not have permission to access this page.</p>
 
-          <div>
+          <div className={styles.buttonContainer}>
             <Link href="/" aria-label="Return to home page">
-              <button
-                style={{ display: 'inline-block', marginRight: '1rem' }}
-                aria-label="Return to home page"
-              >
+              <button className={sharedButtons.actionButton} aria-label="Return to home page">
                 Return to Home
               </button>
             </Link>
@@ -40,7 +37,7 @@ const Unauthorized: NextPage = () => {
               <Link href="/dashboard" aria-label="Go to dashboard page">
                 <button
                   id="return-to-previous"
-                  style={{ display: 'inline-block' }}
+                  className={sharedButtons.actionButton}
                   aria-label="Go to dashboard page"
                 >
                   Go to Dashboard
