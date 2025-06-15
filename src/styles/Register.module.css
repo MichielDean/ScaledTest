@@ -1,0 +1,51 @@
+.centeredCard {
+  text-align: center;
+}
+
+.title {
+  margin-bottom: var(--spacing-xl);
+  text-align: center;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+.subtitle {
+  margin-bottom: var(--spacing-lg);
+  text-align: center;
+  color: var(--color-text-secondary);
+}
+
+/* Note: Error alert and submit button styles are imported from shared modules */
+
+.formRow {
+  display: flex;
+  gap: var(--spacing-lg);
+}
+
+.formGroupFlex {
+  flex: 1;
+}
+
+/* Note: submitButton styles are imported from shared/buttons.module.css */
+
+.submitButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.loginText {
+  text-align: center;
+  margin: var(--spacing-lg) 0;
+  color: var(--color-text-secondary);
+}
+
+.loginLink {
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.loginLink:hover {
+  color: var(--color-primary-dark);
+}

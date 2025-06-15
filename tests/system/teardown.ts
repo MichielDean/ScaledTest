@@ -10,28 +10,77 @@ export async function stopNextApp(): Promise<void> {
   if (nextAppProcess) {
     testLogger.info('Stopping Next.js application');
 
-    // On Windows, we need to use a different approach to kill the process
-    if (process.platform === 'win32') {
-      try {
-        // Find the PID by the port and kill it
-        const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen | Select-Object -ExpandProperty OwningProcess`;
-        const pid = execSync(`powershell -Command "${findCommand}"`, { encoding: 'utf8' }).trim();
+    try {
+      // On Windows, we need to use a different approach to kill the process
+      if (process.platform === 'win32') {
+        // First try to gracefully terminate the process
+        if (!nextAppProcess.killed) {
+          nextAppProcess.kill('SIGTERM');
 
-        if (pid) {
-          testLogger.info(`Killing Next.js process with PID ${pid}`);
-          execSync(`taskkill /F /PID ${pid}`);
+          // Wait a bit for graceful termination
+          await new Promise(resolve => setTimeout(resolve, 2000));
         }
-      } catch (error) {
-        testLogger.error({ err: error }, 'Error stopping Next.js app');
+
+        // If the process is still running, force kill by port
+        try {
+          const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
+          const result = execSync(`powershell -Command "${findCommand}"`, {
+            encoding: 'utf8',
+            timeout: 5000,
+          }).trim();
+
+          if (result) {
+            const pids = result.split('\n').filter(pid => pid.trim());
+            for (const pid of pids) {
+              if (pid.trim()) {
+                testLogger.info(`Force killing process with PID ${pid.trim()}`);
+                try {
+                  execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 5000 });
+                } catch (killError) {
+                  testLogger.warn({ err: killError }, `Failed to kill PID ${pid.trim()}`);
+                }
+              }
+            }
+          }
+        } catch (portError) {
+          testLogger.warn(
+            { err: portError },
+            'No processes found on port 3000 or error checking port'
+          );
+        }
+      } else {
+        // On non-Windows platforms
+        if (!nextAppProcess.killed) {
+          nextAppProcess.kill('SIGTERM');
+
+          // Wait a bit for graceful termination
+          await new Promise(resolve => setTimeout(resolve, 2000));
+
+          // Force kill if still running
+          if (!nextAppProcess.killed) {
+            nextAppProcess.kill('SIGKILL');
+          }
+        }
       }
-    } else {
-      // On non-Windows platforms
-      nextAppProcess.kill('SIGTERM');
+    } catch (error) {
+      testLogger.error({ err: error }, 'Error stopping Next.js app');
+    } finally {
+      // Always set to null to avoid reuse
+      if (nextAppProcess) {
+        nextAppProcess.removeAllListeners();
+      }
+      // Don't set to null here as it's imported from setup.ts
     }
 
-    // Ensure the process is marked as null after killing
+    // Add a small delay to ensure port is released
+    await new Promise(resolve => setTimeout(resolve, 1000));
     testLogger.info('Next.js application stopped');
+  } else {
+    testLogger.info('No Next.js process to stop');
   }
+
+  // Note: We can't directly modify the imported nextAppProcess variable here,
+  // but the cleanup logic above should handle process termination
 }
 
 /**
@@ -73,6 +122,9 @@ export async function teardown(): Promise<void> {
       // Ignore any errors in cleanup
       testLogger.error({ err }, 'Error during timer cleanup');
     }
+
+    // Add a small delay to ensure all resources are fully released
+    await new Promise(resolve => setTimeout(resolve, 2000));
 
     testLogger.info('System test environment teardown completed successfully');
   } catch (error) {

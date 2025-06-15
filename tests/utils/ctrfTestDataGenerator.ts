@@ -59,8 +59,8 @@ export const generateCtrfReport = (
     passed: defaultTests.filter(t => t.status === Status.passed).length,
     failed: defaultTests.filter(t => t.status === Status.failed).length,
     skipped: defaultTests.filter(t => t.status === Status.skipped).length,
-    pending: 0, // Explicitly set to 0 as defaultTests does not include pending
-    other: 0, // Explicitly set to 0 as defaultTests does not include other
+    pending: 0,
+    other: 0,
     start: startTime,
     stop: stopTime,
   };

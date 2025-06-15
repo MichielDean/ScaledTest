@@ -1,0 +1,25 @@
+.title {
+  margin-bottom: var(--spacing-xl);
+  text-align: center;
+  font-size: var(--font-size-2xl);
+  font-weight: var(--font-weight-semibold);
+  color: var(--color-text-primary);
+}
+
+/* Note: Error alert and submit button styles are imported from shared modules */
+
+.registerText {
+  text-align: center;
+  margin: var(--spacing-lg) 0;
+  color: var(--color-text-secondary);
+}
+
+.registerLink {
+  color: var(--color-primary);
+  cursor: pointer;
+  transition: color var(--transition-fast);
+}
+
+.registerLink:hover {
+  color: var(--color-primary-dark);
+}

@@ -56,7 +56,6 @@ const FlakyTestDetector: React.FC<FlakyTestDetectorProps> = ({ reports }) => {
           totalRuns,
           passed: history.passes,
           failed: history.failures,
-          failures: history.failures, // Alias for backward compatibility
           skipped: 0, // Not tracked in this analysis
           flakyScore,
           avgDuration: Math.round(avgDuration),
@@ -91,7 +90,7 @@ const FlakyTestDetector: React.FC<FlakyTestDetectorProps> = ({ reports }) => {
           <p className="text-sm">{`Test: ${data.testName}`}</p>
           <p className="text-red-600 font-medium">{`Failure Rate: ${data.flakyScore}%`}</p>
           <p className="text-blue-600">{`Total Runs: ${data.totalRuns}`}</p>
-          <p className="text-orange-600">{`Failures: ${data.failures}`}</p>
+          <p className="text-orange-600">{`Failures: ${data.failed}`}</p>
           <p className="text-purple-600">{`Avg Duration: ${data.avgDuration}ms`}</p>
           {data.isFlaky && <p className="text-red-700 font-bold">🚨 FLAKY TEST</p>}
         </div>

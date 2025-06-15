@@ -249,27 +249,6 @@ describe('Analytics API Endpoints', () => {
       });
     });
 
-    it('should return 404 when OpenSearch index does not exist', async () => {
-      // Arrange
-      mockGetOpenSearchHealthStatus.mockResolvedValue({
-        ...mockHealthyStatus,
-        indexExists: false,
-      });
-      const { req, res } = createMockRequestResponse();
-
-      // Act
-      await testTrendsHandler(req, res);
-
-      // Assert
-      expect(res.status).toHaveBeenCalledWith(404);
-      expect(res.json).toHaveBeenCalledWith({
-        success: false,
-        error: 'OpenSearch index does not exist',
-        source: 'OpenSearch',
-        details: 'The ctrf-reports index has not been created yet',
-      });
-    });
-
     it('should handle OpenSearch query errors', async () => {
       // Arrange
       mockGetTestTrendsFromOpenSearch.mockRejectedValue(

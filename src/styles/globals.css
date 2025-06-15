@@ -1,10 +1,14 @@
+/* Import design tokens */
+@import './design-tokens.css';
+
+/* Legacy color variables for backwards compatibility */
 :root {
-  --primary-color: #0070f3;
-  --secondary-color: #0070f3;
-  --background-color: #f5f5f5;
-  --text-color: #333;
-  --error-color: #ff0000;
-  --success-color: #00cc00;
+  --primary-color: var(--color-primary);
+  --secondary-color: var(--color-secondary);
+  --background-color: var(--color-background-secondary);
+  --text-color: var(--color-text-primary);
+  --error-color: var(--color-error);
+  --success-color: var(--color-success);
 }
 
 * {
@@ -206,27 +210,6 @@ button:hover {
 .dashboard-button.disabled:hover {
   transform: none;
   box-shadow: none;
-}
-
-/* Test Results Dashboard Specific Styles */
-.test-dashboard {
-  background: linear-gradient(135deg, #f8f9fa 0%, #ffffff 100%);
-  min-height: 100vh;
-}
-
-.test-dashboard .card {
-  background: white;
-  border-radius: 12px;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  padding: 1.5rem;
-  margin-bottom: 1.5rem;
-  border: 1px solid #e9ecef;
-  transition: all 0.3s ease;
-}
-
-.test-dashboard .card:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.15);
-  transform: translateY(-2px);
 }
 
 .test-stats-grid {
