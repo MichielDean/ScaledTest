@@ -51,6 +51,16 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
   } | null>(null);
   const [selectedDays, setSelectedDays] = useState(days);
 
+  // Helper function to format date-time for chart display
+  const formatDateTime = (value: string): string => {
+    const date = new Date(value);
+    return (
+      date.toLocaleDateString() +
+      ' ' +
+      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+    );
+  };
+
   const fetchTestTrendsData = useCallback(async () => {
     try {
       setLoading(true);
@@ -190,15 +200,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   angle={-45}
                   textAnchor="end"
                   height={80}
-                  tickFormatter={value => {
-                    // Format date-time for display: show date + time for multiple entries per day
-                    const date = new Date(value);
-                    return (
-                      date.toLocaleDateString() +
-                      ' ' +
-                      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    );
-                  }}
+                  tickFormatter={formatDateTime}
                 />
                 <YAxis
                   yAxisId="left"
@@ -213,10 +215,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   domain={[0, 100]}
                 />
                 <Tooltip
-                  labelFormatter={label => {
-                    const date = new Date(label);
-                    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                  }}
+                  labelFormatter={formatDateTime}
                   formatter={(value, name) => [name === 'Pass Rate %' ? `${value}%` : value, name]}
                 />
                 <Legend />
@@ -294,15 +293,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   angle={-45}
                   textAnchor="end"
                   height={80}
-                  tickFormatter={value => {
-                    // Format date-time for display: show date + time for multiple entries per day
-                    const date = new Date(value);
-                    return (
-                      date.toLocaleDateString() +
-                      ' ' +
-                      date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-                    );
-                  }}
+                  tickFormatter={formatDateTime}
                 />
                 <YAxis
                   tick={{ fontSize: 12 }}
@@ -310,10 +301,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   domain={[0, 100]}
                 />
                 <Tooltip
-                  labelFormatter={label => {
-                    const date = new Date(label);
-                    return `${date.toLocaleDateString()} ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-                  }}
+                  labelFormatter={formatDateTime}
                   formatter={value => [`${value}%`, 'Pass Rate']}
                 />
                 <Area
