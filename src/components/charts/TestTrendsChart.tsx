@@ -173,6 +173,14 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
           {/* Test Results Trends Line Chart */}
           <div className={`${styles.card} ${styles.chartContainer}`}>
             <h3 className={styles.chartTitle}>📈 Test Results Trends</h3>
+            {data.length === 1 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>ℹ️ Single Data Point:</strong> Only one test result found. Data points are
+                  shown as dots. Add more test reports over time to see trend lines.
+                </p>
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={400}>
               <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -197,18 +205,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                 />
                 <Tooltip
                   labelFormatter={label => `Date: ${label}`}
-                  formatter={(value, name) => [
-                    name === 'passRate' ? `${value}%` : value,
-                    name === 'passRate'
-                      ? 'Pass Rate'
-                      : name === 'total'
-                        ? 'Total Tests'
-                        : name === 'passed'
-                          ? 'Passed'
-                          : name === 'failed'
-                            ? 'Failed'
-                            : 'Skipped',
-                  ]}
+                  formatter={(value, name) => [name === 'Pass Rate %' ? `${value}%` : value, name]}
                 />
                 <Legend />
                 <Line
@@ -218,6 +215,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   stroke="#3b82f6"
                   strokeWidth={2}
                   name="Total Tests"
+                  dot={{ fill: '#3b82f6', strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                 />
                 <Line
                   yAxisId="left"
@@ -226,6 +225,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   stroke="#10b981"
                   strokeWidth={2}
                   name="Passed"
+                  dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                 />
                 <Line
                   yAxisId="left"
@@ -234,6 +235,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   stroke="#ef4444"
                   strokeWidth={2}
                   name="Failed"
+                  dot={{ fill: '#ef4444', strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                 />
                 <Line
                   yAxisId="left"
@@ -242,6 +245,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   stroke="#f59e0b"
                   strokeWidth={2}
                   name="Skipped"
+                  dot={{ fill: '#f59e0b', strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                 />
                 <Line
                   yAxisId="right"
@@ -251,6 +256,8 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   strokeWidth={3}
                   name="Pass Rate %"
                   strokeDasharray="5 5"
+                  dot={{ fill: '#8b5cf6', strokeWidth: 2, r: 4 }}
+                  connectNulls={false}
                 />
               </LineChart>
             </ResponsiveContainer>
@@ -258,6 +265,14 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
           {/* Pass Rate Area Chart */}
           <div className={`${styles.card} ${styles.chartContainer}`}>
             <h3 className={styles.chartTitle}>🎯 Pass Rate Trend</h3>
+            {data.length === 1 && (
+              <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                <p className="text-blue-800 text-sm">
+                  <strong>ℹ️ Single Data Point:</strong> Only one test result found. The data point
+                  is shown as a dot. Add more test reports over time to see trend areas.
+                </p>
+              </div>
+            )}
             <ResponsiveContainer width="100%" height={300}>
               <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
                 <CartesianGrid strokeDasharray="3 3" />
@@ -284,6 +299,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
                   fill="#10b981"
                   fillOpacity={0.3}
                   strokeWidth={2}
+                  dot={{ fill: '#10b981', strokeWidth: 2, r: 4 }}
                 />
               </AreaChart>
             </ResponsiveContainer>

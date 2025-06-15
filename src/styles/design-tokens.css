@@ -2,11 +2,11 @@
 
 :root {
   /* Colors */
-  --color-primary: #2563eb;
-  --color-primary-dark: #1d4ed8;
-  --color-primary-light: #3b82f6;
+  --color-primary: #1e40af;
+  --color-primary-dark: #1e3a8a;
+  --color-primary-light: #2563eb;
 
-  --color-secondary: #6b7280;
+  --color-secondary: #4a5568;
   --color-secondary-dark: #4b5563;
   --color-secondary-light: #9ca3af;
 
@@ -37,8 +37,8 @@
   --color-error-text: #dc2626;
   --color-error-border: #fecaca;
 
-  --color-info: #2563eb;
-  --color-info-dark: #1d4ed8;
+  --color-info: #1e40af;
+  --color-info-dark: #1e3a8a;
   --color-info-bg: #dbeafe;
   --color-info-text: #2563eb;
   --color-info-border: #bfdbfe;
@@ -49,7 +49,7 @@
   --color-gray-200: #e5e7eb;
   --color-gray-300: #d1d5db;
   --color-gray-400: #9ca3af;
-  --color-gray-500: #6b7280;
+  --color-gray-500: #4a5568;
   --color-gray-600: #4b5563;
   --color-gray-700: #374151;
   --color-gray-800: #1f2937;
@@ -62,7 +62,7 @@
 
   /* Text colors */
   --color-text-primary: #111827;
-  --color-text-secondary: #6b7280;
+  --color-text-secondary: #4a5568;
   --color-text-tertiary: #9ca3af;
   --color-text-inverse: #ffffff;
 

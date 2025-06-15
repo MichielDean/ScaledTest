@@ -44,6 +44,31 @@ module.exports = {
       globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
     },
     {
+      displayName: 'Components',
+      testEnvironment: 'jsdom',
+      testMatch: ['**/tests/components/**/*.test.{ts,tsx}'],
+      setupFilesAfterEnv: ['<rootDir>/tests/components/setup.ts'],
+      moduleNameMapper: {
+        '^@/(.*)$': '<rootDir>/src/$1',
+        '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
+      },
+      transform: {
+        '^.+\\.tsx?$': [
+          'ts-jest',
+          {
+            tsconfig: {
+              jsx: 'react-jsx',
+            },
+          },
+        ],
+      },
+      moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
+      transformIgnorePatterns: ['node_modules/(?!(keycloak-js)/)'],
+      setupFiles: ['<rootDir>/tests/components/jest-setup.js'],
+      // Add global teardown to close resources properly
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
+    },
+    {
       displayName: 'Integration',
       ...commonConfig,
       testMatch: ['**/tests/integration/**/*.test.ts'],
