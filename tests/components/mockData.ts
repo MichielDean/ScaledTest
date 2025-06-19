@@ -179,7 +179,7 @@ export const generateVariedTestTrendsData = (): TestTrendsData[] => {
 /**
  * Mock successful API response
  */
-export const mockSuccessfulApiResponse = (data: TestTrendsData[]) => ({
+export const mockSuccessfulApiResponse = <T>(data: T[]) => ({
   success: true,
   data,
   meta: {

@@ -142,52 +142,6 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
     }
   };
 
-  const CustomTooltip = ({
-    active,
-    payload,
-  }: {
-    active?: boolean;
-    payload?: Array<{ payload: ErrorData }>;
-  }) => {
-    if (active && payload && payload.length) {
-      const data = payload[0].payload;
-      return (
-        <div className="bg-white p-4 border border-gray-300 rounded shadow-lg max-w-md">
-          <p className="font-semibold text-sm mb-2">Error Pattern:</p>
-          <p className="text-sm mb-2 text-gray-700 font-mono bg-gray-100 p-2 rounded">
-            {data.error}
-          </p>
-          <p className="text-red-600 font-medium">Occurrences: {data.count}</p>
-          <p className="text-blue-600">Affected Tests: {data.tests.length}</p>
-          <p
-            className={`font-medium capitalize ${
-              data.severity === 'critical'
-                ? 'text-red-700'
-                : data.severity === 'high'
-                  ? 'text-orange-700'
-                  : data.severity === 'medium'
-                    ? 'text-yellow-700'
-                    : 'text-green-700'
-            }`}
-          >
-            Severity: {data.severity}
-          </p>
-          {data.tests.length <= 3 && (
-            <div className="mt-2">
-              <p className="text-xs text-gray-600">Affected tests:</p>
-              {data.tests.slice(0, 3).map((test: string, idx: number) => (
-                <p key={idx} className="text-xs text-gray-500 truncate">
-                  {test}
-                </p>
-              ))}
-            </div>
-          )}
-        </div>
-      );
-    }
-    return null;
-  };
-
   // Prepare category data for chart
   const categoryData = Object.entries(errorCategories)
     .filter(([, count]) => count > 0)
@@ -258,7 +212,10 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
                   tick={{ fontSize: 12 }}
                   label={{ value: 'Occurrence Count', angle: -90, position: 'insideLeft' }}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip
+                  labelFormatter={label => `Error: ${label}`}
+                  formatter={value => [value, 'Error Count']}
+                />
                 <Bar dataKey="count" name="Error Count">
                   {topErrors.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={getBarColor(entry.severity)} />

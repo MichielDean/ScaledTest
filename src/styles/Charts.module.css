@@ -1,6 +1,14 @@
-/* Chart component styles using CSS Modules */
+/* Chart component styles using CSS M.loadingSpinner {
+  height: 3rem;
+  width: 3rem;
+  border: 2px solid transparent;
+  border-top-color: #3b82f6;
+  margin: 0 auto 1rem;
+  animation: spin 1s linear infinite;
+  border-radius: 50%;
+}
 
-/* Shared card styling to reduce duplication */
+.loadingText {ed card styling to reduce duplication */
 .card {
   background-color: white;
   padding: 1.5rem;
