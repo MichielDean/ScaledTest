@@ -55,3 +55,24 @@ export interface FlakyTestData {
   isMarkedFlaky: boolean;
   isFlaky: boolean;
 }
+
+/**
+ * Individual test run data for flaky test visualization
+ */
+export interface TestRunData {
+  testName: string;
+  suite: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration: number;
+  message?: string;
+  trace?: string;
+  timestamp: string;
+  reportId: string;
+}
+
+/**
+ * Enhanced flaky test data with individual test runs
+ */
+export interface FlakyTestWithRuns extends FlakyTestData {
+  testRuns: TestRunData[];
+}
