@@ -6,7 +6,7 @@ import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { useAuth } from '../auth/KeycloakProvider';
 import { UserRole } from '../auth/keycloak';
-import { TestTrendsChart } from '../components/charts';
+import { TestTrendsChart, FlakyTestDetectionChart } from '../components/charts';
 import styles from '../styles/Dashboard.module.css';
 
 const Dashboard: NextPage = () => {
@@ -44,16 +44,6 @@ const Dashboard: NextPage = () => {
     <div>
       <Head>
         <title>Dashboard - Keycloak Auth Demo</title>
-        <style jsx>{`
-          @keyframes spin {
-            0% {
-              transform: rotate(0deg);
-            }
-            100% {
-              transform: rotate(360deg);
-            }
-          }
-        `}</style>
       </Head>
 
       <Header />
@@ -111,6 +101,12 @@ const Dashboard: NextPage = () => {
             <div className={styles.analyticsCard}>
               <h3 className={styles.analyticsCardTitle}>📈 Test Trends Analysis</h3>
               <TestTrendsChart days={7} token={token} />
+            </div>
+
+            {/* Flaky Test Detection Card */}
+            <div className={styles.analyticsCard}>
+              <h3 className={styles.analyticsCardTitle}>🚨 Flaky Test Detection</h3>
+              <FlakyTestDetectionChart token={token} />
             </div>
           </div>
         )}

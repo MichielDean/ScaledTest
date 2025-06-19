@@ -1,4 +1,3 @@
-// OpenSearch Analytics Service - All dashboard data comes from OpenSearch
 import opensearchClient, { ensureCtrfReportsIndexExists } from './opensearch';
 import { dbLogger as logger, logError } from '../utils/logger';
 import {
@@ -8,6 +7,7 @@ import {
   ErrorAnalysisData,
   FlakyTestData,
 } from '../types/dashboard';
+import { CtrfTestSource } from '../types/opensearch';
 
 // OpenSearch aggregation bucket interfaces
 interface SuiteBucket {
@@ -438,6 +438,125 @@ export async function getErrorAnalysisFromOpenSearch(): Promise<ErrorAnalysisDat
 }
 
 /**
+ * Individual test run data for flaky test visualization
+ */
+export interface TestRunData {
+  testName: string;
+  suite: string;
+  status: 'passed' | 'failed' | 'skipped';
+  duration: number;
+  message?: string;
+  trace?: string;
+  timestamp: string;
+  reportId: string;
+}
+
+/**
+ * Enhanced flaky test data with individual test runs
+ */
+export interface FlakyTestWithRuns extends FlakyTestData {
+  testRuns: TestRunData[];
+}
+
+/**
+ * Get individual test runs for flaky tests from OpenSearch
+ * Returns detailed run-by-run data for grid visualization
+ */
+export async function getFlakyTestRunsFromOpenSearch(): Promise<FlakyTestWithRuns[]> {
+  return withIndexEnsured(async () => {
+    try {
+      logger.info('Fetching flaky test runs with individual execution details from OpenSearch');
+
+      // First, get flaky test names
+      const flakyTests = await getFlakyTestsFromOpenSearch();
+      const flakyTestNames = flakyTests.map(test => test.testName);
+
+      if (flakyTestNames.length === 0) {
+        return [];
+      }
+
+      // Then get individual test runs for these flaky tests
+      const response = await opensearchClient.search({
+        index: 'ctrf-reports',
+        body: {
+          size: 1000, // Limit to prevent overwhelming response
+          query: {
+            nested: {
+              path: 'results.tests',
+              query: {
+                bool: {
+                  must: [
+                    {
+                      terms: {
+                        'results.tests.name.keyword': flakyTestNames,
+                      },
+                    },
+                  ],
+                },
+              },
+            },
+          },
+          _source: ['reportId', 'timestamp', 'results.tests'],
+          sort: [{ timestamp: { order: 'desc' } }],
+        },
+      });
+
+      // Process the results
+      const testRunsMap = new Map<string, TestRunData[]>();
+
+      response.body.hits.hits.forEach(hit => {
+        const source = hit._source as CtrfTestSource;
+        if (!source) return;
+
+        const reportId = source.reportId;
+        const timestamp = source.timestamp;
+        const tests = source.results?.tests || [];
+
+        tests.forEach(test => {
+          if (flakyTestNames.includes(test.name)) {
+            const testRun: TestRunData = {
+              testName: test.name,
+              suite: test.suite || 'Unknown',
+              status: test.status as 'passed' | 'failed' | 'skipped',
+              duration: test.duration || 0,
+              message: test.message,
+              trace: test.trace,
+              timestamp: timestamp,
+              reportId: reportId,
+            };
+
+            if (!testRunsMap.has(test.name)) {
+              testRunsMap.set(test.name, []);
+            }
+            testRunsMap.get(test.name)!.push(testRun);
+          }
+        });
+      });
+
+      // Combine flaky test data with individual runs
+      const result: FlakyTestWithRuns[] = flakyTests
+        .map(flakyTest => ({
+          ...flakyTest,
+          testRuns: testRunsMap.get(flakyTest.testName) || [],
+        }))
+        .filter(test => test.testRuns.length > 0);
+
+      logger.info(
+        {
+          flakyTestsWithRuns: result.length,
+          totalTestRuns: result.reduce((sum, test) => sum + test.testRuns.length, 0),
+        },
+        'Successfully retrieved flaky test runs from OpenSearch'
+      );
+      return result;
+    } catch (error) {
+      logError(logger, 'Failed to get flaky test runs from OpenSearch', error);
+      throw new Error('OpenSearch query failed for flaky test runs');
+    }
+  });
+}
+
+/**
  * Get flaky test detection data from OpenSearch
  * Identifies tests that have inconsistent results across multiple runs
  */
@@ -499,9 +618,8 @@ export async function getFlakyTestsFromOpenSearch(): Promise<FlakyTestData[]> {
         .filter((bucket: FlakyTestBucket) => {
           // Consider a test flaky if it has multiple status types or is marked as flaky
           const statusCount = bucket.status_distribution?.buckets?.length || 0;
-          const totalRuns = bucket.total_runs?.value || 0;
           const markedFlaky = (bucket.marked_flaky?.doc_count || 0) > 0;
-          return statusCount > 1 || markedFlaky || totalRuns > 5; // Filter for potentially flaky tests
+          return statusCount > 1 || markedFlaky; // Any test with mixed results or marked as flaky
         })
         .map((bucket: FlakyTestBucket) => {
           const statusBuckets = bucket.status_distribution?.buckets || [];
@@ -518,7 +636,8 @@ export async function getFlakyTestsFromOpenSearch(): Promise<FlakyTestData[]> {
 
           const flakyScore = totalRuns > 0 ? (failed / totalRuns) * 100 : 0;
           const avgDuration = bucket.avg_duration?.value || 0;
-          const isFlaky = flakyScore > 10 && flakyScore < 90; // Consider flaky if between 10-90% failure rate
+          // Consider flaky if it has both passes and failures (any ratio)
+          const isFlaky = passed > 0 && failed > 0;
 
           return {
             testName: bucket.key,

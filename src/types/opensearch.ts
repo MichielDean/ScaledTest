@@ -64,3 +64,49 @@ export interface OpenSearchApiResponse<T> extends SuccessApiResponse<T[]> {
 export interface OpenSearchErrorApiResponse extends ErrorApiResponse {
   source: 'OpenSearch';
 }
+
+/**
+ * OpenSearch hit structure for search results
+ */
+export interface OpenSearchHit<T = Record<string, unknown>> {
+  _index: string;
+  _id: string;
+  _score: number;
+  _source: T;
+}
+
+/**
+ * OpenSearch search response structure
+ */
+export interface OpenSearchSearchResponse<T = Record<string, unknown>> {
+  body: {
+    hits: {
+      total: {
+        value: number;
+        relation: string;
+      };
+      hits: OpenSearchHit<T>[];
+    };
+  };
+  statusCode: number;
+  headers: Record<string, unknown>;
+  meta: Record<string, unknown>;
+}
+
+/**
+ * CTRF test result source structure from OpenSearch
+ */
+export interface CtrfTestSource {
+  reportId: string;
+  timestamp: string;
+  results?: {
+    tests?: Array<{
+      name: string;
+      suite?: string;
+      status: 'passed' | 'failed' | 'skipped';
+      duration?: number;
+      message?: string;
+      trace?: string;
+    }>;
+  };
+}
