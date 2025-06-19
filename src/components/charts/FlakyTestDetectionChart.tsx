@@ -85,7 +85,7 @@ const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) =
           <div className={flakyStyles.textCenter}>
             <div className={styles.loadingSpinner}></div>
             <p className={styles.loadingText}>Loading flaky test analysis from OpenSearch...</p>
-            <p className={styles.loadingSubtext}>Analyzing test patterns and execution history</p>
+            <p className={styles.loadingSubtext}>Analyzing test patterns across all reports</p>
           </div>
         </div>
       </div>

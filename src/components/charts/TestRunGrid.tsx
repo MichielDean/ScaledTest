@@ -9,8 +9,11 @@ interface TestRunGridProps {
 }
 
 const TestRunGrid: React.FC<TestRunGridProps> = ({ testRuns, testName, maxRuns = 50 }) => {
+  // Ensure testRuns is an array before processing
+  const runsArray = Array.isArray(testRuns) ? testRuns : [];
+
   // Sort runs by timestamp (newest first)
-  const sortedRuns = [...testRuns]
+  const sortedRuns = [...runsArray]
     .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime())
     .slice(0, maxRuns);
 

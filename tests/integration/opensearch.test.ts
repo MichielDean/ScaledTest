@@ -101,20 +101,31 @@ describe('OpenSearch Client', () => {
       await ensureCtrfReportsIndexExists();
 
       expect(mockClient.indices.exists).toHaveBeenCalledWith({ index: 'ctrf-reports' });
-      expect(mockClient.indices.create).toHaveBeenCalledWith(
-        expect.objectContaining({
-          index: 'ctrf-reports',
-          body: expect.objectContaining({
-            mappings: expect.objectContaining({
-              properties: expect.objectContaining({
-                reportId: expect.any(Object),
-                reportFormat: expect.any(Object),
-                'results.tests': expect.any(Object),
-              }),
+
+      // Verify the create call was made with the expected structure
+      expect(mockClient.indices.create).toHaveBeenCalledWith({
+        index: 'ctrf-reports',
+        body: {
+          mappings: {
+            properties: expect.objectContaining({
+              reportId: { type: 'keyword' },
+              reportFormat: { type: 'keyword' },
+              specVersion: { type: 'keyword' },
+              timestamp: { type: 'date' },
+              storedAt: { type: 'date' },
+              generatedBy: { type: 'keyword' },
+              results: {
+                properties: expect.objectContaining({
+                  tool: expect.any(Object),
+                  summary: expect.any(Object),
+                  tests: expect.any(Object),
+                  environment: expect.any(Object),
+                }),
+              },
             }),
-          }),
-        })
-      );
+          },
+        },
+      });
     });
 
     it('should not create CTRF reports index if it already exists', async () => {

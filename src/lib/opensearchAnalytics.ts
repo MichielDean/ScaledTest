@@ -7,7 +7,7 @@ import {
   ErrorAnalysisData,
   FlakyTestData,
 } from '../types/dashboard';
-import { OpenSearchSearchResponse, CtrfTestSource } from '../types/opensearch';
+import { CtrfTestSource } from '../types/opensearch';
 
 // OpenSearch aggregation bucket interfaces
 interface SuiteBucket {

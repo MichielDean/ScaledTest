@@ -61,6 +61,24 @@ describe('FlakyTestDetectionChart Component', () => {
       avgDuration: 1200,
       isMarkedFlaky: false,
       isFlaky: true,
+      testRuns: [
+        {
+          testName: 'should login successfully',
+          suite: 'Auth Tests',
+          status: 'passed' as const,
+          duration: 1100,
+          timestamp: '2024-01-01T10:00:00Z',
+          reportId: 'report-1',
+        },
+        {
+          testName: 'should login successfully',
+          suite: 'Auth Tests',
+          status: 'failed' as const,
+          duration: 1300,
+          timestamp: '2024-01-01T09:00:00Z',
+          reportId: 'report-2',
+        },
+      ],
     },
     {
       testName: 'should load dashboard',
@@ -73,6 +91,24 @@ describe('FlakyTestDetectionChart Component', () => {
       avgDuration: 800,
       isMarkedFlaky: true,
       isFlaky: true,
+      testRuns: [
+        {
+          testName: 'should load dashboard',
+          suite: 'UI Tests',
+          status: 'passed' as const,
+          duration: 750,
+          timestamp: '2024-01-01T10:00:00Z',
+          reportId: 'report-3',
+        },
+        {
+          testName: 'should load dashboard',
+          suite: 'UI Tests',
+          status: 'failed' as const,
+          duration: 850,
+          timestamp: '2024-01-01T09:00:00Z',
+          reportId: 'report-4',
+        },
+      ],
     },
     {
       testName: 'should validate input',
@@ -85,6 +121,24 @@ describe('FlakyTestDetectionChart Component', () => {
       avgDuration: 500,
       isMarkedFlaky: false,
       isFlaky: false,
+      testRuns: [
+        {
+          testName: 'should validate input',
+          suite: 'Form Tests',
+          status: 'passed' as const,
+          duration: 480,
+          timestamp: '2024-01-01T10:00:00Z',
+          reportId: 'report-5',
+        },
+        {
+          testName: 'should validate input',
+          suite: 'Form Tests',
+          status: 'failed' as const,
+          duration: 520,
+          timestamp: '2024-01-01T09:00:00Z',
+          reportId: 'report-6',
+        },
+      ],
     },
   ];
 
@@ -157,7 +211,7 @@ describe('FlakyTestDetectionChart Component', () => {
   });
 
   describe('Chart Rendering with Data', () => {
-    it('should render bar chart and scatter chart when flaky tests are found', async () => {
+    it('should render flaky test patterns grid when flaky tests are found', async () => {
       mockFetch.mockResolvedValueOnce({
         ok: true,
         json: () => Promise.resolve(mockSuccessfulApiResponse(mockFlakyTestsData)),
@@ -166,16 +220,14 @@ describe('FlakyTestDetectionChart Component', () => {
       render(<FlakyTestDetectionChart {...defaultProps} />);
 
       await waitFor(() => {
-        // Check main chart components are rendered
-        expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
-        expect(screen.getByTestId('scatter-chart')).toBeInTheDocument();
+        // Check main pattern visualization components are rendered
+        expect(screen.getByText('🔍 Flaky Test Execution Patterns')).toBeInTheDocument();
+        expect(screen.getByText('📈 Flaky Test Summary')).toBeInTheDocument();
       });
 
-      // Verify chart data contains flaky tests
-      const barChart = screen.getByTestId('bar-chart');
-      const barChartData = JSON.parse(barChart.getAttribute('data-chart-data') || '[]');
-      expect(barChartData.length).toBeGreaterThan(0);
-      expect(barChartData.some((test: { isFlaky: boolean }) => test.isFlaky)).toBe(true);
+      // Verify flaky test data is displayed
+      expect(screen.getByText('should login successfully')).toBeInTheDocument();
+      expect(screen.getByText('should load dashboard')).toBeInTheDocument();
     });
 
     it('should display correct summary statistics', async () => {
@@ -256,7 +308,7 @@ describe('FlakyTestDetectionChart Component', () => {
 
       // Should show success state
       await waitFor(() => {
-        expect(screen.getByTestId('bar-chart')).toBeInTheDocument();
+        expect(screen.getByText('🔍 Flaky Test Execution Patterns')).toBeInTheDocument();
       });
 
       expect(mockFetch).toHaveBeenCalledTimes(2);
@@ -292,7 +344,7 @@ describe('FlakyTestDetectionChart Component', () => {
 
       await waitFor(() => {
         expect(mockFetch).toHaveBeenCalledWith(
-          '/api/analytics/flaky-tests',
+          '/api/analytics/flaky-test-runs',
           expect.objectContaining({
             headers: expect.objectContaining({
               Authorization: 'Bearer test-token',
