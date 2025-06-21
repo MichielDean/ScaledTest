@@ -2,9 +2,13 @@ import { execSync } from 'child_process';
 import { spawn, ChildProcess } from 'child_process';
 import waitOn from 'wait-on';
 import path from 'path';
+import { config } from 'dotenv';
 import { teardown } from './teardown';
 import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 import { testLogger } from '../../src/utils/logger';
+
+// Load environment variables from .env file
+config();
 
 // Global variables to track processes
 let nextAppProcess: ChildProcess | null = null;
@@ -58,8 +62,49 @@ export async function startDockerEnvironment(): Promise<void> {
 export async function setupKeycloak(): Promise<void> {
   try {
     testLogger.info('Setting up Keycloak configuration...');
-    execSync('node scripts/setup-keycloak.js', { stdio: 'inherit' });
+    // Set required environment variables for Keycloak setup
+    process.env.KEYCLOAK_BASE_URL = process.env.KEYCLOAK_BASE_URL || 'http://localhost:8080';
+    process.env.KEYCLOAK_REALM = process.env.KEYCLOAK_REALM || 'scaledtest';
+    process.env.KEYCLOAK_CLIENT_ID = process.env.KEYCLOAK_CLIENT_ID || 'scaledtest-client';
+    process.env.KEYCLOAK_ADMIN_USER = process.env.KEYCLOAK_ADMIN_USER || 'admin';
+    process.env.KEYCLOAK_ADMIN_PASSWORD = process.env.KEYCLOAK_ADMIN_PASSWORD || 'admin';
+
+    // Ensure user creation environment variables are set
+    process.env.KEYCLOAK_READONLY_USER_USERNAME =
+      process.env.KEYCLOAK_READONLY_USER_USERNAME || 'readonly@example.com';
+    process.env.KEYCLOAK_READONLY_USER_PASSWORD =
+      process.env.KEYCLOAK_READONLY_USER_PASSWORD || 'password';
+    process.env.KEYCLOAK_READONLY_USER_EMAIL =
+      process.env.KEYCLOAK_READONLY_USER_EMAIL || 'readonly@example.com';
+    process.env.KEYCLOAK_READONLY_USER_ROLES =
+      process.env.KEYCLOAK_READONLY_USER_ROLES || 'readonly';
+
+    process.env.KEYCLOAK_MAINTAINER_USER_USERNAME =
+      process.env.KEYCLOAK_MAINTAINER_USER_USERNAME || 'maintainer@example.com';
+    process.env.KEYCLOAK_MAINTAINER_USER_PASSWORD =
+      process.env.KEYCLOAK_MAINTAINER_USER_PASSWORD || 'password';
+    process.env.KEYCLOAK_MAINTAINER_USER_EMAIL =
+      process.env.KEYCLOAK_MAINTAINER_USER_EMAIL || 'maintainer@example.com';
+    process.env.KEYCLOAK_MAINTAINER_USER_ROLES =
+      process.env.KEYCLOAK_MAINTAINER_USER_ROLES || 'readonly,maintainer';
+
+    process.env.KEYCLOAK_OWNER_USER_USERNAME =
+      process.env.KEYCLOAK_OWNER_USER_USERNAME || 'owner@example.com';
+    process.env.KEYCLOAK_OWNER_USER_PASSWORD =
+      process.env.KEYCLOAK_OWNER_USER_PASSWORD || 'password';
+    process.env.KEYCLOAK_OWNER_USER_EMAIL =
+      process.env.KEYCLOAK_OWNER_USER_EMAIL || 'owner@example.com';
+    process.env.KEYCLOAK_OWNER_USER_ROLES =
+      process.env.KEYCLOAK_OWNER_USER_ROLES || 'readonly,maintainer,owner';
+
+    execSync('npx ts-node --project tsconfig.node.json scripts/setup-keycloak.ts', {
+      stdio: 'inherit',
+      env: process.env, // Make sure to pass the environment variables
+    });
     testLogger.info('Keycloak setup completed');
+
+    // Give Keycloak a moment to fully process the realm and user creation
+    await new Promise(resolve => setTimeout(resolve, 2000));
   } catch (error) {
     testLogger.error({ err: error }, 'Failed to setup Keycloak');
     throw error;
@@ -102,12 +147,9 @@ export async function startNextApp(): Promise<void> {
   }
 
   // Use next start to run the production build
-  // You might want to build the app first if it's not already built
+  // Note: Build is already done in the main setup function
   try {
-    // Check if we need to build first
-    execSync('npm run build', { stdio: 'inherit' });
-
-    // Start the Next.js app
+    // Start the Next.js app (build is already completed)
     nextAppProcess = spawn('npx', ['next', 'start'], {
       stdio: 'pipe',
       shell: true,
@@ -178,6 +220,20 @@ export async function startNextApp(): Promise<void> {
 }
 
 /**
+ * Build Next.js application
+ */
+export async function buildNextApp(): Promise<void> {
+  testLogger.info('Building Next.js application...');
+  try {
+    execSync('npm run build', { stdio: 'inherit' });
+    testLogger.info('Next.js build completed successfully');
+  } catch (error) {
+    testLogger.error({ err: error }, 'Next.js build failed');
+    throw error;
+  }
+}
+
+/**
  * Main setup function for Jest
  */
 export default async function setup(): Promise<void> {
@@ -186,6 +242,9 @@ export default async function setup(): Promise<void> {
   try {
     // Set up required environment variables
     setupOpenSearchTestEnv();
+
+    // Build the application first - fail fast if build issues exist
+    await buildNextApp();
 
     // First try to clean up any existing environment
     // Ignore any errors if nothing is running

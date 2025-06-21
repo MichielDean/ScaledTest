@@ -44,7 +44,7 @@ export async function setupKeycloak(): Promise<void> {
 
   try {
     // Run the Keycloak setup script
-    execSync('node scripts/setup-keycloak.js', { stdio: 'inherit' });
+    execSync('npx ts-node scripts/setup-keycloak.ts', { stdio: 'inherit' });
     apiLogger.info('Keycloak setup completed');
   } catch (error) {
     apiLogger.error('Failed to set up Keycloak:', error);

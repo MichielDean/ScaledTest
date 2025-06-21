@@ -42,8 +42,12 @@ export const getAuthToken = async (
     return response.data.access_token;
   } catch (error) {
     // In test environments, errors should be thrown rather than logged to console
+    const axiosError = error as { response?: { status: number; data: unknown }; message: string };
+    const errorDetails = axiosError.response
+      ? `Status: ${axiosError.response.status}, Data: ${JSON.stringify(axiosError.response.data)}`
+      : axiosError.message;
     throw new Error(
-      `Failed to authenticate test user: ${error instanceof Error ? error.message : 'Unknown error'}`
+      `Failed to authenticate test user: ${errorDetails}. Token URL: ${tokenUrl}, Username: ${username}`
     );
   }
 };

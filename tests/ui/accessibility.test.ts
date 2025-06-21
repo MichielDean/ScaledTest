@@ -2,13 +2,13 @@ import { describe, beforeEach, afterEach, it, expect } from '@jest/globals';
 import { injectAxe, getViolations } from 'axe-playwright';
 import type { Page } from 'playwright';
 import type { Result, NodeResult } from 'axe-core';
+import { testLogger } from '../../src/utils/logger';
 
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { RegisterPage } from './pages/RegisterPage';
 import { TestUsers } from './models/TestUsers';
-import { testLogger } from '../../src/utils/logger';
 
 // For Jest-Playwright integration
 declare const page: Page;
@@ -812,14 +812,14 @@ describe('Accessibility Tests', () => {
 
         // Log violation details for debugging if any are found
         if (loadingViolations.length > 0) {
-          console.log('Loading state violations found:');
-          loadingViolations.forEach((violation, index) => {
-            console.log(`${index + 1}. ${violation.id} (${violation.impact})`);
-            console.log(`   Description: ${violation.description}`);
-            console.log(`   Help: ${violation.helpUrl}`);
-            violation.nodes.forEach((node, nodeIndex) => {
-              console.log(`   Node ${nodeIndex + 1}: ${node.html.substring(0, 200)}...`);
-              console.log(`   Target: ${node.target}`);
+          testLogger.warn('Loading state violations found:');
+          loadingViolations.forEach((violation: Result, index: number) => {
+            testLogger.warn(`${index + 1}. ${violation.id} (${violation.impact})`);
+            testLogger.warn(`   Description: ${violation.description}`);
+            testLogger.warn(`   Help: ${violation.helpUrl}`);
+            violation.nodes.forEach((node: NodeResult, nodeIndex: number) => {
+              testLogger.warn(`   Node ${nodeIndex + 1}: ${node.html.substring(0, 200)}...`);
+              testLogger.warn(`   Target: ${node.target}`);
             });
           });
         }

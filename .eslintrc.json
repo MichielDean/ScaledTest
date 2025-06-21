@@ -21,11 +21,7 @@
   },
   "overrides": [
     {
-      "files": [
-        "tests/jest-playwright-setup.js",
-        "tests/utils/closeHandles.js",
-        "tests/components/jest-setup.js"
-      ],
+      "files": ["tests/jest-playwright-setup.js", "tests/components/jest-setup.js"],
       "rules": {
         "@typescript-eslint/no-require-imports": "off",
         "no-console": "off"
