@@ -15,7 +15,7 @@ const commonConfig = {
 // Define Playwright-specific config
 const playwrightConfig = {
   ...commonConfig,
-  setupFilesAfterEnv: ['<rootDir>/tests/jest-playwright-setup.js'],
+  setupFilesAfterEnv: ['<rootDir>/tests/jest-playwright-setup.ts'],
 };
 
 module.exports = {
@@ -41,13 +41,16 @@ module.exports = {
       testMatch: ['**/tests/unit/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/unit/setup.ts'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
     },
     {
       displayName: 'Components',
       testEnvironment: 'jsdom',
       testMatch: ['**/tests/components/**/*.test.{ts,tsx}'],
-      setupFilesAfterEnv: ['<rootDir>/tests/components/setup.ts'],
+      setupFilesAfterEnv: [
+        '<rootDir>/tests/components/setup.ts',
+        '<rootDir>/tests/components/jest-setup.ts',
+      ],
       moduleNameMapper: {
         '^@/(.*)$': '<rootDir>/src/$1',
         '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
@@ -64,9 +67,8 @@ module.exports = {
       },
       moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
       transformIgnorePatterns: ['node_modules/(?!(keycloak-js)/)'],
-      setupFiles: ['<rootDir>/tests/components/jest-setup.js'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
     },
     {
       displayName: 'Integration',
@@ -74,7 +76,7 @@ module.exports = {
       testMatch: ['**/tests/integration/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.js',
+      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
     },
     {
       displayName: 'System',

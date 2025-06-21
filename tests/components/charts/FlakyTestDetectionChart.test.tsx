@@ -4,6 +4,10 @@ import userEvent from '@testing-library/user-event';
 import FlakyTestDetectionChart from '../../../src/components/charts/FlakyTestDetectionChart';
 import { mockSuccessfulApiResponse } from '../mockData';
 
+// Mock fetch for tests
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
 // Mock Recharts components for testing
 jest.mock('recharts', () => ({
   BarChart: ({ children, data }: React.PropsWithChildren<{ data: unknown }>) => (
@@ -40,9 +44,6 @@ jest.mock('recharts', () => ({
     <div data-testid="responsive-container">{children}</div>
   ),
 }));
-
-// Mock fetch globally
-const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
 describe('FlakyTestDetectionChart Component', () => {
   const defaultProps = {

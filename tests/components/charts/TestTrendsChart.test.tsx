@@ -13,6 +13,10 @@ import {
   mockApiErrorResponse,
 } from '../mockData';
 
+// Mock fetch for tests
+const mockFetch = jest.fn();
+global.fetch = mockFetch;
+
 // Mock Recharts components for testing
 jest.mock('recharts', () => ({
   LineChart: ({ children, data }: React.PropsWithChildren<{ data: unknown }>) => (
@@ -45,9 +49,6 @@ jest.mock('recharts', () => ({
     <div data-testid="responsive-container">{children}</div>
   ),
 }));
-
-// Mock fetch globally
-const mockFetch = global.fetch as jest.MockedFunction<typeof fetch>;
 
 describe('TestTrendsChart Component', () => {
   const defaultProps = {

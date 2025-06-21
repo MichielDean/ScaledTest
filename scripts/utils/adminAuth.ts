@@ -1,27 +1,40 @@
 /**
- * Keycloak Admin Authentication Utilities (CommonJS)
+ * Keycloak Admin Authentication Utilities
  *
  * Shared utilities for authenticating with Keycloak admin APIs.
  * This eliminates duplication between setup scripts and admin API endpoints.
  */
 
-const axios = require('axios');
-const { getRequiredEnvVar } = require('./env');
+import axios from 'axios';
+import { getRequiredEnvVar } from './env';
+
+interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_expires_in: number;
+  token_type: string;
+  not_before_policy: number;
+  scope: string;
+}
 
 /**
  * Get admin access token from Keycloak
- * @param {string} [keycloakUrl] - The base URL of the Keycloak server
- * @param {string} [adminUsername] - Admin username (optional, will use env var if not provided)
- * @param {string} [adminPassword] - Admin password (optional, will use env var if not provided)
- * @returns {Promise<string>} Promise resolving to the admin access token
+ * @param keycloakUrl - The base URL of the Keycloak server
+ * @param adminUsername - Admin username (optional, will use env var if not provided)
+ * @param adminPassword - Admin password (optional, will use env var if not provided)
+ * @returns Promise resolving to the admin access token
  */
-const getKeycloakAdminToken = async (keycloakUrl, adminUsername, adminPassword) => {
+export const getKeycloakAdminToken = async (
+  keycloakUrl?: string,
+  adminUsername?: string,
+  adminPassword?: string
+): Promise<string> => {
   const baseUrl = keycloakUrl || getRequiredEnvVar('KEYCLOAK_URL');
   const username = adminUsername || getRequiredEnvVar('KEYCLOAK_ADMIN_USERNAME');
   const password = adminPassword || getRequiredEnvVar('KEYCLOAK_ADMIN_PASSWORD');
 
   try {
-    const response = await axios.post(
+    const response = await axios.post<TokenResponse>(
       `${baseUrl}/realms/master/protocol/openid-connect/token`,
       new URLSearchParams({
         grant_type: 'password',
@@ -45,18 +58,23 @@ const getKeycloakAdminToken = async (keycloakUrl, adminUsername, adminPassword) 
 
 /**
  * Create authorization headers for admin API requests
- * @param {string} [keycloakUrl] - The base URL of the Keycloak server (optional)
- * @param {string} [adminUsername] - Admin username (optional)
- * @param {string} [adminPassword] - Admin password (optional)
- * @returns {Promise<{Authorization: string}>} Promise resolving to authorization headers object
+ * @param keycloakUrl - The base URL of the Keycloak server (optional)
+ * @param adminUsername - Admin username (optional)
+ * @param adminPassword - Admin password (optional)
+ * @returns Promise resolving to authorization headers object
  */
-const getAdminAuthHeaders = async (keycloakUrl, adminUsername, adminPassword) => {
+export const getAdminAuthHeaders = async (
+  keycloakUrl?: string,
+  adminUsername?: string,
+  adminPassword?: string
+): Promise<{ Authorization: string }> => {
   const token = await getKeycloakAdminToken(keycloakUrl, adminUsername, adminPassword);
   return {
     Authorization: `Bearer ${token}`,
   };
 };
 
+// CommonJS compatibility for scripts that still use require()
 module.exports = {
   getKeycloakAdminToken,
   getAdminAuthHeaders,

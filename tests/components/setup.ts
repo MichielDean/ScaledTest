@@ -1,9 +1,13 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
 
-// Setup OpenSearch test environment
-setupOpenSearchTestEnv();
+// For component tests, we don't need actual OpenSearch setup
+// Just mock the environment variables
+process.env.OPENSEARCH_HOST = 'http://localhost:9200';
+process.env.OPENSEARCH_USERNAME = 'admin';
+process.env.OPENSEARCH_PASSWORD = 'admin';
+process.env.OPENSEARCH_TEST_RESULTS_INDEX = 'test-results-test';
+process.env.OPENSEARCH_SSL_VERIFY = 'false';
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -104,9 +108,6 @@ jest.mock('../../src/auth/KeycloakProvider', () => ({
   KeycloakProvider: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
 }));
-
-// Global fetch mock for API calls
-global.fetch = jest.fn();
 
 // Mock CSS modules
 jest.mock(
