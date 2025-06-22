@@ -1,7 +1,13 @@
 // Define common configuration options for all projects
 const commonConfig = {
+  preset: 'ts-jest',
   transform: {
-    '^.+\\.tsx?$': 'ts-jest',
+    '^.+\\.tsx?$': [
+      'ts-jest',
+      {
+        useESM: false,
+      },
+    ],
   },
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transformIgnorePatterns: [
@@ -18,7 +24,7 @@ const playwrightConfig = {
   setupFilesAfterEnv: ['<rootDir>/tests/jest-playwright-setup.js'],
 };
 
-module.exports = {
+export default {
   // Global reporters configuration - applies to all projects
   reporters: [
     'default',
@@ -45,6 +51,7 @@ module.exports = {
     },
     {
       displayName: 'Components',
+      preset: 'ts-jest',
       testEnvironment: 'jsdom',
       testMatch: ['**/tests/components/**/*.test.{ts,tsx}'],
       setupFilesAfterEnv: ['<rootDir>/tests/components/setup.ts'],
@@ -56,6 +63,7 @@ module.exports = {
         '^.+\\.tsx?$': [
           'ts-jest',
           {
+            useESM: false,
             tsconfig: {
               jsx: 'react-jsx',
             },

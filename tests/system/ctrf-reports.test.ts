@@ -16,9 +16,14 @@ describe('CTRF Reports API System Tests', () => {
   const api = supertest(API_URL);
 
   beforeAll(async () => {
-    // Testing CTRF API against specified URL
-    authHeaders = await getAuthHeader();
-    // Successfully authenticated with Keycloak for CTRF tests
+    try {
+      // Testing CTRF API against specified URL
+      authHeaders = await getAuthHeader();
+      // Successfully authenticated with Keycloak for CTRF tests
+    } catch (error) {
+      console.error('Failed to authenticate in beforeAll:', error);
+      throw error;
+    }
   }, 30000);
 
   describe('CTRF Report Storage', () => {

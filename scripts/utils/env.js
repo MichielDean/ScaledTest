@@ -1,10 +1,10 @@
 /**
- * Environment Variable Utilities (CommonJS)
+ * Environment Variable Utilities (ES Modules)
  *
  * Shared utilities for handling environment variables across the application.
  * This prevents code duplication and ensures consistent error messages.
  *
- * CommonJS version for use in Node.js scripts that use require().
+ * ES modules version for modern Node.js scripts.
  */
 
 /**
@@ -71,7 +71,7 @@ function parseIntEnvVar(name, defaultValue) {
   return parsed;
 }
 
-module.exports = {
+export {
   getRequiredEnvVar,
   getOptionalEnvVar,
   getOptionalEnvVarOrUndefined,

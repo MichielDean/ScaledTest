@@ -11,14 +11,14 @@ global.TextEncoder = TextEncoder;
 global.TextDecoder = TextDecoder;
 
 // Mock IntersectionObserver for jsdom environment
-global.IntersectionObserver = jest.fn().mockImplementation(() => ({
+global.IntersectionObserver = jest.fn(() => ({
   observe: jest.fn(),
   unobserve: jest.fn(),
   disconnect: jest.fn(),
 }));
 
 // Mock ResizeObserver for chart components (Recharts)
-global.ResizeObserver = jest.fn().mockImplementation(() => ({
+global.ResizeObserver = jest.fn(() => ({
   observe: jest.fn(),
   unobserve: jest.fn(),
   disconnect: jest.fn(),

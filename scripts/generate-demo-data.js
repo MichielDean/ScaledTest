@@ -1,4 +1,4 @@
-const { sendTestResults } = require('./send-test-results.js');
+import { sendTestResults } from './send-test-results.js';
 
 /**
  * Generate demo CTRF test results with interesting data points for visualization
@@ -525,8 +525,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = {
-  generateDemoReport,
-  generateAndSendDemoData,
-  DEMO_SCENARIOS,
-};
+export { generateDemoReport, generateAndSendDemoData, DEMO_SCENARIOS };

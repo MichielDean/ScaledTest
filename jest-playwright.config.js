@@ -1,4 +1,4 @@
-module.exports = {
+export default {
   browsers: ['chromium'],
   launchOptions: {
     headless: true,
