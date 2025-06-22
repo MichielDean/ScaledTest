@@ -4,12 +4,30 @@
 
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
 
-**NEVER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. If you encounter linting errors, resolve them properly by:
+**NEVER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. **This includes all forms of ESLint suppression:**
+
+- `// eslint-disable`
+- `// eslint-disable-line`
+- `// eslint-disable-next-line`
+- `/* eslint-disable */`
+- `/* eslint-disable-line */`
+- `/* eslint-disable-next-line */`
+- Rule-specific disables like `// eslint-disable-next-line @typescript-eslint/no-unused-vars`
+
+**Instead, resolve linting errors properly by:**
 
 - Fixing unused variables and imports
 - Adding proper type annotations
 - Following proper naming conventions
 - Ensuring proper dependency usage
+- Refactor code to comply with ESLint rules
+- Using proper TypeScript patterns (prefer interfaces over types, proper generics)
+- Implementing proper error handling instead of ignoring Promise rejections
+- Adding proper return types to functions
+- Using semantic variable and function names
+- Properly handling async/await patterns
+
+**If you encounter a rule that seems inappropriate for the codebase, discuss it with the team to potentially modify the ESLint configuration rather than suppressing the rule.**
 
 **NEVER add filepath comments at the top of files.** Do not include comments like `// src/components/MyComponent.tsx` or similar file path indicators.
 
@@ -85,11 +103,6 @@
 - Use strict typing - avoid `any` types
 - Define proper interfaces and types in `src/types/`
 - Use type guards for runtime type checking
-- **ALWAYS use TypeScript file extensions**:
-  - Use `.ts` for all TypeScript files containing logic, utilities, services, and non-React code
-  - Use `.tsx` only for files that contain JSX/TSX (React components)
-  - **NEVER create `.js` or `.jsx` files** unless absolutely necessary (e.g., configuration files that must be in JavaScript)
-  - Convert any JavaScript files to TypeScript when modifying them substantively
 
 **React Components:**
 
@@ -100,30 +113,31 @@
 **Component Structure Standards:**
 
 - **Component Definition Pattern:**
+
   ```typescript
   import React from 'react';
   import styles from '../styles/ComponentName.module.css';
-  
+
   interface ComponentNameProps {
     // Props defined with specific types (no any)
   }
-  
+
   const ComponentName: React.FC<ComponentNameProps> = ({ prop1, prop2 }) => {
     // Hooks at the top
     // State and derived values
     // Event handlers
-    
+
     return (
       <div className={styles.container}>
         {/* JSX with semantic HTML and accessibility attributes */}
       </div>
     );
   };
-  
+
   export default ComponentName;
   ```
 
-- Include explicit accessibility attributes (aria-* attributes, role, etc.)
+- Include explicit accessibility attributes (aria-\* attributes, role, etc.)
 - Use semantic HTML elements (`<button>`, `<nav>`, `<article>`, etc.) instead of generic `<div>`s
 - Always include skip navigation links for keyboard users in page components
 
@@ -133,93 +147,37 @@
 - Use descriptive, clear filenames
 - Maintain consistent import/export patterns
 
-**Authentication:**
-
-- Use the established Keycloak integration
-- Follow patterns in `src/auth/` directory
-- Implement proper authorization checks
-
 **Authentication Implementation Standards:**
 
 - **ALWAYS use the established authentication hooks and components:**
+
   - `useAuth()` hook from KeycloakProvider for authentication state and functions
   - `withAuth` higher-order component for protecting pages
   - `UserRole` enum for role-based access control
 
 - **Page Protection Pattern:**
+
   ```typescript
   import withAuth from '../auth/withAuth';
   import { UserRole } from '../auth/keycloak';
-  
+
   const ProtectedPage = () => {
     const { userProfile } = useAuth();
     // Component implementation
   };
-  
+
   export default withAuth(ProtectedPage, [UserRole.User, UserRole.Admin]);
   ```
 
 - **Role-Based Rendering Pattern:**
+
   ```typescript
   const { hasRole } = useAuth();
-  
+
   {hasRole(UserRole.Admin) && (
     <AdminOnlyComponent />
   )}
   ```
-
-## Error Handling and Validation
-
-**Error Handling Standards:**
-
-- Implement React error boundaries for component-level error isolation:
-  ```typescript
-  import React, { ErrorInfo } from 'react';
-  
-  interface ErrorBoundaryProps {
-    fallback: React.ReactNode;
-    children: React.ReactNode;
-  }
-  
-  interface ErrorBoundaryState {
-    hasError: boolean;
-  }
-  
-  class ErrorBoundary extends React.Component<ErrorBoundaryProps, ErrorBoundaryState> {
-    constructor(props: ErrorBoundaryProps) {
-      super(props);
-      this.state = { hasError: false };
-    }
-    
-    static getDerivedStateFromError(): ErrorBoundaryState {
-      return { hasError: true };
-    }
-    
-    componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
-      logger.error('Component error', { error, errorInfo });
-    }
-    
-    render(): React.ReactNode {
-      if (this.state.hasError) {
-        return this.props.fallback;
-      }
-      
-      return this.props.children;
-    }
-  }
-  ```
-
-- Use try/catch blocks for handling async operations and API calls
-- Apply proper error mapping with user-friendly messages
-- Log all errors with appropriate context for troubleshooting
-
-**Validation Standards:**
-
-- Use the validation schemas defined in `src/schemas/` for data validation
-- Implement client-side validation before form submission
-- Apply server-side validation in API routes regardless of client validation
-- Use consistent validation error formats across the application
-- Provide clear, actionable error messages to users
 
 ## Accessibility Standards
 
@@ -250,18 +208,21 @@
 **ALWAYS follow established performance optimization practices:**
 
 - **Component Optimization:**
+
   - Use React.memo for expensive pure components
   - Implement useMemo for computationally intensive calculations
   - Apply useCallback for event handlers passed to child components
   - Create virtualized lists for large datasets using established patterns
 
 - **Next.js Optimizations:**
+
   - Use Image component for optimized image loading and display
   - Implement proper code splitting with dynamic imports
   - Apply getStaticProps/getServerSideProps appropriately based on data requirements
   - Utilize Incremental Static Regeneration for dynamic content that changes infrequently
 
 - **Data Fetching Strategies:**
+
   - Follow SWR patterns for client-side data fetching
   - Implement proper loading and error states for all data fetching operations
   - Use appropriate caching strategies based on data volatility
@@ -277,14 +238,18 @@
 
 **NEVER use console.log, console.error, etc. in any code, including tests.** All logging must use the structured logger from `src/utils/logger.ts`
 
+- If console logging is found while working with a file, it should be updated to use the structured logger.
+
 - For all logging (production code and tests), use appropriate log levels:
+
   ```typescript
   import { logger } from '../utils/logger';
-  
+
   logger.info('Operation succeeded', { userId, operation });
   logger.error('Operation failed', { error, context });
   logger.debug('Processing data', { data });
   ```
+
 - Include relevant context objects with log messages
 - **Console Usage Rules:**
   - All code: The ESLint rule `no-console: "error"` will catch violations in both production and test code
@@ -294,30 +259,47 @@
 
 ## Task Execution and Validation Standards
 
-**ALWAYS use direct terminal commands instead of VS Code tasks.** GitHub Copilot should never use VS Code tasks or commands:
+**ALWAYS use terminal commands instead of VS Code tasks.** This ensures direct control and consistent behavior:
 
-- `npm run format` for formatting code
-- `npm run build` for building the application
-- `npm run test` for running tests
+- Use `npm run format` instead of "Format All Files" task
+- Use `npm run build` instead of "NPM Build" task
+- Use `npm run test` instead of "NPM Test" task
 
-**Command Execution Standards:**
+**Windows Terminal Command Handling:**
 
-**ALWAYS limit operations to the src, test, and scripts directories** to maintain focus on relevant code and avoid unintended side effects.
+Due to a Windows-specific issue where fast-executing commands may not be properly detected as completed, follow these strategies:
+
+- **For quick commands (< 5 seconds expected):** Use `get_terminal_output` tool to proactively check command completion rather than waiting indefinitely
+- **Command timeout strategy:** If a command appears to hang after a reasonable time (30-60 seconds for most commands), check terminal output and proceed if the command has actually completed
+- **Signs of completion:** Look for return to command prompt, exit codes, or expected output patterns in terminal
+- **Fallback approach:** If terminal appears stuck but output suggests completion, acknowledge the completion and continue with the next step
+- **Fast command examples:** `npm run format`, `git status`, `ls`/`dir`, simple file operations
+
+**Example pattern for handling potentially fast commands:**
+
+1. Run the command with `run_in_terminal`
+2. If no immediate response after 30 seconds, use `get_terminal_output` to check status
+3. Look for completion indicators (command prompt return, success messages, etc.)
+4. Proceed if command has actually completed, even if terminal detection failed
 
 **ALWAYS wait for commands to complete fully** before proceeding. Do not assume success without confirmation.
 
-**NEVER re-run failing tests without making changes first.** If any command fails:
+**NEVER re-run failing tests without making changes first.** If tests fail:
 
 1. Analyze the failure output carefully
-2. Make specific code changes to address each identified issue
-3. Only then re-run the command that previously failed
+2. Make necessary code changes to fix the issues
+3. Only then re-run the tests
+4. Avoid repeated test runs without modifications
 
-**Final Validation Process:** After completing any task, ALWAYS run this validation sequence in strict order:
+**Final Validation Process:** After completing any task, ALWAYS run this validation command:
 
-1. Run `npm run format` to ensure code formatting, targeting only src and test directories
-2. Run `npm run build` to verify the build succeeds
-3. Run `npm run test` to ensure all tests pass
-4. Fix any errors found and restart the sequence from step 1
+- Run `npm run test` to ensure **ALL** tests pass (this includes automatic formatting and TypeScript compilation validation)
+
+The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, system, and UI tests) in one operation. If any step fails, the task is not complete.
+
+If environment variables are needed for tests, ensure they are properly set up before running the tests.
+
+**CRITICAL: ALL TESTS MUST PASS** after any change to the codebase. This is a non-negotiable requirement. The validation is incomplete until `npm run test` succeeds without errors.
 
 **NEVER re-run the same command multiple times without making changes** when it produces errors. Each failed command must be followed by meaningful code changes before trying again.
 
@@ -339,20 +321,23 @@
 **Specific Testing Patterns:**
 
 - **ALWAYS test accessibility** for UI components using axe-playwright:
+
   ```typescript
   import { injectAxe, getViolations } from 'axe-playwright';
-  
+
   await injectAxe(page);
   const violations = await getViolations(page);
   expect(violations.length).toBe(0);
   ```
 
 - **Page Object Pattern** for UI tests:
+
   - Create page models in `tests/ui/pages/` directory
   - Implement methods for common interactions
   - Abstract implementation details from test cases
 
 - **Test Data Management:**
+
   - Use the `tests/utils/` helpers for test data generation
   - Prefer generated data over hardcoded test values
   - Clean up test data in afterEach/afterAll blocks
@@ -370,6 +355,10 @@
 - Always investigate and fix test failures before re-running
 - Use the established test structure in `tests/` directory
 - Follow existing test patterns and conventions
+- **EVERY TEST MUST PASS** after any code change before the task is considered complete
+- When any tests fail, prioritize fixing them immediately before moving on to other tasks
+- Ensure all test environments (including environment variables) are properly configured
+- Run the complete test suite using `npm run test` to verify ALL tests pass
 
 ## Documentation Standards
 
@@ -379,117 +368,5 @@
 - Avoid over-documenting or creating unnecessary documentation files
 - Focus on practical, actionable information rather than verbose explanations
 - Update existing documentation rather than creating new files
-- DO NOT create a docs folder and add documentation to it. It should go in the readme.
-
-## Environment Configuration Management
-
-**Environment Variables Standards:**
-
-- **ALWAYS use the environment utility functions** from `src/utils/env.ts` to access environment variables
-- Follow the organization pattern in `.env.example` when adding new environment variables:
-  - Group variables by functional area (Keycloak, OpenSearch, etc.)
-  - Mark variables as REQUIRED or OPTIONAL with comments
-  - Include descriptive comments for non-obvious variables
-- **NEVER hardcode configuration values** that should be environment-dependent
 
 When working on this project, examine existing components and maintain consistency with the current architecture.
-
-## Self-Updating Instructions
-
-**ALWAYS scan for new coding patterns and standards:** When working in the codebase, be vigilant about identifying any new coding patterns, standards, or best practices that may not yet be documented in this instructions file.
-
-**Detecting New Standards Process:**
-
-- When observing consistent patterns across multiple files that aren't documented here
-- When noticing newly introduced libraries, tools, or frameworks
-- When identifying repeated code review feedback across multiple pull requests
-- When seeing improvements or optimizations that could be standardized
-- When the user mentions keywords like "standard," "pattern," "best practice," "convention," or "rule" in chat conversations
-- When the user provides feedback like "we always do X this way" or "we never do Y" during chat sessions
-
-**Self-Updating Mechanism:**
-
-1. **Check existing sections first:** Before suggesting additions, verify that the observed pattern isn't already covered elsewhere in this document
-2. **Propose specific updates:** Suggest precise additions or modifications to these instructions, using the same formatting and style as existing content
-3. **Include examples:** Provide concrete examples from the codebase that demonstrate the pattern or standard being documented
-4. **Reference locations:** Mention specific files or components where the pattern is implemented well
-5. **Capture chat insights:** When the user mentions standards or practices in chat conversations, document them promptly in the appropriate section
-6. **Verify with user:** When uncertain about a standard mentioned in chat, ask clarifying questions to ensure accurate documentation
-
-**Documentation Integration:**
-
-- New standards should be placed in the most relevant existing section
-- If no appropriate section exists, suggest creating a new one with a descriptive heading
-- Maintain consistent formatting, including bold headings, bullet points, and code blocks
-- Follow the established tone and level of detail of existing sections
-
-**Priority Standards to Monitor:**
-
-- Security best practices for authentication and data handling
-- Performance optimizations for data fetching and rendering
-- Accessibility improvements and testing methodologies
-- New design system components and usage patterns
-- Test coverage expectations for new feature types
-
-## API Integration Standards
-
-**API Client Implementation:**
-
-- Create typed API clients in `src/api/` directory for external service integration
-- Use consistent error handling patterns across all API calls
-- Implement proper retry logic for transient failures
-- Add appropriate request timeouts to prevent hanging operations
-
-**API Response Handling:**
-
-- Always handle both success and error cases explicitly
-- Parse and validate API responses using schemas from `src/schemas/`
-- Transform API responses to application models before using in components
-- Cache API responses appropriately based on data volatility
-
-**API Request Management:**
-
-- Use SWR or React Query patterns for data fetching
-- Implement loading, error, and success states for all API interactions
-- Add appropriate debouncing for user-initiated API calls
-- Cancel pending requests when components unmount
-
-**Authentication for API Calls:**
-
-- Use the established authentication patterns from `src/auth/apiAuth.ts`
-- Implement proper token refresh handling for expired credentials
-- Apply appropriate authorization headers consistently
-- Handle unauthorized responses by redirecting to login when appropriate
-
-## Package Management and Dependencies
-
-**Dependency Management Standards:**
-
-- Always use exact versions (not ranges) in package.json to ensure consistency
-- Document the purpose of non-standard or complex dependencies with comments
-- Group dependencies logically in package.json:
-  - Core framework dependencies first (Next.js, React)
-  - UI and component libraries next
-  - Utility libraries
-  - Development dependencies appropriately in devDependencies
-
-**Adding New Dependencies:**
-
-- Prefer established libraries with active maintenance and community support
-- Evaluate bundle size impact before adding new dependencies
-- Check for type definitions or add them in `src/types/` when missing
-- Document why a new dependency is needed in pull request descriptions
-
-**Dependency Security:**
-
-- Run security audits regularly with `npm audit`
-- Address security vulnerabilities promptly
-- Pin dependency versions to avoid unexpected updates
-- Use only vetted dependencies from trusted sources
-
-**Custom Script Standards:**
-
-- Add descriptive comments for non-standard npm scripts in package.json
-- Ensure all scripts follow consistent naming conventions
-- Document environment requirements for scripts when applicable
-- Create npm scripts for common development tasks to standardize execution
