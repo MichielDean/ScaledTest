@@ -20,7 +20,7 @@
 - Adding proper type annotations
 - Following proper naming conventions
 - Ensuring proper dependency usage
-- Refactoring code to comply with ESLint rules
+- Refactor code to comply with ESLint rules
 - Using proper TypeScript patterns (prefer interfaces over types, proper generics)
 - Implementing proper error handling instead of ignoring Promise rejections
 - Adding proper return types to functions
