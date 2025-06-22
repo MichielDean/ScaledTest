@@ -36,12 +36,21 @@ export const getAuthToken = async (
         headers: {
           'Content-Type': 'application/x-www-form-urlencoded',
         },
+        timeout: 10000,
       }
     );
 
     return response.data.access_token;
   } catch (error) {
-    // In test environments, errors should be thrown rather than logged to console
+    // More detailed error information for debugging
+    if (axios.isAxiosError(error)) {
+      const status = error.response?.status;
+      const statusText = error.response?.statusText;
+      const data = error.response?.data;
+      throw new Error(
+        `Failed to authenticate test user: ${status} ${statusText}. URL: ${tokenUrl}. Response: ${JSON.stringify(data)}`
+      );
+    }
     throw new Error(
       `Failed to authenticate test user: ${error instanceof Error ? error.message : 'Unknown error'}`
     );

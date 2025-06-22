@@ -7,6 +7,17 @@ const { chromium } = require('playwright');
 const path = require('path');
 const fs = require('fs');
 
+// Safe logger helper for test environment
+function safeLog(level, message, data = {}) {
+  try {
+    const { logger } = require('../src/utils/logger');
+    logger[level](message, data);
+  } catch {
+    // Fallback to console if logger is not available
+    console[level === 'error' ? 'error' : 'warn'](`${message}:`, data);
+  }
+}
+
 // Deep merge utility function
 function deepMerge(target, source) {
   const result = { ...target };
@@ -41,10 +52,15 @@ function loadConfig() {
 
   if (fs.existsSync(configPath)) {
     try {
-      const userConfig = require(configPath);
+      // Use require for CommonJS compatibility in Jest environment
+      const userConfigModule = require(configPath);
+      const userConfig = userConfigModule.default || userConfigModule;
       return deepMerge(defaultConfig, userConfig);
     } catch (error) {
-      console.warn('Failed to load jest-playwright config, using defaults:', error.message);
+      // Safe fallback for logging in test environment
+      safeLog('warn', 'Failed to load jest-playwright config, using defaults', {
+        error: error.message,
+      });
     }
   }
 
@@ -78,7 +94,7 @@ const setupPlaywright = async () => {
         }
         global.page = await global.context.newPage();
       } catch (error) {
-        console.warn('Error resetting page:', error.message);
+        safeLog('warn', 'Error resetting page', { error: error.message });
         // Fallback: recreate the entire context
         await global.jestPlaywright.resetContext();
       }
@@ -94,7 +110,7 @@ const setupPlaywright = async () => {
         });
         global.page = await global.context.newPage();
       } catch (error) {
-        console.warn('Error resetting context:', error.message);
+        safeLog('warn', 'Error resetting context', { error: error.message });
         // Fallback: recreate the entire browser
         await global.jestPlaywright.resetBrowser(newOptions);
       }
@@ -128,7 +144,7 @@ const teardownPlaywright = async () => {
       await global.page.close().catch(() => {});
     }
   } catch (error) {
-    console.warn('Error closing page:', error.message);
+    safeLog('warn', 'Error closing page', { error: error.message });
   }
 
   try {
@@ -136,7 +152,7 @@ const teardownPlaywright = async () => {
       await global.context.close().catch(() => {});
     }
   } catch (error) {
-    console.warn('Error closing context:', error.message);
+    safeLog('warn', 'Error closing context', { error: error.message });
   }
 
   try {
@@ -144,7 +160,7 @@ const teardownPlaywright = async () => {
       await global.browser.close().catch(() => {});
     }
   } catch (error) {
-    console.warn('Error closing browser:', error.message);
+    safeLog('warn', 'Error closing browser', { error: error.message });
   }
 
   // Clear globals
@@ -169,12 +185,14 @@ global.beforeEach(async () => {
       await global.jestPlaywright.resetPage();
     }
   } catch (error) {
-    console.warn('Error in beforeEach reset:', error.message);
+    safeLog('warn', 'Error in beforeEach reset', { error: error.message });
     // Try to reinitialize if reset fails
     try {
       await setupPlaywright();
     } catch (setupError) {
-      console.error('Failed to reinitialize Playwright in beforeEach:', setupError.message);
+      safeLog('error', 'Failed to reinitialize Playwright in beforeEach', {
+        error: setupError.message,
+      });
       throw setupError;
     }
   }

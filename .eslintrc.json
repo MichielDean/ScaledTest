@@ -9,7 +9,7 @@
     "next"
   ],
   "parserOptions": {
-    "ecmaVersion": 2020,
+    "ecmaVersion": 2024,
     "sourceType": "module",
     "ecmaFeatures": {
       "jsx": true
