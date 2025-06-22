@@ -199,6 +199,8 @@ export default async function setup(): Promise<void> {
   testLogger.info('Starting system test environment setup...');
 
   try {
+    await prepareNextApp();
+
     // Set up required environment variables
     setupOpenSearchTestEnv();
 
@@ -213,7 +215,6 @@ export default async function setup(): Promise<void> {
     }
 
     // Start fresh environment
-    await prepareNextApp();
     await startDockerEnvironment();
     await setupKeycloak();
     await startNextApp();
