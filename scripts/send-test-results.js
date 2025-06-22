@@ -1,7 +1,9 @@
-const fs = require('fs');
-const path = require('path');
-const axios = require('axios');
-const { env } = require('./utils/env.js');
+import fs from 'fs';
+import path from 'path';
+import axios from 'axios';
+import os from 'os';
+import crypto from 'crypto';
+import { env } from './utils/env.js';
 
 /**
  * Get authentication token for API requests
@@ -71,8 +73,8 @@ function enhanceReport(reportData) {
     appVersion: enhanced.results.environment.appVersion || '1.0.0',
     buildName: enhanced.results.environment.buildName || 'Local Development',
     osPlatform: process.platform,
-    osRelease: require('os').release(),
-    osVersion: require('os').version(),
+    osRelease: os.release(),
+    osVersion: os.version(),
     testEnvironment: process.env.NODE_ENV || 'development',
     nodeVersion: process.version,
     timestamp: new Date().toISOString(),
@@ -85,7 +87,7 @@ function enhanceReport(reportData) {
 
   // Add a unique report ID if not present
   if (!enhanced.reportId) {
-    enhanced.reportId = require('crypto').randomUUID();
+    enhanced.reportId = crypto.randomUUID();
   }
 
   // Add timestamp if not present
@@ -235,11 +237,11 @@ async function sendTestResults(customReportData = null) {
 }
 
 // Handle command line execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   sendTestResults().catch(error => {
     console.error('❌ Unhandled error:', error);
     process.exit(1);
   });
 }
 
-module.exports = { sendTestResults, enhanceReport };
+export { sendTestResults, enhanceReport };

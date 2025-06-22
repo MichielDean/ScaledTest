@@ -1,12 +1,12 @@
 /**
- * Keycloak Admin Authentication Utilities (CommonJS)
+ * Keycloak Admin Authentication Utilities (ES Modules)
  *
  * Shared utilities for authenticating with Keycloak admin APIs.
  * This eliminates duplication between setup scripts and admin API endpoints.
  */
 
-const axios = require('axios');
-const { getRequiredEnvVar } = require('./env');
+import axios from 'axios';
+import { getRequiredEnvVar } from './env.js';
 
 /**
  * Get admin access token from Keycloak
@@ -57,7 +57,4 @@ const getAdminAuthHeaders = async (keycloakUrl, adminUsername, adminPassword) =>
   };
 };
 
-module.exports = {
-  getKeycloakAdminToken,
-  getAdminAuthHeaders,
-};
+export { getKeycloakAdminToken, getAdminAuthHeaders };

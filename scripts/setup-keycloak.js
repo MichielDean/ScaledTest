@@ -15,18 +15,18 @@
  *   node setup-keycloak.js --help
  */
 
-const axios = require('axios');
-const path = require('path');
-const fs = require('fs');
-const dotenv = require('dotenv');
-const {
+import axios from 'axios';
+import path from 'path';
+import fs from 'fs';
+import dotenv from 'dotenv';
+import {
   getRequiredEnvVar,
   getOptionalEnvVarOrUndefined,
   parseBooleanEnvVar,
   parseArrayEnvVar,
   parseIntEnvVar,
-} = require('./utils/env');
-const { getKeycloakAdminToken } = require('./utils/adminAuth');
+} from './utils/env.js';
+import { getKeycloakAdminToken } from './utils/adminAuth.js';
 
 // Process command-line arguments if provided
 function processCliArgs() {
@@ -693,17 +693,26 @@ async function setup() {
 }
 
 // Run the setup if this script is executed directly
-if (require.main === module) {
-  setup();
+if (
+  import.meta.url === `file://${process.argv[1]}` ||
+  import.meta.url.endsWith('setup-keycloak.js')
+) {
+  console.log('Script executed directly, starting setup...');
+  setup().catch(error => {
+    console.error('Setup failed:', error);
+    process.exit(1);
+  });
 } else {
-  // Export functions and config for use in other scripts
-  module.exports = {
-    setup,
-    getAdminToken,
-    createRealm,
-    createClient,
-    createRoles,
-    createTestUsers,
-    config: keycloakConfig,
-  };
+  console.log('Script imported as module, not running setup automatically');
 }
+
+// Export functions and config for use in other scripts
+export {
+  setup,
+  getAdminToken,
+  createRealm,
+  createClient,
+  createRoles,
+  createTestUsers,
+  keycloakConfig as config,
+};
