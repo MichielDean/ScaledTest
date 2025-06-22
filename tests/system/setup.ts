@@ -67,6 +67,14 @@ export async function setupKeycloak(): Promise<void> {
 }
 
 /**
+ * Preprations required before stating the application
+ */
+export async function prepareNextApp(): Promise<void> {
+  execSync('npm run format', { stdio: 'inherit' });
+  execSync('npm run build', { stdio: 'inherit' });
+}
+
+/**
  * Start Next.js app
  */
 export async function startNextApp(): Promise<void> {
@@ -104,9 +112,6 @@ export async function startNextApp(): Promise<void> {
   // Use next start to run the production build
   // You might want to build the app first if it's not already built
   try {
-    // Check if we need to build first
-    execSync('npm run build', { stdio: 'inherit' });
-
     // Start the Next.js app
     nextAppProcess = spawn('npx', ['next', 'start'], {
       stdio: 'pipe',
@@ -118,7 +123,17 @@ export async function startNextApp(): Promise<void> {
     });
 
     nextAppProcess.stderr?.on('data', data => {
-      testLogger.error(`Next.js error: ${data.toString().trim()}`);
+      const output = data.toString().trim();
+      // Filter out expected npm cleanup messages during teardown
+      if (
+        output.includes('npm verbose') ||
+        output.includes('npm info') ||
+        output.includes('npm warn Unknown')
+      ) {
+        testLogger.debug(`Next.js cleanup: ${output}`);
+      } else {
+        testLogger.error(`Next.js error: ${output}`);
+      }
     });
 
     // Handle process exit
@@ -198,6 +213,7 @@ export default async function setup(): Promise<void> {
     }
 
     // Start fresh environment
+    await prepareNextApp();
     await startDockerEnvironment();
     await setupKeycloak();
     await startNextApp();

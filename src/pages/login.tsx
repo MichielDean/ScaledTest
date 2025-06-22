@@ -140,6 +140,7 @@ const Login: NextPage = () => {
               <input
                 type="email"
                 id="email"
+                name="username"
                 value={email}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
                 placeholder="Enter your email"
@@ -155,6 +156,7 @@ const Login: NextPage = () => {
               <input
                 type="password"
                 id="password"
+                name="password"
                 value={password}
                 onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
                 placeholder="Enter your password"

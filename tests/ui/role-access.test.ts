@@ -1,42 +1,43 @@
-import { describe, beforeEach, afterEach, it } from '@jest/globals';
+import { describe, beforeAll, afterAll, it } from '@jest/globals';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
-import type { Page } from 'playwright';
-
-// For Jest-Playwright integration
-declare const page: Page;
+import { setupPlaywright } from '../utils/playwright';
 
 describe('Role-based Access Tests', () => {
+  const playwrightContext = setupPlaywright();
   let loginPage: LoginPage;
   let dashboardPage: DashboardPage;
   let profilePage: ProfilePage;
   let headerComponent: HeaderComponent;
   let userManagementPage: UserManagementPage;
 
-  beforeEach(async () => {
-    loginPage = new LoginPage(page);
-    dashboardPage = new DashboardPage(page);
-    profilePage = new ProfilePage(page);
-    headerComponent = new HeaderComponent(page);
-    userManagementPage = new UserManagementPage(page);
+  beforeAll(async () => {
+    // Initialize page objects once
+    loginPage = new LoginPage(playwrightContext.page);
+    dashboardPage = new DashboardPage(playwrightContext.page);
+    profilePage = new ProfilePage(playwrightContext.page);
+    headerComponent = new HeaderComponent(playwrightContext.page);
+    userManagementPage = new UserManagementPage(playwrightContext.page);
   });
 
-  afterEach(async () => {
-    // Ensure logout after each test
-    await loginPage.logout();
+  afterAll(async () => {
+    // Cleanup - no final logout needed since each group handles its own
   });
 
   describe('Read-only User Access', () => {
-    beforeEach(async () => {
-      // Login as readonly user before each test in this group
+    beforeAll(async () => {
+      // Login once for all tests in this group
       await loginPage.loginWithUser(TestUsers.READONLY);
-
-      // Verify we're redirected to dashboard as a common prerequisite
       await dashboardPage.expectDashboardLoaded();
+    });
+
+    afterAll(async () => {
+      // Logout after this group to prepare for next group
+      await loginPage.logout();
     });
 
     it('should see correct role assignment', async () => {
@@ -46,10 +47,14 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should not have content editing permissions', async () => {
+      // Go back to dashboard for this test
+      await dashboardPage.goto();
       await dashboardPage.expectNoEditPermission();
     });
 
     it('should not see admin actions on dashboard', async () => {
+      // Ensure we're on dashboard
+      await dashboardPage.goto();
       await dashboardPage.expectAdminActionsNotVisible();
     });
 
@@ -64,12 +69,15 @@ describe('Role-based Access Tests', () => {
   });
 
   describe('Maintainer User Access', () => {
-    beforeEach(async () => {
-      // Login as maintainer user before each test in this group
+    beforeAll(async () => {
+      // Login once for all tests in this group
       await loginPage.loginWithUser(TestUsers.MAINTAINER);
-
-      // Verify we're redirected to dashboard as a common prerequisite
       await dashboardPage.expectDashboardLoaded();
+    });
+
+    afterAll(async () => {
+      // Logout after this group to prepare for next group
+      await loginPage.logout();
     });
 
     it('should see correct role assignments', async () => {
@@ -80,10 +88,12 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should have content editing permissions', async () => {
+      await dashboardPage.goto();
       await dashboardPage.expectEditPermission();
     });
 
     it('should not see admin actions on dashboard', async () => {
+      await dashboardPage.goto();
       await dashboardPage.expectAdminActionsNotVisible();
     });
 
@@ -98,12 +108,15 @@ describe('Role-based Access Tests', () => {
   });
 
   describe('Owner User Access', () => {
-    beforeEach(async () => {
-      // Login as owner user before each test in this group
+    beforeAll(async () => {
+      // Login once for all tests in this group
       await loginPage.loginWithUser(TestUsers.OWNER);
-
-      // Verify we're redirected to dashboard as a common prerequisite
       await dashboardPage.expectDashboardLoaded();
+    });
+
+    afterAll(async () => {
+      // Logout after this group (final cleanup)
+      await loginPage.logout();
     });
 
     it('should see correct role assignments', async () => {
@@ -115,10 +128,12 @@ describe('Role-based Access Tests', () => {
     });
 
     it('should have content editing permissions', async () => {
+      await dashboardPage.goto();
       await dashboardPage.expectEditPermission();
     });
 
     it('should see admin actions on dashboard', async () => {
+      await dashboardPage.goto();
       await dashboardPage.expectAdminActionsVisible();
     });
 

@@ -3,8 +3,12 @@
 ## Code Quality and File Management Standards
 
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
+**Example pattern for handling all commands:**
 
-**NEVER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. **This includes all forms of ESLint suppression:**
+1. Run the command with `run_in_terminal`
+2. If no immediate response after a reasonable time (30-60 seconds for most commands, longer for extensive operations), use `get_terminal_output` to check status
+3. Look for completion indicators (command prompt return, success/failure messages, etc.)
+4. Proceed if command has actually completed, even if terminal detection failedER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. **This includes all forms of ESLint suppression:\*\*
 
 - `// eslint-disable`
 - `// eslint-disable-line`
@@ -264,25 +268,6 @@
 - Use `npm run format` instead of "Format All Files" task
 - Use `npm run build` instead of "NPM Build" task
 - Use `npm run test` instead of "NPM Test" task
-
-**Windows Terminal Command Handling:**
-
-Due to a Windows-specific issue where fast-executing commands may not be properly detected as completed, follow these strategies:
-
-- **For quick commands (< 5 seconds expected):** Use `get_terminal_output` tool to proactively check command completion rather than waiting indefinitely
-- **Command timeout strategy:** If a command appears to hang after a reasonable time (30-60 seconds for most commands), check terminal output and proceed if the command has actually completed
-- **Signs of completion:** Look for return to command prompt, exit codes, or expected output patterns in terminal
-- **Fallback approach:** If terminal appears stuck but output suggests completion, acknowledge the completion and continue with the next step
-- **Fast command examples:** `npm run format`, `git status`, `ls`/`dir`, simple file operations
-
-**Example pattern for handling potentially fast commands:**
-
-1. Run the command with `run_in_terminal`
-2. If no immediate response after 30 seconds, use `get_terminal_output` to check status
-3. Look for completion indicators (command prompt return, success messages, etc.)
-4. Proceed if command has actually completed, even if terminal detection failed
-
-**ALWAYS wait for commands to complete fully** before proceeding. Do not assume success without confirmation.
 
 **NEVER re-run failing tests without making changes first.** If tests fail:
 

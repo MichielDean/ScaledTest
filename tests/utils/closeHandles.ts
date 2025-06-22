@@ -3,6 +3,8 @@
  * Useful for CI environments where tests may hang
  */
 
+import { testLogger } from '../../src/utils/logger';
+
 // Define the delay for cleanup (ms)
 const TEARDOWN_DELAY_MS = 1000;
 
@@ -10,8 +12,8 @@ const TEARDOWN_DELAY_MS = 1000;
  * Jest globalTeardown function
  * This will be called after all tests have finished running
  */
-async function closeHandles() {
-  console.log('Running global teardown to close any open handles...');
+async function closeHandles(): Promise<void> {
+  testLogger.info('Running global teardown to close any open handles...');
 
   try {
     // Force NodeJS to empty the event loop
@@ -26,9 +28,9 @@ async function closeHandles() {
     // Give time for any pending operations to finish
     await new Promise(resolve => setTimeout(resolve, TEARDOWN_DELAY_MS));
 
-    console.log('Global teardown completed successfully');
+    testLogger.info('Global teardown completed successfully');
   } catch (error) {
-    console.error('Error closing handles:', error);
+    testLogger.error('Error closing handles', { error });
   }
 }
 

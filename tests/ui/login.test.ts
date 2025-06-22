@@ -3,20 +3,18 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { TestUsers } from './models/TestUsers';
-import type { Page } from 'playwright';
-
-// For Jest-Playwright integration
-declare const page: Page;
+import { setupPlaywright } from '../utils/playwright';
 
 describe('Authentication Tests', () => {
+  const playwrightContext = setupPlaywright();
   let loginPage: LoginPage;
   let dashboardPage: DashboardPage;
   let headerComponent: HeaderComponent;
 
   beforeEach(async () => {
-    loginPage = new LoginPage(page);
-    dashboardPage = new DashboardPage(page);
-    headerComponent = new HeaderComponent(page);
+    loginPage = new LoginPage(playwrightContext.page);
+    dashboardPage = new DashboardPage(playwrightContext.page);
+    headerComponent = new HeaderComponent(playwrightContext.page);
   });
 
   afterEach(async () => {
@@ -68,7 +66,7 @@ describe('Authentication Tests', () => {
       await loginPage.logout();
 
       // Verify we're redirected to login page
-      const finalUrl = await page.url();
+      const finalUrl = await playwrightContext.page.url();
       expect(finalUrl).toMatch(/\/login/);
     });
 

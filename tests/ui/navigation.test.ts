@@ -4,22 +4,20 @@ import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
-import type { Page } from 'playwright';
-
-// For Jest-Playwright integration
-declare const page: Page;
+import { setupPlaywright } from '../utils/playwright';
 
 describe('Navigation Tests', () => {
+  const playwrightContext = setupPlaywright();
   let loginPage: LoginPage;
   let dashboardPage: DashboardPage;
   let headerComponent: HeaderComponent;
   let userManagementPage: UserManagementPage;
 
   beforeEach(async () => {
-    loginPage = new LoginPage(page);
-    dashboardPage = new DashboardPage(page);
-    headerComponent = new HeaderComponent(page);
-    userManagementPage = new UserManagementPage(page);
+    loginPage = new LoginPage(playwrightContext.page);
+    dashboardPage = new DashboardPage(playwrightContext.page);
+    headerComponent = new HeaderComponent(playwrightContext.page);
+    userManagementPage = new UserManagementPage(playwrightContext.page);
   });
 
   afterEach(async () => {
