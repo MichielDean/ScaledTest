@@ -4,7 +4,7 @@ import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
-import { setupPlaywright } from '../utils/playwright';
+import { setupPlaywright } from './playwrightSetup';
 
 describe('Navigation Tests', () => {
   const playwrightContext = setupPlaywright();

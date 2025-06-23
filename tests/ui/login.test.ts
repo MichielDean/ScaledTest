@@ -3,7 +3,7 @@ import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { TestUsers } from './models/TestUsers';
-import { setupPlaywright } from '../utils/playwright';
+import { setupPlaywright } from './playwrightSetup';
 
 describe('Authentication Tests', () => {
   const playwrightContext = setupPlaywright();

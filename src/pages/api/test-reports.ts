@@ -1,6 +1,6 @@
 import type { NextApiResponse } from 'next';
 import { AuthenticatedRequest, createApi } from '../../auth/apiAuth';
-import { getRequestLogger, logError } from '../../utils/logger';
+import { getRequestLogger, logError } from '../../logging/logger';
 import opensearchClient, { ensureCtrfReportsIndexExists } from '../../lib/opensearch';
 import { CtrfSchema } from '../../schemas/ctrf/ctrf';
 import { z } from 'zod';

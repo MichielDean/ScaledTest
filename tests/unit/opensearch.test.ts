@@ -1,4 +1,4 @@
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
+import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 setupOpenSearchTestEnv();
 
 import { Client } from '@opensearch-project/opensearch';

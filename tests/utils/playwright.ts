@@ -5,7 +5,7 @@
 
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import { beforeAll, afterAll, beforeEach } from '@jest/globals';
-import { testLogger } from '../../src/utils/logger';
+import { testLogger } from '../../src/logging/logger';
 
 // Playwright configuration
 const PLAYWRIGHT_CONFIG = {

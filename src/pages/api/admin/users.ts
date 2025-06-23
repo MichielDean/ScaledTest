@@ -2,9 +2,13 @@
 import axios from 'axios';
 import { MethodHandler, createApi } from '../../../auth/apiAuth';
 import { UserRole } from '../../../auth/keycloak';
-import { logError } from '../../../utils/logger';
+import { logError } from '../../../logging/logger';
 import { keycloakConfig, keycloakEndpoints } from '../../../config/keycloak';
-import { getAdminToken, getAllUsersWithRoles, getClientId } from '../../../utils/keycloakAdminApi';
+import {
+  getAdminToken,
+  getAllUsersWithRoles,
+  getClientId,
+} from '../../../authentication/keycloakAdminApi';
 import { KeycloakRole } from '../../../types/user';
 
 /**

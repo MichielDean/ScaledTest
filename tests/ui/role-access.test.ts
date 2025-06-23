@@ -5,7 +5,7 @@ import { ProfilePage } from './pages/ProfilePage';
 import { HeaderComponent } from './pages/HeaderComponent';
 import { UserManagementPage } from './pages/UserManagementPage';
 import { TestUsers } from './models/TestUsers';
-import { setupPlaywright } from '../utils/playwright';
+import { setupPlaywright } from './playwrightSetup';
 
 describe('Role-based Access Tests', () => {
   const playwrightContext = setupPlaywright();

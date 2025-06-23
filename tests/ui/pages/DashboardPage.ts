@@ -31,8 +31,8 @@ export class DashboardPage extends BasePage {
     // Check for the main content section which should always be visible
     await expect(this.contentSection).toBeVisible();
 
-    // Check for the dashboard title or navigation section that should be present
-    const dashboardTitle = this.page.locator('h1').filter({ hasText: 'Dashboard' });
+    // Check for the dashboard title using its ID
+    const dashboardTitle = this.page.locator('#dashboard-title');
     await expect(dashboardTitle).toBeVisible();
   }
 

@@ -6,7 +6,7 @@
  */
 
 // Common base interfaces
-export * from './common';
+export * from './apiResponses';
 
 // Domain-specific interfaces
 export * from './api';

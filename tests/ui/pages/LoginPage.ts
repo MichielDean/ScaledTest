@@ -34,19 +34,45 @@ export class LoginPage extends BasePage {
     await this.emailInput.waitFor({ state: 'visible', timeout: 10000 });
     await this.emailInput.fill(email);
     await this.passwordInput.fill(password);
-    await this.signInButton.click();
 
-    // For failed logins, wait a bit for either navigation or error message
-    // Increase timeout to ensure we catch async errors
+    // Make sure the button is enabled before clicking
+    await this.signInButton.waitFor({ state: 'visible' });
+    await expect(this.signInButton).toBeEnabled();
+
+    // Click the button and immediately wait for navigation or error
     try {
-      await Promise.race([
-        this.waitForNavigation(),
-        this.errorMessage.waitFor({ state: 'visible', timeout: 10000 }),
+      // Start the click action
+      const clickPromise = this.signInButton.click({ timeout: 5000 });
+
+      // Wait for either navigation away from login or error message
+      const navigationPromise = Promise.race([
+        this.page.waitForURL(url => !url.href.includes('/login'), { timeout: 15000 }),
+        this.errorMessage.waitFor({ state: 'visible', timeout: 15000 }),
       ]);
-    } catch {
-      // If neither navigation nor error appears, wait a bit more
-      // The async error handling might take a moment
-      await this.page.waitForTimeout(2000);
+
+      // Execute click first, then wait for result
+      await clickPromise;
+      await navigationPromise;
+    } catch (error) {
+      // If click failed, check if we're still on login page and try to handle the situation
+      const currentUrl = this.page.url();
+      if (currentUrl.includes('/login')) {
+        // We're still on login page, check for error message or try again
+        const errorVisible = await this.errorMessage.isVisible().catch(() => false);
+        if (!errorVisible) {
+          // No error visible, maybe the form is still processing - wait a bit more
+          await this.page.waitForTimeout(3000);
+
+          // Check if we navigated during the wait
+          const newUrl = this.page.url();
+          if (newUrl.includes('/login')) {
+            // Still on login, something went wrong
+            throw new Error(
+              `Login failed: ${error instanceof Error ? error.message : String(error)}`
+            );
+          }
+        }
+      }
     }
   }
 

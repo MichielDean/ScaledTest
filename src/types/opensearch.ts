@@ -3,7 +3,7 @@
  * Used to provide typing for OpenSearch API calls and mock responses in tests
  */
 
-import { SuccessApiResponse, ErrorApiResponse } from './common';
+import { SuccessApiResponse, ErrorApiResponse } from './apiResponses';
 
 /**
  * Base response structure from OpenSearch API calls

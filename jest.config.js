@@ -42,7 +42,7 @@ export default {
       testMatch: ['**/tests/unit/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/unit/setup.ts'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
+      globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
     },
     {
       displayName: 'Components',
@@ -69,7 +69,7 @@ export default {
       transformIgnorePatterns: ['node_modules/(?!(keycloak-js)/)'],
       setupFiles: ['<rootDir>/tests/components/jest-setup.js'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
+      globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
     },
     {
       displayName: 'Integration',
@@ -77,7 +77,7 @@ export default {
       testMatch: ['**/tests/integration/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
       // Add global teardown to close resources properly
-      globalTeardown: '<rootDir>/tests/utils/closeHandles.ts',
+      globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
     },
     {
       displayName: 'System',

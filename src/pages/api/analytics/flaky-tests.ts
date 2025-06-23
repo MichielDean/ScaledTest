@@ -1,6 +1,6 @@
 // OpenSearch Analytics API - Flaky Test Detection Data
 import { MethodHandler, createApi } from '../../../auth/apiAuth';
-import { logError } from '../../../utils/logger';
+import { logError } from '../../../logging/logger';
 import {
   getFlakyTestsFromOpenSearch,
   getOpenSearchHealthStatus,

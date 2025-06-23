@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
 import { AxiosError } from 'axios';
-import { authLogger as logger } from '../utils/logger';
+import { authLogger as logger } from '../logging/logger';
 import styles from '../styles/Login.module.css';
 import sharedAlerts from '../styles/shared/alerts.module.css';
 import sharedButtons from '../styles/shared/buttons.module.css';
@@ -49,7 +49,7 @@ const Login: NextPage = () => {
 
     try {
       // Import here to avoid issues with SSR
-      const { directLogin } = await import('../utils/keycloakTokenManager');
+      const { directLogin } = await import('../authentication/keycloakTokenManager');
 
       // Perform direct login with email and password
       const success = await directLogin(email, password);

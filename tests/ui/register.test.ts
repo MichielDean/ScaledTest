@@ -3,7 +3,7 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
-import { setupPlaywright } from '../utils/playwright';
+import { setupPlaywright } from './playwrightSetup';
 
 describe('Registration Tests', () => {
   const playwrightContext = setupPlaywright();
