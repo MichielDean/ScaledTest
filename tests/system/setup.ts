@@ -37,13 +37,13 @@ export async function startDockerEnvironment(): Promise<void> {
   try {
     // Use pull policy and timeout optimizations for CI
     const composeCommand = isCI
-      ? `docker compose -f "${dockerComposePath}" up -d --quiet-pull --wait --wait-timeout 120`
+      ? `docker compose -f "${dockerComposePath}" up -d --quiet-pull --wait --wait-timeout 180`
       : `docker compose -f "${dockerComposePath}" up -d`;
 
     execSync(composeCommand, { stdio: 'inherit' });
 
-    // Wait for services to be ready with shorter timeouts in CI
-    const serviceTimeout = isCI ? 30000 : 60000; // 30s in CI, 60s locally
+    // Wait for services to be ready with longer timeouts in CI
+    const serviceTimeout = isCI ? 60000 : 60000; // 60s both in CI and locally
 
     await waitOn({
       resources: ['http://localhost:8080'],
