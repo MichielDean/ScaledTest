@@ -194,6 +194,90 @@ export async function startNextApp(): Promise<void> {
 }
 
 /**
+ * Quick cleanup function for initial setup - aggressive cleanup without long timeouts
+ */
+async function quickCleanup(): Promise<void> {
+  testLogger.info('Performing quick cleanup of existing environment...');
+
+  // Quick Next.js process cleanup
+  if (nextAppProcess && !nextAppProcess.killed) {
+    try {
+      nextAppProcess.kill('SIGKILL');
+    } catch (error) {
+      testLogger.debug({ err: error }, 'Quick Next.js cleanup had issues');
+    }
+  }
+
+  // Aggressive port 3000 cleanup on Windows
+  if (process.platform === 'win32') {
+    try {
+      const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
+      const result = execSync(`powershell -Command "${findCommand}"`, {
+        encoding: 'utf8',
+        timeout: 3000,
+      }).trim();
+
+      if (result) {
+        const pids = result.split('\n').filter(pid => pid.trim());
+        for (const pid of pids) {
+          if (pid.trim()) {
+            try {
+              execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 2000 });
+            } catch (killError) {
+              testLogger.debug(
+                { err: killError },
+                `Quick cleanup: couldn't kill PID ${pid.trim()}`
+              );
+            }
+          }
+        }
+      }
+    } catch (portError) {
+      testLogger.debug({ err: portError }, 'Quick port cleanup had issues');
+    }
+  }
+
+  // Aggressive Docker cleanup with short timeout
+  const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
+  try {
+    // Force stop all containers quickly
+    execSync(`docker compose -f "${dockerComposePath}" kill`, {
+      stdio: 'ignore',
+      timeout: 5000,
+    });
+
+    // Quick removal
+    execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans`, {
+      stdio: 'ignore',
+      timeout: 10000,
+    });
+  } catch (dockerError) {
+    testLogger.debug({ err: dockerError }, 'Quick Docker cleanup had issues, trying alternative');
+
+    // Alternative: kill all running containers that might be from our compose
+    try {
+      if (process.platform === 'win32') {
+        execSync('powershell -Command "docker ps -q | ForEach-Object { docker kill $_ }"', {
+          stdio: 'ignore',
+          timeout: 5000,
+        });
+      } else {
+        execSync('docker kill $(docker ps -q)', {
+          stdio: 'ignore',
+          timeout: 5000,
+        });
+      }
+    } catch (altError) {
+      testLogger.debug({ err: altError }, 'Alternative Docker cleanup also had issues');
+    }
+  }
+
+  // Brief pause to let resources be released
+  await new Promise(resolve => setTimeout(resolve, 1000));
+  testLogger.info('Quick cleanup completed');
+}
+
+/**
  * Main setup function for Jest with improved error handling
  */
 export default async function setup(): Promise<void> {
@@ -203,14 +287,14 @@ export default async function setup(): Promise<void> {
     // Set up required environment variables
     setupOpenSearchTestEnv();
 
-    // First try to clean up any existing environment
-    // Use a more resilient cleanup approach
+    // First try to clean up any existing environment quickly
+    // Use a more resilient and faster cleanup approach
     try {
-      await teardown();
-    } catch (teardownError) {
-      // Log warning but don't fail setup due to teardown issues
+      await quickCleanup();
+    } catch (cleanupError) {
+      // Log warning but don't fail setup due to cleanup issues
       testLogger.warn(
-        { err: teardownError },
+        { err: cleanupError },
         'Previous environment cleanup had issues, but continuing with setup'
       );
     }

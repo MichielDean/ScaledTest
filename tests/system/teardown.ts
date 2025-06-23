@@ -83,28 +83,39 @@ export async function stopNextApp(): Promise<void> {
 export async function stopDockerEnvironment(): Promise<void> {
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
+  testLogger.info('Starting Docker environment teardown...');
+
   try {
-    // Use timeout to prevent hanging in CI
+    // Use timeout to prevent hanging in CI - reduced from 30s to 15s
     await Promise.race([
       new Promise<void>((resolve, reject) => {
         try {
-          // Remove --volumes flag to speed up teardown and avoid potential issues
-          execSync(`docker compose -f "${dockerComposePath}" down`, {
+          // Try kill first for faster cleanup
+          execSync(`docker compose -f "${dockerComposePath}" kill`, {
+            stdio: 'ignore',
+            timeout: 5000, // 5 second timeout for kill
+          });
+
+          // Then remove with shorter timeout
+          execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans`, {
             stdio: 'inherit',
-            timeout: 30000, // 30 second timeout
+            timeout: 10000, // 10 second timeout for down
           });
           resolve();
         } catch (error) {
           reject(error);
         }
       }),
-      new Promise<void>(resolve =>
-        setTimeout(() => {
-          testLogger.warn('Docker teardown timed out after 30 seconds, continuing...');
-          resolve();
-        }, 30000)
+      new Promise<void>(
+        resolve =>
+          setTimeout(() => {
+            testLogger.warn('Docker teardown timed out after 15 seconds, continuing...');
+            resolve();
+          }, 15000) // Reduced from 30s to 15s
       ),
     ]);
+
+    testLogger.info('Docker environment teardown completed successfully');
   } catch (error) {
     testLogger.warn({ err: error }, 'Docker environment cleanup encountered issues but continuing');
 
