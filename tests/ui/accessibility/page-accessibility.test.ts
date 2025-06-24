@@ -24,7 +24,6 @@ describe('Page Accessibility Tests', () => {
   let dashboardPage: DashboardPage;
   let profilePage: ProfilePage;
   let testResultsDashboardPage: TestResultsDashboardPage;
-  let userManagementPage: UserManagementPage;
   let unauthorizedPage: UnauthorizedPage;
   let basePage: BasePage;
 
@@ -34,7 +33,6 @@ describe('Page Accessibility Tests', () => {
     dashboardPage = new DashboardPage(playwright.page);
     profilePage = new ProfilePage(playwright.page);
     testResultsDashboardPage = new TestResultsDashboardPage(playwright.page);
-    userManagementPage = new UserManagementPage(playwright.page);
     unauthorizedPage = new UnauthorizedPage(playwright.page);
     basePage = new BasePage(playwright.page);
   });
@@ -126,28 +124,36 @@ describe('Page Accessibility Tests', () => {
       expect(violations).toHaveLength(0);
     });
   });
+});
 
-  describe('Admin Authenticated Pages', () => {
-    // Login as OWNER user for admin-only tests
-    beforeAll(async () => {
-      // Ensure we're logged out first to avoid authentication conflicts
-      await loginPage.logout();
-      await loginPage.loginWithUser(TestUsers.OWNER);
-      await dashboardPage.expectDashboardLoaded();
-    });
+describe('Admin Authenticated Pages', () => {
+  const playwright = setupPlaywright();
 
-    test('Admin pages should be accessible', async () => {
-      // Navigate to admin page - this should work with admin user
-      await userManagementPage.goto();
-      await userManagementPage.waitForPageLoad();
+  let loginPage: LoginPage;
+  let userManagementPage: UserManagementPage;
+  let dashboardPage: DashboardPage;
 
-      const violations = await getAxeViolations(playwright.page);
+  // Login as OWNER user for admin-only tests
+  beforeAll(async () => {
+    loginPage = new LoginPage(playwright.page);
+    userManagementPage = new UserManagementPage(playwright.page);
+    dashboardPage = new DashboardPage(playwright.page);
 
-      if (violations.length > 0) {
-        logAccessibilityViolations('Admin page', violations);
-      }
+    await loginPage.loginWithUser(TestUsers.OWNER);
+    await dashboardPage.expectDashboardLoaded();
+  });
 
-      expect(violations).toHaveLength(0);
-    });
+  test('Admin pages should be accessible', async () => {
+    // Navigate to admin page - this should work with admin user
+    await userManagementPage.goto();
+    await userManagementPage.waitForPageLoad();
+
+    const violations = await getAxeViolations(playwright.page);
+
+    if (violations.length > 0) {
+      logAccessibilityViolations('Admin page', violations);
+    }
+
+    expect(violations).toHaveLength(0);
   });
 });
