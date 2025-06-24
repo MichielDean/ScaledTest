@@ -130,6 +130,8 @@ describe('Page Accessibility Tests', () => {
   describe('Admin Authenticated Pages', () => {
     // Login as OWNER user for admin-only tests
     beforeAll(async () => {
+      // Ensure we're logged out first to avoid authentication conflicts
+      await loginPage.logout();
       await loginPage.loginWithUser(TestUsers.OWNER);
       await dashboardPage.expectDashboardLoaded();
     });
