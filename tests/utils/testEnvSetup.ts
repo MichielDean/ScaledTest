@@ -1,4 +1,4 @@
-import { testLogger } from '../../src/utils/logger';
+import { testLogger } from '../../src/logging/logger';
 
 /**
  * Helper function to set up environment variables for tests

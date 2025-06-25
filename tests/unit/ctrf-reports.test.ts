@@ -7,7 +7,7 @@ import {
   generateCtrfReport,
   generateInvalidCtrfReport,
   generateLargeCtrfReport,
-} from '../utils/ctrfTestDataGenerator';
+} from '../data/ctrfReportGenerator';
 import { UserRole } from '../../src/auth/keycloak';
 import { AuthenticatedRequest } from '../../src/types/auth';
 import { hasRequiredRole } from '../../src/auth/apiAuth';
@@ -42,7 +42,7 @@ jest.mock('../../src/auth/keycloak', () => ({
     OWNER: 'owner',
   },
 }));
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
     info: jest.fn(),
     error: jest.fn(),

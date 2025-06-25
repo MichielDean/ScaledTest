@@ -1,6 +1,6 @@
 import { Client } from '@opensearch-project/opensearch';
-import { dbLogger as logger, logError } from '../utils/logger';
-import { getRequiredEnvVar, parseBooleanEnvVar } from '../utils/env';
+import { dbLogger as logger, logError } from '../logging/logger';
+import { getRequiredEnvVar, parseBooleanEnvVar } from '../environment/env';
 
 // Get OpenSearch configuration from environment variables with validation
 const host = getRequiredEnvVar('OPENSEARCH_HOST', 'OpenSearch configuration is incomplete.');

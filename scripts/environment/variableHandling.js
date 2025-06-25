@@ -1,7 +1,7 @@
 /**
- * Environment Variable Utilities (ES Modules)
+ * Environment Variable Handling (ES Modules)
  *
- * Shared utilities for handling environment variables across the application.
+ * Shared functionality for handling environment variables across the application.
  * This prevents code duplication and ensures consistent error messages.
  *
  * ES modules version for modern Node.js scripts.

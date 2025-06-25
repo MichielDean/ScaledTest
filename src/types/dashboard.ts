@@ -1,5 +1,5 @@
 import { CtrfSchema } from '../schemas/ctrf/ctrf';
-import { BaseFilters, SuccessApiResponse, AnalyticsDataWithRates } from './common';
+import { BaseFilters, SuccessApiResponse, AnalyticsDataWithRates } from './apiResponses';
 
 // Types for our dashboard data
 export interface TestReport extends CtrfSchema {

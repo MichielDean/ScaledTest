@@ -1,6 +1,6 @@
 // OpenSearch Analytics API - Error Analysis Data
 import { createApi, MethodHandler } from '../../../auth/apiAuth';
-import { logError } from '../../../utils/logger';
+import { logError } from '../../../logging/logger';
 import {
   getErrorAnalysisFromOpenSearch,
   getOpenSearchHealthStatus,

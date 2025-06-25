@@ -1,6 +1,6 @@
 // OpenSearch Analytics API - OpenSearch Health Status
 import { createApi, MethodHandler } from '../../../auth/apiAuth';
-import { logError } from '../../../utils/logger';
+import { logError } from '../../../logging/logger';
 import { getOpenSearchHealthStatus } from '../../../lib/opensearchAnalytics';
 
 type SuccessResponse = {

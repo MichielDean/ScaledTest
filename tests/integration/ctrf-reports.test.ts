@@ -3,7 +3,7 @@ import {
   generateCtrfReport,
   generateMinimalCtrfReport,
   generateInvalidCtrfReport,
-} from '../utils/ctrfTestDataGenerator';
+} from '../data/ctrfReportGenerator';
 import { AuthenticatedRequest } from '../../src/auth/apiAuth';
 import opensearchClient, { ensureCtrfReportsIndexExists } from '../../src/lib/opensearch';
 // We need types from opensearch but use them implicitly
@@ -171,10 +171,10 @@ jest.mock('../../src/auth/keycloak', () => ({
   },
 }));
 
-import { getAuthToken } from '../utils/auth';
+import { getAuthToken } from '../authentication/tokenService';
 import testReportsHandler from '../../src/pages/api/test-reports';
 
-jest.mock('../utils/auth');
+jest.mock('../authentication/tokenService');
 jest.mock('../../src/lib/opensearch', () => {
   return {
     __esModule: true,
@@ -192,7 +192,7 @@ jest.mock('../../src/lib/opensearch', () => {
     ensureIndexExists: jest.fn(),
   };
 });
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
     info: jest.fn(),
     error: jest.fn(),

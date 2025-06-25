@@ -7,7 +7,7 @@ import { withAuth } from '../../auth/withAuth';
 import { UserRole } from '../../auth/keycloak';
 import Header from '../../components/Header';
 import axios from 'axios';
-import { uiLogger as logger, logError } from '../../utils/logger';
+import { uiLogger as logger, logError } from '../../logging/logger';
 import { UserWithRoles } from '../../types/user';
 import styles from '../../styles/AdminUsers.module.css';
 import sharedButtons from '../../styles/shared/buttons.module.css';

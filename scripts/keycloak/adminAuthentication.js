@@ -1,12 +1,12 @@
 /**
- * Keycloak Admin Authentication Utilities (ES Modules)
+ * Keycloak Admin Authentication (ES Modules)
  *
- * Shared utilities for authenticating with Keycloak admin APIs.
+ * Shared functionality for authenticating with Keycloak admin APIs.
  * This eliminates duplication between setup scripts and admin API endpoints.
  */
 
 import axios from 'axios';
-import { getRequiredEnvVar } from './env.js';
+import { getRequiredEnvVar } from '../environment/variableHandling.js';
 
 /**
  * Get admin access token from Keycloak

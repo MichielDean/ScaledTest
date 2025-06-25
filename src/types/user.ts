@@ -6,7 +6,7 @@
  */
 
 import { UserRole } from '../auth/keycloak';
-import { BaseEntity, BaseUser } from './common';
+import { BaseEntity, BaseUser } from './apiResponses';
 
 /**
  * Core user interface with database fields

@@ -39,4 +39,76 @@ export class BasePage {
   async waitForNavigation() {
     await this.page.waitForLoadState('networkidle');
   }
+
+  /**
+   * Wait for page to be fully loaded with content visible
+   */
+  async waitForPageLoad(timeout = 1500) {
+    await this.page.waitForLoadState('networkidle');
+    await this.page.waitForSelector('#main-content, main, body', { state: 'visible' });
+    await this.page.waitForTimeout(timeout);
+  }
+
+  /**
+   * Wait for URL to match a pattern
+   */
+  async waitForURL(pattern: string | RegExp, options?: { timeout?: number }) {
+    await this.page.waitForURL(pattern, options);
+  }
+
+  /**
+   * Press a keyboard key
+   */
+  async pressKey(key: string) {
+    await this.page.keyboard.press(key);
+  }
+
+  /**
+   * Evaluate JavaScript in the page context
+   */
+  async evaluate<T>(func: () => T): Promise<T> {
+    return await this.page.evaluate(func);
+  }
+
+  /**
+   * Wait for a function to return truthy value
+   */
+  async waitForFunction<T>(func: () => T, options?: { timeout?: number }) {
+    await this.page.waitForFunction(func, options);
+  }
+
+  /**
+   * Get the currently focused element
+   */
+  async getFocusedElement() {
+    return this.page.locator(':focus');
+  }
+
+  /**
+   * Wait for a specified amount of time
+   */
+  async waitForTimeout(timeout: number) {
+    await this.page.waitForTimeout(timeout);
+  }
+
+  /**
+   * Get a locator for an element
+   */
+  locator(selector: string) {
+    return this.page.locator(selector);
+  }
+
+  /**
+   * Wait for an element to be visible
+   */
+  async waitForSelector(
+    selector: string,
+    options?: { state?: 'visible' | 'hidden' | 'attached' | 'detached' }
+  ) {
+    if (options) {
+      await this.page.waitForSelector(selector, options);
+    } else {
+      await this.page.waitForSelector(selector);
+    }
+  }
 }

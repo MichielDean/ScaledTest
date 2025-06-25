@@ -1,5 +1,5 @@
 import opensearchClient, { ensureCtrfReportsIndexExists } from './opensearch';
-import { dbLogger as logger, logError } from '../utils/logger';
+import { dbLogger as logger, logError } from '../logging/logger';
 import {
   TestSuiteOverviewData,
   TestTrendsData,

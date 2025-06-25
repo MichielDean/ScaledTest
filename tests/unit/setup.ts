@@ -1,4 +1,4 @@
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
+import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 
 jest.mock('keycloak-js', () => {
   return function () {
