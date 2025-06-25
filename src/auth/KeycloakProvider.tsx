@@ -8,14 +8,14 @@ import React, {
 } from 'react';
 import Keycloak from 'keycloak-js';
 import { initKeycloak, UserRole } from './keycloak';
-import { authLogger as logger, logError } from '../utils/logger';
-import { updateKeycloakConfig } from '../utils/keycloakConfig';
+import { authLogger as logger, logError } from '../logging/logger';
+import { updateKeycloakConfig } from '../authentication/keycloakConfig';
 import {
   getStoredToken,
   getStoredRefreshToken,
   storeTokens,
   clearTokens,
-} from '../utils/keycloakTokenManager';
+} from '../authentication/keycloakTokenManager';
 import keycloakConfig from '../config/keycloak';
 
 interface AuthContextType {

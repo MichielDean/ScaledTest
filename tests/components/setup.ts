@@ -1,6 +1,6 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
+import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 
 // Setup OpenSearch test environment
 setupOpenSearchTestEnv();

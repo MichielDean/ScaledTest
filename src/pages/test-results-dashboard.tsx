@@ -129,7 +129,9 @@ const TestResultsDashboard: NextPage = () => {
 
       <main role="main" id="main-content" className={styles.mainContent}>
         <div className={styles.header}>
-          <h1 className={styles.title}>🧪 Test Results Dashboard</h1>
+          <h1 id="test-results-title" className={styles.title}>
+            🧪 Test Results Dashboard
+          </h1>
           <p className={styles.subtitle}>Monitor and analyze your CTRF test execution results</p>
         </div>
         {/* Summary Statistics */}
@@ -221,7 +223,12 @@ const TestResultsDashboard: NextPage = () => {
         </div>{' '}
         {/* Loading and Error States */}
         {loading && (
-          <div className={`card ${styles.loadingContainer}`} role="status" aria-live="polite">
+          <div
+            id="loading-indicator"
+            className={`card ${styles.loadingContainer}`}
+            role="status"
+            aria-live="polite"
+          >
             <div className="loading-spinner"></div>
             <div className={styles.loadingText}>Loading test reports...</div>
             <div className={styles.loadingSubtext}>Please wait while we fetch the latest data</div>
@@ -242,7 +249,7 @@ const TestResultsDashboard: NextPage = () => {
         )}
         {/* Statistics Overview */}
         {!loading && !error && (
-          <section aria-labelledby="overview-heading">
+          <section id="charts-container" aria-labelledby="overview-heading">
             <div className="card">
               <h2 id="overview-heading" className={styles.overviewTitle}>
                 📊 Overview

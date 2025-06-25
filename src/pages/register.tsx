@@ -6,7 +6,7 @@ import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
 import axios, { AxiosError } from 'axios';
-import { authLogger as logger } from '../utils/logger';
+import { authLogger as logger } from '../logging/logger';
 import { RegisterResponse } from '../types/api';
 import styles from '../styles/Register.module.css';
 import sharedAlerts from '../styles/shared/alerts.module.css';
@@ -85,7 +85,7 @@ const Register: NextPage = () => {
       if (response.data.success) {
         // Check if we have tokens for auto-login
         if (response.data.token && response.data.refreshToken) {
-          const { storeTokens } = await import('../utils/keycloakTokenManager');
+          const { storeTokens } = await import('../authentication/keycloakTokenManager');
           storeTokens(response.data.token, response.data.refreshToken);
 
           logger.info('User registered and automatically logged in');

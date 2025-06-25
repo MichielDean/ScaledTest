@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { UserRole } from './keycloak';
 import { jwtVerify, createRemoteJWKSet } from 'jose';
-import { authLogger as logger, logError, getRequestLogger } from '../utils/logger';
+import { authLogger as logger, logError, getRequestLogger } from '../logging/logger';
 import { keycloakConfig, keycloakEndpoints } from '../config/keycloak';
 import { KeycloakTokenPayload, AuthenticatedRequest, MethodRoleConfig } from '../types/auth';
 import { ErrorResponse } from '../types/api';

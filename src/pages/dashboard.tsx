@@ -49,7 +49,9 @@ const Dashboard: NextPage = () => {
       <Header />
 
       <main id="main-content" className={styles.main}>
-        <h1 className={styles.title}>Dashboard</h1>
+        <h1 id="dashboard-title" className={styles.title}>
+          Dashboard
+        </h1>
 
         {/* Navigation to Other Dashboards */}
         <div className={`card ${styles.dashboardNavigation}`}>

@@ -1,6 +1,6 @@
 // OpenSearch Analytics API - Test Trends Data
 import { MethodHandler, createApi } from '../../../auth/apiAuth';
-import { logError } from '../../../utils/logger';
+import { logError } from '../../../logging/logger';
 import {
   getTestTrendsFromOpenSearch,
   getOpenSearchHealthStatus,

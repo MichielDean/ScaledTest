@@ -1,8 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import axios, { AxiosError } from 'axios';
-import { authLogger as logger } from '../../../utils/logger';
+import { authLogger as logger } from '../../../logging/logger';
 import { keycloakConfig, keycloakEndpoints, keycloakAdminConfig } from '../../../config/keycloak';
-import { getAdminToken } from '../../../utils/keycloakAdminApi';
+import { getAdminToken } from '../../../authentication/keycloakAdminApi';
 import { RegisterResponse } from '../../../types/api';
 import { RegisterRequestBody } from '../../../types/user';
 

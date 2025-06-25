@@ -6,7 +6,7 @@
  */
 
 import axios, { AxiosResponse } from 'axios';
-import { getRequiredEnvVar } from './env';
+import { getRequiredEnvVar } from '../environment/env';
 
 // Admin token response interface
 interface AdminTokenResponse {

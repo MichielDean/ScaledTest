@@ -3,22 +3,20 @@ import { LoginPage } from './pages/LoginPage';
 import { RegisterPage } from './pages/RegisterPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
-import type { Page } from 'playwright';
-
-// For Jest-Playwright integration
-declare const page: Page;
+import { setupPlaywright } from './playwrightSetup';
 
 describe('Registration Tests', () => {
+  const playwrightContext = setupPlaywright();
   let loginPage: LoginPage;
   let registerPage: RegisterPage;
   let dashboardPage: DashboardPage;
   let headerComponent: HeaderComponent;
 
   beforeEach(async () => {
-    loginPage = new LoginPage(page);
-    registerPage = new RegisterPage(page);
-    dashboardPage = new DashboardPage(page);
-    headerComponent = new HeaderComponent(page);
+    loginPage = new LoginPage(playwrightContext.page);
+    registerPage = new RegisterPage(playwrightContext.page);
+    dashboardPage = new DashboardPage(playwrightContext.page);
+    headerComponent = new HeaderComponent(playwrightContext.page);
   });
 
   afterEach(async () => {
@@ -41,7 +39,8 @@ describe('Registration Tests', () => {
       await loginPage.goto();
 
       // Step 2: Click the register link to go to registration page
-      await page.locator('#registerLink').click();
+      // Page is already available from the outer scope
+      await playwrightContext.page.locator('#registerLink').click();
 
       // Verify we're on the registration page
       await registerPage.expectToBeOnRegisterPage();
@@ -56,7 +55,7 @@ describe('Registration Tests', () => {
 
       // Step 4: Verify we're automatically redirected to the dashboard after registration
       // This is the key test for the auto-login functionality
-      await page.waitForURL(/\/dashboard/, { timeout: 15000 });
+      await playwrightContext.page.waitForURL(/\/dashboard/, { timeout: 15000 });
 
       // Step 5: Verify dashboard is properly loaded
       await dashboardPage.expectDashboardLoaded();

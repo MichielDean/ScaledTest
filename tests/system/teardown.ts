@@ -1,135 +1,161 @@
 import { execSync } from 'child_process';
 import path from 'path';
 import { nextAppProcess } from './setup';
-import { testLogger } from '../../src/utils/logger';
+import { testLogger } from '../../src/logging/logger';
 
 /**
- * Shutdown the Next.js app
+ * Shutdown the Next.js app with timeout protection
  */
 export async function stopNextApp(): Promise<void> {
   if (nextAppProcess) {
-    testLogger.info('Stopping Next.js application');
-
     try {
-      // On Windows, we need to use a different approach to kill the process
-      if (process.platform === 'win32') {
-        // First try to gracefully terminate the process
-        if (!nextAppProcess.killed) {
-          nextAppProcess.kill('SIGTERM');
+      // Wrap process cleanup in a timeout to prevent hanging in CI
+      await Promise.race([
+        (async () => {
+          try {
+            // First try graceful termination
+            if (!nextAppProcess.killed) {
+              nextAppProcess.kill('SIGTERM');
+              await new Promise(resolve => setTimeout(resolve, 1000));
+            }
 
-          // Wait a bit for graceful termination
-          await new Promise(resolve => setTimeout(resolve, 2000));
-        }
-
-        // If the process is still running, force kill by port
-        try {
-          const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
-          const result = execSync(`powershell -Command "${findCommand}"`, {
-            encoding: 'utf8',
-            timeout: 5000,
-          }).trim();
-
-          if (result) {
-            const pids = result.split('\n').filter(pid => pid.trim());
-            for (const pid of pids) {
-              if (pid.trim()) {
-                testLogger.info(`Force killing process with PID ${pid.trim()}`);
+            // Force kill if still running
+            if (!nextAppProcess.killed) {
+              if (process.platform === 'win32') {
+                // Windows-specific cleanup
                 try {
-                  execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 5000 });
-                } catch (killError) {
-                  testLogger.warn({ err: killError }, `Failed to kill PID ${pid.trim()}`);
+                  const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
+                  const result = execSync(`powershell -Command "${findCommand}"`, {
+                    encoding: 'utf8',
+                    timeout: 3000,
+                  }).trim();
+
+                  if (result) {
+                    const pids = result.split('\n').filter(pid => pid.trim());
+                    for (const pid of pids) {
+                      if (pid.trim()) {
+                        try {
+                          execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 3000 });
+                        } catch (killError) {
+                          testLogger.warn({ err: killError }, `Failed to kill PID ${pid.trim()}`);
+                        }
+                      }
+                    }
+                  }
+                } catch (portError) {
+                  testLogger.warn({ err: portError }, 'Could not check port 3000 processes');
                 }
+              } else {
+                // Unix-like systems
+                nextAppProcess.kill('SIGKILL');
+              }
+            }
+          } catch (error) {
+            testLogger.warn({ err: error }, 'Error during Next.js process cleanup');
+          } finally {
+            // Clean up listeners
+            if (nextAppProcess && typeof nextAppProcess.removeAllListeners === 'function') {
+              try {
+                nextAppProcess.removeAllListeners();
+              } catch (listenerError) {
+                testLogger.warn({ err: listenerError }, 'Error removing process listeners');
               }
             }
           }
-        } catch (portError) {
-          testLogger.warn(
-            { err: portError },
-            'No processes found on port 3000 or error checking port'
-          );
-        }
-      } else {
-        // On non-Windows platforms
-        if (!nextAppProcess.killed) {
-          nextAppProcess.kill('SIGTERM');
-
-          // Wait a bit for graceful termination
-          await new Promise(resolve => setTimeout(resolve, 2000));
-
-          // Force kill if still running
-          if (!nextAppProcess.killed) {
-            nextAppProcess.kill('SIGKILL');
-          }
-        }
-      }
+        })(),
+        // Timeout after 10 seconds to prevent hanging in CI
+        new Promise(resolve =>
+          setTimeout(() => {
+            testLogger.warn('Next.js process cleanup timed out after 10 seconds');
+            resolve(undefined);
+          }, 10000)
+        ),
+      ]);
     } catch (error) {
-      testLogger.error({ err: error }, 'Error stopping Next.js app');
-    } finally {
-      // Always set to null to avoid reuse
-      if (nextAppProcess) {
-        nextAppProcess.removeAllListeners();
-      }
-      // Don't set to null here as it's imported from setup.ts
+      testLogger.warn({ err: error }, 'Next.js app cleanup encountered issues but continuing');
     }
-
-    // Add a small delay to ensure port is released
-    await new Promise(resolve => setTimeout(resolve, 1000));
-    testLogger.info('Next.js application stopped');
-  } else {
-    testLogger.info('No Next.js process to stop');
   }
-
-  // Note: We can't directly modify the imported nextAppProcess variable here,
-  // but the cleanup logic above should handle process termination
 }
 
 /**
- * Shutdown Docker environment
+ * Shutdown Docker environment with better error handling
  */
 export async function stopDockerEnvironment(): Promise<void> {
-  testLogger.info('Stopping Docker environment...');
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
+  testLogger.info('Starting Docker environment teardown...');
+
   try {
-    execSync(`docker compose -f "${dockerComposePath}" down --volumes`, { stdio: 'inherit' });
-    testLogger.info('Docker environment stopped successfully');
+    // Use timeout to prevent hanging in CI - reduced from 30s to 15s
+    await Promise.race([
+      new Promise<void>((resolve, reject) => {
+        try {
+          // Try kill first for faster cleanup
+          execSync(`docker compose -f "${dockerComposePath}" kill`, {
+            stdio: 'ignore',
+            timeout: 5000, // 5 second timeout for kill
+          });
+
+          // Then remove with shorter timeout
+          execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans`, {
+            stdio: 'inherit',
+            timeout: 10000, // 10 second timeout for down
+          });
+          resolve();
+        } catch (error) {
+          reject(error);
+        }
+      }),
+      new Promise<void>(
+        resolve =>
+          setTimeout(() => {
+            testLogger.warn('Docker teardown timed out after 15 seconds, continuing...');
+            resolve();
+          }, 15000) // Reduced from 30s to 15s
+      ),
+    ]);
+
+    testLogger.info('Docker environment teardown completed successfully');
   } catch (error) {
-    testLogger.error({ err: error }, 'Error stopping Docker environment');
-    throw error;
+    testLogger.warn({ err: error }, 'Docker environment cleanup encountered issues but continuing');
+
+    // Try alternative cleanup if docker compose fails
+    try {
+      execSync('docker container prune -f', { stdio: 'inherit', timeout: 10000 });
+      execSync('docker network prune -f', { stdio: 'inherit', timeout: 10000 });
+    } catch (alternativeError) {
+      testLogger.warn({ err: alternativeError }, 'Alternative Docker cleanup also failed');
+    }
   }
 }
 
 /**
- * Main teardown function for Jest
+ * Main teardown function for Jest with improved error handling
  */
 export async function teardown(): Promise<void> {
-  testLogger.info('Starting system test environment teardown...');
-
   try {
-    // Stop the Next.js app
-    await stopNextApp();
-
-    // Stop Docker environment
-    await stopDockerEnvironment();
-
-    // Force process cleanup to ensure no hanging connections
-    // This is particularly important in CI environments
+    // Stop the Next.js app (don't let failures stop the teardown)
     try {
-      // Clear any remaining timers by ensuring no unnecessary timers are created
-      const timeout = setTimeout(() => {}, 0);
-      clearTimeout(timeout);
-    } catch (err) {
-      // Ignore any errors in cleanup
-      testLogger.error({ err }, 'Error during timer cleanup');
+      await stopNextApp();
+    } catch (error) {
+      testLogger.warn({ err: error }, 'Next.js app cleanup failed, continuing with Docker cleanup');
     }
 
-    // Add a small delay to ensure all resources are fully released
-    await new Promise(resolve => setTimeout(resolve, 2000));
+    // Stop Docker environment (don't let failures stop the teardown)
+    try {
+      await stopDockerEnvironment();
+    } catch (error) {
+      testLogger.warn({ err: error }, 'Docker environment cleanup failed, continuing');
+    }
 
-    testLogger.info('System test environment teardown completed successfully');
+    // Add a final delay to ensure all resources are released
+    await new Promise(resolve => setTimeout(resolve, 1000));
   } catch (error) {
-    testLogger.error({ err: error }, 'System test environment teardown failed');
-    throw error;
+    // Log error but don't throw to prevent CI failure
+    testLogger.warn(
+      { err: error },
+      'System test environment teardown encountered issues but completed'
+    );
   }
 }
 

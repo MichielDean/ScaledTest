@@ -3,6 +3,11 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { KeycloakTokenResponse, KeycloakConfig } from '../../src/types/auth';
 
+/**
+ * Authentication token service for tests
+ * Provides functions to obtain and manage authentication tokens for testing
+ */
+
 // Re-export auth interfaces from the centralized location
 export type { KeycloakTokenResponse, KeycloakConfig } from '../../src/types/auth';
 

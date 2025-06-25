@@ -3,7 +3,6 @@ import path from 'path';
 import axios from 'axios';
 import os from 'os';
 import crypto from 'crypto';
-import { env } from './utils/env.js';
 
 /**
  * Get authentication token for API requests

@@ -25,8 +25,8 @@ import {
   parseBooleanEnvVar,
   parseArrayEnvVar,
   parseIntEnvVar,
-} from './utils/env.js';
-import { getKeycloakAdminToken } from './utils/adminAuth.js';
+} from './environment/variableHandling.js';
+import { getKeycloakAdminToken } from './keycloak/adminAuthentication.js';
 
 // Process command-line arguments if provided
 function processCliArgs() {

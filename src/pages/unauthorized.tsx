@@ -24,7 +24,9 @@ const Unauthorized: NextPage = () => {
             Access Denied
           </h1>
 
-          <p className={styles.description}>You do not have permission to access this page.</p>
+          <p id="unauthorized-message" className={styles.description}>
+            You do not have permission to access this page.
+          </p>
 
           <div className={styles.buttonContainer}>
             <Link href="/" aria-label="Return to home page">

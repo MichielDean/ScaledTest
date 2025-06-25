@@ -1,9 +1,9 @@
 // Import the environment setup (will run before importing anything else)
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
+import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 setupOpenSearchTestEnv();
 
 import { v4 as uuidv4 } from 'uuid';
-import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
+import { generateCtrfReport } from '../data/ctrfReportGenerator';
 
 // Create mock before importing the module that uses it
 const mockClient = {

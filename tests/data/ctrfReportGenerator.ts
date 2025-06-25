@@ -2,6 +2,11 @@ import { v4 as uuidv4 } from 'uuid';
 import { CtrfSchema, Status, ReportFormat } from '../../src/schemas/ctrf/ctrf';
 
 /**
+ * CTRF test report generator
+ * Generates valid CTRF report objects for testing purposes
+ */
+
+/**
  * Generates a valid CTRF report object for testing
  * @param overrides - Partial CtrfSchema object to override default values
  * @param fixedTimestamp - Optional fixed Date to use for timestamps

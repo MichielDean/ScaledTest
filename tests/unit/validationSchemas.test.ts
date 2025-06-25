@@ -1,5 +1,5 @@
 import { HttpMethodSchema } from '../../src/types/validation';
-import { HttpMethod } from '../../src/types/common';
+import { HttpMethod } from '../../src/types/apiResponses';
 
 describe('Validation Schemas', () => {
   describe('HttpMethodSchema Validation', () => {

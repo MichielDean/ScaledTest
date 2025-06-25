@@ -1,4 +1,4 @@
-import { setupOpenSearchTestEnv } from '../utils/testEnvSetup';
+import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 setupOpenSearchTestEnv();
 
 import { NextApiRequest, NextApiResponse } from 'next';
@@ -26,7 +26,7 @@ jest.mock('jose', () => ({
 }));
 
 // Mock logger
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
     debug: jest.fn(),
     info: jest.fn(),

@@ -1,5 +1,5 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { generateCtrfReport } from '../utils/ctrfTestDataGenerator';
+import { generateCtrfReport } from '../data/ctrfReportGenerator';
 
 // Mock dependencies first, before any imports that use them
 jest.mock('keycloak-js', () => {
@@ -25,7 +25,7 @@ jest.mock('jose', () => ({
 }));
 
 // Mock logger to prevent console output during tests
-jest.mock('../../src/utils/logger', () => ({
+jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
     debug: jest.fn(),
     info: jest.fn(),

@@ -1,7 +1,7 @@
 // OpenSearch Analytics API - Test Duration Analysis Data
 import type { NextApiResponse } from 'next';
 import { AuthenticatedRequest, createApi } from '../../../auth/apiAuth';
-import { getRequestLogger, logError } from '../../../utils/logger';
+import { getRequestLogger, logError } from '../../../logging/logger';
 import {
   getTestDurationAnalysisFromOpenSearch,
   getOpenSearchHealthStatus,

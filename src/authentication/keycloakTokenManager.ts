@@ -1,7 +1,7 @@
 /**
  * Manages Keycloak tokens in the browser environment
  */
-import { authLogger as logger } from './logger';
+import { authLogger as logger } from '../logging/logger';
 import { keycloakEndpoints, keycloakConfig } from '../config/keycloak';
 import axios, { AxiosError } from 'axios';
 

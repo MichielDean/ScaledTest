@@ -1,4 +1,4 @@
-import { getAuthToken } from '../utils/auth';
+import { getAuthToken } from '../authentication/tokenService';
 import axios from 'axios';
 
 // Mock axios

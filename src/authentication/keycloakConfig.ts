@@ -1,4 +1,4 @@
-import { authLogger as logger, logError } from './logger';
+import { authLogger as logger, logError } from '../logging/logger';
 import { keycloakJsonConfig } from '../config/keycloak';
 
 // This utility creates a dynamic keycloak.json config in the browser

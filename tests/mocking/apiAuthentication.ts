@@ -2,7 +2,10 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { UserRole } from '../../src/auth/keycloak';
 import { AuthenticatedRequest } from '../../src/auth/apiAuth';
 
-// Mock version of withApiAuth that bypasses actual token verification for testing
+/**
+ * Mock API authentication service for testing
+ * Provides mock version of withApiAuth that bypasses actual token verification
+ */
 export function mockWithApiAuth(
   handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>,
   requiredRoles: UserRole[] = []

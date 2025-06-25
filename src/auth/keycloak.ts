@@ -1,5 +1,5 @@
 import Keycloak from 'keycloak-js';
-import { authLogger as logger } from '../utils/logger';
+import { authLogger as logger } from '../logging/logger';
 import keycloakConfig, { UserRole as ConfigUserRole } from '../config/keycloak';
 
 // Log configuration for debugging

@@ -4,8 +4,8 @@ import {
   generateMinimalCtrfReport,
   generateInvalidCtrfReport,
   generateLargeCtrfReport,
-} from '../utils/ctrfTestDataGenerator';
-import { getAuthHeader } from '../utils/auth';
+} from '../data/ctrfReportGenerator';
+import { getAuthHeader } from '../authentication/tokenService';
 import { Status } from '../../src/schemas/ctrf/ctrf';
 import { StoredReport } from '../../src/types/database';
 

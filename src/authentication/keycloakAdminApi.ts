@@ -1,6 +1,6 @@
 import axios, { AxiosError } from 'axios';
 import { keycloakEndpoints, keycloakAdminConfig, keycloakConfig } from '../config/keycloak';
-import { authLogger as logger, logError } from './logger';
+import { authLogger as logger, logError } from '../logging/logger';
 
 // Cache for admin token to avoid too many requests
 interface TokenCache {

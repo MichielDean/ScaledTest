@@ -6,7 +6,7 @@
  */
 
 import { UserWithRoles } from './user';
-import { BaseApiResponse, SuccessApiResponse, ErrorApiResponse } from './common';
+import { BaseApiResponse, SuccessApiResponse, ErrorApiResponse } from './apiResponses';
 
 /**
  * Error response with HTTP status code

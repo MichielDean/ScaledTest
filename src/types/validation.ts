@@ -6,7 +6,7 @@
  */
 
 import { z } from 'zod';
-import { HttpMethod } from './common';
+import { HttpMethod } from './apiResponses';
 
 // Validation schema for HttpMethod enum
 export const HttpMethodSchema = z.nativeEnum(HttpMethod);
