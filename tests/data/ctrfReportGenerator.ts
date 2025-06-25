@@ -82,7 +82,7 @@ export const generateCtrfReport = (
         version: '29.7.0',
         extra: {
           runner: 'default',
-          config: 'jest.config.js',
+          config: 'jest.config.ts',
         },
       },
       summary,
