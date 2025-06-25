@@ -6,14 +6,14 @@
   "main": "index.js",
   "scripts": {
     "build": "tsc --project tsconfig.tests.json && next build",
-    "dev": "docker compose -f docker/docker-compose.yml up -d && node scripts/setup-keycloak.js && next dev --turbopack",
-    "setup:keycloak": "node scripts/setup-keycloak.js",
+    "dev": "docker compose -f docker/docker-compose.yml up -d && npx tsx scripts/setup-keycloak.ts && next dev --turbopack",
+    "setup:keycloak": "npx tsx scripts/setup-keycloak.ts",
     "update-deps": "npx npm-check-updates -u && npm install",
     "lint": "next lint",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md,yml,yaml,html}\" --log-level warn",
     "test": "jest --forceExit --detectOpenHandles",
-    "send-test-results": "node scripts/send-test-results.js",
-    "demo-data": "node scripts/generate-demo-data.js",
+    "send-test-results": "npx tsx scripts/send-test-results.ts",
+    "demo-data": "npx tsx scripts/generate-demo-data.ts",
     "generate-ctrf:types": "npx json2ts -i src/schemas/ctrf/ctrf-schema.json -o src/schemas/ctrf/ctrf.ts --inferStringEnumKeysFromValues --enableConstEnums",
     "prepare": "husky",
     "postinstall": "husky && npx playwright install chromium"
@@ -67,6 +67,7 @@
     "prettier": "^3.5.3",
     "supertest": "^7.1.1",
     "ts-jest": "^29.3.4",
+    "tsx": "^4.20.3",
     "typescript": "^5.8.3",
     "uuid": "^11.1.0",
     "wait-on": "^8.0.3"

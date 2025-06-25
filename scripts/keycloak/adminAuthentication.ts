@@ -1,27 +1,40 @@
 /**
- * Keycloak Admin Authentication (ES Modules)
+ * Keycloak Admin Authentication (TypeScript)
  *
  * Shared functionality for authenticating with Keycloak admin APIs.
  * This eliminates duplication between setup scripts and admin API endpoints.
  */
 
-import axios from 'axios';
+import axios, { AxiosResponse } from 'axios';
 import { getRequiredEnvVar } from '../environment/variableHandling.js';
+
+interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  refresh_expires_in: number;
+  token_type: string;
+  'not-before-policy': number;
+  scope: string;
+}
+
+interface AuthHeaders {
+  Authorization: string;
+}
 
 /**
  * Get admin access token from Keycloak
- * @param {string} [keycloakUrl] - The base URL of the Keycloak server
- * @param {string} [adminUsername] - Admin username (optional, will use env var if not provided)
- * @param {string} [adminPassword] - Admin password (optional, will use env var if not provided)
- * @returns {Promise<string>} Promise resolving to the admin access token
  */
-const getKeycloakAdminToken = async (keycloakUrl, adminUsername, adminPassword) => {
+const getKeycloakAdminToken = async (
+  keycloakUrl?: string,
+  adminUsername?: string,
+  adminPassword?: string
+): Promise<string> => {
   const baseUrl = keycloakUrl || getRequiredEnvVar('KEYCLOAK_URL');
   const username = adminUsername || getRequiredEnvVar('KEYCLOAK_ADMIN_USERNAME');
   const password = adminPassword || getRequiredEnvVar('KEYCLOAK_ADMIN_PASSWORD');
 
   try {
-    const response = await axios.post(
+    const response: AxiosResponse<TokenResponse> = await axios.post(
       `${baseUrl}/realms/master/protocol/openid-connect/token`,
       new URLSearchParams({
         grant_type: 'password',
@@ -45,12 +58,12 @@ const getKeycloakAdminToken = async (keycloakUrl, adminUsername, adminPassword) 
 
 /**
  * Create authorization headers for admin API requests
- * @param {string} [keycloakUrl] - The base URL of the Keycloak server (optional)
- * @param {string} [adminUsername] - Admin username (optional)
- * @param {string} [adminPassword] - Admin password (optional)
- * @returns {Promise<{Authorization: string}>} Promise resolving to authorization headers object
  */
-const getAdminAuthHeaders = async (keycloakUrl, adminUsername, adminPassword) => {
+const getAdminAuthHeaders = async (
+  keycloakUrl?: string,
+  adminUsername?: string,
+  adminPassword?: string
+): Promise<AuthHeaders> => {
   const token = await getKeycloakAdminToken(keycloakUrl, adminUsername, adminPassword);
   return {
     Authorization: `Bearer ${token}`,

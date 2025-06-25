@@ -31,7 +31,7 @@ const createNodeConfig = (): Config => ({
 const createJSDOMConfig = (): Config => ({
   ...createBaseConfig(),
   testEnvironment: 'jsdom',
-  setupFiles: ['<rootDir>/tests/components/jest-setup.js'],
+  setupFiles: ['<rootDir>/tests/components/jest-setup.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',

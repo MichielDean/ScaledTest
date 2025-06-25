@@ -65,7 +65,7 @@ export async function startDockerEnvironment(): Promise<void> {
  */
 export async function setupKeycloak(): Promise<void> {
   try {
-    execSync('node scripts/setup-keycloak.js', { stdio: 'inherit' });
+    execSync('npx tsx scripts/setup-keycloak.ts', { stdio: 'inherit' });
   } catch (error) {
     testLogger.error({ err: error }, 'Failed to setup Keycloak');
     throw error;

@@ -15,10 +15,14 @@
  *   node setup-keycloak.js --help
  */
 
-import axios from 'axios';
+import axios, { AxiosError, AxiosResponse } from 'axios';
 import path from 'path';
 import fs from 'fs';
 import dotenv from 'dotenv';
+import logger from '../src/logging/logger.js';
+import { KeycloakConfig } from 'keycloak-js';
+import { AdminTokenResponse } from '../src/types/auth.js';
+import { KeycloakRole } from '../src/types/user.js';
 import {
   getRequiredEnvVar,
   getOptionalEnvVarOrUndefined,
@@ -28,8 +32,79 @@ import {
 } from './environment/variableHandling.js';
 import { getKeycloakAdminToken } from './keycloak/adminAuthentication.js';
 
+// Create a script-specific logger
+const scriptLogger = logger.child({ module: 'setup-keycloak' });
+
+// Admin API specific configuration interfaces
+// These are for the Keycloak Admin REST API, not the client-side SDK
+interface AdminServerConfig {
+  baseUrl: string;
+  adminUser: string;
+  adminPassword: string;
+  maxRetries: number;
+  retryInterval: number;
+}
+
+// Keycloak Admin API Realm Representation
+// Based on https://www.keycloak.org/docs-api/latest/rest-api/index.html#_realmrepresentation
+interface AdminRealmRepresentation {
+  name: string;
+  displayName: string;
+  enabled: boolean;
+  registrationAllowed: boolean;
+  resetPasswordAllowed: boolean;
+  rememberMe: boolean;
+  verifyEmail: boolean;
+  loginWithEmailAllowed: boolean;
+  duplicateEmailsAllowed: boolean;
+  sslRequired: string;
+}
+
+// Keycloak Admin API Client Representation
+// Based on https://www.keycloak.org/docs-api/latest/rest-api/index.html#_clientrepresentation
+interface AdminClientRepresentation {
+  id: string;
+  name?: string;
+  enabled: boolean;
+  publicClient: boolean;
+  redirectUris: string[];
+  webOrigins: string[];
+  standardFlowEnabled: boolean;
+  implicitFlowEnabled?: boolean;
+  directAccessGrantsEnabled: boolean;
+  serviceAccountsEnabled?: boolean;
+  authorizationServicesEnabled?: boolean;
+  fullScopeAllowed: boolean;
+  protocol: string;
+}
+
+// Keycloak Admin API User Representation for creation
+// Based on https://www.keycloak.org/docs-api/latest/rest-api/index.html#_userrepresentation
+interface AdminUserRepresentation {
+  username: string;
+  firstName: string;
+  lastName: string;
+  email: string;
+  enabled: boolean;
+  emailVerified: boolean;
+  password: string;
+  roles: string[];
+}
+
+/**
+ * Complete configuration for the Keycloak setup script
+ * Uses admin API types for server operations and official KeycloakConfig for client config
+ */
+interface SetupScriptConfig {
+  server: AdminServerConfig;
+  realm: AdminRealmRepresentation;
+  client: AdminClientRepresentation;
+  users: AdminUserRepresentation[];
+  roles: string[];
+}
+
 // Process command-line arguments if provided
-function processCliArgs() {
+function processCliArgs(): void {
   const args = process.argv.slice(2);
 
   // Check for help
@@ -53,7 +128,7 @@ function processCliArgs() {
 
 // Display help information
 function showHelp() {
-  console.log(`
+  scriptLogger.info(`
 Keycloak Setup Script
 
 Usage:
@@ -107,7 +182,7 @@ dotenv.config({ path: './.env.local' });
 dotenv.config({ path: './.env' });
 
 // Validate and build configuration from environment variables
-function buildConfigFromEnv() {
+function buildConfigFromEnv(): SetupScriptConfig {
   // Build server configuration
   const server = {
     baseUrl: getRequiredEnvVar('KEYCLOAK_URL'),
@@ -149,7 +224,6 @@ function buildConfigFromEnv() {
 
   // Build users array
   const users = [];
-
   // Only add users if their username is defined
   if (process.env.KEYCLOAK_READONLY_USER_USERNAME) {
     users.push({
@@ -160,6 +234,8 @@ function buildConfigFromEnv() {
       email:
         getOptionalEnvVarOrUndefined('KEYCLOAK_READONLY_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_READONLY_USER_USERNAME')}@example.com`,
+      enabled: true,
+      emailVerified: true,
       roles: parseArrayEnvVar('KEYCLOAK_READONLY_USER_ROLES', ',', ['readonly']),
     });
   }
@@ -173,6 +249,8 @@ function buildConfigFromEnv() {
       email:
         getOptionalEnvVarOrUndefined('KEYCLOAK_MAINTAINER_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_MAINTAINER_USER_USERNAME')}@example.com`,
+      enabled: true,
+      emailVerified: true,
       roles: parseArrayEnvVar('KEYCLOAK_MAINTAINER_USER_ROLES', ',', ['readonly', 'maintainer']),
     });
   }
@@ -186,6 +264,8 @@ function buildConfigFromEnv() {
       email:
         getOptionalEnvVarOrUndefined('KEYCLOAK_OWNER_USER_EMAIL') ||
         `${getRequiredEnvVar('KEYCLOAK_OWNER_USER_USERNAME')}@example.com`,
+      enabled: true,
+      emailVerified: true,
       roles: parseArrayEnvVar('KEYCLOAK_OWNER_USER_ROLES', ',', [
         'readonly',
         'maintainer',
@@ -204,12 +284,18 @@ function buildConfigFromEnv() {
 }
 
 // Build configuration from environment variables
-let keycloakConfig;
+let keycloakConfig: SetupScriptConfig;
 try {
   keycloakConfig = buildConfigFromEnv();
-  console.log('Configuration loaded from environment variables');
-} catch (error) {
-  console.error(`Error loading configuration: ${error.message}`);
+  scriptLogger.info('Configuration loaded from environment variables');
+} catch (error: unknown) {
+  const errorMessage =
+    error instanceof Error
+      ? error instanceof Error
+        ? error.message
+        : String(error)
+      : String(error);
+  scriptLogger.error(`Error loading configuration: ${errorMessage}`);
   process.exit(1);
 }
 
@@ -222,33 +308,37 @@ const api = axios.create({
 });
 
 // API error handler
-const handleApiError = (error, operation) => {
-  console.error(`Error during ${operation}:`, error.message);
-  if (error.response) {
-    console.error('Status:', error.response.status);
-    console.error('Response data:', error.response.data);
+const handleApiError = (error: unknown, operation: string): never => {
+  const errorMessage = error instanceof Error ? error.message : String(error);
+  scriptLogger.error(`Error during ${operation}:`, errorMessage);
+  if (error && typeof error === 'object' && 'response' in error) {
+    const axiosError = error as AxiosError;
+    if (axiosError.response) {
+      scriptLogger.error('Status:', axiosError.response.status);
+      scriptLogger.error('Response data:', axiosError.response.data);
+    }
   }
   throw error;
 };
 
 // Get admin access token (using shared utility)
-async function getAdminToken() {
+async function getAdminToken(): Promise<string> {
   try {
-    console.log('Authenticating as admin...');
+    scriptLogger.info('Authenticating as admin...');
     const token = await getKeycloakAdminToken(
       keycloakConfig.server.baseUrl,
       keycloakConfig.server.adminUser,
       keycloakConfig.server.adminPassword
     );
-    console.log('Admin authentication successful');
+    scriptLogger.info('Admin authentication successful');
     return token;
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, 'admin authentication');
   }
 }
 
 // Check if realm exists
-async function checkRealmExists(adminToken, realmName) {
+async function checkRealmExists(adminToken: string, realmName: string): Promise<boolean> {
   try {
     await api.get(`/admin/realms/${realmName}`, {
       headers: {
@@ -256,26 +346,29 @@ async function checkRealmExists(adminToken, realmName) {
       },
     });
     return true;
-  } catch (error) {
-    if (error.response && error.response.status === 404) {
-      return false;
+  } catch (error: unknown) {
+    if (error && typeof error === 'object' && 'response' in error) {
+      const axiosError = error as AxiosError;
+      if (axiosError.response && axiosError.response.status === 404) {
+        return false;
+      }
     }
     return handleApiError(error, `checking if realm '${realmName}' exists`);
   }
 }
 
 // Create a new realm
-async function createRealm(adminToken) {
+async function createRealm(adminToken: string): Promise<void> {
   try {
-    console.log(`Checking if realm '${keycloakConfig.realm.name}' exists...`);
+    scriptLogger.info(`Checking if realm '${keycloakConfig.realm.name}' exists...`);
     const realmExists = await checkRealmExists(adminToken, keycloakConfig.realm.name);
 
     if (realmExists) {
-      console.log(`Realm '${keycloakConfig.realm.name}' already exists.`);
+      scriptLogger.info(`Realm '${keycloakConfig.realm.name}' already exists.`);
       return;
     }
 
-    console.log(`Creating realm '${keycloakConfig.realm.name}'...`);
+    scriptLogger.info(`Creating realm '${keycloakConfig.realm.name}'...`);
     await api.post(
       '/admin/realms',
       {
@@ -297,16 +390,16 @@ async function createRealm(adminToken) {
       }
     );
 
-    console.log(`Realm '${keycloakConfig.realm.name}' created successfully.`);
-  } catch (error) {
+    scriptLogger.info(`Realm '${keycloakConfig.realm.name}' created successfully.`);
+  } catch (error: unknown) {
     return handleApiError(error, 'creating realm');
   }
 }
 
 // Check if client exists and get its ID
-async function getClientId(adminToken) {
+async function getClientId(adminToken: string): Promise<string | null> {
   try {
-    console.log(`Checking if client '${keycloakConfig.client.id}' exists...`);
+    scriptLogger.info(`Checking if client '${keycloakConfig.client.id}' exists...`);
 
     const clientsResponse = await api.get(`/admin/realms/${keycloakConfig.realm.name}/clients`, {
       headers: {
@@ -314,21 +407,21 @@ async function getClientId(adminToken) {
       },
     });
 
-    const client = clientsResponse.data.find(c => c.clientId === keycloakConfig.client.id);
+    const client = clientsResponse.data.find((c: any) => c.clientId === keycloakConfig.client.id);
 
     if (client) {
-      console.log(`Client '${keycloakConfig.client.id}' already exists.`);
+      scriptLogger.info(`Client '${keycloakConfig.client.id}' already exists.`);
       return client.id;
     }
 
     return null;
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, 'checking if client exists');
   }
 }
 
 // Create a client
-async function createClient(adminToken) {
+async function createClient(adminToken: string): Promise<string> {
   try {
     // Check if client exists
     let clientId = await getClientId(adminToken);
@@ -340,7 +433,7 @@ async function createClient(adminToken) {
     }
 
     // Create client
-    console.log(`Creating client '${keycloakConfig.client.id}'...`);
+    scriptLogger.info(`Creating client '${keycloakConfig.client.id}'...`);
     await api.post(
       `/admin/realms/${keycloakConfig.realm.name}/clients`,
       {
@@ -363,22 +456,25 @@ async function createClient(adminToken) {
 
     // Get client ID
     clientId = await getClientId(adminToken);
+    if (!clientId) {
+      throw new Error('Failed to get client ID after creation');
+    }
 
-    console.log(`Client '${keycloakConfig.client.id}' created successfully.`);
+    scriptLogger.info(`Client '${keycloakConfig.client.id}' created successfully.`);
 
     // Create audience mapper for the client
     await createAudienceMapper(adminToken, clientId);
 
     return clientId;
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, 'creating client');
   }
 }
 
 // Create audience mapper for the client
-async function createAudienceMapper(adminToken, clientId) {
+async function createAudienceMapper(adminToken: string, clientId: string): Promise<void> {
   try {
-    console.log(`Creating audience mapper for client '${keycloakConfig.client.id}'...`);
+    scriptLogger.info(`Creating audience mapper for client '${keycloakConfig.client.id}'...`);
 
     // Check if audience mapper already exists
     const mappersResponse = await api.get(
@@ -391,12 +487,12 @@ async function createAudienceMapper(adminToken, clientId) {
     );
 
     const existingMapper = mappersResponse.data.find(
-      mapper =>
+      (mapper: any) =>
         mapper.name === 'audience-mapper' && mapper.protocolMapper === 'oidc-audience-mapper'
     );
 
     if (existingMapper) {
-      console.log('Audience mapper already exists.');
+      scriptLogger.info('Audience mapper already exists.');
       return;
     }
 
@@ -422,14 +518,20 @@ async function createAudienceMapper(adminToken, clientId) {
       }
     );
 
-    console.log(`Audience mapper created successfully for client '${keycloakConfig.client.id}'.`);
-  } catch (error) {
+    scriptLogger.info(
+      `Audience mapper created successfully for client '${keycloakConfig.client.id}'.`
+    );
+  } catch (error: unknown) {
     return handleApiError(error, 'creating audience mapper');
   }
 }
 
 // Check if role exists
-async function checkRoleExists(adminToken, clientId, roleName) {
+async function checkRoleExists(
+  adminToken: string,
+  clientId: string,
+  roleName: string
+): Promise<boolean> {
   try {
     await api.get(
       `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles/${roleName}`,
@@ -440,8 +542,13 @@ async function checkRoleExists(adminToken, clientId, roleName) {
       }
     );
     return true;
-  } catch (error) {
-    if (error.response && error.response.status === 404) {
+  } catch (error: unknown) {
+    if (
+      error &&
+      typeof error === 'object' &&
+      'response' in error &&
+      (error as AxiosError).response?.status === 404
+    ) {
       return false;
     }
     return handleApiError(error, `checking if role '${roleName}' exists`);
@@ -449,21 +556,21 @@ async function checkRoleExists(adminToken, clientId, roleName) {
 }
 
 // Create roles
-async function createRoles(adminToken, clientId) {
+async function createRoles(adminToken: string, clientId: string): Promise<void> {
   try {
-    console.log('Creating roles...');
+    scriptLogger.info('Creating roles...');
 
     for (const role of keycloakConfig.roles) {
       // Check if role exists
       const roleExists = await checkRoleExists(adminToken, clientId, role);
 
       if (roleExists) {
-        console.log(`Role '${role}' already exists.`);
+        scriptLogger.info(`Role '${role}' already exists.`);
         continue;
       }
 
       // Create role
-      console.log(`Creating role '${role}'...`);
+      scriptLogger.info(`Creating role '${role}'...`);
       await api.post(
         `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles`,
         {
@@ -477,15 +584,15 @@ async function createRoles(adminToken, clientId) {
         }
       );
 
-      console.log(`Role '${role}' created successfully.`);
+      scriptLogger.info(`Role '${role}' created successfully.`);
     }
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, 'creating roles');
   }
 }
 
 // Check if user exists
-async function getUserId(adminToken, username) {
+async function getUserId(adminToken: string, username: string): Promise<string | null> {
   try {
     const usersResponse = await api.get(
       `/admin/realms/${keycloakConfig.realm.name}/users?username=${username}`,
@@ -501,15 +608,19 @@ async function getUserId(adminToken, username) {
     }
 
     return null;
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, `checking if user '${username}' exists`);
   }
 }
 
 // Get role representation
-async function getRoleRepresentation(adminToken, clientId, roleName) {
+async function getRoleRepresentation(
+  adminToken: string,
+  clientId: string,
+  roleName: string
+): Promise<KeycloakRole> {
   try {
-    const roleResponse = await api.get(
+    const roleResponse = await api.get<KeycloakRole>(
       `/admin/realms/${keycloakConfig.realm.name}/clients/${clientId}/roles/${roleName}`,
       {
         headers: {
@@ -519,15 +630,15 @@ async function getRoleRepresentation(adminToken, clientId, roleName) {
     );
 
     return roleResponse.data;
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, `getting role representation for '${roleName}'`);
   }
 }
 
 // Create test users
-async function createTestUsers(adminToken, clientId) {
+async function createTestUsers(adminToken: string, clientId: string): Promise<void> {
   try {
-    console.log('Creating test users...');
+    scriptLogger.info('Creating test users...');
 
     for (const user of keycloakConfig.users) {
       try {
@@ -535,10 +646,10 @@ async function createTestUsers(adminToken, clientId) {
         let userId = await getUserId(adminToken, user.username);
 
         if (userId) {
-          console.log(`User '${user.username}' already exists.`);
+          scriptLogger.info(`User '${user.username}' already exists.`);
         } else {
           // Create user
-          console.log(`Creating user '${user.username}'...`);
+          scriptLogger.info(`Creating user '${user.username}'...`);
           await api.post(
             `/admin/realms/${keycloakConfig.realm.name}/users`,
             {
@@ -568,7 +679,7 @@ async function createTestUsers(adminToken, clientId) {
         }
 
         // Assign roles to user
-        console.log(`Assigning roles to user '${user.username}'...`);
+        scriptLogger.info(`Assigning roles to user '${user.username}'...`);
         for (const roleName of user.roles) {
           // Get role representation
           const roleRepresentation = await getRoleRepresentation(adminToken, clientId, roleName);
@@ -585,20 +696,25 @@ async function createTestUsers(adminToken, clientId) {
           );
         }
 
-        console.log(`User '${user.username}' setup completed with roles: ${user.roles.join(', ')}`);
-      } catch (error) {
-        console.error(`Error setting up user '${user.username}':`, error.message);
+        scriptLogger.info(
+          `User '${user.username}' setup completed with roles: ${user.roles.join(', ')}`
+        );
+      } catch (error: unknown) {
+        scriptLogger.error(
+          `Error setting up user '${user.username}':`,
+          error instanceof Error ? error.message : String(error)
+        );
         // Continue with other users even if one fails
       }
     }
-  } catch (error) {
+  } catch (error: unknown) {
     return handleApiError(error, 'creating test users');
   }
 }
 
 // Wait for Keycloak to be ready
 async function waitForKeycloak() {
-  console.log(`Waiting for Keycloak at ${keycloakConfig.server.baseUrl} to be ready...`);
+  scriptLogger.info(`Waiting for Keycloak at ${keycloakConfig.server.baseUrl} to be ready...`);
   let keycloakReady = false;
   let retries = 0;
 
@@ -606,8 +722,8 @@ async function waitForKeycloak() {
     try {
       await api.get('/');
       keycloakReady = true;
-    } catch (error) {
-      console.log(
+    } catch (error: unknown) {
+      scriptLogger.info(
         `Keycloak not ready yet (attempt ${retries + 1}/${keycloakConfig.server.maxRetries}), waiting...`
       );
       await new Promise(resolve => setTimeout(resolve, keycloakConfig.server.retryInterval));
@@ -619,44 +735,20 @@ async function waitForKeycloak() {
     throw new Error(`Keycloak failed to start after ${keycloakConfig.server.maxRetries} retries`);
   }
 
-  console.log('Keycloak is ready');
+  scriptLogger.info('Keycloak is ready');
 }
 
 // Export configuration for other modules to use
 function exportConfiguration() {
-  // Create the public/keycloak.json file for the frontend
-  try {
-    const publicKeycloakConfig = {
-      realm: keycloakConfig.realm.name,
-      'auth-server-url': keycloakConfig.server.baseUrl,
-      'ssl-required': keycloakConfig.realm.sslRequired,
-      resource: keycloakConfig.client.id,
-      'public-client': keycloakConfig.client.publicClient,
-      'confidential-port': 0,
-    };
-
-    // Ensure public directory exists
-    const publicDir = path.resolve(process.cwd(), 'public');
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-
-    // Write the configuration file
-    fs.writeFileSync(
-      path.resolve(publicDir, 'keycloak.json'),
-      JSON.stringify(publicKeycloakConfig, null, 2)
-    );
-
-    console.log('Keycloak client configuration exported to public/keycloak.json');
-  } catch (error) {
-    console.error('Failed to export Keycloak configuration:', error.message);
-  }
+  // Configuration is now centralized in src/config/keycloak.ts
+  // No need to create public/keycloak.json file
+  scriptLogger.info('Keycloak configuration is available via src/config/keycloak.ts');
 }
 
 // Main function to run the setup
 async function setup() {
   try {
-    console.log('Starting Keycloak setup...');
+    scriptLogger.info('Starting Keycloak setup...');
 
     // Wait for Keycloak to be ready
     await waitForKeycloak();
@@ -679,15 +771,15 @@ async function setup() {
     // Export configuration
     exportConfiguration();
 
-    console.log('Keycloak setup completed successfully!');
-    console.log('\nTest users created:');
-    keycloakConfig.users.forEach(user => {
-      console.log(
+    scriptLogger.info('Keycloak setup completed successfully!');
+    scriptLogger.info('\nTest users created:');
+    keycloakConfig.users.forEach((user: AdminUserRepresentation) => {
+      scriptLogger.info(
         `- Username: ${user.username}, Password: ${user.password}, Roles: ${user.roles.join(', ')}`
       );
     });
-  } catch (error) {
-    console.error('Setup failed:', error.message);
+  } catch (error: unknown) {
+    scriptLogger.error('Setup failed:', error instanceof Error ? error.message : String(error));
     process.exit(1);
   }
 }
@@ -697,13 +789,13 @@ if (
   import.meta.url === `file://${process.argv[1]}` ||
   import.meta.url.endsWith('setup-keycloak.js')
 ) {
-  console.log('Script executed directly, starting setup...');
+  scriptLogger.info('Script executed directly, starting setup...');
   setup().catch(error => {
-    console.error('Setup failed:', error);
+    scriptLogger.error('Setup failed:', error);
     process.exit(1);
   });
 } else {
-  console.log('Script imported as module, not running setup automatically');
+  scriptLogger.info('Script imported as module, not running setup automatically');
 }
 
 // Export functions and config for use in other scripts
