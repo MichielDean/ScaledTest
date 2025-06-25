@@ -740,34 +740,9 @@ async function waitForKeycloak() {
 
 // Export configuration for other modules to use
 function exportConfiguration() {
-  // Create the public/keycloak.json file for the frontend
-  try {
-    // Use the official KeycloakConfig interface structure
-    const publicKeycloakConfig: KeycloakConfig = {
-      url: keycloakConfig.server.baseUrl,
-      realm: keycloakConfig.realm.name,
-      clientId: keycloakConfig.client.id,
-    };
-
-    // Ensure public directory exists
-    const publicDir = path.resolve(process.cwd(), 'public');
-    if (!fs.existsSync(publicDir)) {
-      fs.mkdirSync(publicDir, { recursive: true });
-    }
-
-    // Write the configuration file
-    fs.writeFileSync(
-      path.resolve(publicDir, 'keycloak.json'),
-      JSON.stringify(publicKeycloakConfig, null, 2)
-    );
-
-    scriptLogger.info('Keycloak client configuration exported to public/keycloak.json');
-  } catch (error: unknown) {
-    scriptLogger.error(
-      'Failed to export Keycloak configuration:',
-      error instanceof Error ? error.message : String(error)
-    );
-  }
+  // Configuration is now centralized in src/config/keycloak.ts
+  // No need to create public/keycloak.json file
+  scriptLogger.info('Keycloak configuration is available via src/config/keycloak.ts');
 }
 
 // Main function to run the setup

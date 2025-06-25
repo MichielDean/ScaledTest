@@ -5,17 +5,12 @@ import os from 'os';
 import crypto from 'crypto';
 import logger, { logError } from '../src/logging/logger.js';
 import { CtrfSchema } from '../src/schemas/ctrf/ctrf.js';
+import { keycloakConfig } from '../src/config/keycloak.js';
 
 // Create a script-specific logger
 const scriptLogger = logger.child({ module: 'send-test-results' });
 
 // Type definitions
-interface KeycloakConfig {
-  'auth-server-url': string;
-  realm: string;
-  resource: string;
-}
-
 interface TokenResponse {
   access_token: string;
   expires_in: number;
@@ -26,21 +21,8 @@ interface TokenResponse {
  * Get authentication token for API requests
  */
 async function getAuthToken(): Promise<string | null> {
-  const keycloakConfigPath = path.join(process.cwd(), 'public', 'keycloak.json');
-
-  if (!fs.existsSync(keycloakConfigPath)) {
-    scriptLogger.warn(
-      'Keycloak configuration not found. Attempting to send without authentication.',
-      {
-        configPath: keycloakConfigPath,
-      }
-    );
-    return null;
-  }
-
   try {
-    const keycloakConfig: KeycloakConfig = JSON.parse(fs.readFileSync(keycloakConfigPath, 'utf8'));
-    const tokenUrl = `${keycloakConfig['auth-server-url']}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`;
+    const tokenUrl = `${keycloakConfig.url}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`;
 
     // Use test credentials or environment variables
     const username = process.env.TEST_API_USERNAME || 'maintainer@example.com';
@@ -50,7 +32,7 @@ async function getAuthToken(): Promise<string | null> {
       tokenUrl,
       new URLSearchParams({
         grant_type: 'password',
-        client_id: keycloakConfig.resource,
+        client_id: keycloakConfig.clientId,
         username,
         password,
       }),
@@ -64,9 +46,7 @@ async function getAuthToken(): Promise<string | null> {
 
     return response.data.access_token;
   } catch (error) {
-    logError(scriptLogger, 'Failed to get authentication token', error, {
-      configPath: keycloakConfigPath,
-    });
+    logError(scriptLogger, 'Failed to get authentication token', error);
     scriptLogger.warn('Attempting to send test results without authentication...');
     return null;
   }
