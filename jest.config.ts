@@ -9,7 +9,6 @@ const SHARED_CONFIG = {
     'node_modules/(?!(keycloak-js)/)',
   ],
   globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
-  testTimeout: 60000,
 };
 
 // Base configuration factory
@@ -68,6 +67,7 @@ const REPORTERS_CONFIG: Config['reporters'] = [
 
 const config: Config = {
   reporters: REPORTERS_CONFIG,
+  testTimeout: 60000,
   projects: [
     {
       ...createNodeConfig(),
