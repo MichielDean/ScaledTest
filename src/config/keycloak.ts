@@ -5,8 +5,10 @@
  * It can be used on both client and server-side.
  */
 
-// Base Keycloak configuration
-export const keycloakConfig = {
+import { KeycloakConfig } from 'keycloak-js';
+
+// Official Keycloak client configuration
+export const keycloakConfig: KeycloakConfig = {
   // Base URL of the Keycloak server
   url: process.env.NEXT_PUBLIC_KEYCLOAK_URL || 'http://localhost:8080',
 
@@ -15,7 +17,10 @@ export const keycloakConfig = {
 
   // Client ID
   clientId: process.env.NEXT_PUBLIC_KEYCLOAK_CLIENT_ID || 'scaledtest-client',
+};
 
+// Additional configuration for legacy compatibility and admin operations
+export const keycloakExtendedConfig = {
   // SSL Required setting
   sslRequired: 'external',
 
@@ -68,14 +73,14 @@ export const keycloakEndpoints = {
     `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/clients/${clientId}/roles/${roleName}`,
 };
 
-// JSON representation for keycloak.json file
+// JSON representation for keycloak.json file (legacy format)
 export const keycloakJsonConfig = {
   realm: keycloakConfig.realm,
   'auth-server-url': keycloakConfig.url,
-  'ssl-required': keycloakConfig.sslRequired,
+  'ssl-required': keycloakExtendedConfig.sslRequired,
   resource: keycloakConfig.clientId,
-  'public-client': keycloakConfig.publicClient,
-  'confidential-port': keycloakConfig.confidentialPort,
+  'public-client': keycloakExtendedConfig.publicClient,
+  'confidential-port': keycloakExtendedConfig.confidentialPort,
 };
 
 export default keycloakConfig;

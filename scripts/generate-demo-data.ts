@@ -1,12 +1,34 @@
 import { sendTestResults } from './send-test-results.js';
+import logger from '../src/logging/logger.js';
+import { CtrfSchema, Status, ReportFormat } from '../src/schemas/ctrf/ctrf.js';
 
-/**
- * Generate demo CTRF test results with interesting data points for visualization
- * This script creates realistic test scenarios that showcase different chart capabilities
- */
+// Create a script-specific logger
+const scriptLogger = logger.child({ module: 'generate-demo-data' });
+
+// Type definitions for demo scenarios
+interface DemoScenario {
+  name: string;
+  description: string;
+  tool: string;
+  environment: string;
+}
+
+interface DemoScenarios {
+  [key: string]: DemoScenario;
+}
+
+interface ReportOptions {
+  testCount?: number;
+  timeOffset?: number;
+  performanceProfile?: 'fast' | 'normal' | 'slow' | 'very_slow';
+  buildNumber?: number;
+}
+
+type TestType = 'unit' | 'integration' | 'e2e' | 'accessibility';
+type PerformanceProfile = 'fast' | 'normal' | 'slow' | 'very_slow';
 
 // Configuration for different demo scenarios
-const DEMO_SCENARIOS = {
+const DEMO_SCENARIOS: DemoScenarios = {
   // Scenario 1: Progressive improvement over time
   improving: {
     name: 'Improving Test Suite',
@@ -51,7 +73,7 @@ const DEMO_SCENARIOS = {
 /**
  * Generate realistic test names for different categories
  */
-function generateTestNames(category, count) {
+function generateTestNames(category: TestType, count: number): string[] {
   const testTypes = {
     unit: [
       'User Authentication Service',
@@ -118,7 +140,10 @@ function generateTestNames(category, count) {
 /**
  * Generate test duration based on test type and performance characteristics
  */
-function generateTestDuration(testType, performanceProfile = 'normal') {
+function generateTestDuration(
+  testType: TestType,
+  performanceProfile: PerformanceProfile = 'normal'
+): number {
   const baseDurations = {
     unit: { min: 10, max: 500 },
     integration: { min: 100, max: 5000 },
@@ -145,7 +170,12 @@ function generateTestDuration(testType, performanceProfile = 'normal') {
 /**
  * Generate test status based on scenario and time progression
  */
-function generateTestStatus(scenario, testIndex, totalTests, timeProgression = 0) {
+function generateTestStatus(
+  scenario: string,
+  testIndex: number,
+  totalTests: number,
+  timeProgression: number = 0
+): Status {
   const scenarioConfig = DEMO_SCENARIOS[scenario];
 
   switch (scenario) {
@@ -186,17 +216,17 @@ function generateTestStatus(scenario, testIndex, totalTests, timeProgression = 0
   }
 }
 
-function generateStatusWithRates(failureRate, skipRate) {
+function generateStatusWithRates(failureRate: number, skipRate: number): Status {
   const rand = Math.random();
-  if (rand < failureRate) return 'failed';
-  if (rand < failureRate + skipRate) return 'skipped';
-  return 'passed';
+  if (rand < failureRate) return Status.failed;
+  if (rand < failureRate + skipRate) return Status.skipped;
+  return Status.passed;
 }
 
 /**
  * Generate error messages for failed tests
  */
-function generateErrorMessage(testName, testType) {
+function generateErrorMessage(testName: string, testType: TestType): string {
   const errorTemplates = {
     unit: [
       'AssertionError: Expected true but received false',
@@ -235,7 +265,7 @@ function generateErrorMessage(testName, testType) {
 /**
  * Generate a complete CTRF report for a specific scenario
  */
-function generateDemoReport(scenario, options = {}) {
+function generateDemoReport(scenario: string, options: ReportOptions = {}): CtrfSchema {
   const config = DEMO_SCENARIOS[scenario];
   const {
     testCount = 50,
@@ -259,20 +289,20 @@ function generateDemoReport(scenario, options = {}) {
   };
 
   // Generate tests
-  const tests = [];
+  const tests: CtrfSchema['results']['tests'] = [];
   let passedCount = 0;
   let failedCount = 0;
   let skippedCount = 0;
 
   for (let i = 0; i < testCount; i++) {
     // Determine test type based on distribution
-    let testType = 'unit';
+    let testType: TestType = 'unit';
     const rand = Math.random();
     let cumulative = 0;
     for (const [type, percentage] of Object.entries(typeDistribution)) {
       cumulative += percentage;
       if (rand <= cumulative) {
-        testType = type;
+        testType = type as TestType;
         break;
       }
     }
@@ -280,31 +310,35 @@ function generateDemoReport(scenario, options = {}) {
     // Generate test data
     const testNames = generateTestNames(
       testType,
-      Math.ceil(testCount * typeDistribution[testType])
+      Math.ceil(testCount * typeDistribution[testType]!)
     );
-    const testName = testNames[i % testNames.length];
+    const testName = testNames[i % testNames.length]!;
     const status = generateTestStatus(scenario, i, testCount, timeOffset / 100); // Time progression factor
     const duration = generateTestDuration(testType, performanceProfile);
+    const testStart = testStartTime + i * 100;
+    const testStop = testStart + duration;
 
     // Count statuses
-    if (status === 'passed') passedCount++;
-    else if (status === 'failed') failedCount++;
-    else if (status === 'skipped') skippedCount++;
+    if (status === Status.passed) passedCount++;
+    else if (status === Status.failed) failedCount++;
+    else if (status === Status.skipped) skippedCount++;
 
-    const test = {
+    const test: CtrfSchema['results']['tests'][0] = {
       name: `${config.name} ${testType.charAt(0).toUpperCase() + testType.slice(1)} Tests ${testName}`,
       duration,
       status,
+      start: testStart,
+      stop: testStop,
       rawStatus: status,
       type: testType,
       filePath: `C:\\Tests\\${testType}\\${testName.replace(/\s+/g, '')}.test.js`,
-      retries: status === 'failed' && Math.random() < 0.3 ? Math.floor(Math.random() * 3) : 0,
-      flaky: status === 'failed' && scenario === 'flaky' && Math.random() < 0.4,
+      retries: status === Status.failed && Math.random() < 0.3 ? Math.floor(Math.random() * 3) : 0,
+      flaky: status === Status.failed && scenario === 'flaky' && Math.random() < 0.4,
       suite: `${config.name} > ${testType.charAt(0).toUpperCase() + testType.slice(1)} Tests`,
     };
 
     // Add error message for failed tests
-    if (status === 'failed') {
+    if (status === Status.failed) {
       test.message = generateErrorMessage(testName, testType);
     }
 
@@ -312,12 +346,18 @@ function generateDemoReport(scenario, options = {}) {
   }
 
   // Create the CTRF report structure
-  const report = {
+  const report: CtrfSchema = {
+    reportFormat: ReportFormat.CTRF,
+    specVersion: '1.0.0',
+    reportId: `demo-${scenario}-${Date.now()}`,
+    timestamp: new Date().toISOString(),
     results: {
       tool: {
         name: config.tool,
         version: `${Math.floor(Math.random() * 5) + 1}.${Math.floor(Math.random() * 10)}.${Math.floor(Math.random() * 10)}`,
-        generatedBy: 'demo-data-generator',
+        extra: {
+          generatedBy: 'demo-data-generator',
+        },
       },
       summary: {
         tests: testCount,
@@ -339,7 +379,7 @@ function generateDemoReport(scenario, options = {}) {
         extra: {
           demoScenario: scenario,
           description: config.description,
-          generatedAt: now.toISOString(),
+          generatedAt: new Date().toISOString(),
         },
       },
     },
@@ -351,14 +391,13 @@ function generateDemoReport(scenario, options = {}) {
 /**
  * Main function to generate and send demo data
  */
-async function generateAndSendDemoData() {
-  console.log('🎭 Demo Data Generator for CTRF Reports');
-  console.log('=====================================\n');
+async function generateAndSendDemoData(): Promise<void> {
+  scriptLogger.info('Starting demo data generator for CTRF reports');
 
   // Parse command line arguments
   const args = process.argv.slice(2);
   const scenario = args[0] || 'random';
-  const count = parseInt(args[1]) || 1;
+  const count = parseInt(args[1]!) || 1;
 
   if (scenario === 'help' || scenario === '--help' || scenario === '-h') {
     showHelp();
@@ -369,7 +408,8 @@ async function generateAndSendDemoData() {
     listScenarios();
     return;
   }
-  console.log(`📊 Generating ${count} report(s) with scenario: ${scenario}\n`);
+
+  scriptLogger.info(`Generating ${count} report(s) with scenario: ${scenario}`);
 
   try {
     const now = new Date(); // Define now at the start of the function
@@ -379,7 +419,7 @@ async function generateAndSendDemoData() {
       const scenarios = Object.keys(DEMO_SCENARIOS);
 
       for (let i = 0; i < count; i++) {
-        const randomScenario = scenarios[Math.floor(Math.random() * scenarios.length)];
+        const randomScenario = scenarios[Math.floor(Math.random() * scenarios.length)]!;
 
         // Create more realistic time distribution patterns
         let timeOffset;
@@ -400,17 +440,23 @@ async function generateAndSendDemoData() {
         }
 
         const testCount = Math.floor(Math.random() * 80) + 20; // 20-100 tests
-        const performanceProfiles = ['fast', 'normal', 'slow', 'very_slow'];
+        const performanceProfiles: PerformanceProfile[] = ['fast', 'normal', 'slow', 'very_slow'];
         const performanceProfile =
-          performanceProfiles[Math.floor(Math.random() * performanceProfiles.length)];
-        console.log(
-          `📤 Generating report ${i + 1}/${count}: ${randomScenario} (${timeOffset}h ago, ${testCount} tests, ${performanceProfile} performance)`
-        );
+          performanceProfiles[Math.floor(Math.random() * performanceProfiles.length)]!;
+
+        scriptLogger.info(`Generating report ${i + 1}/${count}: ${randomScenario}`, {
+          timeOffset,
+          testCount,
+          performanceProfile,
+          reportNumber: i + 1,
+          totalReports: count,
+        });
 
         const reportDate = new Date(now.getTime() - timeOffset * 60 * 60 * 1000);
-        console.log(
-          `   📅 Report date: ${reportDate.toLocaleDateString()} ${reportDate.toLocaleTimeString()}`
-        );
+        scriptLogger.debug('Report date details', {
+          reportDate: reportDate.toISOString(),
+          timeOffset,
+        });
 
         const report = generateDemoReport(randomScenario, {
           testCount,
@@ -444,14 +490,19 @@ async function generateAndSendDemoData() {
         }
 
         const testCount = Math.floor(Math.random() * 50) + 30; // 30-80 tests
-        console.log(
-          `📤 Generating ${scenario} report ${i + 1}/${count} (${timeOffset}h ago, ${testCount} tests)`
-        );
+
+        scriptLogger.info(`Generating ${scenario} report ${i + 1}/${count}`, {
+          timeOffset,
+          testCount,
+          reportNumber: i + 1,
+          totalReports: count,
+        });
 
         const reportDate = new Date(now.getTime() - timeOffset * 60 * 60 * 1000);
-        console.log(
-          `   📅 Report date: ${reportDate.toLocaleDateString()} ${reportDate.toLocaleTimeString()}`
-        );
+        scriptLogger.debug('Report date details', {
+          reportDate: reportDate.toISOString(),
+          timeOffset,
+        });
 
         const report = generateDemoReport(scenario, {
           testCount,
@@ -466,16 +517,17 @@ async function generateAndSendDemoData() {
         }
       }
     } else {
-      console.error(`❌ Unknown scenario: ${scenario}`);
-      console.log('Use "npm run demo-data list" to see available scenarios.');
+      scriptLogger.error('Unknown scenario provided', { scenario });
+      scriptLogger.info('Use "npm run demo-data list" to see available scenarios');
       process.exit(1);
     }
 
-    console.log('\n✅ Demo data generation completed successfully!');
-    console.log('🎯 You can now view the charts with interesting data points.');
-    console.log('📊 Visit your dashboard to see the visualizations.');
+    scriptLogger.info('Demo data generation completed successfully');
+    scriptLogger.info('You can now view the charts with interesting data points');
+    scriptLogger.info('Visit your dashboard to see the visualizations');
   } catch (error) {
-    console.error('\n❌ Failed to generate demo data:', error.message);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    scriptLogger.error('Failed to generate demo data', { error: errorMessage });
     process.exit(1);
   }
 }
@@ -483,44 +535,49 @@ async function generateAndSendDemoData() {
 /**
  * Show help information
  */
-function showHelp() {
-  console.log('📚 CTRF Demo Data Generator Help');
-  console.log('================================\n');
-  console.log('Usage: npm run demo-data [scenario] [count]');
-  console.log('       npm run demo-data [command]\n');
-  console.log('Arguments:');
-  console.log('  scenario  Test scenario to generate (default: random)');
-  console.log('  count     Number of reports to generate (default: 1)\n');
-  console.log('Commands:');
-  console.log('  list      List all available scenarios');
-  console.log('  help      Show this help message\n');
-  console.log('Examples:');
-  console.log('  npm run demo-data                    # Generate 1 random report');
-  console.log('  npm run demo-data random 5           # Generate 5 random reports');
-  console.log('  npm run demo-data improving 3        # Generate 3 improving scenario reports');
-  console.log('  npm run demo-data flaky 1            # Generate 1 flaky test scenario');
+function showHelp(): void {
+  scriptLogger.info('CTRF Demo Data Generator Help');
+  scriptLogger.info('================================');
+  scriptLogger.info('Usage: npm run demo-data [scenario] [count]');
+  scriptLogger.info('       npm run demo-data [command]');
+  scriptLogger.info('Arguments:');
+  scriptLogger.info('  scenario  Test scenario to generate (default: random)');
+  scriptLogger.info('  count     Number of reports to generate (default: 1)');
+  scriptLogger.info('Commands:');
+  scriptLogger.info('  list      List all available scenarios');
+  scriptLogger.info('  help      Show this help message');
+  scriptLogger.info('Examples:');
+  scriptLogger.info('  npm run demo-data                    # Generate 1 random report');
+  scriptLogger.info('  npm run demo-data random 5           # Generate 5 random reports');
+  scriptLogger.info(
+    '  npm run demo-data improving 3        # Generate 3 improving scenario reports'
+  );
+  scriptLogger.info('  npm run demo-data flaky 1            # Generate 1 flaky test scenario');
 }
 
 /**
  * List available scenarios
  */
-function listScenarios() {
-  console.log('📋 Available Demo Scenarios');
-  console.log('===========================\n');
-  console.log('random     - Generate random mix of scenarios (good for variety)');
+function listScenarios(): void {
+  scriptLogger.info('Available Demo Scenarios');
+  scriptLogger.info('===========================');
+  scriptLogger.info('random     - Generate random mix of scenarios (good for variety)');
 
   Object.entries(DEMO_SCENARIOS).forEach(([key, config]) => {
-    console.log(`${key.padEnd(10)} - ${config.description}`);
-    console.log(`           Tool: ${config.tool}, Environment: ${config.environment}\n`);
+    scriptLogger.info(`${key.padEnd(10)} - ${config.description}`);
+    scriptLogger.info(`           Tool: ${config.tool}, Environment: ${config.environment}`);
   });
 
-  console.log('💡 Pro tip: Use "random" to generate diverse data for comprehensive chart testing.');
+  scriptLogger.info(
+    'Pro tip: Use "random" to generate diverse data for comprehensive chart testing.'
+  );
 }
 
 // Handle command line execution
-if (require.main === module) {
+if (import.meta.url === `file://${process.argv[1]}`) {
   generateAndSendDemoData().catch(error => {
-    console.error('❌ Unhandled error:', error);
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    scriptLogger.error('Unhandled error in demo data generation', { error: errorMessage });
     process.exit(1);
   });
 }

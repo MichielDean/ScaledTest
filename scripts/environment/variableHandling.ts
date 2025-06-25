@@ -1,17 +1,15 @@
 /**
- * Environment Variable Handling (ES Modules)
+ * Environment Variable Handling (TypeScript)
  *
  * Shared functionality for handling environment variables across the application.
  * This prevents code duplication and ensures consistent error messages.
- *
- * ES modules version for modern Node.js scripts.
  */
 
 /**
  * Get a required environment variable
  * Throws an error if the variable is not set
  */
-function getRequiredEnvVar(name, context) {
+function getRequiredEnvVar(name: string, context?: string): string {
   const value = process.env[name];
   if (!value) {
     const contextMessage = context ? ` ${context}` : '';
@@ -23,21 +21,21 @@ function getRequiredEnvVar(name, context) {
 /**
  * Get an optional environment variable with a default value
  */
-function getOptionalEnvVar(name, defaultValue) {
+function getOptionalEnvVar(name: string, defaultValue: string): string {
   return process.env[name] || defaultValue;
 }
 
 /**
  * Get an optional environment variable without a default (returns undefined if not set)
  */
-function getOptionalEnvVarOrUndefined(name) {
+function getOptionalEnvVarOrUndefined(name: string): string | undefined {
   return process.env[name];
 }
 
 /**
  * Parse a boolean environment variable
  */
-function parseBooleanEnvVar(name, defaultValue = false) {
+function parseBooleanEnvVar(name: string, defaultValue: boolean = false): boolean {
   const value = process.env[name];
   if (value === undefined) {
     return defaultValue;
@@ -48,7 +46,11 @@ function parseBooleanEnvVar(name, defaultValue = false) {
 /**
  * Parse an array environment variable
  */
-function parseArrayEnvVar(name, separator = ',', defaultValue = []) {
+function parseArrayEnvVar(
+  name: string,
+  separator: string = ',',
+  defaultValue: string[] = []
+): string[] {
   const value = process.env[name];
   if (!value) {
     return defaultValue;
@@ -59,9 +61,12 @@ function parseArrayEnvVar(name, separator = ',', defaultValue = []) {
 /**
  * Parse an integer environment variable
  */
-function parseIntEnvVar(name, defaultValue) {
+function parseIntEnvVar(name: string, defaultValue?: number): number {
   const value = process.env[name];
   if (!value) {
+    if (defaultValue === undefined) {
+      throw new Error(`Environment variable ${name} is required but not set`);
+    }
     return defaultValue;
   }
   const parsed = parseInt(value, 10);
