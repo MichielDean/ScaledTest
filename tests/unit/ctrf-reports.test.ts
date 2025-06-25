@@ -708,7 +708,7 @@ describe('CTRF Reports API Unit Tests', () => {
             url: 'https://jestjs.io',
             extra: {
               runner: 'default',
-              config: 'jest.config.js',
+              config: 'jest.config.ts',
             },
           },
           summary: {
