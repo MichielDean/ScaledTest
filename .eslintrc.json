@@ -21,13 +21,6 @@
   },
   "overrides": [
     {
-      "files": ["tests/components/jest-setup.js"],
-      "rules": {
-        "@typescript-eslint/no-require-imports": "off",
-        "no-console": "off"
-      }
-    },
-    {
       "files": ["tests/**/*.test.ts", "tests/**/*.test.js"],
       "rules": {
         "no-console": "off"
