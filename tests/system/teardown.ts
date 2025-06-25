@@ -2,6 +2,7 @@ import { execSync } from 'child_process';
 import path from 'path';
 import { nextAppProcess } from './setup';
 import { testLogger } from '../../src/logging/logger';
+import { cleanupPort } from '../../src/lib/portCleanup';
 
 /**
  * Shutdown the Next.js app with timeout protection
@@ -21,32 +22,19 @@ export async function stopNextApp(): Promise<void> {
 
             // Force kill if still running
             if (!nextAppProcess.killed) {
-              if (process.platform === 'win32') {
-                // Windows-specific cleanup
-                try {
-                  const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
-                  const result = execSync(`powershell -Command "${findCommand}"`, {
-                    encoding: 'utf8',
-                    timeout: 3000,
-                  }).trim();
+              // Cross-platform process cleanup using TypeScript utility
+              try {
+                testLogger.debug('Attempting to clean up port 3000 processes...');
+                await cleanupPort(3000, {
+                  maxRetries: 1,
+                  retryDelay: 500,
+                });
+              } catch (portError) {
+                testLogger.warn({ err: portError }, 'Port cleanup during teardown had issues');
+              }
 
-                  if (result) {
-                    const pids = result.split('\n').filter(pid => pid.trim());
-                    for (const pid of pids) {
-                      if (pid.trim()) {
-                        try {
-                          execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 3000 });
-                        } catch (killError) {
-                          testLogger.warn({ err: killError }, `Failed to kill PID ${pid.trim()}`);
-                        }
-                      }
-                    }
-                  }
-                } catch (portError) {
-                  testLogger.warn({ err: portError }, 'Could not check port 3000 processes');
-                }
-              } else {
-                // Unix-like systems
+              // Final attempt to kill the process directly
+              if (!nextAppProcess.killed) {
                 nextAppProcess.kill('SIGKILL');
               }
             }

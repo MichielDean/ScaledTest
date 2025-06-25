@@ -5,6 +5,11 @@ import path from 'path';
 import { teardown } from './teardown';
 import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
 import { testLogger } from '../../src/logging/logger';
+import {
+  cleanupPort,
+  registerSpawnedProcess,
+  unregisterSpawnedProcess,
+} from '../../src/lib/portCleanup';
 
 // Global variables to track processes
 let nextAppProcess: ChildProcess | null = null;
@@ -84,32 +89,23 @@ export async function prepareNextApp(): Promise<void> {
  * Start Next.js app
  */
 export async function startNextApp(): Promise<void> {
-  // Check if port 3000 is already in use and clean it up
-  if (process.platform === 'win32') {
-    try {
-      const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
-      const result = execSync(`powershell -Command "${findCommand}"`, {
-        encoding: 'utf8',
-        timeout: 5000,
-      }).trim();
+  // Cross-platform port cleanup using TypeScript utility
+  try {
+    testLogger.debug('Checking if port 3000 is in use...');
+    const cleanupSuccess = await cleanupPort(3000, {
+      maxRetries: 2,
+      retryDelay: 1000,
+    });
 
-      if (result) {
-        const pids = result.split('\n').filter(pid => pid.trim());
-        for (const pid of pids) {
-          if (pid.trim()) {
-            try {
-              execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 5000 });
-            } catch (killError) {
-              testLogger.warn({ err: killError }, `Failed to kill existing PID ${pid.trim()}`);
-            }
-          }
-        }
-        // Wait for port to be released
-        await new Promise(resolve => setTimeout(resolve, 2000));
-      }
-    } catch {
-      // Silently continue if port check fails
+    if (cleanupSuccess) {
+      testLogger.debug('Port 3000 cleanup completed successfully');
+      // Brief wait for port to be fully released
+      await new Promise(resolve => setTimeout(resolve, 1000));
+    } else {
+      testLogger.warn('Port 3000 cleanup was not completely successful, but continuing...');
     }
+  } catch (portError) {
+    testLogger.warn({ err: portError }, 'Port cleanup encountered issues, but continuing');
   }
 
   // Use next start to run the production build
@@ -120,6 +116,11 @@ export async function startNextApp(): Promise<void> {
       stdio: 'pipe',
       shell: true,
     });
+
+    // Register the process for tracking
+    if (nextAppProcess && nextAppProcess.pid) {
+      registerSpawnedProcess(nextAppProcess.pid, 3000, 'next-app');
+    }
 
     nextAppProcess.stdout?.on('data', data => {
       testLogger.info(`Next.js: ${data.toString('utf8').trim()}`);
@@ -141,6 +142,9 @@ export async function startNextApp(): Promise<void> {
 
     // Handle process exit
     nextAppProcess.on('exit', (code, signal) => {
+      if (nextAppProcess && nextAppProcess.pid) {
+        unregisterSpawnedProcess(nextAppProcess.pid);
+      }
       if (code !== 0 && code !== null) {
         testLogger.error(`Next.js process exited with code ${code} and signal ${signal}`);
       }
@@ -208,33 +212,19 @@ async function quickCleanup(): Promise<void> {
     }
   }
 
-  // Aggressive port 3000 cleanup on Windows
-  if (process.platform === 'win32') {
-    try {
-      const findCommand = `Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue | Select-Object -ExpandProperty OwningProcess`;
-      const result = execSync(`powershell -Command "${findCommand}"`, {
-        encoding: 'utf8',
-        timeout: 3000,
-      }).trim();
+  // Cross-platform port 3000 cleanup using TypeScript utility
+  try {
+    testLogger.debug('Quick cleanup: checking port 3000...');
+    const cleanupSuccess = await cleanupPort(3000, {
+      maxRetries: 1,
+      retryDelay: 500,
+    });
 
-      if (result) {
-        const pids = result.split('\n').filter(pid => pid.trim());
-        for (const pid of pids) {
-          if (pid.trim()) {
-            try {
-              execSync(`taskkill /F /PID ${pid.trim()}`, { timeout: 2000 });
-            } catch (killError) {
-              testLogger.debug(
-                { err: killError },
-                `Quick cleanup: couldn't kill PID ${pid.trim()}`
-              );
-            }
-          }
-        }
-      }
-    } catch (portError) {
-      testLogger.debug({ err: portError }, 'Quick port cleanup had issues');
+    if (!cleanupSuccess) {
+      testLogger.debug('Quick port cleanup had issues, but continuing');
     }
+  } catch (portError) {
+    testLogger.debug({ err: portError }, 'Quick port cleanup had issues');
   }
 
   // Aggressive Docker cleanup with short timeout
@@ -254,19 +244,13 @@ async function quickCleanup(): Promise<void> {
   } catch (dockerError) {
     testLogger.debug({ err: dockerError }, 'Quick Docker cleanup had issues, trying alternative');
 
-    // Alternative: kill all running containers that might be from our compose
+    // Alternative: try to kill Docker containers using cross-platform commands
     try {
-      if (process.platform === 'win32') {
-        execSync('powershell -Command "docker ps -q | ForEach-Object { docker kill $_ }"', {
-          stdio: 'ignore',
-          timeout: 5000,
-        });
-      } else {
-        execSync('docker kill $(docker ps -q)', {
-          stdio: 'ignore',
-          timeout: 5000,
-        });
-      }
+      // Get list of running containers and kill them
+      execSync('docker kill $(docker ps -q) 2>/dev/null || true', {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
     } catch (altError) {
       testLogger.debug({ err: altError }, 'Alternative Docker cleanup also had issues');
     }
