@@ -1,32 +1,43 @@
 /**
- * Logger utility using Pino for structured logging.
- * Supports context-based child loggers and object-based structured logging.
+ * Test logger configuration that routes Pino logs to Jest console capture
+ * This ensures Pino logs appear in testResult.console for the Jest reporter
  */
 import pino from 'pino';
 import { randomUUID } from 'crypto';
 
 /**
- * Create a base logger instance with standardized configuration
- * - Uses consistent log level across all environments
- * - Uses pretty-printing for readable output
- * - Enables colorized output for better readability
+ * Custom Jest transport that writes to console for Jest capture
  */
-const createLogger = () => {
-  // Standardized logger configuration for all environments
+const jestTransport: pino.TransportSingleOptions = {
+  target: 'pino/file',
+  options: {
+    destination: 1, // stdout - Jest will capture this
+  },
+};
+
+/**
+ * Create test logger with Jest-compatible transport
+ */
+const createTestLogger = () => {
+  const isTest = process.env.NODE_ENV === 'test';
+
   return pino({
     level: 'debug',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
+    transport: isTest
+      ? jestTransport
+      : {
+          target: 'pino-pretty',
+          options: {
+            colorize: true,
+          },
+        },
     timestamp: pino.stdTimeFunctions.isoTime,
     base: { app: 'scaledtest' },
   });
 };
 
-const logger = createLogger();
+// Create logger instance
+const logger = createTestLogger();
 
 // Pre-configured child loggers for different modules
 export const authLogger = logger.child({ module: 'auth' });
@@ -68,26 +79,5 @@ export function logError(
     message
   );
 }
-
-/**
- * Usage examples:
- *
- * // Basic logging with standard logger
- * logger.info('Simple log message');
- *
- * // Structured logging with context
- * logger.info({ userId: '123', action: 'login' }, 'User logged in');
- *
- * // Logging errors with helper
- * try {
- *   // some code that might fail
- * } catch (error) {
- *   logError(authLogger, 'Operation failed', error, { userId: '123' });
- * }
- *
- * // API request logging
- * const reqLogger = getRequestLogger(req);
- * reqLogger.info({ userId: req.user?.id }, 'API request received');
- */
 
 export default logger;
