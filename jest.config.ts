@@ -52,15 +52,16 @@ const createJSDOMConfig = (): Config => ({
 // Reporters configuration
 const REPORTERS_CONFIG: Config['reporters'] = [
   'default',
+  // Our enhanced reporter that includes CTRF generation + log capture
   [
-    'jest-ctrf-json-reporter',
+    '<rootDir>/dist/jest/enhancedCtrfReporter.cjs',
     {
       outputFile: 'ctrf-report.json',
       outputDir: './',
       reportName: 'Jest Test Results',
       appName: 'ScaledTest',
       appVersion: '1.0.0',
-      generatedBy: 'jest-ctrf-json-reporter',
+      generatedBy: 'enhanced-ctrf-reporter',
     },
   ],
 ];
@@ -68,6 +69,8 @@ const REPORTERS_CONFIG: Config['reporters'] = [
 const config: Config = {
   reporters: REPORTERS_CONFIG,
   testTimeout: 60000,
+  verbose: true, // Enable verbose output to ensure console logs are captured
+  silent: false, // Ensure console output is not silenced
   projects: [
     {
       ...createNodeConfig(),

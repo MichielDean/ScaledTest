@@ -1,5 +1,68 @@
 # ScaledTest Project - GitHub Copilot Instructions
 
+## Code Generation Best Practices
+
+**When generating any TypeScript code, ALWAYS follow these patterns to prevent common ESLint violations:**
+
+1. **Import Management:**
+
+   ```typescript
+   // ✅ CORRECT - Only import what you use
+   import React, { useState } from 'react';
+   import { logger } from '../logging/logger';
+   import { UserData } from '../types/user';
+
+   // ❌ WRONG - Unused imports
+   import React, { useState, useEffect } from 'react'; // useEffect not used
+   ```
+
+2. **Variable Declaration:**
+
+   ```typescript
+   // ✅ CORRECT - Declare only used variables
+   const [data, setData] = useState<UserData | null>(null);
+   const isLoading = data === null;
+
+   // ❌ WRONG - Unused variables
+   const [data, setData] = useState(null);
+   const unusedVar = 'test'; // unused
+   const [loading, setLoading] = useState(false); // setLoading never called
+   ```
+
+3. **Type Definitions:**
+
+   ```typescript
+   // ✅ CORRECT - Specific types
+   interface ApiResponse {
+     data: UserData[];
+     status: 'success' | 'error';
+   }
+
+   function handleResponse(response: ApiResponse): void {
+     logger.info('Response processed', { status: response.status });
+   }
+
+   // ❌ WRONG - Using any
+   function handleResponse(response: any): any {
+     console.log('Response:', response);
+     return response.data;
+   }
+   ```
+
+4. **Function Parameters:**
+
+   ```typescript
+   // ✅ CORRECT - Remove unused parameters or prefix with underscore
+   function processData(data: UserData, _metadata?: MetaData): string {
+     return data.name;
+   }
+
+   // ❌ WRONG - Unused parameters
+   function processData(data: UserData, metadata: MetaData): string {
+     return data.name; // metadata unused
+   }
+   ```
+
 ## Code Quality and File Management Standards
 
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
@@ -32,6 +95,24 @@
 - Properly handling async/await patterns
 
 **If you encounter a rule that seems inappropriate for the codebase, discuss it with the team to potentially modify the ESLint configuration rather than suppressing the rule.**
+
+**MOST COMMON ESLINT VIOLATIONS TO PREVENT:**
+
+1. **`no-console`** - Never use `console.log`, `console.error`, etc.
+
+   - Use structured logger: `import { logger } from '../logging/logger';`
+   - Use appropriate log levels: `logger.info()`, `logger.error()`, `logger.debug()`
+
+2. **`@typescript-eslint/no-explicit-any`** - Never use `any` type
+
+   - Define proper interfaces in `src/types/`
+   - Use specific union types: `string | number` instead of `any`
+   - Use generic constraints: `<T extends SomeInterface>` instead of `<T = any>`
+
+3. **`@typescript-eslint/no-unused-vars`** - Remove unused variables and imports
+   - Delete unused imports immediately after adding them
+   - Remove unused function parameters or prefix with underscore: `_unusedParam`
+   - Clean up unused variables and constants before committing code
 
 **NEVER add filepath comments at the top of files.** Do not include comments like `// src/components/MyComponent.tsx` or similar file path indicators.
 
@@ -109,6 +190,95 @@
 - Use strict typing - avoid `any` types
 - Define proper interfaces and types in `src/types/`
 - Use type guards for runtime type checking
+
+**CRITICAL: TypeScript Error Prevention**
+
+**NEVER use `any` types** - Always specify proper types:
+
+```typescript
+// ❌ WRONG - Using any
+function processData(data: any): any {
+  return data.someProperty;
+}
+
+// ✅ CORRECT - Proper typing
+interface UserData {
+  id: number;
+  name: string;
+  email: string;
+}
+
+function processUserData(data: UserData): string {
+  return data.name;
+}
+```
+
+**ALWAYS remove unused variables and imports immediately:**
+
+```typescript
+// ❌ WRONG - Unused imports and variables
+import React, { useState, useEffect } from 'react'; // useEffect unused
+import { SomeUnusedType } from './types'; // unused import
+
+const Component = () => {
+  const [data, setData] = useState(null); // setData unused
+  const unusedVariable = 'test'; // unused variable
+
+  return <div>Content</div>;
+};
+
+// ✅ CORRECT - Only used imports and variables
+import React, { useState } from 'react';
+
+const Component = () => {
+  const [data] = useState(null);
+
+  return <div>Content</div>;
+};
+```
+
+**NEVER use console methods** - Use structured logger instead:
+
+```typescript
+// ❌ WRONG - Console usage
+console.log('Debug message');
+console.error('Error occurred');
+
+// ✅ CORRECT - Structured logger
+import { logger } from '../logging/logger';
+
+logger.debug('Debug message', { context: 'additional-data' });
+logger.error('Error occurred', { error, module: 'component-name' });
+```
+
+**ALWAYS check for existing types before creating new ones:**
+
+```typescript
+// ✅ CORRECT - Check src/types/ directory first
+import { UserData, ApiResponse } from '../types/user';
+import { AuthToken } from '../types/auth';
+
+// Only create new types if they don't exist
+interface NewFeatureData {
+  id: string;
+  feature: string;
+}
+
+// ❌ WRONG - Creating duplicate types without checking
+interface User {
+  // UserData already exists in src/types/user.ts
+  id: number;
+  name: string;
+}
+```
+
+**Type Creation Guidelines:**
+
+- Search `src/types/` directory for existing interfaces and types
+- Use semantic search or grep to find similar type definitions
+- Extend existing types when appropriate: `interface ExtendedUser extends UserData`
+- Group related types in the same file (e.g., all auth-related types in `src/types/auth.ts`)
+- Use specific, descriptive names that indicate the type's purpose
 
 **React Components:**
 
