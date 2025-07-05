@@ -66,6 +66,9 @@
 ## Code Quality and File Management Standards
 
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
+
+**NEVER create summary documents or status files.** Do not create files like "TASK_SUMMARY.md", "STATUS.md", "COMPLETION_REPORT.md", or similar documentation files that summarize work completed. The work itself and any necessary updates to existing documentation (like README.md) are sufficient.
+
 **Example pattern for handling all commands:**
 
 1. Run the command with `run_in_terminal`
@@ -551,6 +554,78 @@ If environment variables are needed for tests, ensure they are properly set up b
 - Build errors: Resolve TypeScript errors, missing imports, syntax issues
 - Test failures: Address failing test cases and logic errors
 
+## Jest Configuration and CLI Usage
+
+**Jest Multi-Project Setup:**
+
+This project uses Jest's multi-project configuration with four distinct test types:
+
+- **Unit** - Tests for individual functions and utilities (`tests/unit/`)
+- **Components** - React component tests (`tests/components/`)
+- **Integration** - API and service integration tests (`tests/integration/`)
+- **System** - End-to-end system tests (`tests/system/`)
+
+**CORRECT Jest CLI Usage:**
+
+**Run all tests:**
+
+```bash
+npm run test
+```
+
+**Run specific project types:**
+
+```bash
+# Run only unit tests
+npx jest --selectProjects Unit
+
+# Run only component tests
+npx jest --selectProjects Components
+
+# Run multiple project types
+npx jest --selectProjects Unit,Components
+```
+
+**Filter tests by name pattern:**
+
+```bash
+# Run tests with specific name pattern
+npx jest --testNamePattern="authentication"
+
+# Run specific test file patterns
+npx jest --testPathPattern="auth"
+```
+
+**NEVER use invalid Jest flags.** These are NOT valid Jest CLI options:
+
+- ❌ `--env` (this is not a Jest CLI flag)
+- ❌ `--config-env` (this does not exist)
+- ❌ Custom environment configuration flags
+
+**ES Module Support in Jest:**
+
+- **Custom Reporters:** Must point to compiled `.js` files, not TypeScript source files
+- **Module Resolution:** Jest supports ES modules when the project has `"type": "module"` in `package.json`
+- **Build Requirements:** TypeScript reporters must be compiled to ES2024 modules before Jest can load them
+- **Import Paths:** Use relative imports in Jest configuration: `./dist/logging/enhancedCtrfReporter.js`
+
+**Jest Reporter Configuration:**
+
+```typescript
+// ✅ CORRECT - Point to compiled JS file
+reporters: ['default', './dist/logging/enhancedCtrfReporter.js'];
+
+// ❌ WRONG - Point to TypeScript source
+reporters: ['default', './src/logging/enhancedCtrfReporter.ts'];
+```
+
+**TypeScript Build for Jest:**
+
+- Include Jest reporters in the main TypeScript build (`tsconfig.json`)
+- Ensure reporters are compiled to the same module format as the project (ES2024)
+- Do not create separate build configurations unless absolutely necessary
+- Jest will load ES module reporters correctly in ES module projects
+
 ## Testing and Quality Assurance
 
 **Test Design Philosophy:**
@@ -659,6 +734,31 @@ test('Admin functionality should work', async () => {
 - When any tests fail, prioritize fixing them immediately before moving on to other tasks
 - Ensure all test environments (including environment variables) are properly configured
 - Run the complete test suite using `npm run test` to verify ALL tests pass
+
+**Jest Project-Specific Testing:**
+
+When working on specific areas of the codebase, you can run targeted test suites:
+
+```bash
+# When working on utilities or core logic
+npx jest --selectProjects Unit
+
+# When working on React components
+npx jest --selectProjects Components
+
+# When working on API integrations
+npx jest --selectProjects Integration
+
+# When working on end-to-end workflows
+npx jest --selectProjects System
+```
+
+**Test Filtering Best Practices:**
+
+- Use `--testNamePattern` to run tests with specific names: `npx jest --testNamePattern="login"`
+- Use `--testPathPattern` to run tests in specific files: `npx jest --testPathPattern="auth"`
+- Combine project selection with filtering: `npx jest --selectProjects Unit --testNamePattern="validation"`
+- Always run the full test suite (`npm run test`) before completing any task
 
 ## Documentation Standards
 

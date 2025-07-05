@@ -8,7 +8,7 @@ import type { Test, TestResult } from '@jest/test-result';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { CtrfSchema } from '../schemas/ctrf/ctrf';
-// Import the original CTRF reporter
+// Import the original CTRF reporter as ES module
 import GenerateCtrfReport from 'jest-ctrf-json-reporter';
 
 interface LogEntry {
@@ -19,23 +19,38 @@ interface LogEntry {
 }
 
 /**
+ * Reporter interface for Jest - based on jest-ctrf-json-reporter implementation
+ */
+interface Reporter {
+  onRunStart?(): void;
+  onTestStart?(test?: Test): void;
+  onTestResult?(test: Test, testResult: TestResult): void;
+  onRunComplete?(): void;
+  getLastError?(): Error | undefined;
+}
+
+/**
  * Extract the ReporterConfigOptions type from the GenerateCtrfReport class
  * This ensures we use the exact same interface as the original package
  */
-type ReporterConfigOptions = GenerateCtrfReport['reporterConfigOptions'];
+type ReporterConfigOptions = InstanceType<typeof GenerateCtrfReport>['reporterConfigOptions'];
 
-class EnhancedCtrfReporter {
+class EnhancedCtrfReporter implements Reporter {
   private _globalConfig: Config.GlobalConfig;
   private originalStdoutWrite!: typeof process.stdout.write;
   private originalStderrWrite!: typeof process.stderr.write;
   private capturedLogs: LogEntry[] = [];
   private currentTestFile: string | null = null;
-  private ctrfReporter: GenerateCtrfReport;
+  private ctrfReporter: InstanceType<typeof GenerateCtrfReport>;
 
-  constructor(globalConfig: Config.GlobalConfig, options?: ReporterConfigOptions) {
+  constructor(
+    globalConfig: Config.GlobalConfig,
+    options?: ReporterConfigOptions,
+    reporterContext?: unknown
+  ) {
     this._globalConfig = globalConfig;
     // Create the original CTRF reporter - it does all the heavy lifting
-    this.ctrfReporter = new GenerateCtrfReport(globalConfig, options || {}, {});
+    this.ctrfReporter = new GenerateCtrfReport(globalConfig, options || {}, reporterContext || {});
     this.setupLogCapture();
   }
 
@@ -189,4 +204,5 @@ class EnhancedCtrfReporter {
   }
 }
 
+// Export the class as default for Jest to consume
 export default EnhancedCtrfReporter;

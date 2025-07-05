@@ -54,7 +54,7 @@ const REPORTERS_CONFIG: Config['reporters'] = [
   'default',
   // Our enhanced reporter that includes CTRF generation + log capture
   [
-    '<rootDir>/dist/jest/enhancedCtrfReporter.cjs',
+    '<rootDir>/dist/logging/enhancedCtrfReporter.js',
     {
       outputFile: 'ctrf-report.json',
       outputDir: './',
