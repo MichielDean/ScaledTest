@@ -52,18 +52,20 @@ const createJSDOMConfig = (): Config => ({
 // Reporters configuration
 const REPORTERS_CONFIG: Config['reporters'] = [
   'default',
-  // Our enhanced reporter that includes CTRF generation + log capture
+  // Original CTRF reporter - generates the base CTRF report
   [
-    '<rootDir>/dist/logging/enhancedCtrfReporter.js',
+    'jest-ctrf-json-reporter',
     {
       outputFile: 'ctrf-report.json',
       outputDir: './',
       reportName: 'Jest Test Results',
       appName: 'ScaledTest',
       appVersion: '1.0.0',
-      generatedBy: 'enhanced-ctrf-reporter',
+      generatedBy: 'jest-ctrf-json-reporter',
     },
   ],
+  // Our enhanced reporter - captures logs and enhances the CTRF report
+  '<rootDir>/dist/src/logging/enhancedCtrfReporter.js',
 ];
 
 const config: Config = {

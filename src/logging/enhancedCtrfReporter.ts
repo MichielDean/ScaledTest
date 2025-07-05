@@ -1,15 +1,14 @@
 /**
- * Enhanced CTRF Reporter that composes with jest-ctrf-json-reporter
+ * Enhanced CTRF Reporter that captures logs and enhances the CTRF report
  * Captures ALL logs via stdout/stderr and adds them to CTRF report extra field
  * Works with ANY logger (Pino, Winston, console.log, etc.)
+ * Runs independently alongside jest-ctrf-json-reporter
  */
 import type { Config } from '@jest/types';
 import type { Test, TestResult } from '@jest/test-result';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { CtrfSchema } from '../schemas/ctrf/ctrf';
-// Import the original CTRF reporter as ES module
-import GenerateCtrfReport from 'jest-ctrf-json-reporter';
 
 interface LogEntry {
   type: string;
@@ -19,7 +18,7 @@ interface LogEntry {
 }
 
 /**
- * Reporter interface for Jest - based on jest-ctrf-json-reporter implementation
+ * Reporter interface for Jest
  */
 interface Reporter {
   onRunStart?(): void;
@@ -29,28 +28,15 @@ interface Reporter {
   getLastError?(): Error | undefined;
 }
 
-/**
- * Extract the ReporterConfigOptions type from the GenerateCtrfReport class
- * This ensures we use the exact same interface as the original package
- */
-type ReporterConfigOptions = InstanceType<typeof GenerateCtrfReport>['reporterConfigOptions'];
-
 class EnhancedCtrfReporter implements Reporter {
   private _globalConfig: Config.GlobalConfig;
   private originalStdoutWrite!: typeof process.stdout.write;
   private originalStderrWrite!: typeof process.stderr.write;
   private capturedLogs: LogEntry[] = [];
   private currentTestFile: string | null = null;
-  private ctrfReporter: InstanceType<typeof GenerateCtrfReport>;
 
-  constructor(
-    globalConfig: Config.GlobalConfig,
-    options?: ReporterConfigOptions,
-    reporterContext?: unknown
-  ) {
+  constructor(globalConfig: Config.GlobalConfig) {
     this._globalConfig = globalConfig;
-    // Create the original CTRF reporter - it does all the heavy lifting
-    this.ctrfReporter = new GenerateCtrfReport(globalConfig, options || {}, reporterContext || {});
     this.setupLogCapture();
   }
 
@@ -120,30 +106,26 @@ class EnhancedCtrfReporter implements Reporter {
   }
 
   onRunStart(): void {
-    // Delegate to CTRF reporter
-    this.ctrfReporter.onRunStart();
+    // Initialize log capture for the test run
   }
 
   onTestStart(test?: Test): void {
     // Track current test file for log association
     this.currentTestFile = test?.path || null;
-    // Delegate to CTRF reporter
-    this.ctrfReporter.onTestStart();
   }
 
   onTestResult(test: Test, testResult: TestResult): void {
-    // Delegate to CTRF reporter
-    this.ctrfReporter.onTestResult(test, testResult);
+    // Test completed - logs are already captured
+    // Reference parameters to avoid unused warnings
+    void test;
+    void testResult;
   }
 
   onRunComplete(): void {
-    // First let CTRF reporter complete its work
-    this.ctrfReporter.onRunComplete();
-
-    // Then enhance the report with logs
+    // Enhance the CTRF report with captured logs
     this.enhanceReportWithLogs();
 
-    // Finally cleanup our log capture
+    // Cleanup our log capture
     this.cleanup();
   }
 
