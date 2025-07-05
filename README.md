@@ -27,7 +27,6 @@ npm run test:unit           # Unit tests only
 npm run test:components     # React component tests only
 npm run test:integration    # API and service integration tests
 npm run test:system         # End-to-end and UI tests (Playwright)
-npm run test:ui             # Alias for system tests
 
 # Advanced filtering with Jest CLI
 npx jest --selectProjects Unit Integration          # Multiple projects
@@ -141,7 +140,6 @@ npm run test:unit           # Unit tests only
 npm run test:components     # React component tests only
 npm run test:integration    # Integration tests only
 npm run test:system         # System and UI tests (includes Playwright)
-npm run test:ui             # Alias for system tests (UI tests)
 ```
 
 #### Advanced Jest CLI Usage

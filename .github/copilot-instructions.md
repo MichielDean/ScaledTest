@@ -182,8 +182,7 @@
 
 - Unit tests: `tests/unit/`
 - Integration tests: `tests/integration/`
-- UI tests: `tests/ui/`
-- System tests: `tests/system/`
+- System tests: `tests/system/` (includes UI/end-to-end tests with Playwright)
 - Component tests: `tests/components/`
 
 ## Code Standards
@@ -540,7 +539,7 @@ Always exclude these directories when performing bulk operations:
 
 - Run `npm run test` to ensure **ALL** tests pass (this includes automatic formatting and TypeScript compilation validation)
 
-The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, system, and UI tests) in one operation. If any step fails, the task is not complete.
+The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, and system tests) in one operation. If any step fails, the task is not complete.
 
 If environment variables are needed for tests, ensure they are properly set up before running the tests.
 
@@ -721,8 +720,7 @@ test('Admin functionality should work', async () => {
   - Unit tests with Jest
   - Component tests with React Testing Library
   - Integration tests for API interactions
-  - UI tests with Playwright
-  - System tests for end-to-end workflows
+  - System tests for end-to-end workflows (includes UI testing with Playwright)
 
 **Test Execution Guidelines:**
 
@@ -730,6 +728,7 @@ test('Admin functionality should work', async () => {
 - Always investigate and fix test failures before re-running
 - Use the established test structure in `tests/` directory
 - Follow existing test patterns and conventions
+- **NEVER create a separate `test:ui` script** - UI tests are part of the system test suite (`npm run test:system`)
 - **EVERY TEST MUST PASS** after any code change before the task is considered complete
 - When any tests fail, prioritize fixing them immediately before moving on to other tasks
 - Ensure all test environments (including environment variables) are properly configured

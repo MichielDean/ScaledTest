@@ -78,14 +78,6 @@ export async function setupKeycloak(): Promise<void> {
 }
 
 /**
- * Preprations required before stating the application
- */
-export async function prepareNextApp(): Promise<void> {
-  execSync('npm run format', { stdio: 'inherit' });
-  execSync('npm run build', { stdio: 'inherit' });
-}
-
-/**
  * Start Next.js app
  */
 export async function startNextApp(): Promise<void> {
@@ -108,8 +100,7 @@ export async function startNextApp(): Promise<void> {
     testLogger.warn({ err: portError }, 'Port cleanup encountered issues, but continuing');
   }
 
-  // Use next start to run the production build
-  // You might want to build the app first if it's not already built
+  // Start the Next.js production server (build is assumed to be complete)
   try {
     // Start the Next.js app
     nextAppProcess = spawn('npx', ['next', 'start'], {
@@ -266,8 +257,6 @@ async function quickCleanup(): Promise<void> {
  */
 export default async function setup(): Promise<void> {
   try {
-    await prepareNextApp();
-
     // Set up required environment variables
     setupOpenSearchTestEnv();
 
