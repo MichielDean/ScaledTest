@@ -64,6 +64,13 @@ const Dashboard: NextPage = () => {
             >
               🌟 Test Results Dashboard
             </Link>
+            <Link
+              href="/visualization-playground"
+              className={styles.dashboardLink}
+              aria-label="Go to visualization playground"
+            >
+              🎨 Visualization Playground
+            </Link>
             <button
               onClick={() => setShowAnalytics(!showAnalytics)}
               className={`${styles.toggleButton} ${showAnalytics ? styles.active : styles.inactive}`}

@@ -5,7 +5,62 @@ A comprehensive platform for test result management and reporting built with Nex
 ## Core Features (Updated June 2025)
 
 - **Modern Tech Stack**: Built with Next.js 14+ and TypeScript
-- **Interactive Test Results Dashboard**: Visualize and monitor test results in real-time
+- \*\*Interactive## Testing & Quality Assurance
+
+ScaledTest includes comprehensive testing capabilities with automated CTRF (Common Test Report Format) reporting:
+
+### Test Architecture
+
+- **Unit Tests**: Fast, isolated tests for business logic and utility functions
+- **Component Tests**: React Testing Library tests for UI components and user interactions
+- **Integration Tests**: API endpoints, database interactions, and service integration
+- **System Tests**: End-to-end workflows using Playwright for complete user journeys
+
+### Running Tests
+
+```bash
+# Run all test suites
+npm test
+
+# Run specific test types
+npm run test:unit           # Unit tests only
+npm run test:components     # React component tests only
+npm run test:integration    # API and service integration tests
+npm run test:system         # End-to-end and UI tests (Playwright)
+
+# Advanced filtering with Jest CLI
+npx jest --selectProjects Unit Integration          # Multiple projects
+npx jest --testNamePattern="auth"                   # Filter by test name
+npx jest --testPathPattern="components"             # Filter by file path
+npx jest --watch                                    # Watch mode for development
+npx jest --coverage                                 # Generate coverage reports
+```
+
+### Test Reports & CTRF Integration
+
+Tests automatically generate CTRF-compliant reports with:
+
+- **Standardized Format**: Industry-standard Common Test Report Format
+- **Rich Metadata**: Environment info, timing, failure details, and log capture
+- **API Integration**: Automated submission to test management APIs
+- **CI/CD Ready**: Seamless integration with continuous integration pipelines
+
+```bash
+# Send test results to API endpoints
+npm run send-test-results
+```
+
+### Continuous Integration
+
+The project includes ready-to-use CI/CD configurations:
+
+- **GitHub Actions**: Automated testing on pull requests and main branch
+- **Docker Support**: Containerized test execution for consistent environments
+- **Parallel Execution**: Optimized test running with configurable worker processes
+- **Failure Reporting**: Detailed test failure analysis and artifact collection
+
+For detailed CTRF configuration and CI/CD setup, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).ard\*\*: Visualize and monitor test results in real-time
+
 - **Role-Based Access Control (RBAC)**: Powered by Keycloak authentication
 - **Test Report Generation**: Generate standardized CTRF test reports
 - **OpenSearch Integration**: Fast searching and analytics of test data
@@ -74,14 +129,74 @@ This command will:
 
 ### Running Tests
 
+ScaledTest uses Jest with multiple test projects for comprehensive testing:
+
 ```bash
 # Run all tests
 npm test
 
-# Run specific test suites
-npm run test:unit
-npm run test:integration
-npm run test:system
+# Run specific test types
+npm run test:unit           # Unit tests only
+npm run test:components     # React component tests only
+npm run test:integration    # Integration tests only
+npm run test:system         # System and UI tests (includes Playwright)
+```
+
+#### Advanced Jest CLI Usage
+
+You can use Jest CLI options directly for more granular control:
+
+```bash
+# Run specific projects
+npx jest --selectProjects Unit
+npx jest --selectProjects Integration System
+
+# Filter tests by name pattern
+npx jest --testNamePattern="auth"                    # Tests containing "auth"
+npx jest --testNamePattern="should validate"         # Tests starting with "should validate"
+
+# Filter tests by file path pattern
+npx jest --testPathPattern="components"              # Tests in components directory
+npx jest --testPathPattern="auth.*test"              # Auth-related test files
+
+# Combine project selection with filtering
+npx jest --selectProjects Unit --testNamePattern="validation"
+
+# Run tests in watch mode
+npx jest --watch                                     # Watch changed files
+npx jest --watchAll                                  # Watch all files
+
+# Debug and verbose output
+npx jest --verbose                                   # Show individual test results
+npx jest --detectOpenHandles                        # Debug async handle issues
+npx jest --runInBand                                # Run tests serially (good for debugging)
+
+# Coverage reporting
+npx jest --coverage                                  # Generate coverage reports
+npx jest --coverage --collectCoverageFrom="src/**/*.{ts,tsx}"
+```
+
+#### Test Project Structure
+
+- **Unit** (`tests/unit/`): Fast, isolated unit tests for individual functions and modules
+- **Components** (`tests/components/`): React Testing Library tests for UI components
+- **Integration** (`tests/integration/`): API and service integration tests
+- **System** (`tests/system/` and `tests/ui/`): End-to-end tests with Playwright
+
+#### Environment Variables for Testing
+
+Ensure these environment variables are set for complete test coverage:
+
+```bash
+# Required for integration and system tests
+KEYCLOAK_URL=http://localhost:8080
+OPENSEARCH_HOST=http://localhost:9200
+OPENSEARCH_USERNAME=admin
+OPENSEARCH_PASSWORD=admin
+
+# Optional: Control test execution
+JEST_TIMEOUT=60000                                   # Test timeout in milliseconds
+MAX_WORKERS=50%                                      # Control parallel test execution
 ```
 
 ### Code Formatting
@@ -249,6 +364,8 @@ npm run update-deps
 - **Infrastructure**: Docker, Docker Compose
 - **CI/CD**: GitHub Actions
 - **Report Format**: CTRF (Common Test Result Format)
+- **Module System**: ES2024/ESM with TypeScript
+- **Test Runner**: Jest with custom ES module reporters
 
 ## Testing & CTRF Reporting
 

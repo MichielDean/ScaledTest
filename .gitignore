@@ -35,6 +35,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# compiled outputs
+/dist
+
 # temporary/build artifacts
 temp/
 

@@ -24,41 +24,6 @@ jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
 }));
 
-// Mock logger to prevent console output during tests
-jest.mock('../../src/logging/logger', () => ({
-  apiLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-  getRequestLogger: jest.fn().mockReturnValue({
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-    child: jest.fn().mockReturnValue({
-      debug: jest.fn(),
-      info: jest.fn(),
-      warn: jest.fn(),
-      error: jest.fn(),
-    }),
-  }),
-  logError: jest.fn(),
-  dbLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-  uiLogger: {
-    debug: jest.fn(),
-    info: jest.fn(),
-    warn: jest.fn(),
-    error: jest.fn(),
-  },
-}));
-
 // Mock OpenSearch client
 const mockOpenSearchClient = {
   indices: {

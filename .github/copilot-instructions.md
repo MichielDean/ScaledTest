@@ -1,8 +1,74 @@
 # ScaledTest Project - GitHub Copilot Instructions
 
+## Code Generation Best Practices
+
+**When generating any TypeScript code, ALWAYS follow these patterns to prevent common ESLint violations:**
+
+1. **Import Management:**
+
+   ```typescript
+   // ✅ CORRECT - Only import what you use
+   import React, { useState } from 'react';
+   import { logger } from '../logging/logger';
+   import { UserData } from '../types/user';
+
+   // ❌ WRONG - Unused imports
+   import React, { useState, useEffect } from 'react'; // useEffect not used
+   ```
+
+2. **Variable Declaration:**
+
+   ```typescript
+   // ✅ CORRECT - Declare only used variables
+   const [data, setData] = useState<UserData | null>(null);
+   const isLoading = data === null;
+
+   // ❌ WRONG - Unused variables
+   const [data, setData] = useState(null);
+   const unusedVar = 'test'; // unused
+   const [loading, setLoading] = useState(false); // setLoading never called
+   ```
+
+3. **Type Definitions:**
+
+   ```typescript
+   // ✅ CORRECT - Specific types
+   interface ApiResponse {
+     data: UserData[];
+     status: 'success' | 'error';
+   }
+
+   function handleResponse(response: ApiResponse): void {
+     logger.info('Response processed', { status: response.status });
+   }
+
+   // ❌ WRONG - Using any
+   function handleResponse(response: any): any {
+     console.log('Response:', response);
+     return response.data;
+   }
+   ```
+
+4. **Function Parameters:**
+
+   ```typescript
+   // ✅ CORRECT - Remove unused parameters or prefix with underscore
+   function processData(data: UserData, _metadata?: MetaData): string {
+     return data.name;
+   }
+
+   // ❌ WRONG - Unused parameters
+   function processData(data: UserData, metadata: MetaData): string {
+     return data.name; // metadata unused
+   }
+   ```
+
 ## Code Quality and File Management Standards
 
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
+
+**NEVER create summary documents or status files.** Do not create files like "TASK_SUMMARY.md", "STATUS.md", "COMPLETION_REPORT.md", or similar documentation files that summarize work completed. The work itself and any necessary updates to existing documentation (like README.md) are sufficient.
+
 **Example pattern for handling all commands:**
 
 1. Run the command with `run_in_terminal`
@@ -32,6 +98,24 @@
 - Properly handling async/await patterns
 
 **If you encounter a rule that seems inappropriate for the codebase, discuss it with the team to potentially modify the ESLint configuration rather than suppressing the rule.**
+
+**MOST COMMON ESLINT VIOLATIONS TO PREVENT:**
+
+1. **`no-console`** - Never use `console.log`, `console.error`, etc.
+
+   - Use structured logger: `import { logger } from '../logging/logger';`
+   - Use appropriate log levels: `logger.info()`, `logger.error()`, `logger.debug()`
+
+2. **`@typescript-eslint/no-explicit-any`** - Never use `any` type
+
+   - Define proper interfaces in `src/types/`
+   - Use specific union types: `string | number` instead of `any`
+   - Use generic constraints: `<T extends SomeInterface>` instead of `<T = any>`
+
+3. **`@typescript-eslint/no-unused-vars`** - Remove unused variables and imports
+   - Delete unused imports immediately after adding them
+   - Remove unused function parameters or prefix with underscore: `_unusedParam`
+   - Clean up unused variables and constants before committing code
 
 **NEVER add filepath comments at the top of files.** Do not include comments like `// src/components/MyComponent.tsx` or similar file path indicators.
 
@@ -98,8 +182,7 @@
 
 - Unit tests: `tests/unit/`
 - Integration tests: `tests/integration/`
-- UI tests: `tests/ui/`
-- System tests: `tests/system/`
+- System tests: `tests/system/` (includes UI/end-to-end tests with Playwright)
 - Component tests: `tests/components/`
 
 ## Code Standards
@@ -109,6 +192,95 @@
 - Use strict typing - avoid `any` types
 - Define proper interfaces and types in `src/types/`
 - Use type guards for runtime type checking
+
+**CRITICAL: TypeScript Error Prevention**
+
+**NEVER use `any` types** - Always specify proper types:
+
+```typescript
+// ❌ WRONG - Using any
+function processData(data: any): any {
+  return data.someProperty;
+}
+
+// ✅ CORRECT - Proper typing
+interface UserData {
+  id: number;
+  name: string;
+  email: string;
+}
+
+function processUserData(data: UserData): string {
+  return data.name;
+}
+```
+
+**ALWAYS remove unused variables and imports immediately:**
+
+```typescript
+// ❌ WRONG - Unused imports and variables
+import React, { useState, useEffect } from 'react'; // useEffect unused
+import { SomeUnusedType } from './types'; // unused import
+
+const Component = () => {
+  const [data, setData] = useState(null); // setData unused
+  const unusedVariable = 'test'; // unused variable
+
+  return <div>Content</div>;
+};
+
+// ✅ CORRECT - Only used imports and variables
+import React, { useState } from 'react';
+
+const Component = () => {
+  const [data] = useState(null);
+
+  return <div>Content</div>;
+};
+```
+
+**NEVER use console methods** - Use structured logger instead:
+
+```typescript
+// ❌ WRONG - Console usage
+console.log('Debug message');
+console.error('Error occurred');
+
+// ✅ CORRECT - Structured logger
+import { logger } from '../logging/logger';
+
+logger.debug('Debug message', { context: 'additional-data' });
+logger.error('Error occurred', { error, module: 'component-name' });
+```
+
+**ALWAYS check for existing types before creating new ones:**
+
+```typescript
+// ✅ CORRECT - Check src/types/ directory first
+import { UserData, ApiResponse } from '../types/user';
+import { AuthToken } from '../types/auth';
+
+// Only create new types if they don't exist
+interface NewFeatureData {
+  id: string;
+  feature: string;
+}
+
+// ❌ WRONG - Creating duplicate types without checking
+interface User {
+  // UserData already exists in src/types/user.ts
+  id: number;
+  name: string;
+}
+```
+
+**Type Creation Guidelines:**
+
+- Search `src/types/` directory for existing interfaces and types
+- Use semantic search or grep to find similar type definitions
+- Extend existing types when appropriate: `interface ExtendedUser extends UserData`
+- Group related types in the same file (e.g., all auth-related types in `src/types/auth.ts`)
+- Use specific, descriptive names that indicate the type's purpose
 
 **React Components:**
 
@@ -367,7 +539,7 @@ Always exclude these directories when performing bulk operations:
 
 - Run `npm run test` to ensure **ALL** tests pass (this includes automatic formatting and TypeScript compilation validation)
 
-The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, system, and UI tests) in one operation. If any step fails, the task is not complete.
+The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, and system tests) in one operation. If any step fails, the task is not complete.
 
 If environment variables are needed for tests, ensure they are properly set up before running the tests.
 
@@ -380,6 +552,78 @@ If environment variables are needed for tests, ensure they are properly set up b
 - Format errors: Fix code style and formatting issues
 - Build errors: Resolve TypeScript errors, missing imports, syntax issues
 - Test failures: Address failing test cases and logic errors
+
+## Jest Configuration and CLI Usage
+
+**Jest Multi-Project Setup:**
+
+This project uses Jest's multi-project configuration with four distinct test types:
+
+- **Unit** - Tests for individual functions and utilities (`tests/unit/`)
+- **Components** - React component tests (`tests/components/`)
+- **Integration** - API and service integration tests (`tests/integration/`)
+- **System** - End-to-end system tests (`tests/system/`)
+
+**CORRECT Jest CLI Usage:**
+
+**Run all tests:**
+
+```bash
+npm run test
+```
+
+**Run specific project types:**
+
+```bash
+# Run only unit tests
+npx jest --selectProjects Unit
+
+# Run only component tests
+npx jest --selectProjects Components
+
+# Run multiple project types
+npx jest --selectProjects Unit,Components
+```
+
+**Filter tests by name pattern:**
+
+```bash
+# Run tests with specific name pattern
+npx jest --testNamePattern="authentication"
+
+# Run specific test file patterns
+npx jest --testPathPattern="auth"
+```
+
+**NEVER use invalid Jest flags.** These are NOT valid Jest CLI options:
+
+- ❌ `--env` (this is not a Jest CLI flag)
+- ❌ `--config-env` (this does not exist)
+- ❌ Custom environment configuration flags
+
+**ES Module Support in Jest:**
+
+- **Custom Reporters:** Must point to compiled `.js` files, not TypeScript source files
+- **Module Resolution:** Jest supports ES modules when the project has `"type": "module"` in `package.json`
+- **Build Requirements:** TypeScript reporters must be compiled to ES2024 modules before Jest can load them
+- **Import Paths:** Use relative imports in Jest configuration: `./dist/logging/enhancedCtrfReporter.js`
+
+**Jest Reporter Configuration:**
+
+```typescript
+// ✅ CORRECT - Point to compiled JS file
+reporters: ['default', './dist/logging/enhancedCtrfReporter.js'];
+
+// ❌ WRONG - Point to TypeScript source
+reporters: ['default', './src/logging/enhancedCtrfReporter.ts'];
+```
+
+**TypeScript Build for Jest:**
+
+- Include Jest reporters in the main TypeScript build (`tsconfig.json`)
+- Ensure reporters are compiled to the same module format as the project (ES2024)
+- Do not create separate build configurations unless absolutely necessary
+- Jest will load ES module reporters correctly in ES module projects
 
 ## Testing and Quality Assurance
 
@@ -476,8 +720,7 @@ test('Admin functionality should work', async () => {
   - Unit tests with Jest
   - Component tests with React Testing Library
   - Integration tests for API interactions
-  - UI tests with Playwright
-  - System tests for end-to-end workflows
+  - System tests for end-to-end workflows (includes UI testing with Playwright)
 
 **Test Execution Guidelines:**
 
@@ -485,10 +728,36 @@ test('Admin functionality should work', async () => {
 - Always investigate and fix test failures before re-running
 - Use the established test structure in `tests/` directory
 - Follow existing test patterns and conventions
+- **NEVER create a separate `test:ui` script** - UI tests are part of the system test suite (`npm run test:system`)
 - **EVERY TEST MUST PASS** after any code change before the task is considered complete
 - When any tests fail, prioritize fixing them immediately before moving on to other tasks
 - Ensure all test environments (including environment variables) are properly configured
 - Run the complete test suite using `npm run test` to verify ALL tests pass
+
+**Jest Project-Specific Testing:**
+
+When working on specific areas of the codebase, you can run targeted test suites:
+
+```bash
+# When working on utilities or core logic
+npx jest --selectProjects Unit
+
+# When working on React components
+npx jest --selectProjects Components
+
+# When working on API integrations
+npx jest --selectProjects Integration
+
+# When working on end-to-end workflows
+npx jest --selectProjects System
+```
+
+**Test Filtering Best Practices:**
+
+- Use `--testNamePattern` to run tests with specific names: `npx jest --testNamePattern="login"`
+- Use `--testPathPattern` to run tests in specific files: `npx jest --testPathPattern="auth"`
+- Combine project selection with filtering: `npx jest --selectProjects Unit --testNamePattern="validation"`
+- Always run the full test suite (`npm run test`) before completing any task
 
 ## Documentation Standards
 
