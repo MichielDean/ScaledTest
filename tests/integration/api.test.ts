@@ -24,6 +24,11 @@ jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
 }));
 
+// Mock team management
+jest.mock('../../src/authentication/teamManagement', () => ({
+  getUserTeams: jest.fn().mockResolvedValue([]),
+}));
+
 // Mock OpenSearch client
 const mockOpenSearchClient = {
   indices: {

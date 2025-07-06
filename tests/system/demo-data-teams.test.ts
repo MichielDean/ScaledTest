@@ -6,7 +6,7 @@
 import { describe, test, expect, beforeAll } from '@jest/globals';
 import { generateCtrfReport } from '../../tests/data/ctrfReportGenerator';
 import { getAuthToken } from '../../tests/authentication/tokenService';
-import { CtrfSchema } from '../../src/schemas/ctrf/ctrf';
+import { CtrfSchema, Status } from '../../src/schemas/ctrf/ctrf';
 import logger from '../../src/logging/logger';
 
 // Extended interface for stored reports with metadata
@@ -53,7 +53,7 @@ describe('Demo Data with Teams Integration', () => {
   let maintainerToken: string;
   let readonlyToken: string;
   let ownerToken: string;
-  const baseUrl = 'http://localhost:3002';
+  const baseUrl = 'http://localhost:3000';
 
   beforeAll(async () => {
     // Get tokens for different user types
@@ -64,13 +64,41 @@ describe('Demo Data with Teams Integration', () => {
 
   describe('Demo Data Upload', () => {
     test('should allow maintainer user to upload demo data', async () => {
+      const now = new Date();
+      const startTime = now.getTime() - 30000;
       const demoReport = generateCtrfReport({
-        tool: 'Demo-Jest',
-        environment: 'demo',
-        tests: 15,
-        passed: 12,
-        failed: 2,
-        skipped: 1,
+        results: {
+          tool: { name: 'Demo-Jest' },
+          summary: {
+            tests: 15,
+            passed: 12,
+            failed: 2,
+            skipped: 1,
+            pending: 0,
+            other: 0,
+            start: startTime,
+            stop: now.getTime(),
+          },
+          tests: [
+            {
+              name: 'Demo test case 1',
+              status: Status.passed,
+              duration: 1000,
+              start: startTime,
+              stop: startTime + 1000,
+            },
+            {
+              name: 'Demo test case 2',
+              status: Status.failed,
+              duration: 1500,
+              start: startTime + 1000,
+              stop: startTime + 2500,
+            },
+          ],
+          environment: {
+            testEnvironment: 'demo',
+          },
+        },
       });
 
       const response = await fetch(`${baseUrl}/api/test-reports`, {
@@ -95,13 +123,34 @@ describe('Demo Data with Teams Integration', () => {
     });
 
     test('should mark uploaded data as demo data when user has no teams', async () => {
+      const now = new Date();
+      const startTime = now.getTime() - 25000;
       const demoReport = generateCtrfReport({
-        tool: 'Demo-Playwright',
-        environment: 'demo',
-        tests: 8,
-        passed: 7,
-        failed: 1,
-        skipped: 0,
+        results: {
+          tool: { name: 'Demo-Playwright' },
+          summary: {
+            tests: 8,
+            passed: 7,
+            failed: 1,
+            skipped: 0,
+            pending: 0,
+            other: 0,
+            start: startTime,
+            stop: now.getTime(),
+          },
+          tests: [
+            {
+              name: 'Demo playwright test',
+              status: Status.passed,
+              duration: 800,
+              start: startTime,
+              stop: startTime + 800,
+            },
+          ],
+          environment: {
+            testEnvironment: 'demo',
+          },
+        },
       });
 
       const response = await fetch(`${baseUrl}/api/test-reports`, {
