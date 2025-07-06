@@ -5,6 +5,13 @@
 
 import { describe, test, expect } from '@jest/globals';
 
+interface ReportMetadata {
+  isDemoData?: boolean;
+  userTeams?: string[];
+  uploadedBy?: string;
+  [key: string]: unknown;
+}
+
 describe('Team-based Access Control Logic', () => {
   // Mock the team filtering logic that should exist in the API
   const buildTeamFilter = (userTeams: string[], uploadedBy: string) => {
@@ -223,7 +230,11 @@ describe('Team-based Access Control Logic', () => {
 });
 
 // Helper function to simulate access control logic
-function checkAccess(userTeams: string[], reportMetadata: any, currentUser: string): boolean {
+function checkAccess(
+  userTeams: string[],
+  reportMetadata: ReportMetadata,
+  currentUser: string
+): boolean {
   // Demo data is always accessible
   if (reportMetadata.isDemoData) {
     return true;
@@ -236,7 +247,7 @@ function checkAccess(userTeams: string[], reportMetadata: any, currentUser: stri
 
   // Team-based access
   if (Array.isArray(userTeams) && userTeams.length > 0 && Array.isArray(reportMetadata.userTeams)) {
-    return userTeams.some(team => reportMetadata.userTeams.includes(team));
+    return userTeams.some(team => reportMetadata.userTeams!.includes(team));
   }
 
   return false;

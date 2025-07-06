@@ -3,10 +3,49 @@
  * These tests verify that demo data is properly accessible regardless of team assignments
  */
 
-import { describe, test, expect, beforeAll, afterAll } from '@jest/globals';
+import { describe, test, expect, beforeAll } from '@jest/globals';
 import { generateCtrfReport } from '../../tests/data/ctrfReportGenerator';
 import { getAuthToken } from '../../tests/authentication/tokenService';
+import { CtrfSchema } from '../../src/schemas/ctrf/ctrf';
 import logger from '../../src/logging/logger';
+
+// Extended interface for stored reports with metadata
+interface StoredTestReport extends CtrfSchema {
+  _id: string;
+  storedAt: string;
+  metadata: {
+    uploadedBy: string;
+    userTeams: string[];
+    uploadedAt: string;
+    isDemoData?: boolean;
+    [key: string]: unknown;
+  };
+}
+
+interface TestReportsResponse {
+  success: true;
+  data: StoredTestReport[];
+  total: number;
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+  };
+}
+
+interface PostReportResponse {
+  success: true;
+  id: string;
+  message: string;
+  summary: {
+    tests: number;
+    passed: number;
+    failed: number;
+    skipped: number;
+    pending: number;
+    other: number;
+  };
+}
 
 const testLogger = logger.child({ module: 'demo-data-teams-test' });
 
@@ -45,7 +84,7 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(201);
 
-      const result = await response.json();
+      const result = (await response.json()) as PostReportResponse;
       expect(result.success).toBe(true);
       expect(result.id).toBeDefined();
 
@@ -75,7 +114,7 @@ describe('Demo Data with Teams Integration', () => {
       });
 
       expect(response.status).toBe(201);
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
 
       // Verify the report was stored with demo data metadata
       // This should be detectable through the API response or logs
@@ -94,13 +133,13 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(200);
 
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
       expect(result.success).toBe(true);
       expect(Array.isArray(result.data)).toBe(true);
 
       // Should have demo data visible
       const demoReports = result.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
@@ -124,13 +163,13 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(200);
 
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
       expect(result.success).toBe(true);
       expect(Array.isArray(result.data)).toBe(true);
 
       // Should have demo data visible
       const demoReports = result.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
@@ -149,9 +188,9 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(200);
 
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
       const demoReports = result.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
@@ -189,7 +228,7 @@ describe('Demo Data with Teams Integration', () => {
 
       // Maintainer should see demo data they uploaded
       const maintainerDemoReports = maintainerResult.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
@@ -209,7 +248,7 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(200);
 
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
       expect(result.success).toBe(true);
       expect(Array.isArray(result.data)).toBe(true);
 
@@ -244,13 +283,13 @@ describe('Demo Data with Teams Integration', () => {
       const ownerResult = await ownerResponse.json();
 
       const readonlyDemoReports = readonlyResult.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
       );
       const ownerDemoReports = ownerResult.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
@@ -276,14 +315,14 @@ describe('Demo Data with Teams Integration', () => {
 
       expect(response.status).toBe(200);
 
-      const result = await response.json();
+      const result = (await response.json()) as TestReportsResponse;
       expect(result.success).toBe(true);
       expect(result.pagination).toBeDefined();
       expect(result.pagination.total).toBeGreaterThan(0);
 
       // Should have some demo data in the first page
       const demoReports = result.data.filter(
-        (report: any) =>
+        (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
             report.metadata.userTeams.includes('demo-data'))
