@@ -4,6 +4,11 @@
  */
 
 import { describe, test, expect } from '@jest/globals';
+import {
+  buildTeamAccessFilter,
+  getEffectiveTeamIds,
+  shouldMarkAsDemoData,
+} from '../../src/lib/teamFilters';
 
 interface ReportMetadata {
   isDemoData?: boolean;
@@ -13,149 +18,130 @@ interface ReportMetadata {
 }
 
 describe('Team-based Access Control Logic', () => {
-  // Mock the team filtering logic that should exist in the API
-  const buildTeamFilter = (userTeams: string[], uploadedBy: string) => {
-    // This is the logic we expect to exist in the API
-    const teamFilters = [];
+  describe('buildTeamAccessFilter', () => {
+    test('should create filter for user with teams', () => {
+      const userId = 'user123';
+      const userTeamIds = ['team1', 'team2'];
 
-    // If user has teams, include reports from those teams
-    if (Array.isArray(userTeams) && userTeams.length > 0) {
-      teamFilters.push({
-        terms: {
-          'metadata.userTeams.keyword': userTeams,
+      const filter = buildTeamAccessFilter(userId, userTeamIds);
+
+      expect(filter).toEqual({
+        bool: {
+          should: [
+            {
+              terms: {
+                'metadata.userTeams.keyword': ['team1', 'team2'],
+              },
+            },
+            {
+              term: {
+                'metadata.uploadedBy.keyword': 'user123',
+              },
+            },
+            {
+              term: {
+                'metadata.isDemoData': true,
+              },
+            },
+            {
+              term: {
+                'metadata.userTeams.keyword': 'demo-data',
+              },
+            },
+          ],
+          minimum_should_match: 1,
         },
       });
-    }
-
-    // Always allow access to own uploads
-    teamFilters.push({
-      term: {
-        'metadata.uploadedBy.keyword': uploadedBy,
-      },
     });
 
-    // Always allow access to demo data
-    teamFilters.push({
-      term: {
-        'metadata.isDemoData': true,
-      },
-    });
+    test('should create filter for user with no teams', () => {
+      const userId = 'user456';
+      const userTeamIds: string[] = [];
 
-    return {
-      bool: {
-        should: teamFilters,
-        minimum_should_match: 1,
-      },
-    };
-  };
+      const filter = buildTeamAccessFilter(userId, userTeamIds);
 
-  describe('Team Filter Construction', () => {
-    test('should allow access to demo data for users with no teams', () => {
-      const userTeams: string[] = [];
-      const uploadedBy = 'user123';
-
-      const filter = buildTeamFilter(userTeams, uploadedBy);
-
-      expect(filter.bool.should).toContainEqual({
-        term: { 'metadata.isDemoData': true },
-      });
-      expect(filter.bool.minimum_should_match).toBe(1);
-    });
-
-    test('should allow access to own uploads', () => {
-      const userTeams: string[] = [];
-      const uploadedBy = 'user123';
-
-      const filter = buildTeamFilter(userTeams, uploadedBy);
-
-      expect(filter.bool.should).toContainEqual({
-        term: { 'metadata.uploadedBy.keyword': 'user123' },
+      expect(filter).toEqual({
+        bool: {
+          should: [
+            {
+              term: {
+                'metadata.uploadedBy.keyword': 'user456',
+              },
+            },
+            {
+              term: {
+                'metadata.isDemoData': true,
+              },
+            },
+            {
+              term: {
+                'metadata.userTeams.keyword': 'demo-data',
+              },
+            },
+          ],
+          minimum_should_match: 1,
+        },
       });
     });
+  });
 
-    test('should allow access to team reports when user has teams', () => {
-      const userTeams = ['team1', 'team2'];
-      const uploadedBy = 'user123';
-
-      const filter = buildTeamFilter(userTeams, uploadedBy);
-
-      expect(filter.bool.should).toContainEqual({
-        terms: { 'metadata.userTeams.keyword': ['team1', 'team2'] },
-      });
+  describe('getEffectiveTeamIds', () => {
+    test('should return user teams when they exist', () => {
+      const userTeamIds = ['team1', 'team2', 'team3'];
+      const result = getEffectiveTeamIds(userTeamIds);
+      expect(result).toEqual(['team1', 'team2', 'team3']);
     });
 
-    test('should always include demo data access regardless of teams', () => {
-      const userTeams = ['team1', 'team2'];
-      const uploadedBy = 'user123';
+    test('should return demo-data team when user has no teams', () => {
+      const userTeamIds: string[] = [];
+      const result = getEffectiveTeamIds(userTeamIds);
+      expect(result).toEqual(['demo-data']);
+    });
+  });
 
-      const filter = buildTeamFilter(userTeams, uploadedBy);
+  describe('shouldMarkAsDemoData', () => {
+    test('should return true when user has no teams', () => {
+      const userTeamIds: string[] = [];
+      const result = shouldMarkAsDemoData(userTeamIds);
+      expect(result).toBe(true);
+    });
 
-      // Should have team access, own uploads, AND demo data
-      expect(filter.bool.should).toHaveLength(3);
-      expect(filter.bool.should).toContainEqual({
-        term: { 'metadata.isDemoData': true },
-      });
+    test('should return false when user has teams', () => {
+      const userTeamIds = ['team1'];
+      const result = shouldMarkAsDemoData(userTeamIds);
+      expect(result).toBe(false);
     });
   });
 
   describe('Demo Data Identification', () => {
     test('should identify data as demo when user has no teams', () => {
       const userTeams: string[] = [];
-      const shouldBeDemoData = userTeams.length === 0;
+      const shouldBeDemoData = shouldMarkAsDemoData(userTeams);
 
       expect(shouldBeDemoData).toBe(true);
     });
 
-    test('should identify data as demo when uploaded by specific demo users', () => {
-      const demoUsers = ['maintainer@example.com', 'demo@example.com'];
-      const uploadedBy = 'maintainer@example.com';
+    test('should not mark data as demo when user has teams', () => {
+      const userTeams = ['team1', 'team2'];
+      const shouldBeDemoData = shouldMarkAsDemoData(userTeams);
 
-      const shouldBeDemoData = demoUsers.includes(uploadedBy);
-
-      expect(shouldBeDemoData).toBe(true);
-    });
-
-    test('should identify data as demo when environment is demo', () => {
-      const mockReport = {
-        results: {
-          environment: 'demo',
-          tool: { name: 'Demo-Jest' },
-        },
-      };
-
-      const shouldBeDemoData =
-        mockReport.results.environment === 'demo' || mockReport.results.tool.name.includes('Demo-');
-
-      expect(shouldBeDemoData).toBe(true);
+      expect(shouldBeDemoData).toBe(false);
     });
   });
 
   describe('Team Assignment Logic', () => {
     test('should assign demo-data team when user has no teams', () => {
       const userTeams: string[] = [];
-      const effectiveTeamIds = userTeams.length > 0 ? userTeams : ['demo-data'];
+      const effectiveTeamIds = getEffectiveTeamIds(userTeams);
 
       expect(effectiveTeamIds).toEqual(['demo-data']);
     });
 
     test('should preserve user teams when they exist', () => {
       const userTeams = ['team1', 'team2'];
-      const effectiveTeamIds = userTeams.length > 0 ? userTeams : ['demo-data'];
+      const effectiveTeamIds = getEffectiveTeamIds(userTeams);
 
       expect(effectiveTeamIds).toEqual(['team1', 'team2']);
-    });
-
-    test('should ensure demo data is always accessible via demo-data team', () => {
-      // When storing demo data, it should be assigned to demo-data team
-      const isDemoData = true;
-      const userTeams: string[] = [];
-      const effectiveTeamIds = isDemoData
-        ? ['demo-data']
-        : userTeams.length > 0
-          ? userTeams
-          : ['demo-data'];
-
-      expect(effectiveTeamIds).toEqual(['demo-data']);
     });
   });
 

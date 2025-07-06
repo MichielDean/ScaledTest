@@ -362,7 +362,7 @@ const TeamManagement: NextPage = () => {
                     </td>
                     <td className={styles.tableCell}>
                       {team.isDefault ? (
-                        <span className={styles.defaultBadge} aria-label="Default team">
+                        <span className={styles.defaultTeamBadge} aria-label="Default team">
                           ✓ Default
                         </span>
                       ) : (

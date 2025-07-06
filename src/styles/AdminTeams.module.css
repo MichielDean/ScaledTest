@@ -145,6 +145,13 @@
   margin-left: var(--spacing-sm, 0.5rem);
 }
 
+.cannotDelete {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-style: italic;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+}
+
 /* Note: Button styles (deleteButton) are imported from shared/buttons.module.css */
 
 .noTeams {

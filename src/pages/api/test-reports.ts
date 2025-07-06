@@ -4,6 +4,11 @@ import { getRequestLogger, logError } from '../../logging/logger';
 import opensearchClient, { ensureCtrfReportsIndexExists } from '../../lib/opensearch';
 import { CtrfSchema } from '../../schemas/ctrf/ctrf';
 import { getUserTeams } from '../../authentication/teamManagement';
+import {
+  buildTeamAccessFilter,
+  getEffectiveTeamIds,
+  shouldMarkAsDemoData,
+} from '../../lib/teamFilters';
 import { z } from 'zod';
 
 // Validation schema for CTRF reports
@@ -171,9 +176,9 @@ async function handlePost(
     const userTeams = await getUserTeams(req.user.sub);
     const teamIds = userTeams.map(team => team.id);
 
-    // For demo data (if no teams), assign to a default/public team
-    // This ensures demo data is visible to all users
-    const effectiveTeamIds = teamIds.length > 0 ? teamIds : ['demo-data'];
+    // Use shared utilities for team-based logic
+    const effectiveTeamIds = getEffectiveTeamIds(teamIds);
+    const isDemoData = shouldMarkAsDemoData(teamIds);
 
     // Store report with user's current teams (or demo team if no teams)
     const reportWithMeta = {
@@ -183,7 +188,7 @@ async function handlePost(
         uploadedBy: req.user.sub,
         userTeams: effectiveTeamIds,
         uploadedAt: new Date().toISOString(),
-        isDemoData: teamIds.length === 0, // Mark as demo data if user has no teams
+        isDemoData,
       },
     };
 
@@ -272,49 +277,11 @@ async function handleGet(
     const teamIds = userTeams.map(team => team.id);
 
     // Build query filters
-    const filters: Array<Record<string, unknown>> = []; // OpenSearch query filter objects
+    const filters: Array<Record<string, unknown>> = [];
 
-    // Team-based access control: user can see reports from their teams OR reports they uploaded OR demo data
-    const teamAccessFilter = [];
-
-    // If user has teams, they can see reports from those teams
-    if (teamIds.length > 0) {
-      teamAccessFilter.push({
-        terms: {
-          'metadata.userTeams.keyword': teamIds,
-        },
-      });
-    }
-
-    // User can always see reports they uploaded themselves
-    teamAccessFilter.push({
-      term: {
-        'metadata.uploadedBy.keyword': req.user.sub,
-      },
-    });
-
-    // All users can see demo data (reports marked with isDemoData or with demo-data team)
-    teamAccessFilter.push({
-      term: {
-        'metadata.isDemoData': true,
-      },
-    });
-
-    teamAccessFilter.push({
-      term: {
-        'metadata.userTeams.keyword': 'demo-data',
-      },
-    });
-
-    // Combine team access with OR logic
-    if (teamAccessFilter.length > 0) {
-      filters.push({
-        bool: {
-          should: teamAccessFilter,
-          minimum_should_match: 1,
-        },
-      });
-    }
+    // Add team-based access control filter using shared utility
+    const teamAccessFilter = buildTeamAccessFilter(req.user.sub, teamIds);
+    filters.push(teamAccessFilter);
 
     if (status) {
       filters.push({
