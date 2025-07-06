@@ -117,18 +117,202 @@
    - Remove unused function parameters or prefix with underscore: `_unusedParam`
    - Clean up unused variables and constants before committing code
 
-**NEVER add filepath comments at the top of files.** Do not include comments like `// src/components/MyComponent.tsx` or similar file path indicators.
+## Safe Property and Array Access Standards
 
-**NEVER add redundant or obvious comments.** Only include comments that:
+**CRITICAL: NEVER access properties or array methods without proper safety checks.** All property and array access must be defensive to prevent runtime errors like "Cannot read properties of undefined" or "Cannot read property 'length' of undefined".
 
-- Explain complex business logic
-- Document non-obvious architectural decisions
-- Provide context for unusual code patterns
-- Explain why something is done, not what is being done
+**ALWAYS follow these mandatory safety patterns:**
 
-**NEVER leave commented-out code.** Remove all dead code and unused commented blocks.
+### 1. **Optional Chaining for Nested Properties**
 
-**ALWAYS check for and remove unused/unreferenced files.** Ensure all created files serve a real purpose and are properly integrated.
+```typescript
+// ✅ CORRECT - Safe property access
+const userName = user?.profile?.name || 'Unknown';
+const firstAddress = user?.addresses?.[0]?.street || 'No address';
+
+// ❌ WRONG - Unsafe property access
+const userName = user.profile.name; // Error if user or profile is undefined
+const firstAddress = user.addresses[0].street; // Error if any level is undefined
+```
+
+### 2. **Array Safety Checks Before Operations**
+
+```typescript
+// ✅ CORRECT - Safe array operations
+const results = Array.isArray(data) ? data : [];
+const totalCount = results.length;
+const processedData = results.map(item => processItem(item));
+const sum = results.reduce((acc, item) => acc + (item?.value || 0), 0);
+
+// ❌ WRONG - Unsafe array operations
+const totalCount = data.length; // Error if data is undefined/null
+const processedData = data.map(item => processItem(item)); // Error if data is not an array
+const sum = data.reduce((acc, item) => acc + item.value, 0); // Multiple failure points
+```
+
+### 3. **Defensive State Access in React Components**
+
+```typescript
+// ✅ CORRECT - Safe React state access
+const MyComponent = () => {
+  const [items, setItems] = useState<Item[]>([]);
+  const [metadata, setMetadata] = useState<Metadata | null>(null);
+
+  const itemCount = items?.length || 0;
+  const hasItems = Array.isArray(items) && items.length > 0;
+  const title = metadata?.title || 'Default Title';
+
+  return (
+    <div>
+      <h1>{title}</h1>
+      {hasItems ? (
+        <ul>
+          {items.map((item, index) => (
+            <li key={item?.id || index}>{item?.name || 'Unknown'}</li>
+          ))}
+        </ul>
+      ) : (
+        <p>No items available</p>
+      )}
+    </div>
+  );
+};
+
+// ❌ WRONG - Unsafe React patterns
+const MyComponent = () => {
+  const [items, setItems] = useState<Item[]>();
+  const [metadata, setMetadata] = useState<Metadata>();
+
+  return (
+    <div>
+      <h1>{metadata.title}</h1> {/* Error if metadata is undefined */}
+      <ul>
+        {items.map(item => ( {/* Error if items is undefined */}
+          <li key={item.id}>{item.name}</li> {/* Error if item properties are undefined */}
+        ))}
+      </ul>
+      <p>Total: {items.length}</p> {/* Error if items is undefined */}
+    </div>
+  );
+};
+```
+
+### 4. **API Response Safety Patterns**
+
+```typescript
+// ✅ CORRECT - Safe API response handling
+interface ApiResponse {
+  data?: Item[];
+  metadata?: {
+    total?: number;
+    page?: number;
+  };
+}
+
+const handleApiResponse = (response: ApiResponse) => {
+  const items = Array.isArray(response?.data) ? response.data : [];
+  const total = response?.metadata?.total || 0;
+  const currentPage = response?.metadata?.page || 1;
+
+  return {
+    items,
+    pagination: {
+      total,
+      currentPage,
+      hasItems: items.length > 0,
+    },
+  };
+};
+
+// ❌ WRONG - Unsafe API response handling
+const handleApiResponse = (response: ApiResponse) => {
+  const total = response.data.length; // Error if response.data is undefined
+  const firstItem = response.data[0]; // Error if array is empty or undefined
+  const pageNumber = response.metadata.page; // Error if metadata is undefined
+
+  return {
+    total,
+    firstItem,
+    pageNumber,
+  };
+};
+```
+
+### 5. **Safe Iteration and Aggregation**
+
+```typescript
+// ✅ CORRECT - Safe iteration patterns
+const calculateStats = (data: any) => {
+  const items = Array.isArray(data?.items) ? data.items : [];
+  const validItems = items.filter(item => item && typeof item === 'object');
+
+  return {
+    count: validItems.length,
+    sum: validItems.reduce((acc, item) => acc + (Number(item?.value) || 0), 0),
+    average:
+      validItems.length > 0
+        ? validItems.reduce((acc, item) => acc + (Number(item?.value) || 0), 0) / validItems.length
+        : 0,
+    names: validItems.map(item => item?.name || 'Unknown').filter(Boolean),
+  };
+};
+
+// ❌ WRONG - Unsafe iteration
+const calculateStats = (data: any) => {
+  return {
+    count: data.items.length, // Error if data or items is undefined
+    sum: data.items.reduce((acc, item) => acc + item.value, 0), // Multiple failure points
+    average: data.items.reduce((acc, item) => acc + item.value, 0) / data.items.length,
+    names: data.items.map(item => item.name), // Error if item.name is undefined
+  };
+};
+```
+
+### 6. **Safe Object Destructuring**
+
+```typescript
+// ✅ CORRECT - Safe destructuring with defaults
+const processUser = (user: any) => {
+  const { name = 'Unknown', email = '', preferences = {}, roles = [] } = user || {};
+
+  const { theme = 'light', language = 'en' } = preferences;
+  const isAdmin = Array.isArray(roles) && roles.includes('admin');
+
+  return { name, email, theme, language, isAdmin };
+};
+
+// ❌ WRONG - Unsafe destructuring
+const processUser = (user: any) => {
+  const { name, email, preferences, roles } = user; // Error if user is undefined
+  const { theme, language } = preferences; // Error if preferences is undefined
+  const isAdmin = roles.includes('admin'); // Error if roles is undefined
+
+  return { name, email, theme, language, isAdmin };
+};
+```
+
+### 7. **Safe Property Access Checklist**
+
+**Before accessing any property or array method, ALWAYS verify:**
+
+- ✅ Is the object/array defined? Use `obj?.property` or `Array.isArray(arr)`
+- ✅ Is the property path safe? Use optional chaining `obj?.nested?.property`
+- ✅ Do you have fallback values? Use `|| defaultValue` or `?? defaultValue`
+- ✅ Are array operations protected? Check `Array.isArray()` before `.map()`, `.reduce()`, `.filter()`
+- ✅ Are you handling empty arrays? Check `.length > 0` before accessing indices
+- ✅ Do you have null checks? Use `!== null && !== undefined` when needed
+- ✅ Are API responses validated? Assume external data can be malformed
+- ✅ Are you using safe defaults? Provide meaningful fallback values
+
+**MANDATORY: Apply these patterns consistently in ALL code:**
+
+- React components and hooks
+- API response handlers
+- Data processing functions
+- Event handlers
+- Utility functions
+- Test code
+- Configuration files
 
 ## CSS and Styling Standards
 

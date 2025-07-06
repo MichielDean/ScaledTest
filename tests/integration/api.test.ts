@@ -172,7 +172,7 @@ describe('API Endpoints', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          reports: expect.arrayContaining([expect.any(Object)]),
+          data: expect.arrayContaining([expect.any(Object)]),
           total: 1,
         })
       );
@@ -206,7 +206,7 @@ describe('API Endpoints', () => {
           body: expect.objectContaining({
             query: expect.objectContaining({
               bool: expect.objectContaining({
-                must: expect.arrayContaining([
+                filter: expect.arrayContaining([
                   expect.objectContaining({
                     nested: expect.objectContaining({
                       path: 'results.tests',

@@ -5,6 +5,7 @@ import {
   getTestSuiteOverviewFromOpenSearch,
   getOpenSearchHealthStatus,
 } from '../../../lib/opensearchAnalytics';
+import { getUserTeams } from '../../../authentication/teamManagement';
 
 type SuccessResponse = {
   success: true;
@@ -43,6 +44,18 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
   try {
     reqLogger.info('Fetching test suite overview data from OpenSearch');
 
+    // Get user's teams for filtering
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'User identification required',
+        source: 'OpenSearch',
+      });
+    }
+
+    const userTeams = await getUserTeams(req.user.sub);
+    const teamIds = userTeams.map(team => team.id);
+
     // Get OpenSearch health status first (for connection check only)
     const healthStatus = await getOpenSearchHealthStatus();
 
@@ -55,8 +68,8 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
       });
     }
 
-    // Fetch data from OpenSearch (index will be auto-created if needed)
-    const data = await getTestSuiteOverviewFromOpenSearch();
+    // Fetch data from OpenSearch with team filtering
+    const data = await getTestSuiteOverviewFromOpenSearch(teamIds);
 
     reqLogger.info(
       {

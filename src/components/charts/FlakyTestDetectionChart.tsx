@@ -213,7 +213,9 @@ const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) =
               </div>
               <div className={`${flakyStyles.summaryCard} ${flakyStyles.summaryCardTotalRuns}`}>
                 <div className={`${flakyStyles.summaryValue} ${flakyStyles.summaryValueTotalRuns}`}>
-                  {flakyTests.reduce((sum, t) => sum + t.totalRuns, 0)}
+                  {Array.isArray(flakyTests)
+                    ? flakyTests.reduce((sum, t) => sum + (t?.totalRuns || 0), 0)
+                    : 0}
                 </div>
                 <div className={flakyStyles.summaryLabel}>Total Test Runs</div>
               </div>
@@ -221,9 +223,10 @@ const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) =
                 <div
                   className={`${flakyStyles.summaryValue} ${flakyStyles.summaryValueAvgDuration}`}
                 >
-                  {flakyTests.length > 0
+                  {Array.isArray(flakyTests) && flakyTests.length > 0
                     ? Math.round(
-                        flakyTests.reduce((sum, t) => sum + t.avgDuration, 0) / flakyTests.length
+                        flakyTests.reduce((sum, t) => sum + (t?.avgDuration || 0), 0) /
+                          flakyTests.length
                       )
                     : 0}
                   ms
