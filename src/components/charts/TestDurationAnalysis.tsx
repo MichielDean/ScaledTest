@@ -129,10 +129,11 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
     );
   }
 
-  const totalTests = data.reduce((sum, item) => sum + item.count, 0);
-  const avgDuration = data.length > 0 ? data[0].avgDuration : 0;
-  const maxDuration = data.length > 0 ? data[0].maxDuration : 0;
-  const minDuration = data.length > 0 ? data[0].minDuration : 0;
+  const validData = Array.isArray(data) ? data : [];
+  const totalTests = validData.reduce((sum, item) => sum + (item?.count || 0), 0);
+  const avgDuration = validData.length > 0 ? validData[0]?.avgDuration || 0 : 0;
+  const maxDuration = validData.length > 0 ? validData[0]?.maxDuration || 0 : 0;
+  const minDuration = validData.length > 0 ? validData[0]?.minDuration || 0 : 0;
 
   const formatDuration = (ms: number): string => {
     if (ms < 1000) return `${Math.round(ms)}ms`;
@@ -220,7 +221,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
                 📊 Duration Distribution (OpenSearch)
               </h3>
               <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
+                <BarChart data={validData} margin={{ top: 20, right: 30, left: 20, bottom: 60 }}>
                   <CartesianGrid strokeDasharray="3 3" />
                   <XAxis
                     dataKey="range"
@@ -250,7 +251,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
               <ResponsiveContainer width="100%" height={300}>
                 <PieChart>
                   <Pie
-                    data={data}
+                    data={validData}
                     cx="50%"
                     cy="50%"
                     labelLine={false}
@@ -259,7 +260,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
                     fill="#8884d8"
                     dataKey="count"
                   >
-                    {data.map((entry, index) => (
+                    {validData.map((entry, index) => (
                       <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                     ))}
                   </Pie>
@@ -344,18 +345,20 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                 <h4 className="font-semibold text-green-800 mb-2">Fast Tests (&lt; 5s)</h4>
                 <p className="text-2xl font-bold text-green-600">
-                  {data
-                    .filter(d => d.range.includes('0-1s') || d.range.includes('1-5s'))
-                    .reduce((sum, d) => sum + d.count, 0)}
+                  {validData
+                    .filter(d => d?.range?.includes('0-1s') || d?.range?.includes('1-5s'))
+                    .reduce((sum, d) => sum + (d?.count || 0), 0)}
                 </p>
                 <p className="text-sm text-green-700">
-                  {(
-                    (data
-                      .filter(d => d.range.includes('0-1s') || d.range.includes('1-5s'))
-                      .reduce((sum, d) => sum + d.count, 0) /
-                      totalTests) *
-                    100
-                  ).toFixed(1)}
+                  {totalTests > 0
+                    ? (
+                        (validData
+                          .filter(d => d?.range?.includes('0-1s') || d?.range?.includes('1-5s'))
+                          .reduce((sum, d) => sum + (d?.count || 0), 0) /
+                          totalTests) *
+                        100
+                      ).toFixed(1)
+                    : '0.0'}
                   % of total
                 </p>
               </div>
@@ -363,18 +366,20 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
               <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                 <h4 className="font-semibold text-yellow-800 mb-2">Moderate Tests (5-30s)</h4>
                 <p className="text-2xl font-bold text-yellow-600">
-                  {data
-                    .filter(d => d.range.includes('5-10s') || d.range.includes('10-30s'))
-                    .reduce((sum, d) => sum + d.count, 0)}
+                  {validData
+                    .filter(d => d?.range?.includes('5-10s') || d?.range?.includes('10-30s'))
+                    .reduce((sum, d) => sum + (d?.count || 0), 0)}
                 </p>
                 <p className="text-sm text-yellow-700">
-                  {(
-                    (data
-                      .filter(d => d.range.includes('5-10s') || d.range.includes('10-30s'))
-                      .reduce((sum, d) => sum + d.count, 0) /
-                      totalTests) *
-                    100
-                  ).toFixed(1)}
+                  {totalTests > 0
+                    ? (
+                        (validData
+                          .filter(d => d?.range?.includes('5-10s') || d?.range?.includes('10-30s'))
+                          .reduce((sum, d) => sum + (d?.count || 0), 0) /
+                          totalTests) *
+                        100
+                      ).toFixed(1)
+                    : '0.0'}
                   % of total
                 </p>
               </div>

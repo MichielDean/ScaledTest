@@ -6,6 +6,7 @@ import {
   getOpenSearchHealthStatus,
 } from '../../../lib/opensearchAnalytics';
 import { FlakyTestWithRuns } from '../../../types/dashboard';
+import { getUserTeams } from '../../../authentication/teamManagement';
 
 type SuccessResponse = {
   success: true;
@@ -37,6 +38,18 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
   try {
     reqLogger.info('Fetching flaky test runs with execution details from OpenSearch');
 
+    // Get user's teams for filtering
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'User identification required',
+        source: 'OpenSearch',
+      });
+    }
+
+    const userTeams = await getUserTeams(req.user.sub);
+    const teamIds = userTeams.map(team => team.id);
+
     // Get OpenSearch health status first (for connection check only)
     const healthStatus = await getOpenSearchHealthStatus();
 
@@ -49,13 +62,17 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
       });
     }
 
-    // Fetch data from OpenSearch (index will be auto-created if needed)
-    const data = await getFlakyTestRunsFromOpenSearch();
+    // Fetch data from OpenSearch with team filtering
+    const data = await getFlakyTestRunsFromOpenSearch(teamIds);
+    const validData = Array.isArray(data) ? data : [];
 
     reqLogger.info(
       {
-        flakyTestsWithRuns: data.length,
-        totalTestRuns: data.reduce((sum, test) => sum + test.testRuns.length, 0),
+        flakyTestsWithRuns: validData.length,
+        totalTestRuns: validData.reduce(
+          (sum, test) => sum + (Array.isArray(test?.testRuns) ? test.testRuns.length : 0),
+          0
+        ),
         opensearchDocuments: healthStatus.documentsCount,
       },
       'Successfully retrieved flaky test runs from OpenSearch'
@@ -63,7 +80,7 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
 
     return res.status(200).json({
       success: true,
-      data,
+      data: validData,
       meta: {
         source: 'OpenSearch',
         index: 'ctrf-reports',

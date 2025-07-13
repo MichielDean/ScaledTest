@@ -74,7 +74,7 @@ const SimpleTestDashboard: NextPage = () => {
 
       if (data.success) {
         // Transform the reports into simplified format
-        const simplifiedReports = data.reports.map((report: ApiTestReport) => ({
+        const simplifiedReports = data.data.map((report: ApiTestReport) => ({
           _id: report._id,
           tool: report.results?.tool?.name || 'Unknown',
           environment: report.results?.environment?.name || 'Unknown',
@@ -113,15 +113,20 @@ const SimpleTestDashboard: NextPage = () => {
 
   // Calculate overall statistics
   const calculateOverallStats = () => {
-    if (reports.length === 0) return { total: 0, passed: 0, failed: 0, skipped: 0, successRate: 0 };
+    const validReports = Array.isArray(reports) ? reports : [];
+    if (validReports.length === 0)
+      return { total: 0, passed: 0, failed: 0, skipped: 0, successRate: 0 };
 
-    const totals = reports.reduce(
-      (acc, report) => ({
-        total: acc.total + report.summary.total,
-        passed: acc.passed + report.summary.passed,
-        failed: acc.failed + report.summary.failed,
-        skipped: acc.skipped + report.summary.skipped,
-      }),
+    const totals = validReports.reduce(
+      (acc, report) => {
+        const summary = report?.summary || {};
+        return {
+          total: acc.total + (summary.total || 0),
+          passed: acc.passed + (summary.passed || 0),
+          failed: acc.failed + (summary.failed || 0),
+          skipped: acc.skipped + (summary.skipped || 0),
+        };
+      },
       { total: 0, passed: 0, failed: 0, skipped: 0 }
     );
 

@@ -3,6 +3,12 @@ import { AuthenticatedRequest, createApi } from '../../auth/apiAuth';
 import { getRequestLogger, logError } from '../../logging/logger';
 import opensearchClient, { ensureCtrfReportsIndexExists } from '../../lib/opensearch';
 import { CtrfSchema } from '../../schemas/ctrf/ctrf';
+import { getUserTeams } from '../../authentication/teamManagement';
+import {
+  buildTeamAccessFilter,
+  getEffectiveTeamIds,
+  shouldMarkAsDemoData,
+} from '../../lib/teamFilters';
 import { z } from 'zod';
 
 // Validation schema for CTRF reports
@@ -125,8 +131,13 @@ type ErrorResponse = {
 
 type GetResponse = {
   success: true;
-  reports: Array<CtrfSchema & { _id: string; storedAt: string }>;
+  data: Array<CtrfSchema & { _id: string; storedAt: string }>;
   total: number;
+  pagination: {
+    page: number;
+    size: number;
+    total: number;
+  };
 };
 
 // Function to ensure the OpenSearch index exists for CTRF reports
@@ -154,9 +165,31 @@ async function handlePost(
       ctrfReport.timestamp = new Date().toISOString();
     }
 
+    // Get user's teams for team-based access control
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'User identification required',
+      });
+    }
+
+    const userTeams = await getUserTeams(req.user.sub);
+    const teamIds = userTeams.map(team => team.id);
+
+    // Use shared utilities for team-based logic
+    const effectiveTeamIds = getEffectiveTeamIds(teamIds);
+    const isDemoData = shouldMarkAsDemoData(teamIds);
+
+    // Store report with user's current teams (or demo team if no teams)
     const reportWithMeta = {
       ...ctrfReport,
       storedAt: new Date().toISOString(),
+      metadata: {
+        uploadedBy: req.user.sub,
+        userTeams: effectiveTeamIds,
+        uploadedAt: new Date().toISOString(),
+        isDemoData,
+      },
     };
 
     await opensearchClient.index({
@@ -232,8 +265,23 @@ async function handleGet(
     const pageNum = parseInt(page as string, 10);
     const pageSize = Math.min(parseInt(size as string, 10), 100); // Limit max page size
 
+    // Get user's teams for filtering
+    if (!req.user?.sub) {
+      return res.status(401).json({
+        success: false,
+        error: 'User identification required',
+      });
+    }
+
+    const userTeams = await getUserTeams(req.user.sub);
+    const teamIds = userTeams.map(team => team.id);
+
     // Build query filters
-    const filters: Array<Record<string, unknown>> = []; // OpenSearch query filter objects
+    const filters: Array<Record<string, unknown>> = [];
+
+    // Add team-based access control filter using shared utility
+    const teamAccessFilter = buildTeamAccessFilter(req.user.sub, teamIds);
+    filters.push(teamAccessFilter);
 
     if (status) {
       filters.push({
@@ -258,7 +306,7 @@ async function handleGet(
       });
     }
 
-    const query = filters.length > 0 ? { bool: { must: filters } } : { match_all: {} };
+    const query = { bool: { filter: filters } };
 
     // Search OpenSearch
     const searchResponse = await opensearchClient.search({
@@ -325,8 +373,13 @@ async function handleGet(
 
     return res.status(200).json({
       success: true,
-      reports,
+      data: reports,
       total,
+      pagination: {
+        page: pageNum,
+        size: pageSize,
+        total,
+      },
     });
   } catch (error) {
     logError(reqLogger, 'Error retrieving CTRF reports', error, {

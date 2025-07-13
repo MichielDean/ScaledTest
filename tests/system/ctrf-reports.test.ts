@@ -327,14 +327,14 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        reports: expect.any(Array),
+        data: expect.any(Array),
         total: expect.any(Number),
       });
 
-      expect(response.body.reports.length).toBeGreaterThanOrEqual(2);
+      expect(response.body.data.length).toBeGreaterThanOrEqual(2);
       expect(response.body.total).toBeGreaterThanOrEqual(2);
 
-      const report = response.body.reports[0];
+      const report = response.body.data[0];
       expect(report).toHaveProperty('_id');
       expect(report).toHaveProperty('storedAt');
       expect(report).toHaveProperty('reportFormat', 'CTRF');
@@ -349,11 +349,11 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        reports: expect.any(Array),
+        data: expect.any(Array),
         total: expect.any(Number),
       });
 
-      expect(response.body.reports.length).toBeGreaterThan(0);
+      expect(response.body.data.length).toBeGreaterThan(0);
     });
 
     it('should filter reports by tool name', async () => {
@@ -361,12 +361,12 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        reports: expect.any(Array),
+        data: expect.any(Array),
         total: expect.any(Number),
       });
 
-      if (response.body.reports.length > 0) {
-        expect(response.body.reports[0].results.tool.name).toBe('Jest');
+      if (response.body.data.length > 0) {
+        expect(response.body.data[0].results.tool.name).toBe('Jest');
       }
     });
 
@@ -378,12 +378,12 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        reports: expect.any(Array),
+        data: expect.any(Array),
         total: expect.any(Number),
       });
 
-      if (response.body.reports.length > 0) {
-        expect(response.body.reports[0].results.environment?.testEnvironment).toBe('CI');
+      if (response.body.data.length > 0) {
+        expect(response.body.data[0].results.environment?.testEnvironment).toBe('CI');
       }
     });
 
@@ -393,7 +393,7 @@ describe('CTRF Reports API System Tests', () => {
         .set(authHeaders)
         .expect(200);
 
-      expect(page1Response.body.reports).toHaveLength(1);
+      expect(page1Response.body.data).toHaveLength(1);
 
       if (page1Response.body.total > 1) {
         const page2Response = await api
@@ -401,15 +401,15 @@ describe('CTRF Reports API System Tests', () => {
           .set(authHeaders)
           .expect(200);
 
-        expect(page2Response.body.reports).toHaveLength(1);
-        expect(page2Response.body.reports[0]._id).not.toBe(page1Response.body.reports[0]._id);
+        expect(page2Response.body.data).toHaveLength(1);
+        expect(page2Response.body.data[0]._id).not.toBe(page1Response.body.data[0]._id);
       }
     });
 
     it('should respect maximum page size limit', async () => {
       const response = await api.get('/api/test-reports?size=200').set(authHeaders).expect(200);
 
-      expect(response.body.reports.length).toBeLessThanOrEqual(100);
+      expect(response.body.data.length).toBeLessThanOrEqual(100);
     });
 
     it('should combine multiple filters', async () => {
@@ -420,12 +420,12 @@ describe('CTRF Reports API System Tests', () => {
 
       expect(response.body).toMatchObject({
         success: true,
-        reports: expect.any(Array),
+        data: expect.any(Array),
         total: expect.any(Number),
       });
 
-      if (response.body.reports.length > 0) {
-        const report = response.body.reports[0];
+      if (response.body.data.length > 0) {
+        const report = response.body.data[0];
         expect(report.results.tool.name).toBe('Jest');
         expect(report.results.environment?.testEnvironment).toBe('CI');
       }
@@ -589,7 +589,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const retrieveResponse = await api.get('/api/test-reports').set(authHeaders).expect(200);
 
-      const storedReport = retrieveResponse.body.reports.find(
+      const storedReport = retrieveResponse.body.data.find(
         (r: StoredReport) => r.reportId === reportId
       );
 
