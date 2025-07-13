@@ -9,6 +9,76 @@ import {
 } from '../types/dashboard';
 import { CtrfTestSource } from '../types/opensearch';
 
+/**
+ * Helper function to build team-based query filters with demo data access
+ */
+function buildTeamFilters(teamIds?: string[]): Array<Record<string, unknown>> {
+  const teamAccessFilter = [];
+
+  // If user has teams, they can see reports from those teams
+  if (teamIds && teamIds.length > 0) {
+    teamAccessFilter.push({
+      terms: {
+        'metadata.userTeams.keyword': teamIds,
+      },
+    });
+  }
+
+  // All users can see demo data (reports marked with isDemoData or with demo-data team)
+  teamAccessFilter.push({
+    term: {
+      'metadata.isDemoData': true,
+    },
+  });
+
+  teamAccessFilter.push({
+    term: {
+      'metadata.userTeams.keyword': 'demo-data',
+    },
+  });
+
+  return teamAccessFilter;
+}
+
+/**
+ * Helper function to build OpenSearch query with team filtering
+ */
+function buildQueryWithTeamFilter(
+  additionalFilters: Array<Record<string, unknown>> = [],
+  teamIds?: string[]
+): Record<string, unknown> {
+  const teamFilters = buildTeamFilters(teamIds);
+
+  if (additionalFilters.length === 0 && teamFilters.length > 0) {
+    return {
+      bool: {
+        should: teamFilters,
+        minimum_should_match: 1,
+      },
+    };
+  }
+
+  if (additionalFilters.length > 0 && teamFilters.length > 0) {
+    return {
+      bool: {
+        filter: additionalFilters,
+        should: teamFilters,
+        minimum_should_match: 1,
+      },
+    };
+  }
+
+  if (additionalFilters.length > 0) {
+    return {
+      bool: {
+        filter: additionalFilters,
+      },
+    };
+  }
+
+  return { match_all: {} };
+}
+
 // OpenSearch aggregation bucket interfaces
 interface SuiteBucket {
   key: string;
@@ -115,16 +185,22 @@ interface OpenSearchAggregations {
 /**
  * Get test suite overview data from OpenSearch
  * Aggregates test results across all reports in the index
+ * @param teamIds - Array of team IDs to filter by (optional)
  */
-export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOverviewData[]> {
+export async function getTestSuiteOverviewFromOpenSearch(
+  teamIds?: string[]
+): Promise<TestSuiteOverviewData[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info('Fetching test suite overview from OpenSearch');
+      logger.info('Fetching test suite overview from OpenSearch', { teamIds });
+
+      const query = buildQueryWithTeamFilter([], teamIds);
 
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 0, // No document results, only aggregations
+          query,
           aggs: {
             suites: {
               terms: {
@@ -156,8 +232,29 @@ export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOve
                 avg_duration: {
                   avg: {
                     script: {
-                      source:
-                        "doc['results.summary.stop'].value - doc['results.summary.start'].value",
+                      source: `
+                        try {
+                          // Handle numeric timestamps (CTRF standard)
+                          if (doc['results.summary.stop'].size() > 0 && doc['results.summary.start'].size() > 0) {
+                            def stop = doc['results.summary.stop'].value;
+                            def start = doc['results.summary.start'].value;
+                            
+                            // If they're numbers, use them directly
+                            if (stop instanceof Number && start instanceof Number) {
+                              return stop - start;
+                            }
+                            
+                            // If they're dates, convert to milliseconds
+                            if (stop instanceof org.opensearch.script.JodaCompatibleZonedDateTime && 
+                                start instanceof org.opensearch.script.JodaCompatibleZonedDateTime) {
+                              return stop.getMillis() - start.getMillis();
+                            }
+                          }
+                          return 0;
+                        } catch (Exception e) {
+                          return 0;
+                        }
+                      `,
                     },
                   },
                 },
@@ -185,7 +282,7 @@ export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOve
       });
 
       logger.info(
-        { suitesCount: data.length },
+        { suitesCount: data.length, teamIds },
         'Successfully retrieved test suite overview from OpenSearch'
       );
       return data;
@@ -200,21 +297,43 @@ export async function getTestSuiteOverviewFromOpenSearch(): Promise<TestSuiteOve
  * Get test trends data from OpenSearch
  * Shows test results over time using CTRF summary.start timestamp (actual test execution time)
  * Data is aggregated by hour to show multiple results per day on the same line graph
+ * @param days - Number of days to look back (default: 30)
+ * @param teamIds - Array of team IDs to filter by (optional)
  */
-export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<TestTrendsData[]> {
+export async function getTestTrendsFromOpenSearch(
+  days: number = 30,
+  teamIds?: string[]
+): Promise<TestTrendsData[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info({ days }, 'Fetching test trends from OpenSearch');
+      logger.info({ days, teamIds }, 'Fetching test trends from OpenSearch');
+
+      // Build filters
+      const filters: Array<Record<string, unknown>> = [
+        {
+          range: {
+            'results.summary.start': {
+              gte: `now-${days}d/d`,
+            },
+          },
+        },
+      ];
+
+      if (teamIds && teamIds.length > 0) {
+        filters.push({
+          terms: {
+            'metadata.userTeams.keyword': teamIds,
+          },
+        });
+      }
 
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 0,
           query: {
-            range: {
-              'results.summary.start': {
-                gte: `now-${days}d/d`,
-              },
+            bool: {
+              filter: filters,
             },
           },
           aggs: {
@@ -270,7 +389,7 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
         }));
 
       logger.info(
-        { dataPoints: data.length },
+        { dataPoints: data.length, teamIds },
         'Successfully retrieved test trends from OpenSearch'
       );
       return data;
@@ -284,16 +403,22 @@ export async function getTestTrendsFromOpenSearch(days: number = 30): Promise<Te
 /**
  * Get test duration analysis from OpenSearch
  * Analyzes test execution times and performance patterns
+ * @param teamIds - Array of team IDs to filter by (optional)
  */
-export async function getTestDurationAnalysisFromOpenSearch(): Promise<TestDurationData[]> {
+export async function getTestDurationAnalysisFromOpenSearch(
+  teamIds?: string[]
+): Promise<TestDurationData[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info('Fetching test duration analysis from OpenSearch');
+      logger.info('Fetching test duration analysis from OpenSearch', { teamIds });
+
+      const query = buildQueryWithTeamFilter([], teamIds);
 
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 0,
+          query,
           aggs: {
             duration_ranges: {
               nested: {
@@ -370,15 +495,20 @@ export async function getTestDurationAnalysisFromOpenSearch(): Promise<TestDurat
  * Get error analysis data from OpenSearch
  * Analyzes failure patterns and common error messages
  */
-export async function getErrorAnalysisFromOpenSearch(): Promise<ErrorAnalysisData[]> {
+export async function getErrorAnalysisFromOpenSearch(
+  teamIds?: string[]
+): Promise<ErrorAnalysisData[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info('Fetching error analysis from OpenSearch');
+      logger.info('Fetching error analysis from OpenSearch', { teamIds });
+
+      const query = buildQueryWithTeamFilter([], teamIds);
 
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 0,
+          query,
           aggs: {
             failed_tests: {
               nested: {
@@ -462,40 +592,55 @@ export interface FlakyTestWithRuns extends FlakyTestData {
  * Get individual test runs for flaky tests from OpenSearch
  * Returns detailed run-by-run data for grid visualization
  */
-export async function getFlakyTestRunsFromOpenSearch(): Promise<FlakyTestWithRuns[]> {
+export async function getFlakyTestRunsFromOpenSearch(
+  teamIds?: string[]
+): Promise<FlakyTestWithRuns[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info('Fetching flaky test runs with individual execution details from OpenSearch');
+      logger.info('Fetching flaky test runs with individual execution details from OpenSearch', {
+        teamIds,
+      });
 
-      // First, get flaky test names
-      const flakyTests = await getFlakyTestsFromOpenSearch();
+      // First, get flaky test names with team filtering
+      const flakyTests = await getFlakyTestsFromOpenSearch(teamIds);
       const flakyTestNames = flakyTests.map(test => test.testName);
 
       if (flakyTestNames.length === 0) {
         return [];
       }
 
+      // Build team filter for the detailed query
+      const teamFilters = buildTeamFilters(teamIds);
+
       // Then get individual test runs for these flaky tests
+      const queryFilters = [
+        {
+          nested: {
+            path: 'results.tests',
+            query: {
+              terms: {
+                'results.tests.name.keyword': flakyTestNames,
+              },
+            },
+          },
+        },
+        ...teamFilters,
+      ];
+
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 1000, // Limit to prevent overwhelming response
-          query: {
-            nested: {
-              path: 'results.tests',
-              query: {
-                bool: {
-                  must: [
-                    {
-                      terms: {
-                        'results.tests.name.keyword': flakyTestNames,
-                      },
-                    },
-                  ],
+          query:
+            queryFilters.length > 0
+              ? {
+                  bool: {
+                    filter: queryFilters,
+                  },
+                }
+              : {
+                  match_all: {},
                 },
-              },
-            },
-          },
           _source: ['reportId', 'timestamp', 'results.tests'],
           sort: [{ timestamp: { order: 'desc' } }],
         },
@@ -504,7 +649,7 @@ export async function getFlakyTestRunsFromOpenSearch(): Promise<FlakyTestWithRun
       // Process the results
       const testRunsMap = new Map<string, TestRunData[]>();
 
-      response.body.hits.hits.forEach(hit => {
+      response.body.hits.hits.forEach((hit: Record<string, unknown>) => {
         const source = hit._source as CtrfTestSource;
         if (!source) return;
 
@@ -535,16 +680,19 @@ export async function getFlakyTestRunsFromOpenSearch(): Promise<FlakyTestWithRun
 
       // Combine flaky test data with individual runs
       const result: FlakyTestWithRuns[] = flakyTests
-        .map(flakyTest => ({
+        .map((flakyTest: FlakyTestData) => ({
           ...flakyTest,
           testRuns: testRunsMap.get(flakyTest.testName) || [],
         }))
-        .filter(test => test.testRuns.length > 0);
+        .filter((test: FlakyTestWithRuns) => test.testRuns.length > 0);
 
       logger.info(
         {
           flakyTestsWithRuns: result.length,
-          totalTestRuns: result.reduce((sum, test) => sum + test.testRuns.length, 0),
+          totalTestRuns: result.reduce(
+            (sum, test) => sum + (Array.isArray(test?.testRuns) ? test.testRuns.length : 0),
+            0
+          ),
         },
         'Successfully retrieved flaky test runs from OpenSearch'
       );
@@ -560,15 +708,18 @@ export async function getFlakyTestRunsFromOpenSearch(): Promise<FlakyTestWithRun
  * Get flaky test detection data from OpenSearch
  * Identifies tests that have inconsistent results across multiple runs
  */
-export async function getFlakyTestsFromOpenSearch(): Promise<FlakyTestData[]> {
+export async function getFlakyTestsFromOpenSearch(teamIds?: string[]): Promise<FlakyTestData[]> {
   return withIndexEnsured(async () => {
     try {
-      logger.info('Fetching flaky test analysis from OpenSearch');
+      logger.info('Fetching flaky test analysis from OpenSearch', { teamIds });
+
+      const query = buildQueryWithTeamFilter([], teamIds);
 
       const response = await opensearchClient.search({
         index: 'ctrf-reports',
         body: {
           size: 0,
+          query,
           aggs: {
             test_results: {
               nested: {

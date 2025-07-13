@@ -1,0 +1,166 @@
+/* Component-specific styles using shared design tokens */
+.mainContent {
+  padding: var(--spacing-2xl, 2rem);
+}
+
+.header {
+  margin-bottom: var(--spacing-xl, 1.5rem);
+}
+
+/* Note: Alert and button styles are imported from shared modules in the component */
+
+.createForm {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xl, 1.5rem);
+  margin-bottom: var(--spacing-xl, 1.5rem);
+  box-shadow: var(--shadow);
+}
+
+.formGroup {
+  margin-bottom: var(--spacing-lg, 1rem);
+}
+
+.formLabel {
+  display: block;
+  margin-bottom: var(--spacing-sm, 0.5rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.formInput {
+  width: 100%;
+  padding: var(--spacing-md, 0.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base, 1rem);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  transition: var(--transition-normal);
+}
+
+.formInput:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-20);
+}
+
+.formTextarea {
+  width: 100%;
+  padding: var(--spacing-md, 0.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base, 1rem);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  transition: var(--transition-normal);
+  resize: vertical;
+  min-height: 4rem;
+}
+
+.formTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-20);
+}
+
+.helpText {
+  display: block;
+  margin-top: var(--spacing-xs, 0.25rem);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.formActions {
+  display: flex;
+  gap: var(--spacing-md, 0.75rem);
+  align-items: center;
+}
+
+.teamsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-lg, 1rem);
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.tableHeader {
+  background-color: var(--color-gray-50);
+}
+
+.tableHeaderCell {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: left;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableHeaderCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.tableRow:hover {
+  background-color: var(--color-gray-50);
+}
+
+.tableCell {
+  padding: var(--spacing-md, 0.75rem);
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.tableCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.defaultTeamBadge {
+  display: inline-block;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background-color: var(--color-primary-alpha-20);
+  color: var(--color-primary);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: var(--font-weight-medium, 500);
+  margin-left: var(--spacing-sm, 0.5rem);
+}
+
+.cannotDelete {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-style: italic;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+}
+
+/* Note: Button styles (deleteButton) are imported from shared/buttons.module.css */
+
+.noTeams {
+  text-align: center;
+  margin-top: var(--spacing-2xl, 2rem);
+  padding: var(--spacing-3xl, 3rem);
+  color: var(--color-gray-500);
+  font-style: italic;
+  background-color: var(--color-gray-50);
+  border-radius: var(--border-radius-lg);
+  border: 1px solid var(--color-border-light);
+}

@@ -74,15 +74,24 @@ const TestResultsDashboard: NextPage = () => {
 
   // Calculate aggregate statistics from all visible reports
   const calculateSummaryStats = () => {
+    // Ensure reports is an array and handle potential undefined data
+    if (!Array.isArray(reports) || reports.length === 0) {
+      return { tests: 0, passed: 0, failed: 0, skipped: 0, pending: 0, other: 0 };
+    }
+
     const totals = reports.reduce(
-      (acc, report) => ({
-        tests: acc.tests + report.results.summary.tests,
-        passed: acc.passed + report.results.summary.passed,
-        failed: acc.failed + report.results.summary.failed,
-        skipped: acc.skipped + report.results.summary.skipped,
-        pending: acc.pending + report.results.summary.pending,
-        other: acc.other + report.results.summary.other,
-      }),
+      (acc, report) => {
+        // Safely access nested properties with fallback values
+        const summary = report?.results?.summary || {};
+        return {
+          tests: acc.tests + (summary.tests || 0),
+          passed: acc.passed + (summary.passed || 0),
+          failed: acc.failed + (summary.failed || 0),
+          skipped: acc.skipped + (summary.skipped || 0),
+          pending: acc.pending + (summary.pending || 0),
+          other: acc.other + (summary.other || 0),
+        };
+      },
       { tests: 0, passed: 0, failed: 0, skipped: 0, pending: 0, other: 0 }
     );
 
@@ -163,7 +172,9 @@ const TestResultsDashboard: NextPage = () => {
               <div className={`test-stat-label ${styles.statLabelYellow}`}>Skipped</div>
             </div>
             <div className={`test-stat-card ${styles.statCardBlue}`}>
-              <div className={`test-stat-number ${styles.statNumberBlue}`}>{reports.length}</div>
+              <div className={`test-stat-number ${styles.statNumberBlue}`}>
+                {Array.isArray(reports) ? reports.length : 0}
+              </div>
               <div className={`test-stat-label ${styles.statLabelBlue}`}>Reports</div>
             </div>
           </div>
@@ -298,10 +309,10 @@ const TestResultsDashboard: NextPage = () => {
                 <div
                   className={`test-stat-card ${styles.statCardBlue}`}
                   role="img"
-                  aria-label={`Total reports: ${reports.length}`}
+                  aria-label={`Total reports: ${Array.isArray(reports) ? reports.length : 0}`}
                 >
                   <div className={`test-stat-number ${styles.statNumberBlue}`}>
-                    {reports.length}
+                    {Array.isArray(reports) ? reports.length : 0}
                   </div>
                   <div className={`test-stat-label ${styles.statLabelBlue}`}>Reports</div>
                 </div>
@@ -372,7 +383,7 @@ const TestResultsDashboard: NextPage = () => {
           </section>
         )}
         {/* Test Reports Table */}
-        {!loading && !error && reports.length > 0 && (
+        {!loading && !error && Array.isArray(reports) && reports.length > 0 && (
           <section aria-labelledby="results-heading">
             <div className="card">
               <h2 id="results-heading" className={styles.resultsTitle}>
@@ -386,8 +397,8 @@ const TestResultsDashboard: NextPage = () => {
               >
                 <table className="test-table" aria-label="Test reports data table">
                   <caption className="sr-only">
-                    Test reports showing {reports.length} of {totalReports} total reports. Use arrow
-                    keys to navigate between cells.
+                    Test reports showing {Array.isArray(reports) ? reports.length : 0} of{' '}
+                    {totalReports} total reports. Use arrow keys to navigate between cells.
                   </caption>
                   <thead>
                     <tr>
@@ -416,28 +427,35 @@ const TestResultsDashboard: NextPage = () => {
                   </thead>
                   <tbody>
                     {reports.map((report, index) => {
-                      const successRate = getSuccessRate(report.results.summary);
-                      const duration = report.results.summary.stop - report.results.summary.start;
+                      // Safely access nested properties with fallbacks
+                      const summary = report?.results?.summary || {
+                        tests: 0,
+                        passed: 0,
+                        failed: 0,
+                        skipped: 0,
+                        stop: 0,
+                        start: 0,
+                      };
+                      const tool = report?.results?.tool || { name: 'Unknown', version: undefined };
+                      const successRate = getSuccessRate(summary);
+                      const duration = summary.stop - summary.start;
                       return (
                         <tr
-                          key={report._id}
+                          key={report._id || `report-${index}`}
                           tabIndex={0}
                           aria-rowindex={index + 2}
-                          aria-label={`Test report for ${report.results.tool.name}, ${successRate}% success rate`}
+                          aria-label={`Test report for ${tool.name}, ${successRate}% success rate`}
                         >
                           <td headers="tool-header">
-                            <div
-                              className={styles.toolName}
-                              aria-label={`Tool: ${report.results.tool.name}`}
-                            >
-                              {report.results.tool.name}
+                            <div className={styles.toolName} aria-label={`Tool: ${tool.name}`}>
+                              {tool.name}
                             </div>
-                            {report.results.tool.version && (
+                            {tool.version && (
                               <div
                                 className={styles.toolVersion}
-                                aria-label={`Version: ${report.results.tool.version}`}
+                                aria-label={`Version: ${tool.version}`}
                               >
-                                v{report.results.tool.version}
+                                v{tool.version}
                               </div>
                             )}
                           </td>
@@ -445,36 +463,36 @@ const TestResultsDashboard: NextPage = () => {
                             <div
                               className={styles.testMetrics}
                               role="group"
-                              aria-label={`Test results: ${report.results.summary.passed} passed, ${report.results.summary.failed} failed, ${report.results.summary.skipped} skipped`}
+                              aria-label={`Test results: ${summary.passed} passed, ${summary.failed} failed, ${summary.skipped} skipped`}
                             >
                               <span
                                 className="status-badge status-passed"
-                                aria-label={`${report.results.summary.passed} tests passed`}
+                                aria-label={`${summary.passed} tests passed`}
                               >
-                                ✓ {report.results.summary.passed}
+                                ✓ {summary.passed}
                               </span>
-                              {report.results.summary.failed > 0 && (
+                              {summary.failed > 0 && (
                                 <span
                                   className="status-badge status-failed"
-                                  aria-label={`${report.results.summary.failed} tests failed`}
+                                  aria-label={`${summary.failed} tests failed`}
                                 >
-                                  ✗ {report.results.summary.failed}
+                                  ✗ {summary.failed}
                                 </span>
                               )}
-                              {report.results.summary.skipped > 0 && (
+                              {summary.skipped > 0 && (
                                 <span
                                   className="status-badge status-skipped"
-                                  aria-label={`${report.results.summary.skipped} tests skipped`}
+                                  aria-label={`${summary.skipped} tests skipped`}
                                 >
-                                  ⊘ {report.results.summary.skipped}
+                                  ⊘ {summary.skipped}
                                 </span>
                               )}
                             </div>
                             <div
                               className={styles.testTime}
-                              aria-label={`Total tests: ${report.results.summary.tests}`}
+                              aria-label={`Total tests: ${summary.tests}`}
                             >
-                              {report.results.summary.tests} total
+                              {summary.tests} total
                             </div>
                           </td>
                           <td headers="success-header">
@@ -496,24 +514,24 @@ const TestResultsDashboard: NextPage = () => {
                           <td headers="environment-header">
                             <div
                               className={styles.environmentType}
-                              aria-label={`Environment: ${report.results.environment?.testEnvironment || 'Not specified'}`}
+                              aria-label={`Environment: ${report?.results?.environment?.testEnvironment || 'Not specified'}`}
                             >
-                              {report.results.environment?.testEnvironment || 'N/A'}
+                              {report?.results?.environment?.testEnvironment || 'N/A'}
                             </div>
                           </td>
                           <td headers="stored-header">
                             <div
                               className={styles.storedAt}
-                              aria-label={`Stored at: ${formatDate(report.storedAt)}`}
+                              aria-label={`Stored at: ${formatDate(report?.storedAt || new Date().toISOString())}`}
                             >
-                              {formatDate(report.storedAt)}
+                              {formatDate(report?.storedAt || new Date().toISOString())}
                             </div>
                           </td>
                           <td headers="actions-header">
                             <button
                               onClick={() => setSelectedReport(report)}
                               className={`refresh-button ${styles.viewButton}`}
-                              aria-label={`View detailed results for ${report.results.tool.name} test report`}
+                              aria-label={`View detailed results for ${tool.name} test report`}
                               tabIndex={0}
                             >
                               View Details
@@ -559,110 +577,133 @@ const TestResultsDashboard: NextPage = () => {
           >
             <div className="focus-trap-sentinel" tabIndex={0}></div>
             <div className="test-modal-content focus-trap">
-              <div className={styles.modalHeader}>
-                <h2 id="modal-title">🔍 Test Report Details</h2>
-                <button
-                  onClick={() => setSelectedReport(null)}
-                  className={styles.modalCloseButton}
-                  aria-label="Close modal dialog"
-                  autoFocus
-                >
-                  ×
-                </button>
-              </div>
+              {(() => {
+                // Safely access nested properties for the modal
+                const modalSummary = selectedReport?.results?.summary || {
+                  tests: 0,
+                  passed: 0,
+                  failed: 0,
+                  skipped: 0,
+                  stop: 0,
+                  start: 0,
+                };
+                const modalTool = selectedReport?.results?.tool || {
+                  name: 'Unknown',
+                  version: undefined,
+                };
+                const modalTests = selectedReport?.results?.tests || [];
+                const modalEnvironment = selectedReport?.results?.environment || {};
 
-              <div id="modal-description" className="sr-only">
-                Detailed view of test report for {selectedReport.results.tool.name}. Press Escape to
-                close this dialog.
-              </div>
+                return (
+                  <>
+                    <div className={styles.modalHeader}>
+                      <h2 id="modal-title">🔍 Test Report Details</h2>
+                      <button
+                        onClick={() => setSelectedReport(null)}
+                        className={styles.modalCloseButton}
+                        aria-label="Close modal dialog"
+                        autoFocus
+                      >
+                        ×
+                      </button>
+                    </div>
 
-              {/* Report Overview */}
-              <section aria-labelledby="overview-section">
-                <div className={styles.overviewSection}>
-                  <h3 id="overview-section" className={styles.overviewSectionTitle}>
-                    Report Overview
-                  </h3>
-                  <div className={styles.overviewGrid}>
-                    <div>
-                      <strong>Tool:</strong> {selectedReport.results.tool.name}
-                      {selectedReport.results.tool.version &&
-                        ` v${selectedReport.results.tool.version}`}
+                    <div id="modal-description" className="sr-only">
+                      Detailed view of test report for {modalTool.name}. Press Escape to close this
+                      dialog.
                     </div>
-                    <div>
-                      <strong>Report ID:</strong> {selectedReport.reportId || selectedReport._id}
-                    </div>
-                    <div>
-                      <strong>Environment:</strong>{' '}
-                      {selectedReport.results.environment?.testEnvironment || 'N/A'}
-                    </div>
-                    <div>
-                      <strong>Duration:</strong>{' '}
-                      {formatDuration(
-                        selectedReport.results.summary.stop - selectedReport.results.summary.start
-                      )}
-                    </div>
-                    <div>
-                      <strong>Generated:</strong>{' '}
-                      {selectedReport.timestamp ? formatDate(selectedReport.timestamp) : 'N/A'}
-                    </div>
-                    <div>
-                      <strong>Stored:</strong> {formatDate(selectedReport.storedAt)}
-                    </div>
-                  </div>
-                </div>
-                {/* Individual Tests */}
-                <div>
-                  <h3 className={styles.testsListTitle}>
-                    Individual Tests ({selectedReport.results.tests.length})
-                  </h3>
-                  <div className={styles.testsListContainer}>
-                    {selectedReport.results.tests.map((test, index) => (
-                      <div key={index} className={`test-item ${test.status}`}>
-                        <div className={styles.testItemContainer}>
-                          <div className={styles.testItemContent}>
-                            <div className={styles.testItemTitle}>{test.name}</div>
-                            {test.suite && (
-                              <div className={styles.testItemSuite}>Suite: {test.suite}</div>
-                            )}
+
+                    {/* Report Overview */}
+                    <section aria-labelledby="overview-section">
+                      <div className={styles.overviewSection}>
+                        <h3 id="overview-section" className={styles.overviewSectionTitle}>
+                          Report Overview
+                        </h3>
+                        <div className={styles.overviewGrid}>
+                          <div>
+                            <strong>Tool:</strong> {modalTool.name}
+                            {modalTool.version && ` v${modalTool.version}`}
                           </div>
-                          <div className={styles.testItemMeta}>
-                            <span className={`status-badge status-${test.status}`}>
-                              {test.status.toUpperCase()}
-                            </span>
-                            <span className={styles.testItemDuration}>
-                              {formatDuration(test.duration)}
-                            </span>
+                          <div>
+                            <strong>Report ID:</strong>{' '}
+                            {selectedReport.reportId || selectedReport._id || 'N/A'}
+                          </div>
+                          <div>
+                            <strong>Environment:</strong>{' '}
+                            {modalEnvironment.testEnvironment || 'N/A'}
+                          </div>
+                          <div>
+                            <strong>Duration:</strong>{' '}
+                            {formatDuration(modalSummary.stop - modalSummary.start)}
+                          </div>
+                          <div>
+                            <strong>Generated:</strong>{' '}
+                            {selectedReport.timestamp
+                              ? formatDate(selectedReport.timestamp)
+                              : 'N/A'}
+                          </div>
+                          <div>
+                            <strong>Stored:</strong>{' '}
+                            {formatDate(selectedReport.storedAt || new Date().toISOString())}
                           </div>
                         </div>
-
-                        {test.message && (
-                          <div className="test-error-message">
-                            <strong>Message:</strong> {test.message}
-                          </div>
-                        )}
-
-                        {test.trace && (
-                          <div className="test-trace">
-                            <strong>Stack Trace:</strong>
-                            <br />
-                            {test.trace}
-                          </div>
-                        )}
-
-                        {test.tags && test.tags.length > 0 && (
-                          <div className={styles.testItemTags}>
-                            {test.tags.map((tag, tagIndex) => (
-                              <span key={tagIndex} className="test-tag">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        )}
                       </div>
-                    ))}
-                  </div>
-                </div>
-              </section>
+                      {/* Individual Tests */}
+                      <div>
+                        <h3 className={styles.testsListTitle}>
+                          Individual Tests ({modalTests.length})
+                        </h3>
+                        <div className={styles.testsListContainer}>
+                          {modalTests.map((test, index) => (
+                            <div key={index} className={`test-item ${test.status}`}>
+                              <div className={styles.testItemContainer}>
+                                <div className={styles.testItemContent}>
+                                  <div className={styles.testItemTitle}>{test.name}</div>
+                                  {test.suite && (
+                                    <div className={styles.testItemSuite}>Suite: {test.suite}</div>
+                                  )}
+                                </div>
+                                <div className={styles.testItemMeta}>
+                                  <span className={`status-badge status-${test.status}`}>
+                                    {test.status.toUpperCase()}
+                                  </span>
+                                  <span className={styles.testItemDuration}>
+                                    {formatDuration(test.duration)}
+                                  </span>
+                                </div>
+                              </div>
+
+                              {test.message && (
+                                <div className="test-error-message">
+                                  <strong>Message:</strong> {test.message}
+                                </div>
+                              )}
+
+                              {test.trace && (
+                                <div className="test-trace">
+                                  <strong>Stack Trace:</strong>
+                                  <br />
+                                  {test.trace}
+                                </div>
+                              )}
+
+                              {test.tags && test.tags.length > 0 && (
+                                <div className={styles.testItemTags}>
+                                  {test.tags.map((tag, tagIndex) => (
+                                    <span key={tagIndex} className="test-tag">
+                                      {tag}
+                                    </span>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    </section>
+                  </>
+                );
+              })()}
             </div>
           </div>
         )}
