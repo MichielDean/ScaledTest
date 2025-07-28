@@ -1,7 +1,17 @@
 import React from 'react';
 
 /**
- * Eye icon SVG for showing password (visible state)
+ * A React functional component that renders an eye icon SVG.
+ *
+ * This component is used to indicate the "visible" state in password visibility toggles.
+ * It is typically displayed when the password is visible to the user.
+ *
+ * @component
+ * @example
+ * // Usage in a password toggle button
+ * <button onClick={togglePasswordVisibility}>
+ *   {isPasswordVisible ? <EyeIcon /> : <EyeOffIcon />}
+ * </button>
  */
 export const EyeIcon: React.FC = () => (
   <svg
@@ -20,7 +30,18 @@ export const EyeIcon: React.FC = () => (
 );
 
 /**
- * Eye-off icon SVG for hiding password (hidden state)
+ * Eye-off icon SVG for hiding password (hidden state).
+ *
+ * This component is used in password visibility toggles to indicate
+ * that the password is currently hidden. It is typically displayed
+ * when the user has chosen to obscure the password input.
+ *
+ * @component
+ * @example
+ * // Usage in a password toggle button
+ * <button onClick={togglePasswordVisibility}>
+ *   {isPasswordVisible ? <EyeIcon /> : <EyeOffIcon />}
+ * </button>
  */
 export const EyeOffIcon: React.FC = () => (
   <svg

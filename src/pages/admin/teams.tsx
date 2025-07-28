@@ -1,13 +1,20 @@
 import { NextPage } from 'next';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
+import { uiLogger as logger } from '../../logging/logger';
 
 const TeamsRedirect: NextPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to the unified admin dashboard with teams section active
-    router.replace('/admin?section=teams');
+    const redirectToAdmin = async () => {
+      try {
+        await router.replace('/admin?section=teams');
+      } catch (error) {
+        logger.error('Failed to redirect to admin dashboard', { error, section: 'teams' });
+      }
+    };
+    redirectToAdmin();
   }, [router]);
 
   return <div>Redirecting to admin dashboard...</div>;

@@ -8,7 +8,7 @@ import { cleanupPort } from '../../src/lib/portCleanup';
  * Shutdown the Next.js app - fire and forget approach
  */
 export async function stopNextApp(): Promise<void> {
-  if (nextAppProcess !== null && nextAppProcess !== undefined && !nextAppProcess.killed) {
+  if (nextAppProcess?.killed === false) {
     try {
       nextAppProcess.kill('SIGKILL');
       nextAppProcess.removeAllListeners();
