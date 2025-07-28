@@ -57,9 +57,9 @@ describe('Demo Data with Teams Integration', () => {
 
   beforeAll(async () => {
     // Get tokens for different user types
-    maintainerToken = await getAuthToken('maintainer@example.com', 'password');
-    readonlyToken = await getAuthToken('readonly@example.com', 'password');
-    ownerToken = await getAuthToken('owner@example.com', 'password');
+    maintainerToken = await getAuthToken('maintainer@example.com');
+    readonlyToken = await getAuthToken('readonly@example.com');
+    ownerToken = await getAuthToken('owner@example.com');
   });
 
   describe('Demo Data Upload', () => {

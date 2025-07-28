@@ -34,3 +34,155 @@
 .logo:hover {
   color: var(--color-primary-light);
 }
+
+/* Enhanced navigation layout */
+.navigation {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-lg);
+  flex: 1;
+  margin-left: var(--spacing-2xl);
+}
+
+.navigation a {
+  color: var(--color-text-inverse);
+  text-decoration: none;
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  transition: all var(--transition-fast);
+  font-weight: var(--font-weight-medium);
+}
+
+.navigation a:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: var(--color-primary-light);
+}
+
+.navigation a[aria-current='page'] {
+  background: rgba(255, 255, 255, 0.15);
+  font-weight: var(--font-weight-semibold);
+}
+
+/* Team section - prominently displayed */
+.teamSection {
+  display: flex;
+  align-items: center;
+  margin-left: auto;
+  margin-right: var(--spacing-xl);
+}
+
+/* Admin section */
+.adminSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+  padding: var(--spacing-xs) var(--spacing-sm);
+  background: rgba(255, 255, 255, 0.1);
+  border-radius: var(--border-radius-md);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+}
+
+.adminLabel {
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-medium);
+  opacity: 0.8;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.adminSection a {
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-sm);
+}
+
+/* User section */
+.userSection {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.userSection span {
+  font-weight: var(--font-weight-medium);
+  opacity: 0.9;
+}
+
+.userSection button {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  color: var(--color-text-inverse);
+  padding: var(--spacing-sm) var(--spacing-md);
+  border-radius: var(--border-radius-sm);
+  cursor: pointer;
+  font-weight: var(--font-weight-medium);
+  transition: all var(--transition-fast);
+}
+
+.userSection button:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.userSection button:focus {
+  outline: 2px solid var(--color-background);
+  outline-offset: 2px;
+}
+
+/* Responsive design */
+@media (max-width: 1024px) {
+  .header {
+    padding: var(--spacing-md) var(--spacing-lg);
+  }
+
+  .navigation {
+    gap: var(--spacing-md);
+    margin-left: var(--spacing-lg);
+  }
+
+  .teamSection {
+    margin-right: var(--spacing-lg);
+  }
+}
+
+@media (max-width: 768px) {
+  .header {
+    flex-direction: column;
+    gap: var(--spacing-md);
+    padding: var(--spacing-md);
+  }
+
+  .navigation {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--spacing-sm);
+    margin-left: 0;
+  }
+
+  .teamSection {
+    margin: 0;
+    order: -1;
+  }
+
+  .adminSection {
+    flex-wrap: wrap;
+    gap: var(--spacing-xs);
+  }
+
+  .userSection {
+    gap: var(--spacing-sm);
+  }
+}
+
+@media (max-width: 480px) {
+  .navigation a,
+  .adminSection a {
+    padding: var(--spacing-xs);
+    font-size: var(--font-size-sm);
+  }
+
+  .userSection {
+    flex-direction: column;
+    gap: var(--spacing-xs);
+    text-align: center;
+  }
+}

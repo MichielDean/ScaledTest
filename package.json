@@ -6,8 +6,8 @@
   "main": "index.js",
   "scripts": {
     "build": "npm run format && tsc && next build",
-    "dev": "docker compose -f docker/docker-compose.yml up -d && npx tsx scripts/setup-keycloak.ts && next dev --turbopack",
-    "setup:keycloak": "npx tsx scripts/setup-keycloak.ts",
+    "dev": "docker compose -f docker/docker-compose.yml up -d && next dev --turbopack",
+    "setup:test-users": "npx tsx scripts/setup-test-users.ts",
     "update-deps": "npx npm-check-updates -u && npm install",
     "lint": "next lint",
     "format": "prettier --write \"**/*.{js,jsx,ts,tsx,json,css,md,yml,yaml,html}\" --log-level warn",
@@ -20,7 +20,8 @@
     "demo-data": "npx tsx scripts/generate-demo-data.ts",
     "generate-ctrf:types": "npx json2ts -i src/schemas/ctrf/ctrf-schema.json -o src/schemas/ctrf/ctrf.ts --inferStringEnumKeysFromValues --enableConstEnums",
     "prepare": "husky",
-    "postinstall": "husky && npx playwright install chromium"
+    "postinstall": "husky && npx playwright install chromium",
+    "kill": "kill-port 3000"
   },
   "keywords": [],
   "author": "",
@@ -38,7 +39,6 @@
     "@types/react": "^19.1.6",
     "@types/react-dom": "^19.1.5",
     "axios": "^1.9.0",
-    "dotenv": "^16.5.0",
     "framer-motion": "^12.19.1",
     "get-port": "^7.1.0",
     "jose": "^6.0.11",
@@ -68,6 +68,7 @@
     "@typescript-eslint/parser": "^8.33.0",
     "axe-playwright": "^2.1.0",
     "cross-env": "^7.0.3",
+    "dotenv": "^17.2.0",
     "eslint": "^9.28.0",
     "eslint-config-next": "^15.3.3",
     "eslint-config-prettier": "^10.1.5",

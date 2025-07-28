@@ -11,6 +11,7 @@ import flakyStyles from '../../styles/charts/FlakyTestDetectionChart.module.css'
 
 interface FlakyTestDetectionProps {
   token?: string;
+  teamIds?: string[];
 }
 
 // Use shared OpenSearchApiResponse with a specialized meta type for flaky tests
@@ -26,7 +27,7 @@ interface FlakyTestResponse extends OpenSearchApiResponse<FlakyTestWithRuns> {
 // Use the shared OpenSearchErrorApiResponse
 type ErrorResponse = OpenSearchErrorApiResponse;
 
-const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) => {
+const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token, teamIds }) => {
   const [data, setData] = useState<FlakyTestWithRuns[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -46,7 +47,14 @@ const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) =
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch('/api/analytics/flaky-test-runs', {
+      // Build query parameters for team filtering
+      let queryParams = '';
+      if (teamIds && teamIds.length > 0) {
+        const teamIdsQuery = teamIds.map(id => `teamIds=${encodeURIComponent(id)}`).join('&');
+        queryParams = `?${teamIdsQuery}`;
+      }
+
+      const response = await fetch(`/api/analytics/flaky-test-runs${queryParams}`, {
         headers,
       });
 
@@ -70,7 +78,7 @@ const FlakyTestDetectionChart: React.FC<FlakyTestDetectionProps> = ({ token }) =
     } finally {
       setLoading(false);
     }
-  }, [token]);
+  }, [token, teamIds]);
 
   useEffect(() => {
     if (token) {

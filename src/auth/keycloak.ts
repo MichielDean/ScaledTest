@@ -44,7 +44,7 @@ export import UserRole = ConfigUserRole;
 // Check if the user has a specific role
 export const hasRole = (role: UserRole): boolean => {
   const instance = getKeycloakInstance();
-  return instance.authenticated === true ? instance.hasResourceRole(role) : false;
+  return instance.authenticated === true ? instance.hasRealmRole(role) : false;
 };
 
 // Check if the user has read access

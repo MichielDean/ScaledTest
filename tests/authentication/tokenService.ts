@@ -10,11 +10,25 @@ import { keycloakConfig, keycloakEndpoints } from '../../src/config/keycloak';
 // Re-export auth interfaces from the centralized location
 export type { KeycloakTokenResponse, KeycloakConfig } from '../../src/types/auth';
 
+// User credentials mapping
+const USER_CREDENTIALS = {
+  'readonly@example.com': 'ReadOnly123!',
+  'maintainer@example.com': 'Maintainer123!',
+  'owner@example.com': 'Owner123!',
+} as const;
+
 // Get authentication token for test user with specific role
 export const getAuthToken = async (
   username: string = 'maintainer@example.com',
-  password: string = 'password'
+  password?: string
 ): Promise<string> => {
+  // Use the appropriate password for the user if not explicitly provided
+  const userPassword = password || USER_CREDENTIALS[username as keyof typeof USER_CREDENTIALS];
+
+  if (!userPassword) {
+    throw new Error(`No password configured for user: ${username}`);
+  }
+
   try {
     const response = await axios.post<KeycloakTokenResponse>(
       keycloakEndpoints.token,
@@ -22,7 +36,7 @@ export const getAuthToken = async (
         grant_type: 'password',
         client_id: keycloakConfig.clientId,
         username,
-        password,
+        password: userPassword,
       }),
       {
         headers: {

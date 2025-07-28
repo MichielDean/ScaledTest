@@ -69,6 +69,88 @@
 
 **NEVER create summary documents or status files.** Do not create files like "TASK_SUMMARY.md", "STATUS.md", "COMPLETION_REPORT.md", or similar documentation files that summarize work completed. The work itself and any necessary updates to existing documentation (like README.md) are sufficient.
 
+## Temporary File and Script Management Standards
+
+**CRITICAL: NEVER create scripts, config files, or other files at the project root level** unless they are permanent project infrastructure. This includes:
+
+**FORBIDDEN root-level file patterns:**
+
+- Debug scripts: `debug-*.ts`, `test-*.ts`, `check-*.ts`, `quick-*.ts`, `simulate-*.ts`
+- Configuration files: `*-config.json`, `role-*.json`, `user-*.json`, `assign-*.json`, `realm-config.json`
+- Setup scripts: `setup-*.ps1`, `run-setup.*`, manual setup scripts
+- Testing utilities: Individual test scripts outside the `tests/` directory structure
+- Any temporary or exploratory code files
+
+**PREFERRED APPROACHES:**
+
+1. **Use terminal commands instead of temporary scripts** - Most debugging, testing, and configuration tasks can be accomplished with direct terminal commands rather than creating script files.
+
+2. **Use existing scripts directory** - If a script is genuinely needed, place it in the `scripts/` directory with a clear, descriptive name that indicates its permanent purpose.
+
+3. **Use temporary directories for necessary temporary files:**
+
+   ```
+   temp/               # For any temporary files (excluded from git)
+   temp/debug/         # Debug scripts that will be deleted
+   temp/config/        # Temporary configuration files
+   temp/testing/       # One-off testing scripts
+   ```
+
+4. **Always clean up after yourself:**
+   - If you create temporary files, delete them when the task is complete
+   - Include cleanup commands as part of your workflow
+   - Document any temporary files created and ensure they are removed
+
+**CORRECT workflow patterns:**
+
+```powershell
+# ✅ CORRECT - Use terminal commands for debugging
+$response = Invoke-RestMethod -Uri "http://localhost:8080/auth/realms/scaledtest" -Method GET
+Write-Output $response
+
+# ✅ CORRECT - Use existing scripts directory for permanent scripts
+# Create: scripts/verify-keycloak-setup.ts (if genuinely needed long-term)
+
+# ✅ CORRECT - Use temp directory for necessary temporary files
+mkdir temp/debug -Force
+# Create temporary debug script in temp/debug/
+# Run it, then: Remove-Item temp/debug -Recurse -Force
+```
+
+```typescript
+// ✅ CORRECT - Use existing test infrastructure
+// Add tests to appropriate test directories: tests/unit/, tests/integration/, etc.
+// Use existing test data generators in tests/data/
+
+// ✅ CORRECT - Use existing configuration files
+// Update existing configuration in docker/, src/config/, or established config files
+```
+
+**NEVER create these at project root:**
+
+- `test-auth.ts`, `test-api-direct.ts`, `debug-demo.ts` → Use terminal commands or proper test files
+- `user-owner.json`, `role-readonly.json` → Use existing config in `docker/import/` or `src/config/`
+- `setup-keycloak-manual.ps1` → Use existing `scripts/setup-test-users.ts`
+- `check-opensearch.ts`, `quick-debug.ts` → Use terminal commands with curl/PowerShell
+
+**Cleanup enforcement:**
+
+- Before completing any task, verify no temporary files were created at the project root
+- Remove any temporary directories and files created during the task
+- Ensure `.gitignore` excludes temporary directories like `temp/`
+
+**Using Existing Project Infrastructure:**
+
+Before creating any new files, ALWAYS check for existing infrastructure that can accomplish the same goal:
+
+- **Authentication testing** → Use `tests/authentication/` directory and existing test users
+- **API testing** → Use `tests/integration/` directory and existing test infrastructure
+- **Configuration changes** → Use existing config files in `docker/import/`, `src/config/`, or environment variables
+- **Data generation** → Use existing generators in `tests/data/` directory
+- **Debugging** → Use terminal commands with existing tools (curl, PowerShell, npm scripts)
+- **User management** → Use existing `scripts/setup-test-users.ts`
+- **Service verification** → Use terminal commands to check service status rather than creating verification scripts
+
 **Example pattern for handling all commands:**
 
 1. Run the command with `run_in_terminal`

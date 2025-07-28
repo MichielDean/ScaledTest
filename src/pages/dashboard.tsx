@@ -5,12 +5,15 @@ import { useEffect, useState } from 'react';
 import Header from '../components/Header';
 import withAuth from '../auth/withAuth';
 import { useAuth } from '../auth/KeycloakProvider';
+import { useTeams } from '../contexts/TeamContext';
 import { UserRole } from '../auth/keycloak';
 import { TestTrendsChart, FlakyTestDetectionChart } from '../components/charts';
+import TeamSelector from '../components/TeamSelector';
 import styles from '../styles/Dashboard.module.css';
 
 const Dashboard: NextPage = () => {
   const { hasRole, token } = useAuth();
+  const { selectedTeams, hasMultipleTeams, loading: teamsLoading, error: teamsError } = useTeams();
   const [content, setContent] = useState<string>('');
   const [isEditing, setIsEditing] = useState<boolean>(false);
   const [newContent, setNewContent] = useState<string>('');
@@ -43,19 +46,59 @@ const Dashboard: NextPage = () => {
   return (
     <div>
       <Head>
-        <title>Dashboard - Keycloak Auth Demo</title>
+        <title>Team Dashboard - ScaledTest</title>
       </Head>
 
       <Header />
 
       <main id="main-content" className={styles.main}>
-        <h1 id="dashboard-title" className={styles.title}>
-          Dashboard
-        </h1>
+        {/* Team Context Header */}
+        <div className={styles.teamContextHeader}>
+          <h1 id="dashboard-title" className={styles.title}>
+            Team Dashboard
+          </h1>
+
+          {teamsError ? (
+            <div className={styles.teamError}>⚠️ {teamsError}</div>
+          ) : teamsLoading ? (
+            <div className={styles.teamLoading}>Loading team data...</div>
+          ) : (
+            <div className={styles.teamContext}>
+              {hasMultipleTeams && (
+                <div className={styles.teamSelector}>
+                  <label htmlFor="dashboard-team-selector" className={styles.teamSelectorLabel}>
+                    Viewing data for:
+                  </label>
+                  <div id="dashboard-team-selector">
+                    <TeamSelector />
+                  </div>
+                </div>
+              )}
+
+              <div className={styles.teamSummary}>
+                {selectedTeams.length === 0 ? (
+                  <p className={styles.noTeamsSelected}>📊 Viewing demo data (no teams selected)</p>
+                ) : selectedTeams.length === 1 ? (
+                  <p className={styles.singleTeam}>
+                    👥 Viewing data for <strong>{selectedTeams[0]?.name}</strong>
+                    {selectedTeams[0]?.description && (
+                      <span className={styles.teamDescription}>{selectedTeams[0].description}</span>
+                    )}
+                  </p>
+                ) : (
+                  <p className={styles.multipleTeams}>
+                    👥 Viewing data for <strong>{selectedTeams.length} teams</strong>:
+                    {selectedTeams.map(team => team.name).join(', ')}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Navigation to Other Dashboards */}
         <div className={`card ${styles.dashboardNavigation}`}>
-          <h2 className={styles.navigationTitle}>Available Dashboards</h2>
+          <h2 className={styles.navigationTitle}>Team Data Views</h2>
           <div className={styles.navigationButtons}>
             <Link
               href="/test-results-dashboard"
@@ -63,6 +106,9 @@ const Dashboard: NextPage = () => {
               aria-label="Go to test results dashboard"
             >
               🌟 Test Results Dashboard
+              <span className={styles.linkDescription}>
+                View detailed test reports filtered by your teams
+              </span>
             </Link>
             <Link
               href="/visualization-playground"
@@ -70,6 +116,9 @@ const Dashboard: NextPage = () => {
               aria-label="Go to visualization playground"
             >
               🎨 Visualization Playground
+              <span className={styles.linkDescription}>
+                Create custom charts with team-filtered data
+              </span>
             </Link>
             <button
               onClick={() => setShowAnalytics(!showAnalytics)}
@@ -77,7 +126,10 @@ const Dashboard: NextPage = () => {
               aria-label={showAnalytics ? 'Hide analytics dashboard' : 'Show analytics dashboard'}
               aria-expanded={showAnalytics}
             >
-              📊 Analytics Dashboard (OpenSearch)
+              📊 Team Analytics Dashboard
+              <span className={styles.linkDescription}>
+                Real-time analytics from your team&apos;s test data
+              </span>
             </button>
             <button
               disabled
@@ -85,6 +137,7 @@ const Dashboard: NextPage = () => {
               aria-label="Performance dashboard feature is coming soon"
             >
               📈 Performance Dashboard (Coming Soon)
+              <span className={styles.linkDescription}>Team performance metrics and trends</span>
             </button>
           </div>
         </div>
@@ -94,8 +147,16 @@ const Dashboard: NextPage = () => {
           <div className={styles.analyticsSection}>
             <div className={styles.analyticsHeader}>
               <div className={styles.analyticsHeaderContent}>
-                <h2>📊 Analytics Dashboard</h2>
-                <p>Real-time analytics from OpenSearch test data</p>
+                <h2>📊 Team Analytics Dashboard</h2>
+                <p>Real-time analytics from your team&apos;s OpenSearch test data</p>
+                {selectedTeams.length > 0 && (
+                  <div className={styles.analyticsTeamInfo}>
+                    <span className={styles.analyticsTeamLabel}>Data Source:</span>
+                    <span className={styles.analyticsTeamNames}>
+                      {selectedTeams.map(team => team.name).join(', ')}
+                    </span>
+                  </div>
+                )}
               </div>
               <button
                 onClick={() => setShowAnalytics(false)}
@@ -106,16 +167,20 @@ const Dashboard: NextPage = () => {
               </button>
             </div>
 
-            {/* Main Analytics Content */}
+            {/* Main Analytics Content - Pass team filter */}
             <div className={styles.analyticsCard}>
               <h3 className={styles.analyticsCardTitle}>📈 Test Trends Analysis</h3>
-              <TestTrendsChart days={7} token={token} />
+              <TestTrendsChart
+                days={7}
+                token={token}
+                teamIds={selectedTeams.map(team => team.id)}
+              />
             </div>
 
             {/* Flaky Test Detection Card */}
             <div className={styles.analyticsCard}>
               <h3 className={styles.analyticsCardTitle}>🚨 Flaky Test Detection</h3>
-              <FlakyTestDetectionChart token={token} />
+              <FlakyTestDetectionChart token={token} teamIds={selectedTeams.map(team => team.id)} />
             </div>
           </div>
         )}

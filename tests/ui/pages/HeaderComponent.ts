@@ -9,7 +9,7 @@ export class HeaderComponent {
   readonly dashboardLink: Locator;
   readonly loginLink: Locator;
   readonly registerLink: Locator;
-  readonly manageUsersLink: Locator;
+  readonly adminDashboardLink: Locator;
   readonly logoutButton: Locator;
   readonly userGreeting: Locator;
 
@@ -19,7 +19,7 @@ export class HeaderComponent {
     this.dashboardLink = page.locator('#headerDashboard');
     this.loginLink = page.locator('#headerLogin');
     this.registerLink = page.locator('#headerRegister');
-    this.manageUsersLink = page.locator('#headerManageUsers');
+    this.adminDashboardLink = page.locator('#headerAdminDashboard');
     this.logoutButton = page.locator('#headerLogOut');
     this.userGreeting = page.locator('#headerGreeting');
   }
@@ -33,11 +33,20 @@ export class HeaderComponent {
   }
 
   /**
-   * Navigate to user management page
+   * Navigate to admin dashboard page
+   */
+  async navigateToAdminDashboard() {
+    await this.adminDashboardLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
+   * Navigate to user management page (via admin dashboard)
    */
   async navigateToUserManagement() {
-    await this.manageUsersLink.click();
+    await this.adminDashboardLink.click();
     await this.page.waitForLoadState('networkidle');
+    // Admin dashboard loads with users section by default
   }
 
   /**
@@ -67,16 +76,16 @@ export class HeaderComponent {
   }
 
   /**
-   * Check if user has admin access by verifying the Manage Users link is visible
+   * Check if user has admin access by verifying the Admin Dashboard link is visible
    */
   async expectAdminAccess() {
-    await expect(this.manageUsersLink).toBeVisible();
+    await expect(this.adminDashboardLink).toBeVisible();
   }
 
   /**
    * Check if user does not have admin access
    */
   async expectNoAdminAccess() {
-    await expect(this.manageUsersLink).not.toBeVisible();
+    await expect(this.adminDashboardLink).not.toBeVisible();
   }
 }

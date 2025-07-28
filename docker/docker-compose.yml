@@ -11,20 +11,30 @@ services:
       - keycloak-network
 
   keycloak:
-    image: quay.io/keycloak/keycloak:23.0.0
-    command: start-dev
+    build:
+      context: .
+      dockerfile: Dockerfile.keycloak
     environment:
       KC_DB: postgres
       KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
       KC_DB_USERNAME: keycloak
       KC_DB_PASSWORD: password
-      KEYCLOAK_ADMIN: admin
-      KEYCLOAK_ADMIN_PASSWORD: admin
+      KC_BOOTSTRAP_ADMIN_USERNAME: admin
+      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
       KC_HOSTNAME: localhost
+      KC_HTTP_ENABLED: 'true'
+      KC_HEALTH_ENABLED: 'true'
+      KC_METRICS_ENABLED: 'true'
+      KC_HOSTNAME_STRICT: 'false'
+      KC_HOSTNAME_STRICT_HTTPS: 'false'
     ports:
       - '8080:8080'
+      - '9000:9000'
     depends_on:
       - postgres
+    volumes:
+      - ./import:/opt/keycloak/data/import
+    command: start --optimized --import-realm
     networks:
       - keycloak-network
 
