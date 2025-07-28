@@ -31,13 +31,13 @@ const AdminDashboard: NextPage = () => {
   const { keycloak, isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
   const router = useRouter();
 
-  // Navigation state - default to teams for maintainers, users for owners
-  const [activeSection, setActiveSection] = useState<AdminSection>('teams');
+  // Navigation state - initialized without default to avoid unnecessary state updates
+  const [activeSection, setActiveSection] = useState<AdminSection | null>(null);
 
   // Initialize section from URL parameter and role permissions
   useEffect(() => {
-    // Skip if auth is still loading
-    if (authLoading || !isAuthenticated) return;
+    // Skip if auth is still loading or if section is already set
+    if (authLoading || !isAuthenticated || activeSection !== null) return;
 
     const section = router.query.section as AdminSection;
     if (section && (section === 'users' || section === 'teams')) {
@@ -54,7 +54,7 @@ const AdminDashboard: NextPage = () => {
       setActiveSection(defaultSection);
       router.replace(`/admin?section=${defaultSection}`, undefined, { shallow: true });
     }
-  }, [router.query.section, hasRole, authLoading, isAuthenticated, router]);
+  }, [router.query.section, hasRole, authLoading, isAuthenticated, router, activeSection]);
 
   // Users state
   const [users, setUsers] = useState<UserWithTeams[]>([]);
@@ -795,6 +795,9 @@ const AdminDashboard: NextPage = () => {
 
           {activeSection === 'users' && hasRole(UserRole.OWNER) && renderUsersSection()}
           {activeSection === 'teams' && renderTeamsSection()}
+          {activeSection === null && (
+            <div className={styles.loading}>Loading admin dashboard...</div>
+          )}
         </main>
       </div>
     </div>

@@ -17,6 +17,7 @@ import { useAuth } from '../auth/KeycloakProvider';
 import { Team } from '../types/team';
 import { UserRole } from '../auth/keycloak';
 import { uiLogger as logger } from '../logging/logger';
+import { DEMO_DATA_TEAM } from '../lib/teamFilters';
 import axios from 'axios';
 
 interface TeamContextType {
@@ -162,7 +163,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   const canManageTeams = hasRole(UserRole.MAINTAINER) || hasRole(UserRole.OWNER);
 
   // Effective team IDs for API filtering - includes demo data access
-  const effectiveTeamIds = selectedTeamIds.length > 0 ? selectedTeamIds : ['demo-data'];
+  const effectiveTeamIds = selectedTeamIds.length > 0 ? selectedTeamIds : [DEMO_DATA_TEAM];
 
   const contextValue: TeamContextType = {
     userTeams,

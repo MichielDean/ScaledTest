@@ -7,6 +7,7 @@ import { describe, test, expect, beforeAll } from '@jest/globals';
 import { generateCtrfReport } from '../../tests/data/ctrfReportGenerator';
 import { getAuthToken } from '../../tests/authentication/tokenService';
 import { CtrfSchema, Status } from '../../src/schemas/ctrf/ctrf';
+import { DEMO_DATA_TEAM } from '../../src/lib/teamFilters';
 import logger from '../../src/logging/logger';
 
 // Extended interface for stored reports with metadata
@@ -191,7 +192,7 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       expect(demoReports.length).toBeGreaterThan(0);
@@ -221,7 +222,7 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       expect(demoReports.length).toBeGreaterThan(0);
@@ -242,7 +243,7 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       expect(demoReports.length).toBeGreaterThan(0);
@@ -280,7 +281,7 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       expect(maintainerDemoReports.length).toBeGreaterThan(0);
@@ -335,13 +336,13 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
       const ownerDemoReports = ownerResult.data.filter(
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       // Both users should see demo data
@@ -374,7 +375,7 @@ describe('Demo Data with Teams Integration', () => {
         (report: StoredTestReport) =>
           report?.metadata?.isDemoData === true ||
           (Array.isArray(report?.metadata?.userTeams) &&
-            report.metadata.userTeams.includes('demo-data'))
+            report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
       expect(demoReports.length).toBeGreaterThan(0);
