@@ -23,6 +23,7 @@ import styles from '../../styles/Charts.module.css';
 interface TestTrendsProps {
   days?: number;
   token?: string;
+  teamIds?: string[];
 }
 
 // Use shared OpenSearchApiResponse with a specialized meta type for trends
@@ -39,7 +40,7 @@ interface TestTrendsResponse extends OpenSearchApiResponse<TestTrendsData> {
 // Use the shared OpenSearchErrorApiResponse
 type ErrorResponse = OpenSearchErrorApiResponse;
 
-const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
+const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token, teamIds }) => {
   const [data, setData] = useState<TestTrendsData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,7 +76,14 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
         headers['Authorization'] = `Bearer ${token}`;
       }
 
-      const response = await fetch(`/api/analytics/test-trends?days=${selectedDays}`, {
+      // Build query parameters
+      let queryParams = `days=${selectedDays}`;
+      if (teamIds && teamIds.length > 0) {
+        const teamIdsQuery = teamIds.map(id => `teamIds=${encodeURIComponent(id)}`).join('&');
+        queryParams += `&${teamIdsQuery}`;
+      }
+
+      const response = await fetch(`/api/analytics/test-trends?${queryParams}`, {
         headers,
       });
 
@@ -100,7 +108,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token }) => {
     } finally {
       setLoading(false);
     }
-  }, [selectedDays, token]);
+  }, [selectedDays, token, teamIds]);
 
   useEffect(() => {
     if (token) {

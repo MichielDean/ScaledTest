@@ -1,4 +1,5 @@
 import { describe, beforeAll, afterAll, it } from '@jest/globals';
+import { expect } from '@playwright/test';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -97,13 +98,15 @@ describe('Role-based Access Tests', () => {
       await dashboardPage.expectAdminActionsNotVisible();
     });
 
-    it('should not have admin menu access', async () => {
-      await headerComponent.expectNoAdminAccess();
+    it('should have admin menu access for teams management', async () => {
+      await headerComponent.expectAdminAccess();
     });
 
-    it('should be denied access to user management page', async () => {
+    it('should be redirected from user management to teams section', async () => {
+      // Maintainers can access admin dashboard but should be redirected to teams section
       await userManagementPage.goto();
-      await userManagementPage.expectUnauthorizedPage();
+      // Should be redirected to teams section instead of users
+      await expect(userManagementPage.page).toHaveURL(/\/admin\?section=teams/);
     });
   });
 

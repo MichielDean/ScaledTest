@@ -1,0 +1,488 @@
+/* Admin Dashboard Layout Styles */
+.container {
+  min-height: 100vh;
+  background-color: var(--color-background);
+}
+
+.layout {
+  display: flex;
+  min-height: calc(100vh - var(--header-height, 60px));
+}
+
+/* Sidebar Navigation */
+.sidebar {
+  width: 250px;
+  background-color: var(--color-background);
+  border-right: 1px solid var(--color-border);
+  padding: var(--spacing-xl, 1.5rem);
+  box-shadow: var(--shadow);
+  position: sticky;
+  top: 0;
+  height: fit-content;
+  max-height: calc(100vh - var(--header-height, 60px));
+  overflow-y: auto;
+}
+
+.sidebarTitle {
+  margin: 0 0 var(--spacing-lg, 1rem) 0;
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-md, 0.75rem);
+}
+
+.sidebarNav {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.navButton {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--spacing-md, 0.75rem);
+  margin-bottom: var(--spacing-sm, 0.5rem);
+  background: none;
+  border: none;
+  border-radius: var(--border-radius-md);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base, 1rem);
+  font-weight: var(--font-weight-medium, 500);
+  text-align: left;
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.navButton:hover {
+  background-color: var(--color-gray-50);
+  color: var(--color-text-primary);
+}
+
+.navButton:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-20);
+}
+
+.navButtonActive {
+  background-color: var(--color-primary-alpha-10);
+  color: var(--color-primary);
+  font-weight: var(--font-weight-semibold, 600);
+}
+
+.navIcon {
+  margin-right: var(--spacing-sm, 0.5rem);
+  font-size: 1.2em;
+}
+
+/* Main Content Area */
+.mainContent {
+  flex: 1;
+  padding: var(--spacing-2xl, 2rem);
+  background-color: var(--color-background);
+  overflow-y: auto;
+}
+
+.pageTitle {
+  margin: 0 0 var(--spacing-xl, 1.5rem) 0;
+  font-size: var(--font-size-2xl, 1.875rem);
+  font-weight: var(--font-weight-bold, 700);
+  color: var(--color-text-primary);
+  border-bottom: 1px solid var(--color-border);
+  padding-bottom: var(--spacing-md, 0.75rem);
+}
+
+.section {
+  max-width: 100%;
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: var(--spacing-xl, 1.5rem);
+  flex-wrap: wrap;
+  gap: var(--spacing-md, 0.75rem);
+}
+
+.sectionHeader h2 {
+  margin: 0 0 var(--spacing-sm, 0.5rem) 0;
+  font-size: var(--font-size-xl, 1.25rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.sectionHeader p {
+  margin: 0;
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+/* Tables - Users */
+.usersTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-lg, 1rem);
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.tableHeader {
+  background-color: var(--color-gray-50);
+}
+
+.tableHeaderCell {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: left;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableHeaderCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  font-weight: var(--font-weight-semibold, 600);
+  border-bottom: 2px solid var(--color-border);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.tableRow {
+  border-bottom: 1px solid var(--color-border);
+  transition: var(--transition-normal);
+}
+
+.tableRow:hover {
+  background-color: var(--color-gray-50);
+}
+
+.tableCell {
+  padding: var(--spacing-md, 0.75rem);
+  vertical-align: top;
+  color: var(--color-text-primary);
+}
+
+.tableCellCenter {
+  padding: var(--spacing-md, 0.75rem);
+  text-align: center;
+  vertical-align: middle;
+  color: var(--color-text-primary);
+}
+
+/* User Details */
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 0.25rem);
+}
+
+.userEmail {
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.userName {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs, 0.75rem);
+}
+
+/* Role Tags */
+.roleTag {
+  display: inline-block;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  margin: var(--spacing-xs, 0.25rem) var(--spacing-xs, 0.25rem) var(--spacing-xs, 0.25rem) 0;
+  background-color: var(--color-primary-alpha-10);
+  color: var(--color-primary);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: var(--font-weight-medium, 500);
+  border: 1px solid var(--color-primary-alpha-20);
+}
+
+/* Team Assignments */
+.teamAssignments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 0.5rem);
+}
+
+.teamAssignment {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--spacing-xs, 0.25rem);
+}
+
+.teamTag {
+  display: inline-block;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background-color: var(--color-secondary-alpha-10);
+  color: var(--color-secondary);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: var(--font-weight-medium, 500);
+  border: 1px solid var(--color-secondary-alpha-20);
+}
+
+.defaultTeam {
+  background-color: var(--color-warning-alpha-10);
+  color: var(--color-warning);
+  border-color: var(--color-warning-alpha-20);
+}
+
+.removeTeamButton {
+  background: var(--color-danger);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-full);
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: var(--font-size-xs, 0.75rem);
+  line-height: 1;
+  transition: var(--transition-normal);
+}
+
+.removeTeamButton:hover {
+  background: var(--color-danger-dark);
+}
+
+.removeTeamButton:focus {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--color-danger-alpha-20);
+}
+
+.removeTeamButton:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.teamActions {
+  margin-top: var(--spacing-sm, 0.5rem);
+}
+
+.teamSelector {
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.teamSelector:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-20);
+}
+
+/* Action Buttons */
+.actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 0.5rem);
+  align-items: center;
+}
+
+/* Teams Table */
+.teamsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: var(--spacing-lg, 1rem);
+  border: 1px solid var(--color-border);
+  background: var(--color-background);
+  border-radius: var(--border-radius-lg);
+  overflow: hidden;
+  box-shadow: var(--shadow);
+}
+
+.teamInfo {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm, 0.5rem);
+}
+
+.teamName {
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+}
+
+.defaultBadge {
+  display: inline-block;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background-color: var(--color-warning-alpha-10);
+  color: var(--color-warning);
+  border-radius: var(--border-radius-full);
+  font-size: var(--font-size-xs, 0.75rem);
+  font-weight: var(--font-weight-medium, 500);
+  border: 1px solid var(--color-warning-alpha-20);
+}
+
+.teamDescription {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.memberCount {
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.defaultTeamNote {
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-xs, 0.75rem);
+  font-style: italic;
+}
+
+/* Create Form */
+.createForm {
+  background: var(--color-background);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-lg);
+  padding: var(--spacing-xl, 1.5rem);
+  margin-bottom: var(--spacing-xl, 1.5rem);
+  box-shadow: var(--shadow);
+}
+
+.createForm h3 {
+  margin: 0 0 var(--spacing-lg, 1rem) 0;
+  font-size: var(--font-size-lg, 1.125rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+}
+
+.formGroup {
+  margin-bottom: var(--spacing-lg, 1rem);
+}
+
+.formLabel {
+  display: block;
+  margin-bottom: var(--spacing-sm, 0.5rem);
+  font-weight: var(--font-weight-semibold, 600);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+}
+
+.formInput,
+.formTextarea {
+  width: 100%;
+  padding: var(--spacing-md, 0.75rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-md);
+  font-size: var(--font-size-base, 1rem);
+  color: var(--color-text-primary);
+  background-color: var(--color-background);
+  transition: var(--transition-normal);
+  font-family: inherit;
+}
+
+.formInput:focus,
+.formTextarea:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha-20);
+}
+
+.formTextarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+.formActions {
+  display: flex;
+  gap: var(--spacing-md, 0.75rem);
+  justify-content: flex-start;
+}
+
+/* Empty States */
+.noUsers,
+.noTeams {
+  text-align: center;
+  padding: var(--spacing-2xl, 2rem);
+  color: var(--color-text-secondary);
+  font-size: var(--font-size-base, 1rem);
+  background: var(--color-gray-50);
+  border-radius: var(--border-radius-lg);
+  margin-top: var(--spacing-lg, 1rem);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .layout {
+    flex-direction: column;
+  }
+
+  .sidebar {
+    width: 100%;
+    position: static;
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--color-border);
+  }
+
+  .sidebarNav {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--spacing-xs, 0.25rem);
+  }
+
+  .navButton {
+    flex: 1;
+    min-width: 120px;
+    margin-bottom: 0;
+  }
+
+  .mainContent {
+    padding: var(--spacing-lg, 1rem);
+  }
+
+  .sectionHeader {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .usersTable,
+  .teamsTable {
+    font-size: var(--font-size-sm, 0.875rem);
+  }
+
+  .tableCell,
+  .tableCellCenter {
+    padding: var(--spacing-sm, 0.5rem);
+  }
+
+  .actionButtons {
+    flex-direction: row;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .mainContent {
+    padding: var(--spacing-md, 0.75rem);
+  }
+
+  .usersTable,
+  .teamsTable {
+    display: block;
+    overflow-x: auto;
+    white-space: nowrap;
+  }
+
+  .formActions {
+    flex-direction: column;
+  }
+}

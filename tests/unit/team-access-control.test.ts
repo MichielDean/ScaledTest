@@ -8,6 +8,7 @@ import {
   buildTeamAccessFilter,
   getEffectiveTeamIds,
   shouldMarkAsDemoData,
+  DEMO_DATA_TEAM,
 } from '../../src/lib/teamFilters';
 
 interface ReportMetadata {
@@ -45,7 +46,7 @@ describe('Team-based Access Control Logic', () => {
             },
             {
               term: {
-                'metadata.userTeams.keyword': 'demo-data',
+                'metadata.userTeams.keyword': DEMO_DATA_TEAM,
               },
             },
           ],
@@ -75,7 +76,7 @@ describe('Team-based Access Control Logic', () => {
             },
             {
               term: {
-                'metadata.userTeams.keyword': 'demo-data',
+                'metadata.userTeams.keyword': DEMO_DATA_TEAM,
               },
             },
           ],
@@ -95,7 +96,7 @@ describe('Team-based Access Control Logic', () => {
     test('should return demo-data team when user has no teams', () => {
       const userTeamIds: string[] = [];
       const result = getEffectiveTeamIds(userTeamIds);
-      expect(result).toEqual(['demo-data']);
+      expect(result).toEqual([DEMO_DATA_TEAM]);
     });
   });
 
@@ -134,7 +135,7 @@ describe('Team-based Access Control Logic', () => {
       const userTeams: string[] = [];
       const effectiveTeamIds = getEffectiveTeamIds(userTeams);
 
-      expect(effectiveTeamIds).toEqual(['demo-data']);
+      expect(effectiveTeamIds).toEqual([DEMO_DATA_TEAM]);
     });
 
     test('should preserve user teams when they exist', () => {
@@ -152,7 +153,7 @@ describe('Team-based Access Control Logic', () => {
         userTeams: [],
         reportMetadata: {
           isDemoData: true,
-          userTeams: ['demo-data'],
+          userTeams: [DEMO_DATA_TEAM],
           uploadedBy: 'maintainer@example.com',
         },
         currentUser: 'readonly@example.com',
@@ -163,7 +164,7 @@ describe('Team-based Access Control Logic', () => {
         userTeams: ['team1'],
         reportMetadata: {
           isDemoData: true,
-          userTeams: ['demo-data'],
+          userTeams: [DEMO_DATA_TEAM],
           uploadedBy: 'maintainer@example.com',
         },
         currentUser: 'user@example.com',
@@ -174,7 +175,7 @@ describe('Team-based Access Control Logic', () => {
         userTeams: [],
         reportMetadata: {
           isDemoData: false,
-          userTeams: ['demo-data'],
+          userTeams: [DEMO_DATA_TEAM],
           uploadedBy: 'user@example.com',
         },
         currentUser: 'user@example.com',

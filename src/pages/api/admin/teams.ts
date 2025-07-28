@@ -49,7 +49,10 @@ interface ErrorResponse {
  */
 const handleGet: MethodHandler<GetTeamsResponse | ErrorResponse> = async (req, res, reqLogger) => {
   try {
-    const userRoles = req.user.resource_access?.[req.user.aud as string]?.roles || [];
+    // Get both realm and client roles
+    const realmRoles = req.user.realm_access?.roles || [];
+    const clientRoles = req.user.resource_access?.[req.user.aud as string]?.roles || [];
+    const userRoles = [...realmRoles, ...clientRoles];
 
     // Get teams with member counts
     const teams = await getAllTeamsWithMemberCount();
@@ -60,6 +63,8 @@ const handleGet: MethodHandler<GetTeamsResponse | ErrorResponse> = async (req, r
     reqLogger.info('Successfully retrieved teams', {
       teamCount: teams.length,
       userRoles,
+      realmRoles,
+      clientRoles,
     });
 
     return res.status(200).json({

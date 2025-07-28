@@ -4,6 +4,11 @@
  */
 
 /**
+ * Default team for users with no team assignments - used for demo data access
+ */
+export const DEMO_DATA_TEAM = 'demo-data';
+
+/**
  * Builds OpenSearch filters for team-based access control
  *
  * This function creates a filter that allows users to see:
@@ -37,7 +42,7 @@ export function buildTeamAccessFilter(
     },
   });
 
-  // All users can see demo data (reports marked with isDemoData or with demo-data team)
+  // All users can see demo data (reports marked with isDemoData or with DEMO_DATA_TEAM)
   teamAccessFilter.push({
     term: {
       'metadata.isDemoData': true,
@@ -46,7 +51,7 @@ export function buildTeamAccessFilter(
 
   teamAccessFilter.push({
     term: {
-      'metadata.userTeams.keyword': 'demo-data',
+      'metadata.userTeams.keyword': DEMO_DATA_TEAM,
     },
   });
 
@@ -62,14 +67,14 @@ export function buildTeamAccessFilter(
 /**
  * Determines effective team IDs for a user when storing reports
  *
- * For users with no teams, assigns them to the 'demo-data' team
+ * For users with no teams, assigns them to the DEMO_DATA_TEAM
  * to ensure their uploads are visible to all users as demo data.
  *
  * @param userTeamIds - Array of team IDs the user belongs to
  * @returns Array of effective team IDs to use for the report
  */
 export function getEffectiveTeamIds(userTeamIds: string[]): string[] {
-  return userTeamIds.length > 0 ? userTeamIds : ['demo-data'];
+  return userTeamIds.length > 0 ? userTeamIds : [DEMO_DATA_TEAM];
 }
 
 /**

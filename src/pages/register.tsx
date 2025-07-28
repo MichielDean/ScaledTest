@@ -5,9 +5,11 @@ import { useEffect, useState, FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
+import { PasswordToggleIcon } from '../components/shared/PasswordToggleIcons';
 import axios, { AxiosError } from 'axios';
 import { authLogger as logger } from '../logging/logger';
 import { RegisterResponse } from '../types/api';
+import { Team } from '../types/team';
 import styles from '../styles/Register.module.css';
 import sharedAlerts from '../styles/shared/alerts.module.css';
 import sharedButtons from '../styles/shared/buttons.module.css';
@@ -22,10 +24,17 @@ const Register: NextPage = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
+  const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
+
+  // Teams data
+  const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
+  const [loadingTeams, setLoadingTeams] = useState(true);
 
   // UI state
   const [error, setError] = useState<string | null>(null);
   const [registering, setRegistering] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
 
   useEffect(() => {
     // If already authenticated, redirect to dashboard
@@ -33,6 +42,25 @@ const Register: NextPage = () => {
       router.push('/dashboard');
     }
   }, [isAuthenticated, loading, router]);
+
+  // Load available teams for registration
+  useEffect(() => {
+    const loadTeams = async () => {
+      try {
+        const response = await axios.get<{ success: boolean; teams: Team[] }>('/api/teams');
+        if (response.data.success) {
+          setAvailableTeams(response.data.teams);
+        }
+      } catch (error) {
+        logger.error('Failed to load teams for registration', { error });
+        // Teams are optional, so don't show error to user
+      } finally {
+        setLoadingTeams(false);
+      }
+    };
+
+    loadTeams();
+  }, []);
 
   // Form validation
   const validateForm = (): boolean => {
@@ -59,6 +87,17 @@ const Register: NextPage = () => {
     return true;
   };
 
+  // Team selection handlers
+  const handleTeamSelection = (teamId: string, checked: boolean) => {
+    setSelectedTeamIds(prev => {
+      if (checked) {
+        return [...prev, teamId];
+      } else {
+        return prev.filter(id => id !== teamId);
+      }
+    });
+  };
+
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
 
@@ -80,6 +119,7 @@ const Register: NextPage = () => {
         password,
         firstName: firstName || undefined,
         lastName: lastName || undefined,
+        teamIds: selectedTeamIds.length > 0 ? selectedTeamIds : undefined,
       });
 
       if (response.data.success) {
@@ -202,28 +242,89 @@ const Register: NextPage = () => {
 
             <div className="form-group">
               <label htmlFor="password">Password*</label>
-              <input
-                type="password"
-                id="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                placeholder="Create a password (8+ characters)"
-                required
-                minLength={8}
-              />
+              <div className={styles.passwordInputContainer}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  value={password}
+                  onChange={e => setPassword(e.target.value)}
+                  placeholder="Create a password (8+ characters)"
+                  required
+                  minLength={8}
+                  className={styles.passwordInput}
+                />
+                <button
+                  type="button"
+                  id="toggle-password-visibility"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  tabIndex={0}
+                >
+                  <span className={styles.passwordToggleIcon}>
+                    <PasswordToggleIcon isVisible={showPassword} />
+                  </span>
+                </button>
+              </div>
             </div>
 
             <div className="form-group">
               <label htmlFor="confirmPassword">Confirm Password*</label>
-              <input
-                type="password"
-                id="confirmPassword"
-                value={confirmPassword}
-                onChange={e => setConfirmPassword(e.target.value)}
-                placeholder="Confirm your password"
-                required
-              />
+              <div className={styles.passwordInputContainer}>
+                <input
+                  type={showConfirmPassword ? 'text' : 'password'}
+                  id="confirmPassword"
+                  value={confirmPassword}
+                  onChange={e => setConfirmPassword(e.target.value)}
+                  placeholder="Confirm your password"
+                  required
+                  className={styles.passwordInput}
+                />
+                <button
+                  type="button"
+                  id="toggle-confirm-password-visibility"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  aria-label={
+                    showConfirmPassword ? 'Hide confirm password' : 'Show confirm password'
+                  }
+                  aria-pressed={showConfirmPassword}
+                  tabIndex={0}
+                >
+                  <span className={styles.passwordToggleIcon}>
+                    <PasswordToggleIcon isVisible={showConfirmPassword} />
+                  </span>
+                </button>
+              </div>
             </div>
+
+            {/* Team Selection */}
+            {!loadingTeams && availableTeams.length > 0 && (
+              <div className="form-group">
+                <label>Join Teams (Optional)</label>
+                <p className={styles.helpText}>
+                  Select which teams you&apos;d like to join. You can join additional teams later.
+                </p>
+                <div className={styles.teamSelection}>
+                  {availableTeams.map(team => (
+                    <label key={team.id} className={styles.checkboxLabel}>
+                      <input
+                        type="checkbox"
+                        id={`team-${team.id}`}
+                        checked={selectedTeamIds.includes(team.id)}
+                        onChange={e => handleTeamSelection(team.id, e.target.checked)}
+                        className={styles.checkbox}
+                      />
+                      <span className={styles.teamName}>{team.name}</span>
+                      {team.description && (
+                        <span className={styles.teamDescription}>- {team.description}</span>
+                      )}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <button
               id="registerButton"

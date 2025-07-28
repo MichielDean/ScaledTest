@@ -3,6 +3,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import { UserRole } from '../auth/keycloak';
+import TeamSelector from './TeamSelector';
 import styles from '../styles/Header.module.css';
 
 const Header: React.FC = () => {
@@ -24,18 +25,16 @@ const Header: React.FC = () => {
         </div>
 
         <nav className="navigation" role="navigation" aria-label="Main navigation">
-          {' '}
-          <Link
-            id="headerHome"
-            href="/"
-            aria-label="Go to home page"
-            aria-current={router.pathname === '/' ? 'page' : undefined}
-          >
-            Home
-          </Link>
           {isAuthenticated ? (
             <>
-              {' '}
+              <Link
+                id="headerHome"
+                href="/"
+                aria-label="Go to home page"
+                aria-current={router.pathname === '/' ? 'page' : undefined}
+              >
+                Home
+              </Link>
               <Link
                 id="headerDashboard"
                 href="/dashboard"
@@ -43,7 +42,7 @@ const Header: React.FC = () => {
                 aria-current={router.pathname === '/dashboard' ? 'page' : undefined}
               >
                 Dashboard
-              </Link>{' '}
+              </Link>
               <Link
                 id="headerProfile"
                 href="/profile"
@@ -52,24 +51,30 @@ const Header: React.FC = () => {
               >
                 Profile
               </Link>
-              {/* Only show admin section for owners */}
-              {hasRole(UserRole.OWNER) && (
-                <>
-                  <Link
-                    id="headerManageUsers"
-                    href="/admin/users"
-                    aria-label="Go to user management page"
-                  >
-                    Manage Users
+
+              {/* Team Selector - prominently displayed */}
+              <div className={styles.teamSection}>
+                <TeamSelector compact />
+              </div>
+
+              {/* Admin section for owners and maintainers */}
+              {(hasRole(UserRole.OWNER) || hasRole(UserRole.MAINTAINER)) && (
+                <div className={styles.adminSection}>
+                  <span className={styles.adminLabel}>Admin:</span>
+                  <Link id="headerAdminDashboard" href="/admin" aria-label="Go to admin dashboard">
+                    Admin Dashboard
                   </Link>
-                </>
+                </div>
               )}
-              <span id="headerGreeting">
-                Hello, {userProfile?.firstName || userProfile?.username || 'User'}
-              </span>
-              <button id="headerLogOut" onClick={logout} aria-label="Logout from the application">
-                Logout
-              </button>
+
+              <div className={styles.userSection}>
+                <span id="headerGreeting">
+                  Hello, {userProfile?.firstName || userProfile?.username || 'User'}
+                </span>
+                <button id="headerLogOut" onClick={logout} aria-label="Logout from the application">
+                  Logout
+                </button>
+              </div>
             </>
           ) : (
             <>

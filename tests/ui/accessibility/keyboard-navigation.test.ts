@@ -59,16 +59,29 @@ describe('Keyboard Navigation Tests', () => {
     );
     expect(focusedElement2).toBe('password');
 
+    // Tab to password toggle button
+    await basePage.pressKey('Tab');
+
+    // Wait for focus to change to password toggle button
+    await basePage.waitForFunction(
+      () => document.activeElement?.getAttribute('id') === 'toggle-password-visibility'
+    );
+
+    const focusedElement3 = await basePage.evaluate(() =>
+      document.activeElement?.getAttribute('id')
+    );
+    expect(focusedElement3).toBe('toggle-password-visibility');
+
     // Tab to submit button
     await basePage.pressKey('Tab');
 
     // Wait for focus to change to submit button
     await basePage.waitForFunction(() => document.activeElement?.getAttribute('type') === 'submit');
 
-    const focusedElement3 = await basePage.evaluate(() =>
+    const focusedElement4 = await basePage.evaluate(() =>
       document.activeElement?.getAttribute('type')
     );
-    expect(focusedElement3).toBe('submit');
+    expect(focusedElement4).toBe('submit');
   });
 
   test('Navigation should be keyboard accessible', async () => {
@@ -76,8 +89,9 @@ describe('Keyboard Navigation Tests', () => {
     await loginPage.goto();
     await basePage.waitForNavigation();
 
-    // Wait for header navigation to be present using HeaderComponent
-    await header.homeLink.waitFor({ state: 'visible' });
+    // Wait for header navigation to be present - check for non-authenticated state elements
+    await header.loginLink.waitFor({ state: 'visible' });
+    await header.registerLink.waitFor({ state: 'visible' });
     await basePage.waitForTimeout(500);
 
     // Start from the skip link (first focusable element)

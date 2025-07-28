@@ -1,4 +1,5 @@
 import { describe, beforeEach, afterEach, it } from '@jest/globals';
+import { expect } from '@playwright/test';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
@@ -71,12 +72,12 @@ describe('Navigation Tests', () => {
       await loginPage.expectToBeOnLoginPage();
     });
 
-    it('should redirect to login page when accessing user management', async () => {
+    it('should redirect to unauthorized page when accessing user management', async () => {
       // Try to directly navigate to user management
       await userManagementPage.goto();
 
-      // Should be redirected to login page
-      await loginPage.expectToBeOnLoginPage();
+      // Should be redirected to unauthorized page (since admin pages redirect to unauthorized)
+      await userManagementPage.expectUnauthorizedPage();
     });
   });
 
@@ -88,12 +89,16 @@ describe('Navigation Tests', () => {
       await dashboardPage.expectDashboardLoaded();
     });
 
-    it('should redirect to unauthorized page when accessing admin pages', async () => {
+    it('should redirect to teams section when maintainer accesses users section', async () => {
       // Try to navigate directly to user management page
       await userManagementPage.goto();
 
-      // Verify unauthorized page is shown
-      await userManagementPage.expectUnauthorizedPage();
+      // Verify we're redirected to teams section
+      await expect(playwrightContext.page).toHaveURL(/\/admin\?section=teams/, { timeout: 10000 });
+
+      // Verify teams section is loaded
+      const teamsSection = playwrightContext.page.locator('#teams-section-title');
+      await expect(teamsSection).toBeVisible();
     });
   });
 });

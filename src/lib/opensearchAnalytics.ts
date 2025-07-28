@@ -1,5 +1,6 @@
 import opensearchClient, { ensureCtrfReportsIndexExists } from './opensearch';
 import { dbLogger as logger, logError } from '../logging/logger';
+import { DEMO_DATA_TEAM } from './teamFilters';
 import {
   TestSuiteOverviewData,
   TestTrendsData,
@@ -33,7 +34,7 @@ function buildTeamFilters(teamIds?: string[]): Array<Record<string, unknown>> {
 
   teamAccessFilter.push({
     term: {
-      'metadata.userTeams.keyword': 'demo-data',
+      'metadata.userTeams.keyword': DEMO_DATA_TEAM,
     },
   });
 

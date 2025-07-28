@@ -3,6 +3,7 @@ import axios, { AxiosError } from 'axios';
 import { authLogger as logger } from '../../../logging/logger';
 import { keycloakConfig, keycloakEndpoints, keycloakAdminConfig } from '../../../config/keycloak';
 import { getAdminToken } from '../../../authentication/keycloakAdminApi';
+import { assignUserToTeam } from '../../../authentication/teamManagement';
 import { RegisterResponse } from '../../../types/api';
 import { RegisterRequestBody } from '../../../types/user';
 
@@ -13,7 +14,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
-    const { username, email, password, firstName, lastName } = req.body as RegisterRequestBody;
+    const { username, email, password, firstName, lastName, teamIds } =
+      req.body as RegisterRequestBody;
 
     // Validate required fields
     if (!email || !password) {
@@ -54,7 +56,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       username: finalUsername,
       email,
       enabled: true,
-      emailVerified: false,
+      emailVerified: true, // Set to true for auto-login functionality
       firstName,
       lastName,
       credentials: [
@@ -73,6 +75,37 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       },
     });
 
+    // Get the user ID to perform additional setup
+    const usersResponse = await axios.get(
+      `${keycloakEndpoints.users}?username=${encodeURIComponent(finalUsername)}`,
+      {
+        headers: {
+          Authorization: `Bearer ${adminToken}`,
+        },
+      }
+    );
+
+    if (!usersResponse.data || usersResponse.data.length === 0) {
+      throw new Error('User was created but could not be found');
+    }
+
+    const userId = usersResponse.data[0].id;
+
+    // Assign user to selected teams
+    if (teamIds && Array.isArray(teamIds) && teamIds.length > 0) {
+      logger.info({ username: finalUsername, teamIds }, 'Assigning user to selected teams');
+
+      for (const teamId of teamIds) {
+        try {
+          await assignUserToTeam(userId, teamId, 'registration');
+          logger.info({ username: finalUsername, teamId }, 'User assigned to team successfully');
+        } catch (error) {
+          logger.warn({ username: finalUsername, teamId, error }, 'Failed to assign user to team');
+          // Continue with other teams - don't fail registration if one team assignment fails
+        }
+      }
+    }
+
     // After successful registration, get a token for the new user
     logger.info({ username: finalUsername }, 'User registered successfully, obtaining token');
 
@@ -82,22 +115,42 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     userTokenFormData.append('password', password);
     userTokenFormData.append('grant_type', 'password');
 
-    const userTokenResponse = await axios.post(
-      keycloakEndpoints.token,
-      userTokenFormData.toString(),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
+    let tokenAttempts = 0;
+    const maxAttempts = 3;
+    let userTokenResponse;
+
+    while (tokenAttempts < maxAttempts) {
+      try {
+        userTokenResponse = await axios.post(
+          keycloakEndpoints.token,
+          userTokenFormData.toString(),
+          {
+            headers: {
+              'Content-Type': 'application/x-www-form-urlencoded',
+            },
+          }
+        );
+        break; // Success, exit retry loop
+      } catch (error) {
+        tokenAttempts++;
+        if (tokenAttempts >= maxAttempts) {
+          throw error; // Re-throw the error if we've exhausted retries
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, 1000));
+        logger.info(
+          { username: finalUsername, attempt: tokenAttempts },
+          'Token request failed, retrying...'
+        );
       }
-    );
+    }
 
     return res.status(201).json({
       success: true,
       message: 'User registered successfully',
-      token: userTokenResponse.data.access_token,
-      refreshToken: userTokenResponse.data.refresh_token,
-      expiresIn: userTokenResponse.data.expires_in,
+      token: userTokenResponse!.data.access_token,
+      refreshToken: userTokenResponse!.data.refresh_token,
+      expiresIn: userTokenResponse!.data.expires_in,
     });
   } catch (err) {
     const axiosError = err as AxiosError;

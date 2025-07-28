@@ -60,15 +60,125 @@
   color: var(--color-text-primary);
 }
 
+/* User details styling */
+.userDetails {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 0.25rem);
+}
+
+.userEmail {
+  font-weight: var(--font-weight-medium, 500);
+  color: var(--color-text-primary);
+}
+
+.userName {
+  font-size: var(--font-size-sm, 0.875rem);
+  color: var(--color-text-secondary);
+}
+
+/* Role and team tag styling */
 .roleTag {
   display: inline-block;
   margin-right: var(--spacing-sm, 0.5rem);
+  margin-bottom: var(--spacing-xs, 0.25rem);
   padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
   background-color: var(--color-gray-100);
   color: var(--color-gray-700);
   border-radius: var(--border-radius-sm);
   font-size: var(--font-size-sm, 0.875rem);
   font-weight: var(--font-weight-medium, 500);
+}
+
+/* Team assignment styling */
+.teamAssignments {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm, 0.5rem);
+}
+
+.teamAssignment {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-xs, 0.25rem);
+  margin-bottom: var(--spacing-xs, 0.25rem);
+}
+
+.teamTag {
+  display: inline-block;
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  background-color: var(--color-blue-100);
+  color: var(--color-blue-700);
+  border-radius: var(--border-radius-sm);
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: var(--font-weight-medium, 500);
+  border: 1px solid var(--color-blue-200);
+}
+
+.teamTag.defaultTeam {
+  background-color: var(--color-amber-100);
+  color: var(--color-amber-700);
+  border: 1px solid var(--color-amber-200);
+}
+
+.removeTeamButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  margin-left: var(--spacing-xs, 0.25rem);
+  background-color: var(--color-red-100);
+  color: var(--color-red-600);
+  border: 1px solid var(--color-red-200);
+  border-radius: 50%;
+  font-size: var(--font-size-sm, 0.875rem);
+  font-weight: var(--font-weight-bold, 700);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.removeTeamButton:hover {
+  background-color: var(--color-red-200);
+  border-color: var(--color-red-300);
+}
+
+.removeTeamButton:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.teamActions {
+  margin-top: var(--spacing-xs, 0.25rem);
+}
+
+.teamSelector {
+  padding: var(--spacing-xs, 0.25rem) var(--spacing-sm, 0.5rem);
+  border: 1px solid var(--color-border);
+  border-radius: var(--border-radius-sm);
+  background-color: var(--color-background);
+  color: var(--color-text-primary);
+  font-size: var(--font-size-sm, 0.875rem);
+  cursor: pointer;
+  transition: var(--transition-normal);
+}
+
+.teamSelector:hover {
+  border-color: var(--color-blue-300);
+}
+
+.teamSelector:focus {
+  outline: none;
+  border-color: var(--color-blue-500);
+  box-shadow: 0 0 0 2px var(--color-blue-100);
+}
+
+/* Action buttons styling */
+.actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs, 0.25rem);
+  align-items: center;
 }
 
 /* Note: Button styles (grantButton, revokeButton) are imported from shared/buttons.module.css */

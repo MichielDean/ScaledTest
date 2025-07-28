@@ -20,6 +20,39 @@ import {
 import { UserRole } from '../auth/keycloak';
 
 /**
+ * Validates that a string is a valid UUID format
+ */
+function isValidUuid(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+/**
+ * Safely encodes a UUID for use in URLs, with validation
+ */
+function safeEncodeUuid(uuid: string, paramName: string): string {
+  if (!uuid || typeof uuid !== 'string') {
+    throw new Error(`Invalid ${paramName}: must be a non-empty string`);
+  }
+
+  if (!isValidUuid(uuid)) {
+    throw new Error(`Invalid ${paramName}: must be a valid UUID format`);
+  }
+
+  // Encode the UUID to prevent any potential injection
+  return encodeURIComponent(uuid);
+}
+
+/**
+ * Constructs a safe Keycloak API URL with validated parameters
+ */
+function buildKeycloakUrl(...pathSegments: string[]): string {
+  const baseUrl = `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}`;
+  const safePath = pathSegments.map(segment => encodeURIComponent(segment)).join('/');
+  return `${baseUrl}/${safePath}`;
+}
+
+/**
  * Keycloak group representation for teams
  */
 interface KeycloakGroup {
@@ -47,17 +80,16 @@ export async function getAllTeams(): Promise<Team[]> {
   try {
     const token = await getAdminToken();
 
-    const response = await axios.get<KeycloakGroup[]>(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-        params: {
-          search: 'team-', // Only get groups with team- prefix
-        },
-      }
-    );
+    const url = buildKeycloakUrl('groups');
+
+    const response = await axios.get<KeycloakGroup[]>(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+      params: {
+        search: 'team-', // Only get groups with team- prefix
+      },
+    });
 
     return response.data.map(mapKeycloakGroupToTeam);
   } catch (error) {
@@ -80,14 +112,16 @@ export async function getAllTeamsWithMemberCount(): Promise<TeamWithMemberCount[
     const teamsWithCount = await Promise.all(
       teams.map(async team => {
         try {
-          const membersResponse = await axios.get(
-            `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups/${team.id}/members`,
-            {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
-            }
-          );
+          // Validate and safely encode parameters
+          const safeTeamId = safeEncodeUuid(team.id, 'team.id');
+
+          const url = buildKeycloakUrl('groups', safeTeamId, 'members');
+
+          const membersResponse = await axios.get(url, {
+            headers: {
+              Authorization: `Bearer ${token}`,
+            },
+          });
 
           return {
             ...team,
@@ -132,16 +166,14 @@ export async function createTeam(teamData: CreateTeamRequest, createdBy: string)
       },
     };
 
-    const response = await axios.post(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups`,
-      groupData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    const url = buildKeycloakUrl('groups');
+
+    const response = await axios.post(url, groupData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
     // Get the created group ID from the Location header
     const locationHeader = response.headers.location;
@@ -182,14 +214,16 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
   try {
     const token = await getAdminToken();
 
-    const response = await axios.get<KeycloakGroup>(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups/${teamId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Validate and safely encode parameters
+    const safeTeamId = safeEncodeUuid(teamId, 'teamId');
+
+    const url = buildKeycloakUrl('groups', safeTeamId);
+
+    const response = await axios.get<KeycloakGroup>(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     return mapKeycloakGroupToTeam(response.data);
   } catch (error) {
@@ -235,16 +269,17 @@ export async function updateTeam(
       };
     }
 
-    await axios.put(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups/${teamId}`,
-      updateData,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      }
-    );
+    // Validate and safely encode parameters
+    const safeTeamId = safeEncodeUuid(teamId, 'teamId');
+
+    const url = buildKeycloakUrl('groups', safeTeamId);
+
+    await axios.put(url, updateData, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+        'Content-Type': 'application/json',
+      },
+    });
 
     logger.info('Team updated successfully', {
       teamId,
@@ -284,14 +319,16 @@ export async function deleteTeam(teamId: string, deletedBy: string): Promise<voi
       throw new Error('Cannot delete the default team');
     }
 
-    await axios.delete(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/groups/${teamId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Validate and safely encode parameters
+    const safeTeamId = safeEncodeUuid(teamId, 'teamId');
+
+    const url = buildKeycloakUrl('groups', safeTeamId);
+
+    await axios.delete(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     logger.info('Team deleted successfully', {
       teamId,
@@ -319,8 +356,14 @@ export async function assignUserToTeam(
   try {
     const token = await getAdminToken();
 
+    // Validate and safely encode parameters
+    const safeUserId = safeEncodeUuid(userId, 'userId');
+    const safeTeamId = safeEncodeUuid(teamId, 'teamId');
+
+    const url = buildKeycloakUrl('users', safeUserId, 'groups', safeTeamId);
+
     await axios.put(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}/groups/${teamId}`,
+      url,
       {},
       {
         headers: {
@@ -363,14 +406,17 @@ export async function removeUserFromTeam(
       throw new Error('Cannot remove user from the default team');
     }
 
-    await axios.delete(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}/groups/${teamId}`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Validate and safely encode parameters
+    const safeUserId = safeEncodeUuid(userId, 'userId');
+    const safeTeamId = safeEncodeUuid(teamId, 'teamId');
+
+    const url = buildKeycloakUrl('users', safeUserId, 'groups', safeTeamId);
+
+    await axios.delete(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     logger.info('User removed from team successfully', {
       userId,
@@ -396,14 +442,16 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
   try {
     const token = await getAdminToken();
 
-    const response = await axios.get<KeycloakGroup[]>(
-      `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}/groups`,
-      {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      }
-    );
+    // Validate and safely encode parameters
+    const safeUserId = safeEncodeUuid(userId, 'userId');
+
+    const url = buildKeycloakUrl('users', safeUserId, 'groups');
+
+    const response = await axios.get<KeycloakGroup[]>(url, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
 
     // Filter only team groups (those with team- prefix)
     const teamGroups = response.data.filter(group => group.name.startsWith('team-'));

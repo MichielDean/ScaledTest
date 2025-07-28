@@ -11,19 +11,19 @@ export interface TestUser {
 export const TestUsers: Record<string, TestUser> = {
   READONLY: {
     email: 'readonly@example.com',
-    password: 'password',
+    password: 'ReadOnly123!',
     displayName: 'Read Only',
     roles: ['readonly'],
   },
   MAINTAINER: {
     email: 'maintainer@example.com',
-    password: 'password',
+    password: 'Maintainer123!',
     displayName: 'Maintainer User',
     roles: ['readonly', 'maintainer'],
   },
   OWNER: {
     email: 'owner@example.com',
-    password: 'password',
+    password: 'Owner123!',
     displayName: 'Owner User',
     roles: ['readonly', 'maintainer', 'owner'],
   },

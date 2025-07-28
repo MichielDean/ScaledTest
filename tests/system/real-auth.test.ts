@@ -8,7 +8,7 @@ import logger from '../../src/logging/logger';
 
 describe('Real Authentication Integration', () => {
   it('should authenticate maintainer@example.com successfully', async () => {
-    const token = await getAuthToken('maintainer@example.com', 'password');
+    const token = await getAuthToken('maintainer@example.com');
     expect(token).toBeDefined();
     expect(typeof token).toBe('string');
     expect(token.length).toBeGreaterThan(0);
@@ -16,7 +16,7 @@ describe('Real Authentication Integration', () => {
   });
 
   it('should authenticate readonly@example.com successfully', async () => {
-    const token = await getAuthToken('readonly@example.com', 'password');
+    const token = await getAuthToken('readonly@example.com');
     expect(token).toBeDefined();
     expect(typeof token).toBe('string');
     expect(token.length).toBeGreaterThan(0);
@@ -24,7 +24,7 @@ describe('Real Authentication Integration', () => {
   });
 
   it('should authenticate owner@example.com successfully', async () => {
-    const token = await getAuthToken('owner@example.com', 'password');
+    const token = await getAuthToken('owner@example.com');
     expect(token).toBeDefined();
     expect(typeof token).toBe('string');
     expect(token.length).toBeGreaterThan(0);

@@ -242,7 +242,7 @@ export const KeycloakProvider: React.FC<KeycloakProviderProps> = ({ children }) 
 
   const hasRole = (role: UserRole): boolean => {
     if (!keycloak || !keycloak.authenticated) return false;
-    return keycloak.hasResourceRole(role);
+    return keycloak.hasRealmRole(role);
   };
 
   const contextValue: AuthContextType = {
