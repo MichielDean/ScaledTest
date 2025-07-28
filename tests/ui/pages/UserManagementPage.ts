@@ -21,16 +21,18 @@ export class UserManagementPage extends BasePage {
   }
 
   /**
-   * Navigate to the user management page
+   * Navigate to the admin dashboard (users section)
    */
   async goto() {
-    await super.goto('/admin/users');
+    await super.goto('/admin?section=users');
   }
   /**
-   * Check if the user management page is loaded properly
+   * Check if the admin dashboard (users section) is loaded properly
    */
   async expectPageLoaded() {
-    await expect(this.pageTitle).toBeVisible();
+    // Wait for the users section to be visible instead of page title
+    const usersSection = this.page.locator('#users-section-title');
+    await expect(usersSection).toBeVisible();
     await expect(this.usersTable).toBeVisible();
   }
 
@@ -63,22 +65,13 @@ export class UserManagementPage extends BasePage {
    * Check if unauthorized page is shown when accessing without proper permissions
    */
   async expectUnauthorizedPage() {
-    try {
-      // We expect to be redirected to the unauthorized page with a timeout
-      await expect(this.page).toHaveURL(/\/unauthorized/, { timeout: 10000 });
-      // Check for the unauthorized title which should be present on the unauthorized page
-      const unauthorizedTitle = this.page.locator('#unauthorized-title');
-      await expect(unauthorizedTitle).toBeVisible();
-      // Check for the return button
-      const returnButton = this.page.locator('#return-to-previous');
-      await expect(returnButton).toBeVisible();
-    } catch {
-      // If not redirected, check that we're still on the admin page but don't see user data
-      // This is an acceptable state for the test as the protection can be done either via
-      // redirect or by hiding content
-      await expect(this.page).toHaveURL(/\/admin\/users/);
-      // Verify we don't see the user table (protection by hiding content)
-      await expect(this.usersTable).not.toBeVisible();
-    }
+    // We expect to be redirected to the unauthorized page
+    await expect(this.page).toHaveURL(/\/unauthorized/, { timeout: 10000 });
+    // Check for the unauthorized title which should be present on the unauthorized page
+    const unauthorizedTitle = this.page.locator('#unauthorized-title');
+    await expect(unauthorizedTitle).toBeVisible();
+    // Check for the return button
+    const returnButton = this.page.locator('#return-to-previous');
+    await expect(returnButton).toBeVisible();
   }
 }

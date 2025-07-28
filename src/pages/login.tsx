@@ -1,10 +1,11 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
-import { useEffect, useState, FormEvent } from 'react';
+import { useState, useEffect, FormEvent } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../auth/KeycloakProvider';
 import Header from '../components/Header';
+import { PasswordToggleIcon } from '../components/shared/PasswordToggleIcons';
 import { AxiosError } from 'axios';
 import { authLogger as logger } from '../logging/logger';
 import styles from '../styles/Login.module.css';
@@ -18,6 +19,8 @@ const Login: NextPage = () => {
   const [password, setPassword] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [loggingIn, setLoggingIn] = useState(false);
+  const [loginAttempted, setLoginAttempted] = useState(false);
+  const [showPassword, setShowPassword] = useState(false);
 
   const { returnUrl } = router.query;
   const sanitizeUrl = (url: string): string => {
@@ -46,6 +49,7 @@ const Login: NextPage = () => {
     e.preventDefault();
     setLoggingIn(true);
     setError(null);
+    setLoginAttempted(true);
 
     try {
       // Import here to avoid issues with SSR
@@ -58,7 +62,7 @@ const Login: NextPage = () => {
         // Refresh the page to have KeycloakProvider initialize with the token
         window.location.href = redirectPath;
       } else {
-        setError('Authentication failed. Please check your credentials.');
+        setError('Authentication failed. Please check your credentials and try again.');
       }
     } catch (err) {
       const axiosError = err as AxiosError;
@@ -126,11 +130,17 @@ const Login: NextPage = () => {
             <div
               id="loginError"
               role="alert"
-              aria-live="polite"
-              className={`${sharedAlerts.alert} ${sharedAlerts.alertError}`}
+              aria-live="assertive"
+              className={`${sharedAlerts.alert} ${sharedAlerts.alertError} ${styles.loginError}`}
               data-testid="login-error"
             >
-              {error}
+              <div className={styles.errorIcon} aria-hidden="true">
+                ⚠️
+              </div>
+              <div className={styles.errorContent}>
+                <strong>Login Failed</strong>
+                <div>{error}</div>
+              </div>
             </div>
           )}
 
@@ -142,7 +152,12 @@ const Login: NextPage = () => {
                 id="email"
                 name="username"
                 value={email}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setEmail(e.target.value)}
+                onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                  setEmail(e.target.value);
+                  if (error && loginAttempted) {
+                    setError(null);
+                  }
+                }}
                 placeholder="Enter your email"
                 required
                 aria-required="true"
@@ -153,28 +168,62 @@ const Login: NextPage = () => {
 
             <div className="form-group">
               <label htmlFor="password">Password</label>
-              <input
-                type="password"
-                id="password"
-                name="password"
-                value={password}
-                onChange={(e: React.ChangeEvent<HTMLInputElement>) => setPassword(e.target.value)}
-                placeholder="Enter your password"
-                required
-                aria-required="true"
-                aria-describedby={error ? 'loginError' : undefined}
-                autoComplete="current-password"
-              />
+              <div className={styles.passwordInputContainer}>
+                <input
+                  type={showPassword ? 'text' : 'password'}
+                  id="password"
+                  name="password"
+                  value={password}
+                  onChange={(e: React.ChangeEvent<HTMLInputElement>) => {
+                    setPassword(e.target.value);
+                    if (error && loginAttempted) {
+                      setError(null);
+                    }
+                  }}
+                  placeholder="Enter your password"
+                  required
+                  aria-required="true"
+                  aria-describedby={error ? 'loginError' : undefined}
+                  autoComplete="current-password"
+                  className={styles.passwordInput}
+                />
+                <button
+                  type="button"
+                  id="toggle-password-visibility"
+                  className={styles.passwordToggle}
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? 'Hide password' : 'Show password'}
+                  aria-pressed={showPassword}
+                  tabIndex={0}
+                >
+                  <span className={styles.passwordToggleIcon}>
+                    <PasswordToggleIcon isVisible={showPassword} />
+                  </span>
+                </button>
+              </div>
             </div>
 
             <button
               id="signInButton"
               type="submit"
-              className={sharedButtons.submitButton}
+              className={`${sharedButtons.submitButton} ${loggingIn ? sharedButtons.buttonLoading : ''}`}
               disabled={loggingIn}
+              aria-describedby={loggingIn ? 'login-status' : undefined}
             >
               {loggingIn ? 'Signing in...' : 'Sign In'}
             </button>
+
+            {loggingIn && (
+              <div
+                id="login-status"
+                role="status"
+                aria-live="polite"
+                className={styles.loginStatus}
+                data-testid="login-status"
+              >
+                <span className={styles.loadingText}>Authenticating your credentials...</span>
+              </div>
+            )}
 
             <p className={styles.registerText}>
               Don&apos;t have an account?{' '}

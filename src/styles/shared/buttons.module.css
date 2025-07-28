@@ -19,6 +19,37 @@
   cursor: not-allowed;
 }
 
+/* Loading state for buttons */
+.buttonLoading {
+  position: relative;
+  color: transparent !important;
+}
+
+.buttonLoading::after {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  top: 50%;
+  left: 50%;
+  margin-left: -8px;
+  margin-top: -8px;
+  border: 2px solid transparent;
+  border-top-color: currentColor;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  color: white;
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
 /* Size variants */
 .buttonSmall {
   padding: 0.25rem 0.5rem;

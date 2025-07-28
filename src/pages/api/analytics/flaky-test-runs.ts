@@ -36,7 +36,12 @@ type ErrorResponse = {
  */
 const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, res, reqLogger) => {
   try {
-    reqLogger.info('Fetching flaky test runs with execution details from OpenSearch');
+    const teamIdsParam = req.query.teamIds as string | string[];
+
+    reqLogger.info(
+      { teamIdsParam },
+      'Fetching flaky test runs with execution details from OpenSearch'
+    );
 
     // Get user's teams for filtering
     if (!req.user?.sub) {
@@ -48,7 +53,37 @@ const handleGet: MethodHandler<SuccessResponse | ErrorResponse> = async (req, re
     }
 
     const userTeams = await getUserTeams(req.user.sub);
-    const teamIds = userTeams.map(team => team.id);
+    const allUserTeamIds = userTeams.map(team => team.id);
+
+    // Determine which team IDs to use - either from query param or all user teams
+    let teamIds: string[] = allUserTeamIds;
+
+    if (teamIdsParam) {
+      // Parse team IDs from query parameter
+      const requestedTeamIds = Array.isArray(teamIdsParam) ? teamIdsParam : [teamIdsParam];
+
+      // Filter to only include teams the user is assigned to
+      teamIds = requestedTeamIds.filter(teamId => allUserTeamIds.includes(teamId));
+
+      // If no valid team IDs found, return empty data
+      if (teamIds.length === 0) {
+        return res.status(200).json({
+          success: true,
+          data: [],
+          meta: {
+            source: 'OpenSearch',
+            index: 'ctrf-reports',
+            timestamp: new Date().toISOString(),
+            opensearchHealth: {
+              connected: true,
+              indexExists: true,
+              documentsCount: 0,
+              clusterHealth: 'unknown',
+            },
+          },
+        });
+      }
+    }
 
     // Get OpenSearch health status first (for connection check only)
     const healthStatus = await getOpenSearchHealthStatus();

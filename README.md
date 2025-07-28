@@ -5,62 +5,7 @@ A comprehensive platform for test result management and reporting built with Nex
 ## Core Features (Updated June 2025)
 
 - **Modern Tech Stack**: Built with Next.js 14+ and TypeScript
-- \*\*Interactive## Testing & Quality Assurance
-
-ScaledTest includes comprehensive testing capabilities with automated CTRF (Common Test Report Format) reporting:
-
-### Test Architecture
-
-- **Unit Tests**: Fast, isolated tests for business logic and utility functions
-- **Component Tests**: React Testing Library tests for UI components and user interactions
-- **Integration Tests**: API endpoints, database interactions, and service integration
-- **System Tests**: End-to-end workflows using Playwright for complete user journeys
-
-### Running Tests
-
-```bash
-# Run all test suites
-npm test
-
-# Run specific test types
-npm run test:unit           # Unit tests only
-npm run test:components     # React component tests only
-npm run test:integration    # API and service integration tests
-npm run test:system         # End-to-end and UI tests (Playwright)
-
-# Advanced filtering with Jest CLI
-npx jest --selectProjects Unit Integration          # Multiple projects
-npx jest --testNamePattern="auth"                   # Filter by test name
-npx jest --testPathPattern="components"             # Filter by file path
-npx jest --watch                                    # Watch mode for development
-npx jest --coverage                                 # Generate coverage reports
-```
-
-### Test Reports & CTRF Integration
-
-Tests automatically generate CTRF-compliant reports with:
-
-- **Standardized Format**: Industry-standard Common Test Report Format
-- **Rich Metadata**: Environment info, timing, failure details, and log capture
-- **API Integration**: Automated submission to test management APIs
-- **CI/CD Ready**: Seamless integration with continuous integration pipelines
-
-```bash
-# Send test results to API endpoints
-npm run send-test-results
-```
-
-### Continuous Integration
-
-The project includes ready-to-use CI/CD configurations:
-
-- **GitHub Actions**: Automated testing on pull requests and main branch
-- **Docker Support**: Containerized test execution for consistent environments
-- **Parallel Execution**: Optimized test running with configurable worker processes
-- **Failure Reporting**: Detailed test failure analysis and artifact collection
-
-For detailed CTRF configuration and CI/CD setup, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).ard\*\*: Visualize and monitor test results in real-time
-
+- **Interactive Test Results Dashboard**: Visualize and monitor test results in real-time
 - **Role-Based Access Control (RBAC)**: Powered by Keycloak authentication
 - **Test Report Generation**: Generate standardized CTRF test reports
 - **OpenSearch Integration**: Fast searching and analytics of test data
@@ -314,24 +259,26 @@ ScaledTest consists of three main components:
 
 ## Test Users
 
-The system automatically creates these test users:
+The system automatically creates these test users for development and testing:
 
 1. **Read-only User**
 
    - Username: `readonly@example.com`
-   - Password: `password`
+   - Password: `ReadOnly123!`
    - Role: readonly
 
 2. **Maintainer User**
 
    - Username: `maintainer@example.com`
-   - Password: `password`
+   - Password: `Maintainer123!`
    - Roles: readonly, maintainer
 
 3. **Owner User**
    - Username: `owner@example.com`
-   - Password: `password`
+   - Password: `Owner123!`
    - Roles: readonly, maintainer, owner
+
+**Security Note**: These test users are intended for development and testing environments only. In production, create proper user accounts through Keycloak's admin interface with secure passwords following your organization's password policy.
 
 ## CI/CD Integration
 
@@ -367,26 +314,61 @@ npm run update-deps
 - **Module System**: ES2024/ESM with TypeScript
 - **Test Runner**: Jest with custom ES module reporters
 
-## Testing & CTRF Reporting
+## Testing & Quality Assurance
 
 ScaledTest includes comprehensive testing capabilities with automated CTRF (Common Test Report Format) reporting:
 
-### Running Tests with CTRF Reporting
+### Test Architecture
+
+- **Unit Tests**: Fast, isolated tests for business logic and utility functions
+- **Component Tests**: React Testing Library tests for UI components and user interactions
+- **Integration Tests**: API endpoints, database interactions, and service integration
+- **System Tests**: End-to-end workflows using Playwright for complete user journeys
+
+### Running Tests
 
 ```bash
-# Send existing test results to API
+# Run all test suites
+npm test
+
+# Run specific test types
+npm run test:unit           # Unit tests only
+npm run test:components     # React component tests only
+npm run test:integration    # API and service integration tests
+npm run test:system         # End-to-end and UI tests (Playwright)
+
+# Advanced filtering with Jest CLI
+npx jest --selectProjects Unit Integration          # Multiple projects
+npx jest --testNamePattern="auth"                   # Filter by test name
+npx jest --testPathPattern="components"             # Filter by file path
+npx jest --watch                                    # Watch mode for development
+npx jest --coverage                                 # Generate coverage reports
+```
+
+### Test Reports & CTRF Integration
+
+Tests automatically generate CTRF-compliant reports with:
+
+- **Standardized Format**: Industry-standard Common Test Report Format
+- **Rich Metadata**: Environment info, timing, failure details, and log capture
+- **API Integration**: Automated submission to test management APIs
+- **CI/CD Ready**: Seamless integration with continuous integration pipelines
+
+```bash
+# Send test results to API endpoints
 npm run send-test-results
 ```
 
-### CTRF Benefits
+### Continuous Integration
 
-- **Standardized Format**: Uses the industry-standard CTRF schema
-- **API Integration**: Automatically sends test results to your own API for dogfooding
-- **Rich Metadata**: Includes environment info, timing, and failure details
-- **Authentication**: Supports Keycloak authentication for secure API submission
-- **Flexible Reporting**: Works with CI/CD pipelines and local development
+The project includes ready-to-use CI/CD configurations:
 
-For detailed CTRF configuration and usage, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).
+- **GitHub Actions**: Automated testing on pull requests and main branch
+- **Docker Support**: Containerized test execution for consistent environments
+- **Parallel Execution**: Optimized test running with configurable worker processes
+- **Failure Reporting**: Detailed test failure analysis and artifact collection
+
+For detailed CTRF configuration and CI/CD setup, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).
 
 ## Contributing
 
