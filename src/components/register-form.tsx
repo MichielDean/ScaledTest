@@ -7,6 +7,33 @@ import Link from 'next/link';
 import { useState, FormEvent } from 'react';
 import { Team } from '../types/team';
 
+// Password requirement item component
+interface RequirementItemProps {
+  met: boolean;
+  text: string;
+}
+
+function RequirementItem({ met, text }: RequirementItemProps) {
+  return (
+    <div
+      className={cn(
+        'flex items-center gap-2 text-xs',
+        met ? 'text-green-600' : 'text-muted-foreground'
+      )}
+    >
+      <span
+        className={cn(
+          'w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold',
+          met ? 'bg-green-100 text-green-600' : 'bg-muted text-muted-foreground'
+        )}
+      >
+        {met ? '✓' : '○'}
+      </span>
+      <span>{text}</span>
+    </div>
+  );
+}
+
 interface RegisterFormData {
   email: string;
   password: string;
@@ -42,6 +69,27 @@ export function RegisterForm({
   const [lastName, setLastName] = useState('');
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [validationError, setValidationError] = useState('');
+  const [showPasswordRequirements, setShowPasswordRequirements] = useState(false);
+
+  // Password requirement checks
+  const passwordRequirements = {
+    length: password.length >= 8,
+    digit: /\d/.test(password),
+    lowercase: /[a-z]/.test(password),
+    uppercase: /[A-Z]/.test(password),
+    special: /[!@#$%^&*()_+\-=[\]{};':"\\|,.<>/?]/.test(password),
+    notUsername: password !== email && password !== email.split('@')[0],
+  };
+
+  const allRequirementsMet = Object.values(passwordRequirements).every(Boolean);
+
+  // Enhanced error handling for Keycloak password policy errors
+  const getFormattedError = (errorMessage: string): string => {
+    if (errorMessage.toLowerCase().includes('password policy not met')) {
+      return 'Password does not meet the security requirements. Please check the requirements below.';
+    }
+    return errorMessage;
+  };
 
   const validateForm = (): boolean => {
     if (!email || !password) {
@@ -54,8 +102,9 @@ export function RegisterForm({
       return false;
     }
 
-    if (password.length < 8) {
-      setValidationError('Password must be at least 8 characters long');
+    if (!allRequirementsMet) {
+      setValidationError('Password does not meet all security requirements');
+      setShowPasswordRequirements(true);
       return false;
     }
 
@@ -103,7 +152,7 @@ export function RegisterForm({
                   className="bg-destructive/15 text-destructive rounded-md p-3 text-sm"
                   id="registerError"
                 >
-                  {error || validationError}
+                  {getFormattedError(error || validationError)}
                 </div>
               )}
 
@@ -150,12 +199,48 @@ export function RegisterForm({
                 <Input
                   id="password"
                   type="password"
-                  placeholder="At least 8 characters"
+                  placeholder="Create a secure password"
                   value={password}
-                  onChange={e => setPassword(e.target.value)}
+                  onChange={e => {
+                    setPassword(e.target.value);
+                    if (e.target.value) {
+                      setShowPasswordRequirements(true);
+                    }
+                  }}
+                  onFocus={() => setShowPasswordRequirements(true)}
                   required
                   disabled={isLoading}
                 />
+
+                {/* Password Requirements */}
+                {showPasswordRequirements && password && (
+                  <div className="mt-2 p-3 bg-muted rounded-md">
+                    <p className="text-sm font-medium mb-2">Password Requirements:</p>
+                    <div className="space-y-1">
+                      <RequirementItem
+                        met={passwordRequirements.length}
+                        text="At least 8 characters"
+                      />
+                      <RequirementItem met={passwordRequirements.digit} text="At least 1 number" />
+                      <RequirementItem
+                        met={passwordRequirements.lowercase}
+                        text="At least 1 lowercase letter"
+                      />
+                      <RequirementItem
+                        met={passwordRequirements.uppercase}
+                        text="At least 1 uppercase letter"
+                      />
+                      <RequirementItem
+                        met={passwordRequirements.special}
+                        text="At least 1 special character (!@#$%^&*)"
+                      />
+                      <RequirementItem
+                        met={passwordRequirements.notUsername}
+                        text="Cannot be the same as your email"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               <div className="grid gap-3">
