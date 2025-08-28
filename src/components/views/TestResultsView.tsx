@@ -221,10 +221,10 @@ const TestResultsView: React.FC = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Passed</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
+              <CheckCircle className="h-4 w-4 text-green-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-green-600">{summaryStats.passed}</div>
+              <div className="text-2xl font-bold text-green-700">{summaryStats.passed}</div>
             </CardContent>
           </Card>
 
@@ -241,10 +241,10 @@ const TestResultsView: React.FC = () => {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Skipped</CardTitle>
-              <SkipForward className="h-4 w-4 text-yellow-600" />
+              <SkipForward className="h-4 w-4 text-yellow-700" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold text-yellow-600">{summaryStats.skipped}</div>
+              <div className="text-2xl font-bold text-yellow-700">{summaryStats.skipped}</div>
             </CardContent>
           </Card>
 

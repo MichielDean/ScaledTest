@@ -1049,6 +1049,80 @@ interface User {
   )}
   ```
 
+## Authentication Backend Abstraction Standards
+
+**CRITICAL: NEVER expose authentication backend implementation details in the UI.**
+
+The UI must remain completely agnostic about which authentication system is being used (Keycloak, Auth0, custom, etc.). This ensures the frontend remains decoupled and can work with any authentication backend without code changes.
+
+**FORBIDDEN UI References:**
+
+- ❌ NEVER mention "Keycloak" in user-facing text, error messages, or UI labels
+- ❌ NEVER reference backend-specific concepts like "realm", "client", "admin console"
+- ❌ NEVER expose backend error messages directly to users
+- ❌ NEVER include backend system names in logs visible to end users
+
+**CORRECT UI Language Patterns:**
+
+```typescript
+// ❌ WRONG - Exposes backend implementation
+'User will be removed from Keycloak';
+'Keycloak authentication failed';
+'Check Keycloak admin console';
+'Password policy not met'; // Raw backend error
+
+// ✅ CORRECT - Backend-agnostic language
+'User will be removed from the system';
+'Authentication failed';
+'Contact your administrator';
+'Password does not meet security requirements';
+```
+
+**Error Message Translation:**
+
+- **Always translate backend-specific errors into user-friendly, generic messages**
+- **Provide actionable guidance without exposing technical details**
+- **Use application-specific terminology, not backend-specific terms**
+
+**Examples of Proper Abstraction:**
+
+```typescript
+// ✅ CORRECT - Generic user management language
+'Delete user from ScaledTest';
+'User account will be permanently removed';
+'Access to the application will be revoked';
+'Please contact support for account issues';
+
+// ✅ CORRECT - Generic authentication language
+'Sign in to your account';
+'Authentication required';
+'Invalid credentials';
+'Session expired';
+```
+
+**Implementation Pattern:**
+
+```typescript
+// ✅ CORRECT - Abstract error handling
+const getFormattedError = (backendError: string): string => {
+  if (backendError.includes('password policy')) {
+    return 'Password does not meet security requirements';
+  }
+  if (backendError.includes('user not found')) {
+    return 'Account not found';
+  }
+  return 'An error occurred. Please try again.';
+};
+```
+
+**Benefits of This Approach:**
+
+1. **Backend Flexibility**: Can switch authentication providers without UI changes
+2. **User Experience**: Users get consistent, brand-aligned messaging
+3. **Professional Appearance**: No technical jargon confuses users
+4. **Maintainability**: Centralized error handling and messaging
+5. **Security**: Doesn't leak information about internal systems
+
 ## Accessibility Standards
 
 **ALWAYS prioritize accessibility when creating visual elements:**

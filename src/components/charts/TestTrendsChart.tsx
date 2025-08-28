@@ -335,7 +335,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token, teamIds 
                 <div className="text-sm text-gray-600">Total Tests</div>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   {data.length > 0
                     ? Math.round(data.reduce((sum, d) => sum + d.passRate, 0) / data.length)
                     : 0}
@@ -350,7 +350,7 @@ const TestTrendsChart: React.FC<TestTrendsProps> = ({ days = 30, token, teamIds 
                 <div className="text-sm text-gray-600">Best Pass Rate</div>
               </div>
               <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">{data.length}</div>
+                <div className="text-2xl font-bold text-yellow-700">{data.length}</div>
                 <div className="text-sm text-gray-600">Data Points</div>
               </div>
             </div>

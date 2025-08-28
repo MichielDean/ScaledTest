@@ -19,13 +19,13 @@ function RequirementItem({ met, text }: RequirementItemProps) {
     <div
       className={cn(
         'flex items-center gap-2 text-xs',
-        met ? 'text-green-600' : 'text-muted-foreground'
+        met ? 'text-green-700' : 'text-muted-foreground'
       )}
     >
       <span
         className={cn(
           'w-4 h-4 rounded-full flex items-center justify-center text-xs font-bold',
-          met ? 'bg-green-100 text-green-600' : 'bg-muted text-muted-foreground'
+          met ? 'bg-green-100 text-green-700' : 'bg-muted text-muted-foreground'
         )}
       >
         {met ? '✓' : '○'}
@@ -84,7 +84,7 @@ export function RegisterForm({
 
   const allRequirementsMet = Object.values(passwordRequirements).every(Boolean);
 
-  // Enhanced error handling for Keycloak password policy errors
+  // Enhanced error handling for backend password policy errors
   const getFormattedError = (errorMessage: string): string => {
     if (errorMessage.toLowerCase().includes('password policy not met')) {
       return 'Password does not meet the security requirements. Please check the requirements below.';

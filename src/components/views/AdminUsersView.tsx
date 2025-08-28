@@ -221,7 +221,7 @@ const AdminUsersView: React.FC = () => {
                               <br />
                               <br />
                               This action cannot be undone. The user will be permanently removed
-                              from Keycloak and will lose access to the application.
+                              from the system and will lose access to the application.
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>

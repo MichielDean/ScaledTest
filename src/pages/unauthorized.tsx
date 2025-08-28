@@ -2,7 +2,7 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { ShieldX, Home, LayoutDashboard } from 'lucide-react';
 
@@ -23,9 +23,9 @@ const Unauthorized: NextPage = () => {
             <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
               <ShieldX className="h-6 w-6 text-red-600" />
             </div>
-            <CardTitle id="unauthorized-title" className="text-xl font-semibold text-red-600">
+            <h1 id="unauthorized-title" className="text-xl font-semibold text-destructive">
               Access Denied
-            </CardTitle>
+            </h1>
           </CardHeader>
           <CardContent className="text-center space-y-6">
             <p id="unauthorized-message" className="text-muted-foreground">

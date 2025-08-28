@@ -11,7 +11,7 @@ class MyDocument extends Document {
       <Html lang="en">
         <Head>
           <meta charSet="utf-8" />
-          <meta name="description" content="Next.js application with Keycloak authentication" />
+          <meta name="description" content="ScaledTest - Analytics and testing platform" />
 
           {/* Favicon and app icons */}
           <link rel="icon" href="/favicon.ico" />
