@@ -8,7 +8,7 @@ const Home: NextPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    // Fast redirect logic - don't wait for loading to complete
+    // Fast redirect logic - redirect to SPA dashboard for authenticated users
     if (isAuthenticated) {
       router.replace('/dashboard');
     } else if (!loading) {

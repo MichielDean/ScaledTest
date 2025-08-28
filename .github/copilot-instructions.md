@@ -1,5 +1,196 @@
 # ScaledTest Project - GitHub Copilot Instructions
 
+## Context7 Usage Requirements
+
+**ALWAYS use Context7 for code examples, package information, and implementation patterns:**
+
+- **BEFORE implementing any library or framework feature** - Use Context7 to get up-to-date examples and best practices
+- **BEFORE suggesting package versions** - Use Context7 to get current version information
+- **BEFORE creating custom implementations** - Check Context7 for existing solutions and patterns
+- **For Shadcn/ui, Next.js, React, and other frameworks** - Always reference Context7 documentation for correct implementation patterns
+
+**When a user asks for examples or implementation guidance:**
+
+1. Use Context7 first to get current best practices
+2. Implement exactly what Context7 recommends
+3. Do not create custom implementations when standard ones exist
+
+## Shadcn/ui Implementation Standards
+
+**CRITICAL: ALWAYS use the official Shadcn/ui CLI to install components. NEVER create custom implementations.**
+
+### Component Installation Process
+
+**ALWAYS follow this exact process:**
+
+1. **Install components using the CLI:**
+
+   ```bash
+   npx shadcn@latest add [component-name]
+   ```
+
+2. **Use official components exactly as documented:**
+
+   ```typescript
+   // ✅ CORRECT - Use official components
+   import { Button } from '@/components/ui/button';
+   import { Input } from '@/components/ui/input';
+   import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+
+   // ❌ WRONG - Creating custom components
+   const CustomButton = () => {
+     /* ... */
+   };
+   ```
+
+3. **Form implementation - ALWAYS use the official Form components:**
+
+   ```bash
+   npx shadcn@latest add form
+   ```
+
+   ```typescript
+   // ✅ CORRECT - Official form pattern
+   import { useForm } from 'react-hook-form';
+   import { zodResolver } from '@hookform/resolvers/zod';
+   import { z } from 'zod';
+   import {
+     Form,
+     FormControl,
+     FormField,
+     FormItem,
+     FormLabel,
+     FormMessage,
+   } from '@/components/ui/form';
+   ```
+
+### Shadcn/ui Best Practices
+
+**Component Usage:**
+
+- **NEVER create custom UI components** when Shadcn/ui equivalents exist
+- **ALWAYS check the Shadcn/ui registry** before building anything custom
+- **Use Context7** to get the latest Shadcn/ui implementation patterns
+- **Install individual components** as needed rather than all at once
+
+**Styling Rules:**
+
+- **ONLY use Tailwind CSS classes** for styling
+- **NEVER write custom CSS** for basic UI patterns
+- **Use design tokens** from the Shadcn/ui system
+- **Follow the established design system** consistently
+
+**Common Components to Install:**
+
+```bash
+# Essential components
+npx shadcn@latest add button
+npx shadcn@latest add input
+npx shadcn@latest add card
+npx shadcn@latest add form
+npx shadcn@latest add alert
+npx shadcn@latest add dialog
+npx shadcn@latest add dropdown-menu
+npx shadcn@latest add table
+npx shadcn@latest add tabs
+npx shadcn@latest add sheet
+```
+
+### CSS and Styling Conflict Prevention
+
+**CRITICAL: Avoid CSS conflicts with Shadcn/ui:**
+
+1. **NEVER override Shadcn/ui component styles** with custom CSS
+2. **Use Tailwind utility classes** instead of custom CSS
+3. **Check existing CSS modules** for conflicts before adding Shadcn/ui
+4. **Remove conflicting global styles** that override Tailwind base styles
+
+### Shadcn/ui Customization Restrictions
+
+**CRITICAL: Maintain component consistency and minimize customization:**
+
+1. **NEVER heavily customize Shadcn/ui components** - Use them as-is from the official registry
+2. **NEVER create wrapper components** that significantly alter Shadcn behavior or styling
+3. **NEVER add custom props or variants** unless absolutely necessary and approved
+4. **Use official component variants** and built-in styling options only
+5. **Follow the "minimal custom code" principle** - rely on official implementations
+
+**Acceptable customization (minimal only):**
+
+- Adding `className` props for spacing/layout (margin, padding)
+- Using official component variants (`variant`, `size`, etc.)
+- Passing through standard HTML attributes (`id`, `aria-*`, `data-*`)
+
+**FORBIDDEN customization:**
+
+- Creating custom styled-components or CSS modules for Shadcn components
+- Adding custom CSS classes that override component internals
+- Wrapping components in custom divs with extensive styling
+- Creating "enhanced" versions of existing Shadcn components
+
+## Established Color Theme Standards
+
+**CRITICAL: The project uses a carefully designed amber/charcoal color theme. NEVER modify colors without explicit user request.**
+
+### Current Color System
+
+The project uses a comprehensive color system defined in:
+
+- `tailwind.config.ts` - Custom brand colors (amber, charcoal, sand)
+- `src/styles/globals.css` - Semantic color mappings for light/dark modes
+
+**Primary Brand Colors:**
+
+- **Amber:** `#D88C2C` (primary actions, highlights)
+- **Amber Dark:** `#7A4B1F` (darker variant)
+- **Amber Light:** `#F3C57A` (lighter variant)
+- **Charcoal:** `#2B1D0E` (text, dark elements)
+- **Sand:** `#FDF5E6` (backgrounds, light elements)
+
+### Color Usage Rules
+
+**ALWAYS use semantic color tokens:**
+
+```typescript
+// ✅ CORRECT - Use semantic tokens
+className = 'bg-background text-foreground';
+className = 'bg-primary text-primary-foreground';
+className = 'bg-card text-card-foreground';
+className = 'border-border';
+
+// ❌ WRONG - Using arbitrary colors
+className = 'bg-blue-500 text-white';
+className = 'bg-gray-100 text-black';
+```
+
+**NEVER modify colors unless explicitly requested:**
+
+- Do not change color values in `tailwind.config.ts`
+- Do not alter semantic mappings in `globals.css`
+- Do not add new color variants without permission
+- Do not override theme colors with custom CSS
+
+**ALWAYS check accessibility:**
+
+- All color combinations maintain WCAG 2.1 AA contrast ratios
+- Dark mode is fully supported with inverted semantic mappings
+- Test color changes with the `/color-demo` page
+
+### Color Modification Process
+
+**ONLY modify colors when:**
+
+1. User explicitly requests color changes
+2. Accessibility issues are identified
+3. New semantic color tokens are needed for specific functionality
+
+**Before making color changes:**
+
+1. Verify current theme meets requirements
+2. Check if existing semantic tokens can be used
+3. Test accessibility impact in both light and dark modes
+4. Update `/color-demo` page if new colors are added
+
 ## Code Generation Best Practices
 
 **When generating any TypeScript code, ALWAYS follow these patterns to prevent common ESLint violations:**
@@ -68,6 +259,214 @@
 **NEVER create files with "new", "backup", "copy", "temp", or similar suffixes in the filename.** Always update existing files directly or create files with proper, final names.
 
 **NEVER create summary documents or status files.** Do not create files like "TASK_SUMMARY.md", "STATUS.md", "COMPLETION_REPORT.md", or similar documentation files that summarize work completed. The work itself and any necessary updates to existing documentation (like README.md) are sufficient.
+
+## React Component Development Standards
+
+**ALWAYS follow React best practices and consistency patterns:**
+
+### Component Structure and Organization
+
+```typescript
+// ✅ CORRECT - Proper component structure
+import React from 'react';
+import { Button } from "@/components/ui/button"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import styles from '../styles/ComponentName.module.css';
+import { logger } from '../logging/logger';
+
+interface ComponentNameProps {
+  title: string;
+  onAction?: () => void;
+  variant?: 'primary' | 'secondary';
+}
+
+const ComponentName: React.FC<ComponentNameProps> = ({
+  title,
+  onAction,
+  variant = 'primary'
+}) => {
+  // Hooks at the top
+  const [isLoading, setIsLoading] = useState(false);
+
+  // Event handlers
+  const handleClick = useCallback(() => {
+    logger.info('Component action triggered', { component: 'ComponentName' });
+    onAction?.();
+  }, [onAction]);
+
+  return (
+    <Card className={styles.container}>
+      <CardHeader>
+        <CardTitle>{title}</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Button
+          id="component-action-button"
+          onClick={handleClick}
+          disabled={isLoading}
+          variant={variant}
+        >
+          {isLoading ? 'Loading...' : 'Take Action'}
+        </Button>
+      </CardContent>
+    </Card>
+  );
+};
+
+export default ComponentName;
+```
+
+### State Management Patterns
+
+```typescript
+// ✅ CORRECT - Safe state management
+const [user, setUser] = useState<UserData | null>(null);
+const [errors, setErrors] = useState<Record<string, string>>({});
+const [isLoading, setIsLoading] = useState(false);
+
+// Derived state
+const hasUser = user !== null;
+const userName = user?.name || 'Guest';
+const errorCount = Object.keys(errors).length;
+
+// State updates with proper error handling
+const updateUser = useCallback(async (userData: Partial<UserData>) => {
+  try {
+    setIsLoading(true);
+    setErrors({});
+
+    const updatedUser = await userService.update(userData);
+    setUser(updatedUser);
+    logger.info('User updated successfully', { userId: updatedUser.id });
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : 'Update failed';
+    setErrors({ general: errorMessage });
+    logger.error('User update failed', { error, userData });
+  } finally {
+    setIsLoading(false);
+  }
+}, []);
+```
+
+### Event Handler Patterns
+
+```typescript
+// ✅ CORRECT - Proper event handling
+const handleSubmit = useCallback(
+  async (event: React.FormEvent) => {
+    event.preventDefault();
+
+    if (!formData.email || !formData.password) {
+      setErrors({ form: 'Email and password are required' });
+      return;
+    }
+
+    try {
+      setIsLoading(true);
+      await onSubmit(formData);
+    } catch (error) {
+      logger.error('Form submission failed', { error, formData: { email: formData.email } });
+      setErrors({ form: 'Submission failed. Please try again.' });
+    } finally {
+      setIsLoading(false);
+    }
+  },
+  [formData, onSubmit]
+);
+
+// ✅ CORRECT - Input change handlers
+const handleInputChange = useCallback(
+  (field: keyof FormData) => (event: React.ChangeEvent<HTMLInputElement>) => {
+    setFormData(prev => ({
+      ...prev,
+      [field]: event.target.value,
+    }));
+
+    // Clear field-specific errors
+    if (errors[field]) {
+      setErrors(prev => {
+        const { [field]: removed, ...rest } = prev;
+        return rest;
+      });
+    }
+  },
+  [errors]
+);
+```
+
+### Performance Optimization Patterns
+
+```typescript
+// ✅ CORRECT - Memoization for expensive calculations
+const processedData = useMemo(() => {
+  if (!Array.isArray(rawData)) return [];
+
+  return rawData
+    .filter(item => item?.isActive === true)
+    .map(item => ({
+      id: item.id,
+      displayName: item.name || 'Unknown',
+      value: Number(item.value) || 0
+    }))
+    .sort((a, b) => b.value - a.value);
+}, [rawData]);
+
+// ✅ CORRECT - Callback memoization for child components
+const handleItemClick = useCallback((itemId: string) => {
+  logger.info('Item clicked', { itemId });
+  onItemSelect?.(itemId);
+}, [onItemSelect]);
+
+// ✅ CORRECT - Component memoization for pure components
+const ItemList = React.memo<ItemListProps>(({ items, onItemClick }) => {
+  const itemElements = useMemo(() =>
+    items.map(item => (
+      <Item
+        key={item.id}
+        data={item}
+        onClick={() => onItemClick(item.id)}
+      />
+    )), [items, onItemClick]);
+
+  return <div className={styles.itemList}>{itemElements}</div>;
+});
+```
+
+### Error Boundary Implementation
+
+```typescript
+// ✅ CORRECT - Error boundary pattern
+class ComponentErrorBoundary extends React.Component<
+  { children: React.ReactNode; fallback?: React.ComponentType<{ error: Error }> },
+  { hasError: boolean; error?: Error }
+> {
+  constructor(props: any) {
+    super(props);
+    this.state = { hasError: false };
+  }
+
+  static getDerivedStateFromError(error: Error) {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
+    logger.error('Component error boundary triggered', {
+      error: error.message,
+      stack: error.stack,
+      componentStack: errorInfo.componentStack
+    });
+  }
+
+  render() {
+    if (this.state.hasError) {
+      const FallbackComponent = this.props.fallback || DefaultErrorFallback;
+      return <FallbackComponent error={this.state.error!} />;
+    }
+
+    return this.props.children;
+  }
+}
+```
 
 ## Temporary File and Script Management Standards
 
@@ -396,23 +795,6 @@ const processUser = (user: any) => {
 - Test code
 - Configuration files
 
-## CSS and Styling Standards
-
-**NEVER use inline styles.** All styling must use CSS Modules located in `src/styles/`.
-
-**ALWAYS use the existing design system:**
-
-- Use CSS custom properties from `src/styles/design-tokens.css`
-- Import shared styles from `src/styles/shared/` directory
-- Follow the established CSS architecture and patterns in the codebase
-- Maintain consistency with existing design patterns
-
-**CSS Module Structure:**
-
-- Component-specific styles go in `src/styles/ComponentName.module.css`
-- Use shared styles from `src/styles/shared/` for common patterns
-- Import CSS modules with: `import styles from '../styles/ComponentName.module.css'`
-
 ## DRY (Don't Repeat Yourself) Principles
 
 **ALWAYS follow DRY principles:**
@@ -679,10 +1061,12 @@ interface User {
 
 **Color Selection Guidelines:**
 
-- Reference existing accessible color combinations from the design system
-- Test color contrast using design tokens from `src/styles/design-tokens.css`
+- **ALWAYS use the established amber/charcoal theme** - see "Established Color Theme Standards" section
+- Reference semantic color tokens from `src/styles/globals.css`
+- Test color contrast using the `/color-demo` page
 - Avoid relying solely on color to convey information
 - Provide additional visual or textual indicators alongside color coding
+- **NEVER modify theme colors** without explicit user request
 
 **ALWAYS add accessibility tests for new visual components:**
 
@@ -745,54 +1129,7 @@ interface User {
 - Always include useful information in log messages to aid troubleshooting
 - Use appropriate log levels based on the severity and purpose of the message
 
-## Task Execution and Validation Standards
-
-**ALWAYS use terminal commands instead of VS Code tasks.** This ensures direct control and consistent behavior:
-
-**Bulk File Operations - Use Terminal Commands for Efficiency:**
-
-When making similar changes across multiple files, **ALWAYS favor terminal commands over individual file edits.** This is significantly faster and more efficient than editing each file individually.
-
-**Examples of when to use terminal commands:**
-
-- Adding imports across multiple files
-- Updating import paths after refactoring
-- Replacing deprecated function calls
-- Adding or removing specific patterns from multiple files
-- Updating configuration values across components
-
-**Terminal Command Patterns for Bulk Operations:**
-
-```powershell
-# Find and replace across TypeScript/JavaScript files (exclude node_modules, .next, etc.)
-Get-ChildItem -Recurse -Include "*.ts","*.tsx","*.js","*.jsx" -Path . | Where-Object { $_.FullName -notmatch "(node_modules|\.next|\.git|dist|build)" } | ForEach-Object { (Get-Content $_) -replace "oldPattern", "newPattern" | Set-Content $_ }
-
-# Add import statement to all component files
-Get-ChildItem -Recurse -Include "*.tsx" -Path "src/components" | ForEach-Object { $content = Get-Content $_; if ($content -notmatch "import.*logger") { $content = "import { logger } from '../logging/logger';`n" + ($content -join "`n"); Set-Content $_ $content } }
-
-# Remove console.log statements across all files
-Get-ChildItem -Recurse -Include "*.ts","*.tsx","*.js","*.jsx" -Path . | Where-Object { $_.FullName -notmatch "(node_modules|\.next|\.git|dist|build)" } | ForEach-Object { (Get-Content $_) -replace "console\.(log|error|warn|info).*", "" | Set-Content $_ }
-```
-
-**Directory Exclusion Patterns:**
-Always exclude these directories when performing bulk operations:
-
-- `node_modules/`
-- `.next/`
-- `.git/`
-- `dist/`
-- `build/`
-- `.vscode/`
-- `coverage/`
-- `.nyc_output/`
-- Any other build artifacts or dependency directories
-
-**When to still use individual file edits:**
-
-- Complex logic changes that require understanding of specific file context
-- Changes that vary significantly between files
-- When the bulk operation would be more complex than individual edits
-- Adding new functions or components with unique implementations
+## Validation Standards
 
 **NEVER re-run failing tests without making changes first.** If tests fail:
 

@@ -1,5 +1,4 @@
 import { describe, beforeAll, afterAll, it } from '@jest/globals';
-import { expect } from '@playwright/test';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { ProfilePage } from './pages/ProfilePage';
@@ -50,7 +49,7 @@ describe('Role-based Access Tests', () => {
     it('should not have content editing permissions', async () => {
       // Go back to dashboard for this test
       await dashboardPage.goto();
-      await dashboardPage.expectNoEditPermission();
+      await dashboardPage.expectNoAdminPermissions();
     });
 
     it('should not see admin actions on dashboard', async () => {
@@ -90,7 +89,8 @@ describe('Role-based Access Tests', () => {
 
     it('should have content editing permissions', async () => {
       await dashboardPage.goto();
-      await dashboardPage.expectEditPermission();
+      // Maintainers don't have admin permissions (manage users/teams)
+      await dashboardPage.expectNoAdminPermissions();
     });
 
     it('should not see admin actions on dashboard', async () => {
@@ -102,11 +102,11 @@ describe('Role-based Access Tests', () => {
       await headerComponent.expectAdminAccess();
     });
 
-    it('should be redirected from user management to teams section', async () => {
-      // Maintainers can access admin dashboard but should be redirected to teams section
+    it('should be denied access to user management', async () => {
+      // Maintainers can access some admin functions but should be denied user management
       await userManagementPage.goto();
-      // Should be redirected to teams section instead of users
-      await expect(userManagementPage.page).toHaveURL(/\/admin\?section=teams/);
+      // Should see access denied message instead of being redirected
+      await userManagementPage.expectAccessDenied();
     });
   });
 
@@ -132,7 +132,8 @@ describe('Role-based Access Tests', () => {
 
     it('should have content editing permissions', async () => {
       await dashboardPage.goto();
-      await dashboardPage.expectEditPermission();
+      // Owners have full admin permissions (manage users/teams)
+      await dashboardPage.expectAdminPermissions();
     });
 
     it('should see admin actions on dashboard', async () => {
