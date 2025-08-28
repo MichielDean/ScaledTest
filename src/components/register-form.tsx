@@ -3,7 +3,6 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import Image from 'next/image';
 import Link from 'next/link';
 import { useState, FormEvent } from 'react';
 import { Team } from '../types/team';
@@ -88,13 +87,15 @@ export function RegisterForm({
 
   return (
     <div className={cn('flex flex-col gap-6', className)} {...props}>
-      <Card className="overflow-hidden p-0">
-        <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
+      <Card className="overflow-hidden">
+        <CardContent className="p-6 md:p-8">
+          <form onSubmit={handleSubmit}>
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <h1 className="text-2xl font-bold">Create your account</h1>
-                <p className="text-muted-foreground text-balance">Join ScaledTest to get started</p>
+                <p className="text-muted-foreground text-balance">
+                  Enter your details to get started
+                </p>
               </div>
 
               {(error || validationError) && (
@@ -218,9 +219,6 @@ export function RegisterForm({
               </div>
             </div>
           </form>
-          <div className="bg-muted relative hidden md:block">
-            <Image src="/icon.png" alt="ScaledTest Logo" fill className="object-contain p-8" />
-          </div>
         </CardContent>
       </Card>
       <div className="text-muted-foreground text-center text-xs text-balance">

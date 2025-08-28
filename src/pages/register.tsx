@@ -97,7 +97,7 @@ export default function RegisterPage() {
   return (
     <>
       <Head>
-        <title>Register - ScaledTest</title>
+        <title>Register</title>
       </Head>
 
       <main className="bg-muted flex min-h-svh flex-col items-center justify-center p-6 md:p-10">
