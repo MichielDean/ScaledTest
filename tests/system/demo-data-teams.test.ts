@@ -9,6 +9,7 @@ import { getAuthToken } from '../../tests/authentication/tokenService';
 import { CtrfSchema, Status } from '../../src/schemas/ctrf/ctrf';
 import { DEMO_DATA_TEAM } from '../../src/lib/teamFilters';
 import logger from '../../src/logging/logger';
+import crypto from 'crypto';
 
 // Extended interface for stored reports with metadata
 interface StoredTestReport extends CtrfSchema {
@@ -61,8 +62,78 @@ describe('Demo Data with Teams Integration', () => {
     maintainerToken = await getAuthToken('maintainer@example.com');
     readonlyToken = await getAuthToken('readonly@example.com');
     ownerToken = await getAuthToken('owner@example.com');
+
+    // Upload demo data that will be used by all tests
+    await uploadDemoData();
   });
 
+  // Helper function to upload demo data
+  async function uploadDemoData() {
+    // Create demo data by directly inserting it into OpenSearch with demo marking
+    // This bypasses the normal team-based logic to ensure demo data exists
+    await createDemoDataDirectly();
+  }
+
+  // Helper function to create demo data directly in OpenSearch
+  async function createDemoDataDirectly() {
+    const opensearchClient = (await import('../../src/lib/opensearch')).default;
+
+    const now = new Date();
+    const startTime = now.getTime() - 30000;
+
+    const demoReport = {
+      reportId: crypto.randomUUID(),
+      timestamp: now.toISOString(),
+      results: {
+        tool: { name: 'Demo-Jest' },
+        summary: {
+          tests: 15,
+          passed: 12,
+          failed: 2,
+          skipped: 1,
+          pending: 0,
+          other: 0,
+          start: startTime,
+          stop: now.getTime(),
+        },
+        tests: [
+          {
+            name: 'Demo test case 1',
+            status: 'passed' as const,
+            duration: 1000,
+            start: startTime,
+            stop: startTime + 1000,
+          },
+          {
+            name: 'Demo test case 2',
+            status: 'failed' as const,
+            duration: 1500,
+            start: startTime + 1000,
+            stop: startTime + 2500,
+          },
+        ],
+        environment: {
+          testEnvironment: 'demo',
+        },
+      },
+      storedAt: now.toISOString(),
+      metadata: {
+        uploadedBy: 'demo-system',
+        userTeams: [DEMO_DATA_TEAM], // Force demo data marking
+        uploadedAt: now.toISOString(),
+        isDemoData: true, // Explicitly mark as demo data
+      },
+    };
+
+    await opensearchClient.index({
+      index: 'ctrf-reports',
+      id: demoReport.reportId,
+      body: demoReport,
+      refresh: true,
+    });
+
+    testLogger.info('Demo data created directly in OpenSearch');
+  }
   describe('Demo Data Upload', () => {
     test('should allow maintainer user to upload demo data', async () => {
       const now = new Date();
@@ -174,18 +245,74 @@ describe('Demo Data with Teams Integration', () => {
 
   describe('Demo Data Visibility', () => {
     test('should allow readonly user to see demo data even with no teams', async () => {
+      // Wait a bit for OpenSearch to index the data
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      testLogger.info('Making GET request to fetch reports', {
+        url: `${baseUrl}/api/test-reports`,
+        hasToken: !!readonlyToken,
+        tokenStart: readonlyToken?.substring(0, 20) + '...',
+        fullUrl: `${baseUrl}/api/test-reports`,
+        method: 'GET',
+      });
+
       const response = await fetch(`${baseUrl}/api/test-reports`, {
         method: 'GET',
         headers: {
           Authorization: `Bearer ${readonlyToken}`,
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-cache',
         },
       });
+
+      testLogger.info('GET response received', {
+        status: response.status,
+        statusText: response.statusText,
+        headers: Object.fromEntries(response.headers.entries()),
+        responseOk: response.ok,
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        testLogger.error('API request failed', {
+          status: response.status,
+          statusText: response.statusText,
+          errorBody: errorText,
+        });
+        throw new Error(
+          `API request failed: ${response.status} ${response.statusText} - ${errorText}`
+        );
+      }
 
       expect(response.status).toBe(200);
 
       const result = (await response.json()) as TestReportsResponse;
+
+      testLogger.info('API response parsed', {
+        success: result.success,
+        dataLength: result.data?.length || 0,
+        hasData: !!result.data,
+        total: result.total,
+        pagination: result.pagination,
+        responseKeys: Object.keys(result),
+        dataIsArray: Array.isArray(result.data),
+      });
+
       expect(result.success).toBe(true);
       expect(Array.isArray(result.data)).toBe(true);
+
+      // Log all report metadata for debugging
+      testLogger.info('All reports returned for readonly user', {
+        totalReports: result.data.length,
+        firstReportsMetadata: result.data.slice(0, 3).map((report: StoredTestReport) => ({
+          id: report.id,
+          tool: report.results?.tool?.name,
+          isDemoData: report?.metadata?.isDemoData,
+          userTeams: report?.metadata?.userTeams,
+          uploadedBy: report?.metadata?.uploadedBy,
+          fullMetadata: report?.metadata,
+        })),
+      });
 
       // Should have demo data visible
       const demoReports = result.data.filter(
@@ -195,12 +322,25 @@ describe('Demo Data with Teams Integration', () => {
             report.metadata.userTeams.includes(DEMO_DATA_TEAM))
       );
 
-      expect(demoReports.length).toBeGreaterThan(0);
-
       testLogger.info('Demo data visibility test', {
         totalReports: result.data.length,
         demoReports: demoReports.length,
+        DEMO_DATA_TEAM,
+        firstFewReports: result.data.slice(0, 5).map((report: StoredTestReport) => ({
+          hasMetadata: !!report.metadata,
+          isDemoData: report?.metadata?.isDemoData,
+          userTeams: report?.metadata?.userTeams,
+          userTeamsType: typeof report?.metadata?.userTeams,
+          userTeamsIsArray: Array.isArray(report?.metadata?.userTeams),
+          includesDemo: Array.isArray(report?.metadata?.userTeams)
+            ? report.metadata.userTeams.includes(DEMO_DATA_TEAM)
+            : 'not array',
+          fullMetadata: report?.metadata,
+          metadataKeys: report?.metadata ? Object.keys(report.metadata) : 'no metadata',
+        })),
       });
+
+      expect(demoReports.length).toBeGreaterThan(0);
     });
 
     test('should allow owner user to see demo data', async () => {

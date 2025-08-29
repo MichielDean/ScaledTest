@@ -1,23 +1,20 @@
-import { NextPage } from 'next';
+import type { NextPage } from 'next';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { uiLogger as logger } from '../../logging/logger';
+import withAuth from '../../auth/withAuth';
+import { UserRole } from '../../auth/keycloak';
 
-const UsersRedirect: NextPage = () => {
+const AdminUsers: NextPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    const redirectToAdmin = async () => {
-      try {
-        await router.replace('/admin?section=users');
-      } catch (error) {
-        logger.error('Failed to redirect to admin dashboard', { error, section: 'users' });
-      }
-    };
-    redirectToAdmin();
+    // Redirect to the main SPA dashboard with admin view
+    router.replace('/dashboard?view=admin');
   }, [router]);
 
-  return <div>Redirecting to admin dashboard...</div>;
+  return null;
 };
 
-export default UsersRedirect;
+export default withAuth(AdminUsers, {
+  requiredRoles: [UserRole.OWNER],
+});

@@ -230,7 +230,7 @@ const TestSuiteOverview: React.FC<TestSuiteOverviewProps> = ({ token }) => {
                 </div>
                 <div className="grid grid-cols-3 gap-4 text-center">
                   <div>
-                    <div className="text-2xl font-bold text-green-600">{totalPassed}</div>
+                    <div className="text-2xl font-bold text-green-700">{totalPassed}</div>
                     <div className="text-sm text-gray-600">Passed</div>
                   </div>
                   <div>
@@ -240,7 +240,7 @@ const TestSuiteOverview: React.FC<TestSuiteOverviewProps> = ({ token }) => {
                     <div className="text-sm text-gray-600">Failed</div>
                   </div>
                   <div>
-                    <div className="text-2xl font-bold text-yellow-600">
+                    <div className="text-2xl font-bold text-yellow-700">
                       {statusData.find(s => s.name === 'Skipped')?.value || 0}
                     </div>
                     <div className="text-sm text-gray-600">Skipped</div>

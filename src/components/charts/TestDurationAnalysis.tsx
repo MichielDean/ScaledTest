@@ -193,13 +193,13 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
                 <div className="text-sm text-gray-600">Total Tests Analyzed</div>
               </div>
               <div className="text-center p-4 bg-green-50 rounded-lg">
-                <div className="text-2xl font-bold text-green-600">
+                <div className="text-2xl font-bold text-green-700">
                   {formatDuration(avgDuration)}
                 </div>
                 <div className="text-sm text-gray-600">Average Duration</div>
               </div>
               <div className="text-center p-4 bg-yellow-50 rounded-lg">
-                <div className="text-2xl font-bold text-yellow-600">
+                <div className="text-2xl font-bold text-yellow-700">
                   {formatDuration(maxDuration)}
                 </div>
                 <div className="text-sm text-gray-600">Slowest Test</div>
@@ -344,7 +344,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
             <div className="grid md:grid-cols-3 gap-4">
               <div className="p-4 bg-green-50 rounded-lg border border-green-200">
                 <h4 className="font-semibold text-green-800 mb-2">Fast Tests (&lt; 5s)</h4>
-                <p className="text-2xl font-bold text-green-600">
+                <p className="text-2xl font-bold text-green-700">
                   {validData
                     .filter(d => d?.range?.includes('0-1s') || d?.range?.includes('1-5s'))
                     .reduce((sum, d) => sum + (d?.count || 0), 0)}
@@ -365,7 +365,7 @@ const TestDurationAnalysis: React.FC<TestDurationAnalysisProps> = ({ token }) =>
 
               <div className="p-4 bg-yellow-50 rounded-lg border border-yellow-200">
                 <h4 className="font-semibold text-yellow-800 mb-2">Moderate Tests (5-30s)</h4>
-                <p className="text-2xl font-bold text-yellow-600">
+                <p className="text-2xl font-bold text-yellow-700">
                   {validData
                     .filter(d => d?.range?.includes('5-10s') || d?.range?.includes('10-30s'))
                     .reduce((sum, d) => sum + (d?.count || 0), 0)}

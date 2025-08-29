@@ -60,6 +60,10 @@ export const keycloakEndpoints = {
   users: `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users`,
   clients: `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/clients`,
 
+  // Helper function to get a specific user endpoint
+  getUserEndpoint: (userId: string) =>
+    `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}`,
+
   // Helper function to get the client roles endpoint for a user
   getUserClientRolesEndpoint: (userId: string, clientId: string) =>
     `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}/role-mappings/clients/${clientId}`,

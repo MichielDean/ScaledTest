@@ -1,5 +1,4 @@
 import { describe, beforeEach, afterEach, it } from '@jest/globals';
-import { expect } from '@playwright/test';
 import { LoginPage } from './pages/LoginPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { HeaderComponent } from './pages/HeaderComponent';
@@ -72,12 +71,12 @@ describe('Navigation Tests', () => {
       await loginPage.expectToBeOnLoginPage();
     });
 
-    it('should redirect to unauthorized page when accessing user management', async () => {
+    it('should redirect to login page when accessing user management', async () => {
       // Try to directly navigate to user management
       await userManagementPage.goto();
 
-      // Should be redirected to unauthorized page (since admin pages redirect to unauthorized)
-      await userManagementPage.expectUnauthorizedPage();
+      // Should be redirected to login page (since unauthenticated users must login first)
+      await loginPage.expectToBeOnLoginPage();
     });
   });
 
@@ -89,16 +88,12 @@ describe('Navigation Tests', () => {
       await dashboardPage.expectDashboardLoaded();
     });
 
-    it('should redirect to teams section when maintainer accesses users section', async () => {
+    it('should show access denied when maintainer accesses users section', async () => {
       // Try to navigate directly to user management page
       await userManagementPage.goto();
 
-      // Verify we're redirected to teams section
-      await expect(playwrightContext.page).toHaveURL(/\/admin\?section=teams/, { timeout: 10000 });
-
-      // Verify teams section is loaded
-      const teamsSection = playwrightContext.page.locator('#teams-section-title');
-      await expect(teamsSection).toBeVisible();
+      // Verify we get an access denied message (maintainers can't manage users, only owners can)
+      await userManagementPage.expectAccessDenied();
     });
   });
 });

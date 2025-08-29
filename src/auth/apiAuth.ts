@@ -164,11 +164,14 @@ export function withApiAuth(
 // Enhanced middleware with method-specific role requirements
 export function withMethodAuth(handler: AuthenticatedApiHandler, roleConfig: MethodRoleConfig) {
   return async (req: NextApiRequest, res: NextApiResponse) => {
+    const reqLogger = getRequestLogger(req);
+
     try {
       // First, authenticate the user
       const authHeader = req.headers.authorization;
 
       if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        reqLogger.error('No valid authorization header found');
         return res.status(401).json({
           success: false,
           error: 'Unauthorized - No valid token provided',
@@ -180,6 +183,7 @@ export function withMethodAuth(handler: AuthenticatedApiHandler, roleConfig: Met
       try {
         // Verify the token
         const payload = await verifyToken(token);
+        reqLogger.info('Token verified successfully', { userSub: payload.sub });
 
         // Add the decoded token to the request object
         const authReq = req as AuthenticatedRequest;
@@ -189,13 +193,26 @@ export function withMethodAuth(handler: AuthenticatedApiHandler, roleConfig: Met
         const method = req.method as keyof MethodRoleConfig;
         const requiredRoles = roleConfig[method];
 
+        reqLogger.info('Role check', {
+          method,
+          requiredRoles,
+          userRoles: payload.realm_access?.roles || [],
+          clientRoles: payload.resource_access?.[keycloakConfig.clientId]?.roles || [],
+        });
+
         if (requiredRoles && !hasRequiredRole(payload, requiredRoles)) {
+          reqLogger.error('Insufficient privileges', {
+            method,
+            requiredRoles,
+            userRoles: payload.realm_access?.roles || [],
+          });
           return res.status(403).json({
             success: false,
             error: `Forbidden - ${method} operations require ${requiredRoles.join(' or ')} privileges`,
           } as ErrorResponse);
         }
 
+        reqLogger.info('Authentication successful, calling handler', { userSub: payload.sub });
         // Call the handler with the authenticated request
         return handler(authReq, res);
       } catch (error) {

@@ -2,9 +2,9 @@ import type { NextPage } from 'next';
 import Head from 'next/head';
 import Link from 'next/link';
 import { useRouter } from 'next/router';
-import Header from '../components/Header';
-import styles from '../styles/Unauthorized.module.css';
-import sharedButtons from '../styles/shared/buttons.module.css';
+import { Card, CardContent, CardHeader } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { ShieldX, Home, LayoutDashboard } from 'lucide-react';
 
 const Unauthorized: NextPage = () => {
   const router = useRouter();
@@ -13,41 +13,44 @@ const Unauthorized: NextPage = () => {
   return (
     <div>
       <Head>
-        <title>Unauthorized - Keycloak Auth Demo</title>
+        <title>Unauthorized - ScaledTest</title>
+        <meta name="description" content="Access denied - unauthorized page" />
       </Head>
 
-      <Header />
+      <main className="container mx-auto px-4 py-8 min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100">
+              <ShieldX className="h-6 w-6 text-red-600" />
+            </div>
+            <h1 id="unauthorized-title" className="text-xl font-semibold text-destructive">
+              Access Denied
+            </h1>
+          </CardHeader>
+          <CardContent className="text-center space-y-6">
+            <p id="unauthorized-message" className="text-muted-foreground">
+              You do not have permission to access this page.
+            </p>
 
-      <main id="main-content" className="container">
-        <div className={`card ${styles.centeredCard}`}>
-          <h1 id="unauthorized-title" className={styles.errorTitle}>
-            Access Denied
-          </h1>
-
-          <p id="unauthorized-message" className={styles.description}>
-            You do not have permission to access this page.
-          </p>
-
-          <div className={styles.buttonContainer}>
-            <Link href="/" aria-label="Return to home page">
-              <button className={sharedButtons.actionButton} aria-label="Return to home page">
-                Return to Home
-              </button>
-            </Link>
-
-            {returnUrl && typeof returnUrl === 'string' && (
-              <Link href="/dashboard" aria-label="Go to dashboard page">
-                <button
-                  id="return-to-previous"
-                  className={sharedButtons.actionButton}
-                  aria-label="Go to dashboard page"
-                >
-                  Go to Dashboard
-                </button>
+            <div className="flex flex-col gap-3">
+              <Link href="/" aria-label="Return to home page">
+                <Button className="w-full" variant="default">
+                  <Home className="h-4 w-4 mr-2" />
+                  Return to Home
+                </Button>
               </Link>
-            )}
-          </div>
-        </div>
+
+              {returnUrl && typeof returnUrl === 'string' && (
+                <Link href="/dashboard" aria-label="Go to dashboard page">
+                  <Button id="return-to-previous" className="w-full" variant="outline">
+                    <LayoutDashboard className="h-4 w-4 mr-2" />
+                    Go to Dashboard
+                  </Button>
+                </Link>
+              )}
+            </div>
+          </CardContent>
+        </Card>
       </main>
     </div>
   );

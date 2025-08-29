@@ -24,41 +24,41 @@ export function buildTeamAccessFilter(
   userId: string,
   userTeamIds: string[]
 ): Record<string, unknown> {
-  const teamAccessFilter = [];
+  const shouldClauses = [];
 
-  // If user has teams, they can see reports from those teams
+  // If user has teams, they can access reports for those teams
   if (userTeamIds.length > 0) {
-    teamAccessFilter.push({
+    shouldClauses.push({
       terms: {
         'metadata.userTeams.keyword': userTeamIds,
       },
     });
   }
 
-  // User can always see reports they uploaded themselves
-  teamAccessFilter.push({
+  // User can always access their own uploads
+  shouldClauses.push({
     term: {
       'metadata.uploadedBy.keyword': userId,
     },
   });
 
-  // All users can see demo data (reports marked with isDemoData or with DEMO_DATA_TEAM)
-  teamAccessFilter.push({
+  // All users can access demo data
+  shouldClauses.push({
     term: {
       'metadata.isDemoData': true,
     },
   });
 
-  teamAccessFilter.push({
+  // All users can access data marked with demo-data team
+  shouldClauses.push({
     term: {
       'metadata.userTeams.keyword': DEMO_DATA_TEAM,
     },
   });
 
-  // Combine all access rules with OR logic
   return {
     bool: {
-      should: teamAccessFilter,
+      should: shouldClauses,
       minimum_should_match: 1,
     },
   };
