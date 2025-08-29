@@ -32,6 +32,7 @@ const handleGet: MethodHandler<GetUserTeamsResponse | ErrorResponse> = async (
     reqLogger.info('Successfully retrieved user teams', {
       userId,
       teamCount: userTeams.length,
+      teamIds: userTeams.map(t => t.id),
     });
 
     return res.status(200).json({

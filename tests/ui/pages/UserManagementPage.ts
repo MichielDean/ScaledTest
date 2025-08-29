@@ -2,7 +2,7 @@ import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 
 /**
- * Page object representing the user management page
+ * Page object for user management functionality
  */
 export class UserManagementPage extends BasePage {
   readonly usersTable: Locator;
@@ -24,15 +24,16 @@ export class UserManagementPage extends BasePage {
    * Navigate to the admin dashboard (users section)
    */
   async goto() {
-    await super.goto('/admin?section=users');
+    await super.goto('/dashboard?view=admin-users');
   }
+
   /**
    * Check if the admin dashboard (users section) is loaded properly
    */
   async expectPageLoaded() {
     // Wait for the users section to be visible instead of page title
-    const usersSection = this.page.locator('#users-section-title');
-    await expect(usersSection).toBeVisible();
+    const usersTitle = this.page.locator('#admin-users-title');
+    await expect(usersTitle).toBeVisible();
     await expect(this.usersTable).toBeVisible();
   }
 
@@ -61,17 +62,33 @@ export class UserManagementPage extends BasePage {
     const userRow = this.page.locator(`#user-row-${username}`);
     const rolesCell = userRow.locator(`#user-role-${role.toLowerCase()}`);
     await expect(rolesCell).toBeVisible();
-  } /**
-   * Check if unauthorized page is shown when accessing without proper permissions
+  }
+
+  /**
+   * Check if access denied message is shown when accessing without proper permissions
+   */
+  async expectAccessDenied() {
+    // We expect to stay on the dashboard but see an access denied alert
+    await expect(this.page).toHaveURL(/\/dashboard/, { timeout: 5000 });
+    // Check for the access denied alert using Shadcn Alert component selector
+    const accessDeniedAlert = this.page.locator('[data-slot="alert"]', {
+      hasText: "You don't have permission to manage users",
+    });
+    await expect(accessDeniedAlert).toBeVisible();
+  }
+
+  /**
+   * Check if access denied message is shown when accessing without proper permissions
+   * In the SPA structure, we show access denied messages inline instead of redirecting
    */
   async expectUnauthorizedPage() {
-    // We expect to be redirected to the unauthorized page
-    await expect(this.page).toHaveURL(/\/unauthorized/, { timeout: 10000 });
-    // Check for the unauthorized title which should be present on the unauthorized page
-    const unauthorizedTitle = this.page.locator('#unauthorized-title');
-    await expect(unauthorizedTitle).toBeVisible();
-    // Check for the return button
-    const returnButton = this.page.locator('#return-to-previous');
-    await expect(returnButton).toBeVisible();
+    // In SPA, we expect to stay on the same page but see an access denied alert
+    await expect(this.page).toHaveURL(/\/dashboard\?view=admin-users/, { timeout: 10000 });
+
+    // Check for the access denied alert message
+    const accessDeniedAlert = this.page.locator('[data-slot="alert"]', {
+      hasText: "You don't have permission to manage users",
+    });
+    await expect(accessDeniedAlert).toBeVisible();
   }
 }

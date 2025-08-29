@@ -1,31 +1,20 @@
-import React from 'react';
-import Head from 'next/head';
+import type { NextPage } from 'next';
+import { useEffect } from 'react';
+import { useRouter } from 'next/router';
 import withAuth from '../auth/withAuth';
 import { UserRole } from '../auth/keycloak';
-import Header from '../components/Header';
-import ModernVisualizationPlayground from '../components/charts/ModernVisualizationPlayground';
 
-const ModernAnalyticsPage: React.FC = () => {
-  return (
-    <>
-      <Head>
-        <title>Smart Analytics Studio | ScaledTest</title>
-        <meta
-          name="description"
-          content="Create beautiful, interactive visualizations from your test data with our modern analytics studio"
-        />
-        <meta name="viewport" content="width=device-width, initial-scale=1" />
-      </Head>
+const ModernAnalytics: NextPage = () => {
+  const router = useRouter();
 
-      <Header />
+  useEffect(() => {
+    // Redirect to the main SPA dashboard with modern-analytics view
+    router.replace('/dashboard?view=modern-analytics');
+  }, [router]);
 
-      <main>
-        <ModernVisualizationPlayground />
-      </main>
-    </>
-  );
+  return null;
 };
 
-export default withAuth(ModernAnalyticsPage, {
+export default withAuth(ModernAnalytics, {
   requiredRoles: [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER],
 });

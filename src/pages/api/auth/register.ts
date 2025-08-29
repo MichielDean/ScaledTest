@@ -91,6 +91,41 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const userId = usersResponse.data[0].id;
 
+    // Assign the readonly role to the new user (required for dashboard access)
+    try {
+      const readonlyRoleResponse = await axios.get(
+        `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/roles/readonly`,
+        {
+          headers: {
+            Authorization: `Bearer ${adminToken}`,
+          },
+        }
+      );
+
+      if (readonlyRoleResponse.data) {
+        await axios.post(
+          `${keycloakConfig.url}/admin/realms/${keycloakConfig.realm}/users/${userId}/role-mappings/realm`,
+          [readonlyRoleResponse.data],
+          {
+            headers: {
+              Authorization: `Bearer ${adminToken}`,
+              'Content-Type': 'application/json',
+            },
+          }
+        );
+        logger.info(
+          { username: finalUsername, role: 'readonly' },
+          'Assigned readonly role to new user'
+        );
+
+        // Wait a short time for role assignment to propagate in Keycloak
+        await new Promise(resolve => setTimeout(resolve, 500));
+      }
+    } catch (error) {
+      logger.warn({ username: finalUsername, error }, 'Failed to assign readonly role to new user');
+      // Don't fail registration if role assignment fails
+    }
+
     // Assign user to selected teams
     if (teamIds && Array.isArray(teamIds) && teamIds.length > 0) {
       logger.info({ username: finalUsername, teamIds }, 'Assigning user to selected teams');
@@ -116,7 +151,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     userTokenFormData.append('grant_type', 'password');
 
     let tokenAttempts = 0;
-    const maxAttempts = 3;
+    const maxAttempts = 5; // Increased attempts to account for role propagation
     let userTokenResponse;
 
     while (tokenAttempts < maxAttempts) {
@@ -130,18 +165,59 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
             },
           }
         );
-        break; // Success, exit retry loop
+
+        // Verify that the token includes the readonly role before returning
+        try {
+          const { verifyToken } = await import('../../../auth/apiAuth');
+          const payload = await verifyToken(userTokenResponse.data.access_token);
+          const userRoles = [
+            ...(payload.realm_access?.roles || []),
+            ...(payload.resource_access?.[keycloakConfig.clientId]?.roles || []),
+          ];
+
+          if (userRoles.includes('readonly')) {
+            logger.info(
+              { username: finalUsername, roles: userRoles },
+              'Token verified with readonly role'
+            );
+            break; // Success with proper role, exit retry loop
+          } else {
+            logger.warn(
+              { username: finalUsername, roles: userRoles, attempt: tokenAttempts + 1 },
+              'Token does not include readonly role, retrying...'
+            );
+            if (tokenAttempts >= maxAttempts - 1) {
+              logger.error(
+                { username: finalUsername, roles: userRoles },
+                'Failed to get token with readonly role after all attempts'
+              );
+              break; // Use the token even without role verification
+            }
+          }
+        } catch (verifyError) {
+          logger.warn(
+            { username: finalUsername, error: verifyError, attempt: tokenAttempts + 1 },
+            'Failed to verify token, proceeding anyway'
+          );
+          break; // Use the token even if verification fails
+        }
       } catch (error) {
         tokenAttempts++;
         if (tokenAttempts >= maxAttempts) {
           throw error; // Re-throw the error if we've exhausted retries
         }
-        // Wait before retrying
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        // Wait before retrying (progressive backoff)
+        await new Promise(resolve => setTimeout(resolve, 1000 * (tokenAttempts + 1)));
         logger.info(
           { username: finalUsername, attempt: tokenAttempts },
           'Token request failed, retrying...'
         );
+      }
+
+      if (!userTokenResponse) {
+        tokenAttempts++;
+        // Wait before retrying for role propagation
+        await new Promise(resolve => setTimeout(resolve, 1000 * (tokenAttempts + 1)));
       }
     }
 

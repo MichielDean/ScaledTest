@@ -7,13 +7,15 @@ import { BasePage } from './BasePage';
 export class DashboardPage extends BasePage {
   readonly contentSection: Locator;
   readonly adminActionsSection: Locator;
-  readonly editContentButton: Locator;
+  readonly manageUsersButton: Locator;
+  readonly manageTeamsButton: Locator;
 
   constructor(page: Page) {
     super(page);
-    this.contentSection = page.locator('#content-section');
+    this.contentSection = page.locator('#main-content');
     this.adminActionsSection = page.locator('#admin-actions-section');
-    this.editContentButton = page.locator('#edit-content-button');
+    this.manageUsersButton = page.locator('#manage-users-button');
+    this.manageTeamsButton = page.locator('#manage-teams-button');
   }
 
   /**
@@ -37,19 +39,21 @@ export class DashboardPage extends BasePage {
   }
 
   /**
-   * Check if the edit content button is visible
-   * This should only be visible for maintainer and owner roles
+   * Check if admin actions are available (manage users/teams buttons)
+   * This should only be visible for owner roles
    */
-  async expectEditPermission() {
-    await expect(this.editContentButton).toBeVisible();
+  async expectAdminPermissions() {
+    await expect(this.adminActionsSection).toBeVisible();
+    await expect(this.manageUsersButton).toBeVisible();
+    await expect(this.manageTeamsButton).toBeVisible();
   }
 
   /**
-   * Check if the edit content button is not visible
-   * This should not be visible for readonly role
+   * Check if admin actions are not available
+   * This should not be visible for readonly and maintainer roles
    */
-  async expectNoEditPermission() {
-    await expect(this.editContentButton).not.toBeVisible();
+  async expectNoAdminPermissions() {
+    await expect(this.adminActionsSection).not.toBeVisible();
   }
 
   /**

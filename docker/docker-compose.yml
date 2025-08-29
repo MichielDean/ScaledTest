@@ -61,18 +61,6 @@ services:
     networks:
       - keycloak-network
 
-  opensearch-dashboards:
-    image: opensearchproject/opensearch-dashboards:2.11.0
-    environment:
-      - OPENSEARCH_HOSTS=["http://opensearch:9200"]
-      - DISABLE_SECURITY_DASHBOARDS_PLUGIN=true
-    ports:
-      - '5601:5601'
-    depends_on:
-      - opensearch
-    networks:
-      - keycloak-network
-
 networks:
   keycloak-network:
     driver: bridge

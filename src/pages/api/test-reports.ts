@@ -176,9 +176,24 @@ async function handlePost(
     const userTeams = await getUserTeams(req.user.sub);
     const teamIds = userTeams.map(team => team.id);
 
+    // Debug logging to understand team assignment
+    reqLogger.info('User team information for upload', {
+      userSub: req.user.sub,
+      userTeamsCount: userTeams.length,
+      teamIds: teamIds,
+      firstTeamId: teamIds[0] || 'none',
+    });
+
     // Use shared utilities for team-based logic
     const effectiveTeamIds = getEffectiveTeamIds(teamIds);
     const isDemoData = shouldMarkAsDemoData(teamIds);
+
+    reqLogger.info('Demo data marking logic', {
+      originalTeamIds: teamIds,
+      effectiveTeamIds: effectiveTeamIds,
+      isDemoData: isDemoData,
+      shouldBeDemo: teamIds.length === 0,
+    });
 
     // Store report with user's current teams (or demo team if no teams)
     const reportWithMeta = {
@@ -361,15 +376,12 @@ async function handleGet(
         ? searchResponse.body.hits.total
         : searchResponse.body.hits.total?.value || 0;
 
-    reqLogger.info(
-      {
-        page: pageNum,
-        size: pageSize,
-        total,
-        filters: { status, tool, environment },
-      },
-      'Retrieved CTRF reports'
-    );
+    reqLogger.info('Retrieved CTRF reports', {
+      page: pageNum,
+      size: pageSize,
+      total,
+      filters: { status, tool, environment },
+    });
 
     return res.status(200).json({
       success: true,
@@ -403,6 +415,9 @@ async function handleGet(
     });
   }
 }
+
+// Export individual handlers for debugging
+export { handleGet, handlePost };
 
 // Export the complete API handler with authentication, logging, and error handling
 export default createApi.readWrite(

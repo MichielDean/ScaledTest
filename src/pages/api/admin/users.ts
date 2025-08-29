@@ -29,6 +29,54 @@ const handleGet: MethodHandler = async (req, res, reqLogger) => {
 };
 
 /**
+ * Handle DELETE requests - delete user from Keycloak
+ */
+const handleDelete: MethodHandler = async (req, res, reqLogger) => {
+  try {
+    const adminToken = await getAdminToken();
+
+    const { userId } = req.query;
+
+    // Validate userId to ensure it is a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+    if (!userId || typeof userId !== 'string' || !uuidRegex.test(userId)) {
+      return res.status(400).json({ error: 'Invalid or missing User ID' });
+    }
+
+    // Delete user from Keycloak
+    await axios.delete(keycloakEndpoints.getUserEndpoint(userId), {
+      headers: {
+        Authorization: `Bearer ${adminToken}`,
+      },
+    });
+
+    reqLogger.info('User deleted successfully', {
+      userId,
+      realm: keycloakConfig.realm,
+    });
+
+    return res.status(200).json({ message: 'User deleted successfully' });
+  } catch (error) {
+    logError(reqLogger, 'Error deleting user', error, {
+      userId: req.query?.userId,
+      realm: keycloakConfig.realm,
+    });
+
+    // Handle specific Keycloak errors
+    if (axios.isAxiosError(error)) {
+      if (error.response?.status === 404) {
+        return res.status(404).json({ error: 'User not found' });
+      }
+      if (error.response?.status === 403) {
+        return res.status(403).json({ error: 'Insufficient permissions to delete user' });
+      }
+    }
+
+    return res.status(500).json({ error: 'Failed to delete user' });
+  }
+};
+
+/**
  * Handle POST requests - update user roles (grant/revoke maintainer)
  */
 const handlePost: MethodHandler = async (req, res, reqLogger) => {
@@ -105,8 +153,9 @@ const handlePost: MethodHandler = async (req, res, reqLogger) => {
 
 /**
  * Admin API for user management
- * GET  /api/admin/users - Get all users with their roles
- * POST /api/admin/users - Update user roles (grant/revoke maintainer)
+ * GET    /api/admin/users - Get all users with their roles
+ * POST   /api/admin/users - Update user roles (grant/revoke maintainer)
+ * DELETE /api/admin/users?userId=<uuid> - Delete user from Keycloak
  *
  * This endpoint requires OWNER role for all operations
  * Manages Keycloak user roles through admin API
@@ -116,4 +165,5 @@ const handlePost: MethodHandler = async (req, res, reqLogger) => {
 export default createApi.adminOnly({
   GET: handleGet,
   POST: handlePost,
+  DELETE: handleDelete,
 });

@@ -1,5 +1,5 @@
 import { CtrfSchema } from '../schemas/ctrf/ctrf';
-import { BaseFilters, SuccessApiResponse, AnalyticsDataWithRates } from './apiResponses';
+import { BaseFilters, AnalyticsDataWithRates, PaginatedResponse } from './apiResponses';
 
 // Types for our dashboard data
 export interface TestReport extends CtrfSchema {
@@ -7,7 +7,7 @@ export interface TestReport extends CtrfSchema {
   storedAt: string;
 }
 
-export interface TestReportsResponse extends SuccessApiResponse<TestReport[]> {
+export interface TestReportsResponse extends PaginatedResponse<TestReport> {
   total: number;
 }
 

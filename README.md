@@ -5,6 +5,7 @@ A comprehensive platform for test result management and reporting built with Nex
 ## Core Features (Updated June 2025)
 
 - **Modern Tech Stack**: Built with Next.js 14+ and TypeScript
+- **Single Page Application (SPA) Navigation**: Default seamless, stateful navigation without page reloads
 - **Interactive Test Results Dashboard**: Visualize and monitor test results in real-time
 - **Role-Based Access Control (RBAC)**: Powered by Keycloak authentication
 - **Test Report Generation**: Generate standardized CTRF test reports

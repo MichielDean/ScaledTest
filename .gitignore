@@ -44,3 +44,6 @@ temp/
 # CTRF test reports
 ctrf-report.json
 ctrf-report-*.json
+
+# Playwright MCP artifacts
+.playwright-mcp/

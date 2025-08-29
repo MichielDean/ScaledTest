@@ -295,8 +295,8 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
                             : error.severity === 'high'
                               ? 'text-orange-600'
                               : error.severity === 'medium'
-                                ? 'text-yellow-600'
-                                : 'text-green-600'
+                                ? 'text-yellow-700'
+                                : 'text-green-700'
                         }`}
                       >
                         {error.severity}

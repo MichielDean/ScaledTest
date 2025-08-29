@@ -86,6 +86,10 @@ describe('Page Accessibility Tests', () => {
   describe('Authenticated Pages', () => {
     // Single login for all authenticated tests for performance
     beforeAll(async () => {
+      // Ensure page objects are created
+      loginPage = new LoginPage(playwright.page);
+      dashboardPage = new DashboardPage(playwright.page);
+
       await loginPage.loginWithUser(TestUsers.READONLY);
       await dashboardPage.expectDashboardLoaded();
     });
