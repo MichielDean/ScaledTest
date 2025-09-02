@@ -1,10 +1,10 @@
 import React from 'react';
-import ModernVisualizationPlayground from '../charts/ModernVisualizationPlayground';
 
 const AnalyticsView: React.FC = () => {
   return (
-    <div>
-      <ModernVisualizationPlayground />
+    <div className="p-6">
+      <h1 className="text-2xl font-bold mb-4">Analytics Dashboard</h1>
+      <p className="text-muted-foreground">Analytics visualizations will be implemented here.</p>
     </div>
   );
 };

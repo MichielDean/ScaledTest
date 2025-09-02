@@ -2,77 +2,64 @@
  * Auth-related interfaces
  *
  * This file contains shared authentication-related interfaces to reduce duplication across
- * the codebase. These interfaces represent structures used for authentication with Keycloak,
+ * the codebase. These interfaces represent structures used for authentication with Better Auth,
  * handling tokens, and user authentication.
  */
 
-import { JWTPayload } from 'jose';
 import { NextApiRequest } from 'next';
-import { UserRole } from '../auth/keycloak';
+import { UserRole } from './roles';
+
+// Re-export UserRole for convenience
+export { UserRole } from './roles';
 
 /**
- * Keycloak configuration interface
+ * Response from Better Auth authentication
  */
-export interface KeycloakConfig {
-  resource: string;
-  'auth-server-url': string;
-  realm: string;
-  [key: string]: string | boolean | number;
-}
-
-/**
- * Response from Keycloak token endpoint
- */
-export interface KeycloakTokenResponse {
-  access_token: string;
-  expires_in: number;
-  refresh_token: string;
-  refresh_expires_in: number;
-  token_type: string;
-  scope: string;
-}
-
-/**
- * Response from Keycloak admin token endpoint
- */
-export interface AdminTokenResponse {
-  access_token: string;
-  expires_in: number;
-  token_type: string;
-  refresh_token?: string;
-}
-
-/**
- * Decoded Keycloak token payload
- */
-export interface KeycloakTokenPayload extends JWTPayload {
-  // Keycloak-specific claims not covered by standard JWTPayload
-  auth_time: number;
-  typ: string;
-  azp: string;
-  session_state: string;
-  acr: string;
-  realm_access?: { roles: string[] };
-  resource_access?: {
-    [key: string]: {
-      roles: string[];
-    };
+export interface BetterAuthTokenResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
   };
-  scope: string;
-  sid: string;
-  email_verified: boolean;
-  name?: string;
-  preferred_username?: string;
-  given_name?: string;
-  family_name?: string;
+  token: string;
+  redirect: boolean;
+  url?: string;
+}
+
+/**
+ * Better Auth session data
+ */
+export interface BetterAuthSession {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
+  };
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    token: string;
+  };
+}
+
+/**
+ * Decoded Better Auth token payload
+ */
+export interface BetterAuthTokenPayload {
+  // Better Auth specific claims
+  userId: string;
   email?: string;
+  role?: string;
 }
 
 /**
  * Extended NextApiRequest to include the authenticated user
  */
 export interface AuthenticatedRequest extends NextApiRequest {
-  user: KeycloakTokenPayload;
+  user: BetterAuthTokenPayload;
 }
 
 /**

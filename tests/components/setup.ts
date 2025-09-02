@@ -1,9 +1,18 @@
 import '@testing-library/jest-dom';
 import React from 'react';
-import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
+import { setupTestEnv } from '../setup/environmentConfiguration';
 
-// Setup OpenSearch test environment
-setupOpenSearchTestEnv();
+// Component Test Setup
+
+// Setup test environment
+setupTestEnv();
+
+// Mock the migration module to prevent actual migrations during tests
+jest.mock('../../src/lib/migrations', () => ({
+  runMigrations: jest.fn().mockResolvedValue(undefined),
+  checkMigrationStatus: jest.fn().mockResolvedValue(false), // No pending migrations
+  ensureDatabaseSchema: jest.fn().mockResolvedValue(undefined),
+}));
 
 // Mock next/navigation
 jest.mock('next/navigation', () => ({
@@ -41,67 +50,52 @@ jest.mock('next/link', () => {
   };
 });
 
-// Mock Keycloak
-jest.mock('keycloak-js', () => {
-  return function Keycloak() {
-    return {
-      init: jest.fn().mockResolvedValue(true),
-      login: jest.fn(),
-      logout: jest.fn(),
-      register: jest.fn(),
-      updateToken: jest.fn().mockResolvedValue(true),
-      authenticated: true,
-      token: 'mock-token',
-      tokenParsed: {
-        sub: 'user-123',
-        preferred_username: 'testuser',
-        email: 'test@example.com',
-        name: 'Test User',
-      },
-    };
-  };
-});
-
-// Mock jose
-jest.mock('jose', () => ({
-  jwtVerify: jest.fn().mockResolvedValue({
-    payload: {
-      sub: 'user-123',
-      aud: 'scaledtest-client',
-      resource_access: {
-        'scaledtest-client': {
-          roles: ['owner', 'maintainer', 'readonly'],
+// Mock Better Auth client
+jest.mock('@/lib/auth-client', () => ({
+  auth: {
+    signIn: jest.fn().mockResolvedValue({ data: null, error: null }),
+    signOut: jest.fn().mockResolvedValue({ data: null, error: null }),
+    signUp: jest.fn().mockResolvedValue({ data: null, error: null }),
+    getSession: jest.fn().mockResolvedValue({
+      data: {
+        user: {
+          id: 'user-123',
+          email: 'test@example.com',
+          name: 'Test User',
+          role: 'owner',
+        },
+        session: {
+          id: 'session-123',
+          userId: 'user-123',
+          token: 'mock-token',
         },
       },
-    },
-  }),
-  createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
+      error: null,
+    }),
+  },
 }));
 
 // Mock authentication context
-jest.mock('../../src/auth/KeycloakProvider', () => ({
-  useAuth: jest.fn(() => ({
-    keycloak: {
-      authenticated: true,
-      token: 'mock-token',
-      tokenParsed: {
-        sub: 'user-123',
-        preferred_username: 'testuser',
-        email: 'test@example.com',
-        name: 'Test User',
-      },
-    },
-    token: 'mock-token',
+jest.mock('../../src/auth/BetterAuthProvider', () => ({
+  useBetterAuth: jest.fn(() => ({
     user: {
-      sub: 'user-123',
-      preferred_username: 'testuser',
+      id: 'user-123',
       email: 'test@example.com',
       name: 'Test User',
+      role: 'owner',
+    },
+    session: {
+      id: 'session-123',
+      userId: 'user-123',
+      token: 'mock-token',
     },
     isAuthenticated: true,
     isLoading: false,
+    signIn: jest.fn(),
+    signOut: jest.fn(),
+    signUp: jest.fn(),
   })),
-  KeycloakProvider: ({ children }: { children: React.ReactNode }) =>
+  BetterAuthProvider: ({ children }: { children: React.ReactNode }) =>
     React.createElement(React.Fragment, null, children),
 }));
 

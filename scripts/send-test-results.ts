@@ -5,50 +5,69 @@ import os from 'os';
 import crypto from 'crypto';
 import logger, { logError } from '../src/logging/logger.js';
 import { CtrfSchema } from '../src/schemas/ctrf/ctrf.js';
-import { keycloakConfig } from '../src/config/keycloak.js';
 
 // Create a script-specific logger
 const scriptLogger = logger.child({ module: 'send-test-results' });
 
 // Type definitions
-interface TokenResponse {
-  access_token: string;
-  expires_in: number;
-  token_type: string;
+interface BetterAuthTokenResponse {
+  success: boolean;
+  user?: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
+  };
+  session?: {
+    token: string;
+    expiresAt: string;
+  };
 }
 
 /**
- * Get authentication token for API requests
+ * Get authentication token for API access using Better Auth
  */
-async function getAuthToken(): Promise<string | null> {
+async function getAuthToken(): Promise<string> {
   try {
-    const tokenUrl = `${keycloakConfig.url}/realms/${keycloakConfig.realm}/protocol/openid-connect/token`;
+    logger.info('Authenticating with Better Auth for API access');
 
-    // Use test credentials or environment variables
-    const username = process.env.TEST_API_USERNAME || 'maintainer@example.com';
-    const password = process.env.TEST_API_PASSWORD || 'password';
+    // Get API base URL from environment
+    const apiBaseUrl =
+      process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || 'http://localhost:3000';
 
-    const response: AxiosResponse<TokenResponse> = await axios.post(
-      tokenUrl,
-      new URLSearchParams({
-        grant_type: 'password',
-        client_id: keycloakConfig.clientId,
-        username,
-        password,
+    // Get test user credentials from environment (for testing purposes)
+    const testUserEmail = process.env.TEST_API_USERNAME || 'maintainer@example.com';
+    const testUserPassword = process.env.TEST_API_PASSWORD || 'Maintainer123!';
+
+    const response = await fetch(`${apiBaseUrl}/api/auth/sign-in/email`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        email: testUserEmail,
+        password: testUserPassword,
       }),
-      {
-        headers: {
-          'Content-Type': 'application/x-www-form-urlencoded',
-        },
-        timeout: 10000,
-      }
-    );
+    });
 
-    return response.data.access_token;
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(
+        `Authentication failed: ${response.status} ${response.statusText} - ${errorText}`
+      );
+    }
+
+    // Extract Bearer token from set-auth-token header (Better Auth bearer plugin)
+    const bearerToken = response.headers.get('set-auth-token');
+    if (!bearerToken) {
+      throw new Error('No Bearer token found in response headers');
+    }
+
+    logger.info('Successfully obtained Bearer token for API access');
+    return bearerToken;
   } catch (error) {
-    logError(scriptLogger, 'Failed to get authentication token', error);
-    scriptLogger.warn('Attempting to send test results without authentication...');
-    return null;
+    logger.error('Failed to get auth token', { error });
+    throw error;
   }
 }
 
@@ -115,7 +134,7 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
   if (customReportData) {
     // Use provided custom data
     reportData = customReportData;
-    scriptLogger.info('Using provided demo data for test results');
+    scriptLogger.info('Using provided custom data for test results');
   } else {
     // Read from file as before
     ctrfReportPath = path.join(process.cwd(), 'ctrf-report.json');
@@ -189,7 +208,9 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
     } else {
       scriptLogger.error('API returned error status', {
         status: response.status,
+        statusText: response.statusText,
         responseData: response.data,
+        headers: response.headers,
       });
       process.exit(1);
     }
@@ -221,8 +242,10 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
       tips: [
         'Make sure your application server is running',
         'Verify the API_BASE_URL or NEXT_PUBLIC_API_URL environment variable',
-        'Check authentication credentials (TEST_API_USERNAME, TEST_API_PASSWORD)',
+        'Check Better Auth credentials (TEST_API_USERNAME, TEST_API_PASSWORD)',
         'Ensure the /api/test-reports endpoint is accessible',
+        'Verify Better Auth is configured correctly (BETTER_AUTH_SECRET, BETTER_AUTH_URL)',
+        'Check that the test user exists and has the correct role',
       ],
     });
 

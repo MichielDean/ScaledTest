@@ -7,8 +7,8 @@ import { Label } from '@/components/ui/label';
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
-import { storeTokens } from '../authentication/keycloakTokenManager';
 import { authLogger as logger } from '../logging/logger';
+import { SocialLogin } from '@/components/shared/SocialLogin';
 
 export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) {
   const [email, setEmail] = useState('');
@@ -28,28 +28,25 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
     }
 
     try {
-      const response = await fetch('/api/auth/login', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ email, password }),
+      // Use Better Auth for login
+      const { signIn } = await import('../lib/auth-client');
+
+      const response = await signIn.email({
+        email,
+        password,
       });
 
-      const data = await response.json();
-
-      if (data.success && data.tokens) {
-        logger.info('Login successful via API', { email });
-        // Store the tokens locally
-        storeTokens(data.tokens.access_token, data.tokens.refresh_token);
-        // Navigate to dashboard using window.location for immediate redirect
+      if (response.data?.user) {
+        logger.info('Login successful with Better Auth', { email });
+        // Better Auth handles authentication automatically
         window.location.href = '/dashboard';
-      } else {
-        setError(data.error || 'Login failed');
+      } else if (response.error) {
+        logger.error('Login failed', { error: response.error, email });
+        setError(response.error.message || 'Invalid email or password');
       }
     } catch (err) {
-      logger.error('Login failed', { error: err, email });
-      setError('Login failed. Please check your credentials and try again.');
+      logger.error('Login error', { error: err, email });
+      setError('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -103,6 +100,27 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
               <Button type="submit" className="w-full" disabled={isLoading} id="signInButton">
                 {isLoading ? 'Signing in...' : 'Sign in'}
               </Button>
+
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center">
+                  <span className="w-full border-t" />
+                </div>
+                <div className="relative flex justify-center text-xs uppercase">
+                  <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
+                </div>
+              </div>
+
+              <SocialLogin
+                onSuccess={() => {
+                  logger.info('Social login successful');
+                  window.location.href = '/dashboard';
+                }}
+                onError={error => {
+                  logger.error('Social login failed', { error });
+                  setError(error);
+                }}
+              />
+
               <div className="text-center text-sm">
                 Don&apos;t have an account?{' '}
                 <Link href="/register" className="underline underline-offset-4" id="registerLink">
@@ -111,13 +129,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
               </div>
             </div>
           </form>
-          <div className="bg-muted relative hidden md:block">
-            <Image
-              src="/icon.png"
-              alt="ScaledTest Logo"
-              fill
-              className="object-cover dark:brightness-[0.2] dark:grayscale"
-            />
+          <div className="bg-muted relative hidden md:flex md:items-center md:justify-center">
+            <div className="relative h-full w-full max-w-md">
+              <Image
+                src="/icon.png"
+                alt="ScaledTest Logo"
+                fill
+                className="object-contain dark:brightness-[0.2] dark:grayscale"
+              />
+            </div>
           </div>
         </CardContent>
       </Card>

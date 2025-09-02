@@ -2,10 +2,8 @@ import { RegisterForm } from '@/components/register-form';
 import Head from 'next/head';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../auth/KeycloakProvider';
-import axios, { AxiosError } from 'axios';
+import { useAuth } from '../hooks/useAuth';
 import { authLogger as logger } from '../logging/logger';
-import { RegisterResponse } from '../types/api';
 import { Team } from '../types/team';
 
 interface RegisterFormData {
@@ -38,10 +36,17 @@ export default function RegisterPage() {
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        const response = await axios.get<{ success: boolean; teams: Team[] }>('/api/teams');
-        if (response.data?.success && Array.isArray(response.data.teams)) {
-          setAvailableTeams(response.data.teams);
-        }
+        // Temporarily disable teams loading - teams API not implemented
+        // const response = await fetch('/api/teams');
+        // if (response.ok) {
+        //   const data = await response.json();
+        //   if (data?.success && Array.isArray(data.teams)) {
+        //     setAvailableTeams(data.teams);
+        //   }
+        // }
+
+        // For now, just set empty teams list
+        setAvailableTeams([]);
       } catch (err) {
         logger.error('Failed to load teams for registration', { error: err });
         // Continue without teams - they're optional
@@ -58,37 +63,26 @@ export default function RegisterPage() {
     setError('');
 
     try {
-      const response = await axios.post<RegisterResponse>('/api/auth/register', {
-        username: data.email,
+      // Use Better Auth for registration
+      const { signUp } = await import('../lib/auth-client');
+
+      const response = await signUp.email({
         email: data.email,
         password: data.password,
-        firstName: data.firstName || undefined,
-        lastName: data.lastName || undefined,
-        teamIds: data.selectedTeamIds.length > 0 ? data.selectedTeamIds : undefined,
+        name: data.firstName && data.lastName ? `${data.firstName} ${data.lastName}` : data.email,
       });
 
-      if (response.data?.success) {
-        if (response.data.token && response.data.refreshToken) {
-          const { storeTokens } = await import('../authentication/keycloakTokenManager');
-          storeTokens(response.data.token, response.data.refreshToken);
-          logger.info('User registered and automatically logged in');
-          window.location.href = '/dashboard';
-        } else {
-          logger.info('User registered, redirecting to login');
-          router.push('/login');
-        }
-      } else {
-        setError(response.data?.error || 'Registration failed. Please try again.');
+      if (response.data?.user) {
+        logger.info('User registered successfully with Better Auth');
+        // Better Auth handles authentication automatically after registration
+        window.location.href = '/dashboard';
+      } else if (response.error) {
+        logger.error('Registration failed', { error: response.error });
+        setError(response.error.message || 'Registration failed');
       }
     } catch (err) {
-      const axiosError = err as AxiosError<{ error?: string }>;
       logger.error('Registration failed', { error: err, email: data.email });
-
-      if (axiosError.response?.status === 409) {
-        setError('An account with this email already exists. Please try logging in instead.');
-      } else {
-        setError(axiosError.response?.data?.error || 'Registration failed. Please try again.');
-      }
+      setError('Registration failed. Please try again.');
     } finally {
       setIsLoading(false);
     }

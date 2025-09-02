@@ -476,7 +476,7 @@ class ComponentErrorBoundary extends React.Component<
 
 - Debug scripts: `debug-*.ts`, `test-*.ts`, `check-*.ts`, `quick-*.ts`, `simulate-*.ts`
 - Configuration files: `*-config.json`, `role-*.json`, `user-*.json`, `assign-*.json`, `realm-config.json`
-- Setup scripts: `setup-*.ps1`, `run-setup.*`, manual setup scripts
+- Setup scripts: `setup-*.*`, `run-setup.*`, manual setup scripts
 - Testing utilities: Individual test scripts outside the `tests/` directory structure
 - Any temporary or exploratory code files
 
@@ -502,18 +502,17 @@ class ComponentErrorBoundary extends React.Component<
 
 **CORRECT workflow patterns:**
 
-```powershell
+```bash
 # ✅ CORRECT - Use terminal commands for debugging
-$response = Invoke-RestMethod -Uri "http://localhost:8080/auth/realms/scaledtest" -Method GET
-Write-Output $response
+curl -X GET "http://localhost:8080/auth/realms/scaledtest"
 
 # ✅ CORRECT - Use existing scripts directory for permanent scripts
-# Create: scripts/verify-keycloak-setup.ts (if genuinely needed long-term)
+# Create: scripts/verify-auth-setup.ts (if genuinely needed long-term)
 
 # ✅ CORRECT - Use temp directory for necessary temporary files
-mkdir temp/debug -Force
+mkdir -p temp/debug
 # Create temporary debug script in temp/debug/
-# Run it, then: Remove-Item temp/debug -Recurse -Force
+# Run it, then: rm -rf temp/debug
 ```
 
 ```typescript
@@ -525,12 +524,11 @@ mkdir temp/debug -Force
 // Update existing configuration in docker/, src/config/, or established config files
 ```
 
-**NEVER create these at project root:**
+**NEVER create scripts at project root:**
 
-- `test-auth.ts`, `test-api-direct.ts`, `debug-demo.ts` → Use terminal commands or proper test files
-- `user-owner.json`, `role-readonly.json` → Use existing config in `docker/import/` or `src/config/`
-- `setup-keycloak-manual.ps1` → Use existing `scripts/setup-test-users.ts`
-- `check-opensearch.ts`, `quick-debug.ts` → Use terminal commands with curl/PowerShell
+- If a script is necessary for testing only, it should go into the ./temp folder and be cleaned up when we are done with it
+- If a script should live long-term and is necessary for the application to function, it should be created under the ./scripts directory.
+- The ./scripts directory should not become bloated and we should really think about what goes in there. I do not want to manage a lot of scripts.
 
 **Cleanup enforcement:**
 
@@ -546,16 +544,406 @@ Before creating any new files, ALWAYS check for existing infrastructure that can
 - **API testing** → Use `tests/integration/` directory and existing test infrastructure
 - **Configuration changes** → Use existing config files in `docker/import/`, `src/config/`, or environment variables
 - **Data generation** → Use existing generators in `tests/data/` directory
-- **Debugging** → Use terminal commands with existing tools (curl, PowerShell, npm scripts)
+- **Debugging** → Use terminal commands with existing tools (curl, shell scripts, npm scripts)
 - **User management** → Use existing `scripts/setup-test-users.ts`
 - **Service verification** → Use terminal commands to check service status rather than creating verification scripts
 
-**Example pattern for handling all commands:**
+## Terminal Management and Interactive Command Handling
 
-1. Run the command with `run_in_terminal`
-2. If no immediate response after a reasonable time (30-60 seconds for most commands, longer for extensive operations), use `get_terminal_output` to check status
-3. Look for completion indicators (command prompt return, success/failure messages, etc.)
-4. Proceed if command has actually completed, even if terminal detection failedER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. **This includes all forms of ESLint suppression:\*\*
+**CRITICAL: This is the definitive guide for handling terminal commands, background processes, and interactive prompts. These patterns MUST be followed to prevent hanging terminals and indefinite waits.**
+
+### Application Startup Guidelines
+
+**CRITICAL: NEVER use `npm run dev` or `npm run start` directly. ALWAYS use PM2 commands for application management.**
+
+```bash
+# ✅ CORRECT - Use PM2 for development server
+npm run pm2:dev
+
+# ❌ FORBIDDEN - Never use npm run dev directly
+npm run dev
+
+# ❌ FORBIDDEN - Never use npm run start directly
+npm run start
+```
+
+**Why PM2 is mandatory:**
+
+- Provides proper process management and monitoring
+- Enables graceful restarts and automatic failure recovery
+- Offers centralized logging and status checking
+- Prevents terminal hanging and indefinite waits
+- Ensures consistent cross-platform behavior
+- Allows background operation without terminal dependency
+
+**Required PM2 workflow:**
+
+1. Start: `npm run pm2:dev`
+2. Monitor: `npm run pm2:status` and `npm run pm2:logs`
+3. Stop: `npm run pm2:stop`
+4. Clean up: `npm run pm2:delete`
+
+### Command Classification and Handling Strategy
+
+**Before running ANY command, classify it into one of these categories:**
+
+1. **Development server startup** (`npm run pm2:dev` - PM2-managed long-running process)
+2. **Other long-running processes** (docker-compose up without -d)
+3. **Interactive CLI tools** (npx package installations, migrations with prompts)
+4. **Quick-completion commands** (npm build, file operations, most scripts)
+
+### 1. Long-Running Process Management
+
+**CRITICAL: ALWAYS use PM2 for development server management.**
+
+**For development server startup, ONLY use PM2 commands:**
+
+```bash
+# ✅ CORRECT - Start development server with PM2
+npm run pm2:dev
+
+# ❌ FORBIDDEN - Never start development server directly
+npm run dev
+npm run start
+```
+
+### 1.1. PM2 Cross-Platform Process Management
+
+**For scenarios requiring reliable background process management, use the PM2 scripts with the dedicated startup script:**
+
+```bash
+# ✅ PREFERRED - Start PM2 managed development server
+npm run pm2:dev
+
+# ✅ CORRECT - Check PM2 process status
+npm run pm2:status
+
+# ✅ CORRECT - View PM2 logs
+npm run pm2:logs
+
+# ✅ CORRECT - Stop PM2 processes
+npm run pm2:stop
+
+# ✅ CORRECT - Restart PM2 processes
+npm run pm2:restart
+
+# ✅ CORRECT - Clean up PM2 processes when finished
+npm run pm2:delete
+```
+
+**PM2 Benefits:**
+
+- Cross-platform compatibility (works on Windows, macOS, Linux)
+- Automatic process restart on failure
+- Built-in log management and rotation
+- Process monitoring and status checking
+- Proper cleanup and process lifecycle management
+- No terminal session dependency
+
+**How it works:**
+
+- Uses a dedicated Node.js script (`scripts/start-dev-server.js`) that PM2 can reliably execute
+- The script handles Docker startup and Next.js development server initialization
+- Provides proper error handling and graceful shutdown
+- Avoids Windows-specific npm/PM2 compatibility issues
+
+### 2. Interactive Command Handling
+
+**CRITICAL: ALWAYS use non-interactive flags when available, or auto-answer prompts.**
+
+**Known interactive commands and their solutions:**
+
+```bash
+# ✅ CORRECT - Better Auth CLI with auto-yes
+npx @better-auth/cli migrate --yes
+
+# ✅ CORRECT - NPX with auto-answer for package installation
+echo "y" | npx @better-auth/cli migrate
+
+# ✅ CORRECT - Alternative auto-answer method
+printf "y\n" | npx package-name@latest command
+
+# ✅ CORRECT - Docker Compose detached mode
+docker-compose up -d
+
+# ✅ CORRECT - npm commands (usually non-interactive by default)
+npm install
+npm run build
+npm test
+```
+
+**Interactive Command Detection Patterns:**
+
+Watch for these patterns in terminal output that indicate a hanging prompt:
+
+- `Ok to proceed? (y)`
+- `Do you want to continue? [Y/n]`
+- `Are you sure you want to run these migrations?`
+- Prompts ending with `(y/n)`, `[Y/n]`, `[y/N]`
+
+### 3. Command Progress Detection and Timeout Management
+
+**CRITICAL: Implement systematic command monitoring to prevent indefinite waits.**
+
+**Proactive Hanging Detection Strategy:**
+
+```powershell
+# MANDATORY: After starting ANY command, set a monitoring timer
+run_in_terminal(command="npx some-command", isBackground=false)
+
+# IMMEDIATELY after command execution, start monitoring:
+# Wait 15-30 seconds for command acknowledgment, then check status
+get_terminal_output(id="terminal_id")
+
+# Look for these IMMEDIATE hanging indicators:
+# - "Ok to proceed? (y)" or similar prompts
+# - "Do you want to continue?" messages
+# - Process sitting with no output for >30 seconds
+# - Terminal showing command but no progress/completion
+```
+
+**MANDATORY Command Monitoring Workflow:**
+
+```powershell
+# Phase 1: Immediate Response Check (15-30 seconds)
+# - Did command start executing?
+# - Are there any prompts waiting for input?
+# - Is there clear progress indication?
+
+# Phase 2: Progress Verification (1-2 minutes)
+# - Is command making measurable progress?
+# - Are there status updates, progress bars, or log output?
+# - Has command completed successfully?
+
+# Phase 3: Timeout Decision (2-5 minutes based on command type)
+# - If no progress and no completion, investigate or restart
+# - Check for hung processes or waiting prompts
+# - Consider alternative approaches (flags, auto-answer, job control)
+```
+
+**Command Execution Pattern:**
+
+```bash
+# 1. Start command
+run_in_terminal(command="command", isBackground=false)
+
+# 2. If no immediate response after reasonable time, check progress
+# Wait times by command type:
+# - Quick commands (npm build, file ops): 30-60 seconds
+# - Installations (npm install): 2-3 minutes
+# - Migrations/DB operations: 1-2 minutes
+# - Test runs: Variable based on test suite size
+
+get_terminal_output(id="terminal_id")
+
+# 3. Look for these completion indicators:
+# - Command prompt return ($, %, > prompt)
+# - "Command completed" or success messages
+# - Error messages with exit codes
+# - Progress percentages reaching 100%
+
+# 4. Look for these hanging indicators:
+# - Prompt waiting for input (Ok to proceed? (y))
+# - Cursor blinking with no progress for >30 seconds
+# - Process showing 0% CPU but no completion message
+```
+
+**Progressive Monitoring Strategy:**
+
+```bash
+# Phase 1: Quick check (30 seconds)
+get_terminal_output(id="terminal_id")
+
+# Phase 2: If still running, check for interactive prompts (60 seconds)
+get_terminal_output(id="terminal_id")
+# If interactive prompt detected, use auto-answer techniques
+
+# Phase 3: Extended wait for complex operations (2-5 minutes)
+get_terminal_output(id="terminal_id")
+
+# Phase 4: Timeout and investigate (>5 minutes for most commands)
+# Log command details and investigate why it's hanging
+```
+
+### 4. Comprehensive Non-Interactive Command Reference
+
+**CLI Tools with Interactive Prompts and Solutions:**
+
+```bash
+# Better Auth CLI
+npx @better-auth/cli migrate --yes
+npx @better-auth/cli generate --yes
+
+# NPX package installations
+echo "y" | npx @package/cli command
+echo "y" | npx create-something@latest
+
+# Docker operations
+docker-compose up -d  # Detached mode
+docker system prune --force  # Skip confirmation
+
+# Git operations
+git add . && git commit -m "message"  # No interaction needed
+git push  # May need credentials setup
+
+# Database migrations
+# Check each tool's documentation for --yes, --force, or --auto flags
+```
+
+### 5. Emergency Command Recovery
+
+**If a command appears to hang:**
+
+1. **Check terminal output immediately:**
+
+   ```powershell
+   get_terminal_output(id="terminal_id")
+   ```
+
+2. **Look for interactive prompts and respond:**
+
+   - If you see `Ok to proceed? (y)` - the command is waiting for input
+   - Cancel current approach and restart with auto-answer method
+
+3. **Identify command type:**
+
+   - Server/watcher: Should have been started with background job control
+   - Interactive tool: Needs --yes flag or auto-answer
+   - Quick command: Should complete within 1-2 minutes
+
+4. **Recovery actions:**
+
+   ```bash
+   # For hanging servers - stop and restart with PM2
+   npm run pm2:stop  # Stop any hanging PM2 processes
+   npm run pm2:dev   # Restart with PM2
+
+   # For interactive prompts - restart with auto-answer
+   echo "y" | command
+
+   # For truly stuck commands - start fresh terminal session
+   # (run_in_terminal automatically creates new session)
+   ```
+
+### 7. Terminal Session Management
+
+**CRITICAL: Each `run_in_terminal` call creates a separate terminal session.**
+
+```bash
+# ✅ CORRECT - Each command runs in its own terminal
+run_in_terminal(command="docker-compose up -d", isBackground=false)
+run_in_terminal(command="npm run build", isBackground=false)
+run_in_terminal(command="npm test", isBackground=false)
+
+# ❌ WRONG - Don't try to chain commands expecting same terminal
+run_in_terminal(command="cd project", isBackground=false)
+run_in_terminal(command="npm install", isBackground=false)  # Wrong directory!
+
+# ✅ CORRECT - Include directory context in each command
+run_in_terminal(command="cd /path/to/project && npm install", isBackground=false)
+```
+
+### 8. Workflow Patterns for Complex Operations
+
+**Development workflow (using PM2 for server management):**
+
+```bash
+# Step 1: Start development server with PM2 (includes Docker, build, and dev server)
+run_in_terminal(command="npm run pm2:dev", isBackground=false)
+
+# Step 2: Run setup scripts (quick completion)
+run_in_terminal(command="npx tsx scripts/setup-test-users.ts", isBackground=false)
+
+# Step 3: Monitor server status
+run_in_terminal(command="npm run pm2:status", isBackground=false)
+
+# Step 4: View logs if needed
+run_in_terminal(command="npm run pm2:logs", isBackground=false)
+```
+
+**Production testing workflow:**
+
+```bash
+# Step 1: Start production server with PM2
+run_in_terminal(command="npm run pm2:dev", isBackground=false)
+
+# Step 2: Run tests (monitor for completion)
+run_in_terminal(command="npm test", isBackground=false)
+# Monitor: get_terminal_output after appropriate time based on test suite size
+
+# Step 3: Stop PM2 processes when done
+run_in_terminal(command="npm run pm2:stop", isBackground=false)
+```
+
+### 9. Command Timeout and Monitoring Guidelines
+
+**Recommended timeout periods:**
+
+- **File operations**: 30 seconds
+- **npm build/compile**: 2-3 minutes
+- **npm install**: 3-5 minutes (depends on package size)
+- **Database migrations**: 1-2 minutes
+- **Test suites**: Variable (unit: 1-2 min, integration: 3-5 min, e2e: 5-10 min)
+- **CLI tool installations**: 1-2 minutes
+
+**Monitoring checkpoints:**
+
+1. **Immediate check** (0-10 seconds): Command started successfully?
+2. **Progress check** (30-60 seconds): Is command progressing or waiting for input?
+3. **Completion check** (timeout period): Did command complete or hang?
+
+### 10. Definitive Command Handling Checklist
+
+**Before running ANY command, ask:**
+
+1. ✅ **Is this a long-running server?** → Use PM2 managed processes (`npm run pm2:dev`)
+2. ✅ **Does this tool have interactive prompts?** → Use --yes flag or auto-answer
+3. ✅ **What's the expected completion time?** → Set appropriate monitoring intervals
+4. ✅ **Does this command need specific directory context?** → Include in command
+5. ✅ **Is this command prone to hanging?** → Plan monitoring and recovery strategy
+
+**This systematic approach will eliminate terminal hanging issues permanently.**
+
+### 11. Common CLI Tools Non-Interactive Reference
+
+**CRITICAL: Always prefer non-interactive flags when available. If no flags exist, use auto-answer techniques.**
+
+| Tool                | Interactive Command             | Non-Interactive Solution              |
+| ------------------- | ------------------------------- | ------------------------------------- |
+| Better Auth CLI     | `npx @better-auth/cli migrate`  | `npx @better-auth/cli migrate --yes`  |
+| Better Auth CLI     | `npx @better-auth/cli generate` | `npx @better-auth/cli generate --yes` |
+| NPX Package Install | `npx some-package@latest`       | `echo "y" \| npx some-package@latest` |
+| Docker System       | `docker system prune`           | `docker system prune --force`         |
+| Docker Compose      | `docker-compose up`             | `docker-compose up -d` (detached)     |
+| Git Operations      | Generally non-interactive       | No changes needed                     |
+| npm/yarn            | Generally non-interactive       | No changes needed                     |
+
+**Auto-Answer Pattern for Unknown Tools:**
+
+```bash
+# When you encounter a new CLI tool that prompts for confirmation:
+# 1. Check help first: command --help | grep -i "yes\|force\|auto\|non-interactive"
+# 2. If no flags found, use auto-answer:
+echo "y" | command-that-prompts
+# 3. Document the solution in this table for future reference
+```
+
+**Auto-Answer Variations:**
+
+```bash
+# Single "y" answer
+echo "y" | command
+
+# Multiple answers (if tool asks multiple questions)
+printf "y\ny\ny\n" | command  # y, then y, then y
+
+# Alternative format
+echo -e "y\ny\ny" | command
+```
+
+## ESLint Standards
+
+**NEVER use eslint-disable comments.** Fix actual linting errors instead of suppressing them. **This includes all forms of ESLint suppression:**
 
 - `// eslint-disable`
 - `// eslint-disable-line`
@@ -810,7 +1198,7 @@ const processUser = (user: any) => {
 
 - Next.js with TypeScript
 - CSS Modules for styling
-- Keycloak for authentication
+- Better Auth for authentication
 - OpenSearch for analytics
 - Jest and Playwright for testing
 
@@ -1021,7 +1409,7 @@ interface User {
 
 - **ALWAYS use the established authentication hooks and components:**
 
-  - `useAuth()` hook from KeycloakProvider for authentication state and functions
+  - `useAuth()` hook from BetterAuthProvider for authentication state and functions
   - `withAuth` higher-order component for protecting pages
   - `UserRole` enum for role-based access control
 
@@ -1029,7 +1417,7 @@ interface User {
 
   ```typescript
   import withAuth from '../auth/withAuth';
-  import { UserRole } from '../auth/keycloak';
+  import { UserRole } from '../lib/auth-shared';
 
   const ProtectedPage = () => {
     const { userProfile } = useAuth();
@@ -1053,11 +1441,11 @@ interface User {
 
 **CRITICAL: NEVER expose authentication backend implementation details in the UI.**
 
-The UI must remain completely agnostic about which authentication system is being used (Keycloak, Auth0, custom, etc.). This ensures the frontend remains decoupled and can work with any authentication backend without code changes.
+The UI must remain completely agnostic about which authentication system is being used (Better Auth, Auth0, custom, etc.). This ensures the frontend remains decoupled and can work with any authentication backend without code changes.
 
 **FORBIDDEN UI References:**
 
-- ❌ NEVER mention "Keycloak" in user-facing text, error messages, or UI labels
+- ❌ NEVER mention specific auth provider names in user-facing text, error messages, or UI labels
 - ❌ NEVER reference backend-specific concepts like "realm", "client", "admin console"
 - ❌ NEVER expose backend error messages directly to users
 - ❌ NEVER include backend system names in logs visible to end users
@@ -1066,9 +1454,9 @@ The UI must remain completely agnostic about which authentication system is bein
 
 ```typescript
 // ❌ WRONG - Exposes backend implementation
-'User will be removed from Keycloak';
-'Keycloak authentication failed';
-'Check Keycloak admin console';
+'User will be removed from the system';
+'Authentication failed';
+'Check your administrator console';
 'Password policy not met'; // Raw backend error
 
 // ✅ CORRECT - Backend-agnostic language

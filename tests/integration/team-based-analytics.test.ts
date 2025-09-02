@@ -20,7 +20,7 @@ describe('Team-Based Analytics Integration', () => {
     it('should handle users with no teams gracefully', async () => {
       // Mock getUserTeams to return empty array for test user
       const mockGetUserTeams = jest.fn().mockResolvedValue([]);
-      jest.doMock('../../src/authentication/teamManagement', () => ({
+      jest.doMock('../../src/lib/teamManagement', () => ({
         getUserTeams: mockGetUserTeams,
       }));
 
@@ -31,7 +31,7 @@ describe('Team-Based Analytics Integration', () => {
     it('should allow users to retrieve their own reports even without teams', async () => {
       // Mock getUserTeams to return empty array
       const mockGetUserTeams = jest.fn().mockResolvedValue([]);
-      jest.doMock('../../src/authentication/teamManagement', () => ({
+      jest.doMock('../../src/lib/teamManagement', () => ({
         getUserTeams: mockGetUserTeams,
       }));
 
@@ -57,7 +57,7 @@ describe('Team-Based Analytics Integration', () => {
           .fn()
           .mockResolvedValue([{ id: 'team-1', name: 'Development Team', isDefault: false }]);
 
-        jest.doMock('../../src/authentication/teamManagement', () => ({
+        jest.doMock('../../src/lib/teamManagement', () => ({
           getUserTeams: mockGetUserTeams,
         }));
 
@@ -71,7 +71,7 @@ describe('Team-Based Analytics Integration', () => {
         // Mock getUserTeams to return empty array
         const mockGetUserTeams = jest.fn().mockResolvedValue([]);
 
-        jest.doMock('../../src/authentication/teamManagement', () => ({
+        jest.doMock('../../src/lib/teamManagement', () => ({
           getUserTeams: mockGetUserTeams,
         }));
 
@@ -83,7 +83,7 @@ describe('Team-Based Analytics Integration', () => {
     });
   });
 
-  describe('OpenSearch Query Building', () => {
+  describe('Database Query Building', () => {
     it('should build team filters correctly', () => {
       // Test the team filter building logic
       const teamIds = ['team-1', 'team-2'];
@@ -167,17 +167,19 @@ describe('Team-Based Analytics Integration', () => {
   });
 
   describe('Error Handling', () => {
-    it('should handle Keycloak connection errors gracefully', async () => {
-      // Mock getUserTeams to simulate Keycloak connection failure
-      const mockGetUserTeams = jest.fn().mockRejectedValue(new Error('Keycloak connection failed'));
+    it('should handle authentication connection errors gracefully', async () => {
+      // Mock getUserTeams to simulate authentication connection failure
+      const mockGetUserTeams = jest
+        .fn()
+        .mockRejectedValue(new Error('Authentication service connection failed'));
 
-      jest.doMock('../../src/authentication/teamManagement', () => ({
+      jest.doMock('../../src/lib/teamManagement', () => ({
         getUserTeams: mockGetUserTeams,
       }));
 
-      logger.info('Testing Keycloak connection error handling');
+      logger.info('Testing authentication connection error handling');
 
-      // The system should handle Keycloak errors gracefully
+      // The system should handle authentication errors gracefully
       try {
         await mockGetUserTeams('test-user');
       } catch (error) {
@@ -185,11 +187,11 @@ describe('Team-Based Analytics Integration', () => {
       }
     });
 
-    it('should handle user not found in Keycloak', async () => {
+    it('should handle user not found in authentication system', async () => {
       // Mock getUserTeams to simulate user not found (404)
       const mockGetUserTeams = jest.fn().mockResolvedValue([]);
 
-      jest.doMock('../../src/authentication/teamManagement', () => ({
+      jest.doMock('../../src/lib/teamManagement', () => ({
         getUserTeams: mockGetUserTeams,
       }));
 

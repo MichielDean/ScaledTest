@@ -1,7 +1,7 @@
 // User Teams API - Get current user's team assignments
-import { MethodHandler, createApi } from '../../auth/apiAuth';
+import { BetterAuthMethodHandler, createBetterAuthApi } from '../../auth/betterAuthApi';
 import { logError } from '../../logging/logger';
-import { getUserTeams } from '../../authentication/teamManagement';
+import { getUserTeams } from '../../lib/teamManagement';
 
 import { Team } from '../../types/team';
 
@@ -18,13 +18,13 @@ interface ErrorResponse {
 /**
  * Handle GET requests - get current user's team assignments
  */
-const handleGet: MethodHandler<GetUserTeamsResponse | ErrorResponse> = async (
+const handleGet: BetterAuthMethodHandler<GetUserTeamsResponse | ErrorResponse> = async (
   req,
   res,
   reqLogger
 ) => {
   try {
-    const userId = req.user.sub!;
+    const userId = req.user.id;
 
     // Get teams for the current user
     const userTeams = await getUserTeams(userId);
@@ -41,7 +41,7 @@ const handleGet: MethodHandler<GetUserTeamsResponse | ErrorResponse> = async (
     });
   } catch (error) {
     logError(reqLogger, 'Error fetching user teams', error, {
-      userId: req.user.sub,
+      userId: req.user.id,
     });
 
     return res.status(500).json({
@@ -55,4 +55,4 @@ const handleGet: MethodHandler<GetUserTeamsResponse | ErrorResponse> = async (
  * User Teams API for getting current user's team assignments
  * GET /api/user-teams - Get current user's teams (authenticated users only)
  */
-export default createApi.readOnly(handleGet);
+export default createBetterAuthApi({ GET: handleGet }, 'readonly');

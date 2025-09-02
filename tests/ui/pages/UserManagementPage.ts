@@ -1,5 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
+import { testLogger } from '../../../src/logging/testLogger';
 
 /**
  * Page object for user management functionality
@@ -41,6 +42,78 @@ export class UserManagementPage extends BasePage {
    * Check if a specific user is listed in the table
    */
   async expectUserListed(email: string) {
+    // First, wait for the table to be visible
+    await expect(this.usersTable).toBeVisible();
+
+    // Wait for any loading indicators to disappear
+    await this.page.waitForFunction(
+      () => {
+        const loadingElements = document.querySelectorAll(
+          '.loading, .skeleton, [data-loading="true"]'
+        );
+        return loadingElements.length === 0;
+      },
+      { timeout: 15000 }
+    );
+
+    // Wait a bit more for data to load
+    await this.page.waitForTimeout(2000);
+
+    // Add debugging to see console logs
+    this.page.on('console', msg => {
+      testLogger.info(`Browser console: ${msg.text()}`);
+    });
+
+    // Wait for the page to finish loading and API calls to complete
+    await this.page.waitForLoadState('networkidle');
+
+    // Check if the table body exists and is visible
+    const tableBody = this.page.locator('#users-table tbody');
+    await expect(tableBody).toBeVisible();
+
+    // Wait for at least one row to appear or timeout after 10 seconds
+    await this.page
+      .waitForFunction(
+        () => {
+          const rows = document.querySelectorAll('#users-table tbody tr');
+          return rows.length > 0;
+        },
+        { timeout: 10000 }
+      )
+      .catch(() => {
+        // If no rows appear, we'll handle it below
+      });
+
+    // Check the row count
+    const rowCount = await this.page.locator('#users-table tbody tr').count();
+    testLogger.info(`Found ${rowCount} rows in users table`);
+
+    if (rowCount === 0) {
+      // Check for error messages
+      const errorElements = await this.page.locator('.error, [role="alert"], .alert').all();
+      for (let i = 0; i < errorElements.length; i++) {
+        const errorText = await errorElements[i].textContent();
+        if (errorText) {
+          testLogger.info(`Error message found: ${errorText}`);
+        }
+      }
+
+      // Log the current page state for debugging
+      const pageTitle = await this.page.title();
+      const currentUrl = this.page.url();
+      testLogger.info(`Page title: ${pageTitle}, URL: ${currentUrl}`);
+
+      throw new Error('No rows found in users table after waiting');
+    }
+
+    // Get all table rows and log their content for debugging
+    const rows = await this.page.locator('#users-table tbody tr').all();
+
+    for (let i = 0; i < rows.length; i++) {
+      const rowText = await rows[i].textContent();
+      testLogger.info(`Row ${i}: ${rowText}`);
+    }
+
     // Find the row containing the email address in the email column
     const userRow = this.page.locator(`#users-table tbody tr`).filter({
       hasText: email,

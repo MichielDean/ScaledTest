@@ -1,8 +1,8 @@
 import type { NextPage } from 'next';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import withAuth from '../../auth/withAuth';
-import { UserRole } from '../../auth/keycloak';
+import withAuth from '../../auth/withBetterAuth';
+import { UserRole } from '../../types/roles';
 
 const AdminTeams: NextPage = () => {
   const router = useRouter();
@@ -15,6 +15,4 @@ const AdminTeams: NextPage = () => {
   return null;
 };
 
-export default withAuth(AdminTeams, {
-  requiredRoles: [UserRole.MAINTAINER, UserRole.OWNER],
-});
+export default withAuth(AdminTeams, [UserRole.MAINTAINER, UserRole.OWNER]);

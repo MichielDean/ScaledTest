@@ -1,7 +1,7 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
-import withAuth from '../auth/withAuth';
-import { UserRole } from '../auth/keycloak';
+import withAuth from '../auth/withBetterAuth';
+import { Roles } from '../lib/permissions';
 import { SPANavigationProvider } from '../contexts/SPANavigationContext';
 import MainSPAContent from '../components/MainSPAContent';
 
@@ -21,6 +21,4 @@ const Dashboard: NextPage = () => {
   );
 };
 
-export default withAuth(Dashboard, {
-  requiredRoles: [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER],
-});
+export default withAuth(Dashboard, [Roles.readonly, Roles.maintainer, Roles.owner]);

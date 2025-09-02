@@ -1,27 +1,12 @@
-import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
+import { setupTestEnv } from '../setup/environmentConfiguration';
 
-jest.mock('keycloak-js', () => {
-  return function () {
-    return {};
-  };
-});
+setupTestEnv();
 
-// Mock jose for JWT verification
-jest.mock('jose', () => ({
-  jwtVerify: jest.fn(() =>
-    Promise.resolve({
-      payload: {
-        sub: 'user-123',
-        aud: 'scaledtest-client',
-        resource_access: {
-          'scaledtest-client': {
-            roles: ['owner', 'maintainer', 'readonly'],
-          },
-        },
-      },
-    })
-  ),
-  createRemoteJWKSet: jest.fn(() => 'mocked-jwks'),
+// Mock the migration module to prevent actual migrations during tests
+jest.mock('../../src/lib/migrations', () => ({
+  runMigrations: jest.fn().mockResolvedValue(undefined),
+  checkMigrationStatus: jest.fn().mockResolvedValue(false), // No pending migrations
+  ensureDatabaseSchema: jest.fn().mockResolvedValue(undefined),
 }));
 
-setupOpenSearchTestEnv();
+setupTestEnv();

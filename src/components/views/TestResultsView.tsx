@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../../auth/KeycloakProvider';
+import { useAuth } from '../../hooks/useAuth';
 import { TestReport, TestReportsResponse, DashboardFilters } from '../../types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {

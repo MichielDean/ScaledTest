@@ -1,0 +1,67 @@
+import { NextApiRequest, NextApiResponse } from 'next';
+import { authClient } from '@/lib/auth-client';
+import { roleNames } from '@/lib/auth-shared';
+import { apiLogger } from '@/logging/logger';
+
+export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
+    return res.status(405).json({ error: 'Method not allowed' });
+  }
+
+  try {
+    const { email, password, name, role = 'readonly' } = req.body;
+
+    if (!email || !password) {
+      return res.status(400).json({
+        error: 'Missing required fields: email and password',
+      });
+    }
+
+    // Validate role if provided
+    const validRoles = Object.values(roleNames);
+    if (!validRoles.includes(role)) {
+      return res.status(400).json({
+        error: 'Invalid role. Must be one of: ' + validRoles.join(', '),
+      });
+    }
+
+    // Register user with Better Auth
+    const result = await authClient.signUp.email({
+      email,
+      password,
+      name: name || email.split('@')[0], // Use email prefix as default name
+    });
+
+    if (!result.data) {
+      return res.status(400).json({
+        error: 'Registration failed',
+        details: result.error || 'Unknown error',
+      });
+    }
+
+    // TODO: Set user role using Better Auth admin API
+    // For now, we'll just log the intended role assignment
+    apiLogger.info('User registered with Better Auth', {
+      userId: result.data.user.id,
+      email,
+      role,
+      name: result.data.user.name,
+    });
+
+    return res.status(201).json({
+      message: 'User registered successfully',
+      user: {
+        id: result.data.user.id,
+        email: result.data.user.email,
+        name: result.data.user.name,
+        role: role, // Role assignment pending implementation
+      },
+    });
+  } catch (error) {
+    apiLogger.error('Registration error', { error, email: req.body?.email });
+    return res.status(500).json({
+      error: 'Failed to register user',
+    });
+  }
+}

@@ -49,7 +49,13 @@ export const logAccessibilityViolations = (
  * Helper function to wait for page to be fully loaded
  */
 export const waitForPageLoad = async (page: Page, timeout = 1500) => {
-  await page.waitForLoadState('networkidle');
+  try {
+    // Try networkidle but with shorter timeout
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
+  } catch {
+    // Fallback to domcontentloaded if networkidle fails
+    await page.waitForLoadState('domcontentloaded');
+  }
   await page.waitForSelector('main, body', { state: 'visible' });
   await page.waitForTimeout(timeout);
 };

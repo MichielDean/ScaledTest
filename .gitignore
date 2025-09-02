@@ -23,6 +23,7 @@ yarn-debug.log*
 yarn-error.log*
 
 # local env files
+.env
 .env*.local
 .env.development.local
 .env.staging.local
@@ -44,6 +45,13 @@ temp/
 # CTRF test reports
 ctrf-report.json
 ctrf-report-*.json
+
+# Test log files
+logs/
+
+# PM2 process files and logs
+.pm2/
+ecosystem.config.js.bak
 
 # Playwright MCP artifacts
 .playwright-mcp/

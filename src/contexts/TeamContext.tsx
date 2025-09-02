@@ -13,11 +13,9 @@ import React, {
   ReactNode,
   useCallback,
 } from 'react';
-import { useAuth } from '../auth/KeycloakProvider';
+import { useBetterAuth } from '../auth/BetterAuthProvider';
 import { Team } from '../types/team';
-import { UserRole } from '../auth/keycloak';
-import { uiLogger as logger } from '../logging/logger';
-import { DEMO_DATA_TEAM } from '../lib/teamFilters';
+import { uiLogger } from '../logging/logger';
 import axios from 'axios';
 
 interface TeamContextType {
@@ -68,46 +66,57 @@ interface TeamProviderProps {
 }
 
 export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
-  const { isAuthenticated, token, keycloak, hasRole } = useAuth();
+  const { isAuthenticated, user, hasRole, token } = useBetterAuth();
   const [userTeams, setUserTeams] = useState<Team[]>([]);
   const [allTeams, setAllTeams] = useState<Team[]>([]);
   const [selectedTeamIds, setSelectedTeamIds] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Get user ID from keycloak instance
-  const userId = keycloak?.subject;
+  // Get user ID from Better Auth user object
+  const userWithId = user as { id?: string };
+  const userId = userWithId?.id;
 
-  // Fetch user's teams
+  // Fetch user's teams from Better Auth user metadata
   const refreshUserTeams = useCallback(async () => {
-    if (!isAuthenticated || !token || !userId) {
+    if (!isAuthenticated || !userId) {
       setUserTeams([]);
       return;
     }
 
     try {
       setError(null);
-      const response = await axios.get(`/api/user-teams`, {
-        headers: { Authorization: `Bearer ${token}` },
-      });
 
-      if (response.data?.success) {
-        const teams = Array.isArray(response.data.teams) ? response.data.teams : [];
-        setUserTeams(teams);
+      // Get teams from Better Auth user metadata
+      const userWithTeams = user as {
+        teams?: Array<{ id: string; name: string; role: string }>;
+      };
+      const userTeamsFromAuth = userWithTeams?.teams || [];
 
-        // Auto-select teams if none selected and user has teams
-        if (selectedTeamIds.length === 0 && teams.length > 0) {
-          setSelectedTeamIds(teams.map((team: Team) => team.id));
-        }
+      // Convert Better Auth team format to our Team interface
+      const teams: Team[] = userTeamsFromAuth.map(team => ({
+        id: team.id,
+        name: team.name,
+        description: `Team managed through Better Auth`,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }));
+
+      setUserTeams(teams);
+
+      // Auto-select teams if none selected and user has teams
+      if (selectedTeamIds.length === 0 && teams.length > 0) {
+        setSelectedTeamIds(teams.map(team => team.id));
       }
     } catch (err) {
-      logger.error('Failed to fetch user teams', { error: err, userId });
+      uiLogger.error('Failed to fetch user teams', { error: err, userId });
       setError('Failed to load team information');
       setUserTeams([]);
     }
-  }, [isAuthenticated, token, userId, selectedTeamIds.length]);
+  }, [isAuthenticated, user, userId, selectedTeamIds.length]);
 
-  // Fetch all teams (for admin/maintainer users)
+  // Fetch all teams (for admin/maintainer users) via API
   const refreshAllTeams = useCallback(async () => {
     if (!isAuthenticated || !token) {
       setAllTeams([]);
@@ -115,7 +124,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     }
 
     try {
-      const response = await axios.get('/api/admin/teams', {
+      const response = await axios.get('/api/teams', {
         headers: { Authorization: `Bearer ${token}` },
       });
 
@@ -124,7 +133,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
       }
     } catch (err) {
       // Non-admin users can't access this endpoint, which is expected
-      logger.debug('Could not fetch all teams', { error: err });
+      uiLogger.debug('Could not fetch all teams', { error: err });
       setAllTeams([]);
     }
   }, [isAuthenticated, token]);
@@ -160,10 +169,10 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   // Computed values
   const selectedTeams = userTeams.filter(team => selectedTeamIds.includes(team.id));
   const hasMultipleTeams = userTeams.length > 1;
-  const canManageTeams = hasRole(UserRole.MAINTAINER) || hasRole(UserRole.OWNER);
+  const canManageTeams = hasRole('maintainer') || hasRole('owner');
 
-  // Effective team IDs for API filtering - includes demo data access
-  const effectiveTeamIds = selectedTeamIds.length > 0 ? selectedTeamIds : [DEMO_DATA_TEAM];
+  // Effective team IDs for API filtering
+  const effectiveTeamIds = selectedTeamIds.length > 0 ? selectedTeamIds : [];
 
   const contextValue: TeamContextType = {
     userTeams,

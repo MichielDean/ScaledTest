@@ -1,70 +1,24 @@
 services:
+  # TimescaleDB with multiple databases: scaledtest (test results) and auth (Better Auth)
   postgres:
-    image: postgres:16
+    image: timescale/timescaledb:2.14.2-pg16
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./init-scripts:/docker-entrypoint-initdb.d
     environment:
-      POSTGRES_DB: keycloak
-      POSTGRES_USER: keycloak
+      POSTGRES_DB: scaledtest
+      POSTGRES_USER: scaledtest
       POSTGRES_PASSWORD: password
-    networks:
-      - keycloak-network
-
-  keycloak:
-    build:
-      context: .
-      dockerfile: Dockerfile.keycloak
-    environment:
-      KC_DB: postgres
-      KC_DB_URL: jdbc:postgresql://postgres:5432/keycloak
-      KC_DB_USERNAME: keycloak
-      KC_DB_PASSWORD: password
-      KC_BOOTSTRAP_ADMIN_USERNAME: admin
-      KC_BOOTSTRAP_ADMIN_PASSWORD: admin
-      KC_HOSTNAME: localhost
-      KC_HTTP_ENABLED: 'true'
-      KC_HEALTH_ENABLED: 'true'
-      KC_METRICS_ENABLED: 'true'
-      KC_HOSTNAME_STRICT: 'false'
-      KC_HOSTNAME_STRICT_HTTPS: 'false'
+      # TimescaleDB specific settings
+      POSTGRES_INITDB_ARGS: '--auth-host=md5 --auth-local=md5'
     ports:
-      - '8080:8080'
-      - '9000:9000'
-    depends_on:
-      - postgres
-    volumes:
-      - ./import:/opt/keycloak/data/import
-    command: start --optimized --import-realm
+      - '5432:5432'
     networks:
-      - keycloak-network
-
-  opensearch:
-    image: opensearchproject/opensearch:2.11.0
-    environment:
-      - discovery.type=single-node
-      - OPENSEARCH_JAVA_OPTS=-Xms512m -Xmx512m
-      - bootstrap.memory_lock=true
-      - DISABLE_SECURITY_PLUGIN=true
-      - DISABLE_INSTALL_DEMO_CONFIG=true
-    ulimits:
-      memlock:
-        soft: -1
-        hard: -1
-      nofile:
-        soft: 65536
-        hard: 65536
-    ports:
-      - '9200:9200'
-      - '9600:9600'
-    volumes:
-      - opensearch-data:/usr/share/opensearch/data
-    networks:
-      - keycloak-network
+      - app-network
 
 networks:
-  keycloak-network:
+  app-network:
     driver: bridge
 
 volumes:
   postgres_data:
-  opensearch-data:

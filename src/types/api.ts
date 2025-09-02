@@ -40,7 +40,7 @@ export interface RegisterResponse extends AuthResponse {
 export type UserManagementResponse = SuccessApiResponse<UserWithRoles[]>;
 
 /**
- * OpenSearch response for analytics endpoints
+ * Analytics response for analytics endpoints
  */
 export interface AnalyticsResponse extends BaseApiResponse {
   data?: unknown;
