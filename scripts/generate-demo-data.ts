@@ -1,5 +1,7 @@
 import { sendTestResults } from './send-test-results';
-import logger from '../src/utils/logger';
+import { testLogger } from '../src/logging/logger';
+import logger from '../src/logging/logger';
+import { ReportFormat } from '../src/schemas/ctrf/ctrf';
 import crypto from 'crypto';
 
 // Create a dedicated logger for demo data generation
@@ -29,7 +31,7 @@ interface SummaryTrend {
 }
 
 interface DemoReport {
-  reportFormat: string;
+  reportFormat: ReportFormat;
   specVersion: string;
   reportId: string;
   timestamp: string;
@@ -499,7 +501,7 @@ function generateDemoReport(
 
   // Create the full report object
   return {
-    reportFormat: 'CTRF',
+    reportFormat: ReportFormat.CTRF,
     specVersion: '1.0.0',
     reportId,
     timestamp: now.toISOString(),

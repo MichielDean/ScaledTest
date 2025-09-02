@@ -6,7 +6,7 @@
 import { chromium, Browser, BrowserContext, Page } from 'playwright';
 import path from 'path';
 import fs from 'fs';
-import { testLogger } from '../src/utils/logger';
+import { testLogger } from '../src/logging/logger';
 
 // Define globals with TypeScript for Node.js environment
 declare global {
@@ -48,30 +48,6 @@ interface PlaywrightConfig {
   browsers: string[];
   launchOptions: LaunchOptions;
   contextOptions: ContextOptions;
-}
-
-// Deep merge utility function - unused but kept for future reference
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
-function deepMerge<T extends Record<string, unknown>>(
-  target: T,
-  source: Record<string, unknown>
-): T {
-  const result = { ...target } as Record<string, unknown>;
-
-  for (const key in source) {
-    if (Object.prototype.hasOwnProperty.call(source, key)) {
-      if (source[key] && typeof source[key] === 'object' && !Array.isArray(source[key])) {
-        result[key] = deepMerge(
-          (target[key] as Record<string, unknown>) || {},
-          source[key] as Record<string, unknown>
-        );
-      } else {
-        result[key] = source[key];
-      }
-    }
-  }
-
-  return result as T;
 }
 
 // Load configuration

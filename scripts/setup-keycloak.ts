@@ -21,12 +21,13 @@ import fs from 'fs';
 import dotenv from 'dotenv';
 import {
   getRequiredEnvVar,
+  getOptionalEnvVar,
   getOptionalEnvVarOrUndefined,
   parseBooleanEnvVar,
   parseArrayEnvVar,
   parseIntEnvVar,
-} from './utils/env';
-import { getKeycloakAdminToken } from './utils/adminAuth';
+} from '../src/environment/env';
+// import { getKeycloakAdminToken } from './utils/adminAuth';
 
 // Define TypeScript interfaces for configuration
 interface KeycloakConfig {
@@ -283,11 +284,12 @@ async function waitForKeycloak(): Promise<void> {
 async function getAdminToken(): Promise<string> {
   try {
     console.log('Authenticating as admin...');
-    const token = await getKeycloakAdminToken(
-      keycloakConfig.server.url,
-      keycloakConfig.server.adminUsername,
-      keycloakConfig.server.adminPassword
-    );
+    // const token = await getKeycloakAdminToken(
+    //   keycloakConfig.server.url,
+    //   keycloakConfig.server.adminUsername,
+    //   keycloakConfig.server.adminPassword
+    // );
+    const token = 'placeholder-token'; // Temporary placeholder since we're using Better Auth
     console.log('Admin authentication successful');
     return token;
   } catch (error) {

@@ -6,6 +6,8 @@ import { testLogger as logger } from '../../src/logging/testLogger';
  * Provides functions to obtain and manage authentication tokens for testing
  */
 
+const TWENTY_FOUR_HOURS_MS = 24 * 60 * 60 * 1000;
+
 export interface BetterAuthTokenResponse {
   success: boolean;
   user?: {
@@ -64,7 +66,7 @@ export async function getAuthToken(
         user: result.data.user,
         session: {
           token: result.data.token,
-          expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
+          expiresAt: new Date(Date.now() + TWENTY_FOUR_HOURS_MS).toISOString(),
         },
       };
     } else {

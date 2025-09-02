@@ -1,18 +1,40 @@
 import { NextApiRequest, NextApiResponse } from 'next';
+import { auth } from '@/lib/auth';
 import { roleNames } from '@/lib/auth-shared';
 import { apiLogger } from '@/logging/logger';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
-  // For now, we'll implement a basic role management API
-  // TODO: Add proper authentication middleware for Better Auth
+  try {
+    // Get session from Better Auth
+    const session = await auth.api.getSession({
+      headers: new Headers(req.headers as Record<string, string>),
+    });
 
-  if (req.method === 'POST') {
-    return handleAssignRole(req, res);
-  } else if (req.method === 'GET') {
-    return handleGetUserRole(req, res);
-  } else {
-    res.setHeader('Allow', ['POST', 'GET']);
-    return res.status(405).json({ error: 'Method not allowed' });
+    if (!session?.user) {
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+
+    // Check if user has owner role (required for role management)
+    const userWithRole = session.user as { role?: string };
+    const userRole = userWithRole.role;
+
+    if (userRole !== 'owner') {
+      return res.status(403).json({
+        error: 'Insufficient permissions - owner role required for role management',
+      });
+    }
+
+    if (req.method === 'POST') {
+      return handleAssignRole(req, res);
+    } else if (req.method === 'GET') {
+      return handleGetUserRole(req, res);
+    } else {
+      res.setHeader('Allow', ['POST', 'GET']);
+      return res.status(405).json({ error: 'Method not allowed' });
+    }
+  } catch (error) {
+    apiLogger.error('Error in user roles API authentication', { error });
+    return res.status(500).json({ error: 'Internal server error' });
   }
 }
 
@@ -34,17 +56,51 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    // TODO: Implement actual role assignment with Better Auth
-    // For now, this is a placeholder API structure
-    apiLogger.info('Role assignment requested', { userId, role });
+    // Validate user exists first
+    const targetUser = await auth.api.getUser({
+      body: { userId },
+    });
+
+    if (!targetUser) {
+      return res.status(404).json({
+        error: 'User not found',
+      });
+    }
+
+    // Assign role using Better Auth admin API
+    await auth.api.setRole({
+      body: {
+        userId,
+        role,
+      },
+    });
+
+    apiLogger.info('Role assigned successfully', {
+      userId,
+      role,
+      assignedBy: req.headers['user-id'] || 'admin',
+    });
 
     return res.status(200).json({
-      message: 'Role assignment API ready (implementation pending)',
+      success: true,
+      message: 'Role assigned successfully',
       userId,
       role,
     });
   } catch (error) {
-    apiLogger.error('Error in role assignment API', { error, userId: req.body?.userId });
+    apiLogger.error('Error assigning role', {
+      error,
+      userId: req.body?.userId,
+      role: req.body?.role,
+    });
+
+    // Check if this is a Better Auth error
+    if (error instanceof Error && error.message.includes('User not found')) {
+      return res.status(404).json({
+        error: 'User not found',
+      });
+    }
+
     return res.status(500).json({
       error: 'Failed to assign role',
     });
@@ -61,17 +117,43 @@ async function handleGetUserRole(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
-    // TODO: Implement actual role retrieval with Better Auth
-    // For now, return a default role
-    apiLogger.info('Role retrieval requested', { userId });
+    // Get user with role from Better Auth
+    const user = await auth.api.getUser({
+      body: { userId },
+    });
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'User not found',
+      });
+    }
+
+    // Extract role from user object
+    const userWithRole = user as { role?: string };
+    const userRole = userWithRole.role || 'readonly'; // Default to readonly if no role set
+
+    apiLogger.info('Role retrieved successfully', { userId, role: userRole });
 
     return res.status(200).json({
+      success: true,
       userId,
-      role: 'readonly', // Default role until implementation is complete
-      message: 'Role retrieval API ready (implementation pending)',
+      role: userRole,
+      email: user.email,
+      name: user.name,
     });
   } catch (error) {
-    apiLogger.error('Error in role retrieval API', { error, userId: req.query.userId });
+    apiLogger.error('Error retrieving user role', {
+      error,
+      userId: req.query.userId,
+    });
+
+    // Check if this is a Better Auth error
+    if (error instanceof Error && error.message.includes('User not found')) {
+      return res.status(404).json({
+        error: 'User not found',
+      });
+    }
+
     return res.status(500).json({
       error: 'Failed to get user role',
     });

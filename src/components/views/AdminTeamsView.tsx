@@ -4,6 +4,7 @@ import { UserRole } from '../../types/roles';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../logging/logger';
 import { TeamWithMemberCount, TeamPermissions } from '../../types/team';
+import CreateTeamModal from '../shared/CreateTeamModal';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +40,7 @@ const AdminTeamsView: React.FC = () => {
   });
   const [teamsLoading, setTeamsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
 
   // Fetch teams with member counts
   const fetchTeams = useCallback(async () => {
@@ -89,6 +91,20 @@ const AdminTeamsView: React.FC = () => {
     }
   }, [token, fetchTeams]);
 
+  // Modal handlers
+  const handleCreateTeam = useCallback(() => {
+    setIsCreateModalOpen(true);
+  }, []);
+
+  const handleCloseModal = useCallback(() => {
+    setIsCreateModalOpen(false);
+  }, []);
+
+  const handleTeamCreated = useCallback(() => {
+    // Refresh the teams list after creation
+    fetchTeams();
+  }, [fetchTeams]);
+
   if (!isAuthenticated || authLoading) {
     return <div>Loading...</div>;
   }
@@ -135,7 +151,11 @@ const AdminTeamsView: React.FC = () => {
             </div>
           ) : (
             <div className="space-y-4">
-              {permissions?.canCreateTeam && <Button id="create-team-button">Create Team</Button>}
+              {permissions?.canCreateTeam && (
+                <Button id="create-team-button" onClick={handleCreateTeam}>
+                  Create Team
+                </Button>
+              )}
 
               <Table>
                 <TableHeader>
@@ -174,6 +194,13 @@ const AdminTeamsView: React.FC = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Create Team Modal */}
+      <CreateTeamModal
+        isOpen={isCreateModalOpen}
+        onClose={handleCloseModal}
+        onTeamCreated={handleTeamCreated}
+      />
     </div>
   );
 };

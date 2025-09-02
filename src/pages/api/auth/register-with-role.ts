@@ -1,7 +1,8 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { authClient } from '@/lib/auth-client';
-import { roleNames } from '@/lib/auth-shared';
-import { apiLogger } from '@/logging/logger';
+import { authClient } from '../../../lib/auth-client';
+import { auth } from '../../../lib/auth';
+import { roleNames } from '../../../lib/auth-shared';
+import { apiLogger } from '../../../logging/logger';
 
 export default async function handler(req: NextApiRequest, res: NextApiResponse) {
   if (req.method !== 'POST') {
@@ -48,6 +49,36 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       role,
       name: result.data.user.name,
     });
+
+    // CRITICAL SECURITY FIX: Actually set the user role using Better Auth admin API
+    try {
+      await auth.api.setRole({
+        body: {
+          userId: result.data.user.id,
+          role: role,
+        },
+      });
+
+      apiLogger.info('User role successfully set', {
+        userId: result.data.user.id,
+        role,
+        email,
+      });
+    } catch (roleError) {
+      apiLogger.error('Failed to set user role - CRITICAL SECURITY ISSUE', {
+        userId: result.data.user.id,
+        email,
+        intendedRole: role,
+        error: roleError,
+      });
+
+      // This is a critical security issue - user was created but role not set
+      // In production, you might want to delete the user or mark them as needing manual role assignment
+      return res.status(500).json({
+        error: 'User registered but role assignment failed - contact administrator',
+        userId: result.data.user.id,
+      });
+    }
 
     return res.status(201).json({
       message: 'User registered successfully',

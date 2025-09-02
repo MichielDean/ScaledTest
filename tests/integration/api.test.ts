@@ -41,7 +41,10 @@ jest.mock('../../src/lib/timescaledb', () => ({
     success: true,
     reportId: 'test-report-id',
   }),
-  searchCtrfReports: jest.fn().mockResolvedValue([]),
+  searchCtrfReports: jest.fn().mockResolvedValue({
+    reports: [],
+    total: 0,
+  }),
 }));
 
 // Mock team management for integration tests

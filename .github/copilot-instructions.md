@@ -1602,7 +1602,14 @@ const getFormattedError = (backendError: string): string => {
 
 **Final Validation Process:** After completing any task, ALWAYS run this validation command:
 
-- Run `npm run test` to ensure **ALL** tests pass (this includes automatic formatting and TypeScript compilation validation)
+- Run `npm run test` to ensure **ALL** tests pass (this includes automatic formatting, TypeScript compilation, and build validation)
+
+**IMPORTANT: `npm run test` includes a complete build step.** Do NOT run `npm run build` separately before `npm run test` as this is redundant and wastes time. The test command automatically:
+
+1. Runs code formatting with Prettier
+2. Performs TypeScript compilation and type checking
+3. Builds the entire Next.js application
+4. Executes all test suites (unit, component, integration, and system tests)
 
 The single `npm run test` command runs formatting, TypeScript compilation of test files, and all test suites (unit, component, integration, and system tests) in one operation. If any step fails, the task is not complete.
 
@@ -1617,6 +1624,8 @@ If environment variables are needed for tests, ensure they are properly set up b
 - Format errors: Fix code style and formatting issues
 - Build errors: Resolve TypeScript errors, missing imports, syntax issues
 - Test failures: Address failing test cases and logic errors
+
+**EFFICIENCY NOTE:** Since `npm run test` performs all validation steps (formatting, building, and testing), avoid running individual commands like `npm run build` or `npm run format` separately unless you specifically need to isolate one step for debugging purposes.
 
 ## Jest Configuration and CLI Usage
 

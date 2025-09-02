@@ -2,7 +2,7 @@
  * Helper to explicitly close any outstanding handles
  * Useful for CI environments where tests may hang
  */
-import { testLogger } from '../../src/utils/logger';
+import { testLogger } from '../../src/logging/logger';
 
 // Define the delay for cleanup (ms)
 const TEARDOWN_DELAY_MS = 1000;

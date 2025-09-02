@@ -1,19 +1,30 @@
 import { auth } from './auth';
-import { Team } from '../types/team';
+import { Team, TeamWithMemberCount } from '../types/team';
+import { Pool } from 'pg';
+import { dbLogger } from '../logging/logger';
 
 /**
- * Team management for Better Auth
- * Provides team-related functionality for users
+ * Team management with proper database storage
+ * Provides team-related functionality for users using PostgreSQL backend
  */
 
 /**
- * Get teams for a user from Better Auth
- * For now, this provides a default team structure
- * In a full implementation, this would integrate with Better Auth's team plugin or custom metadata
+ * Get database connection pool
+ */
+function getDbPool(): Pool {
+  return new Pool({
+    connectionString: process.env.DATABASE_URL,
+  });
+}
+
+/**
+ * Get teams for a user from the database
  */
 export async function getUserTeams(userId: string): Promise<Team[]> {
+  const pool = getDbPool();
+
   try {
-    // Get user from Better Auth
+    // Verify user exists first
     const user = await auth.api.getUser({
       body: { userId },
     });
@@ -22,89 +33,274 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
       return [];
     }
 
-    // For now, provide a default team structure
-    // In a full implementation, this would come from Better Auth metadata or a teams plugin
-    const userWithTeams = user as {
-      teams?: Team[];
-      role?: string;
-    };
+    // Query user's teams from the database
+    const result = await pool.query(
+      `
+      SELECT 
+        t.id,
+        t.name,
+        t.description,
+        t.is_default as "isDefault",
+        t.created_at as "createdAt",
+        t.updated_at as "updatedAt",
+        ut.assigned_at as "assignedAt"
+      FROM teams t
+      INNER JOIN user_teams ut ON t.id = ut.team_id
+      WHERE ut.user_id = $1
+      ORDER BY t.is_default DESC, t.name ASC
+    `,
+      [userId]
+    );
 
-    // If user has teams metadata, return it
-    if (userWithTeams.teams && Array.isArray(userWithTeams.teams)) {
-      return userWithTeams.teams;
-    }
+    const teams: Team[] = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      isDefault: row.isDefault,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+    }));
 
-    // Provide default team based on user role
-    const defaultTeam: Team = {
-      id: 'default-team',
-      name: 'Default Team',
-      description: 'Default team for all users',
-      isDefault: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    };
+    dbLogger.debug('Retrieved user teams', {
+      userId,
+      teamCount: teams.length,
+      teamIds: teams.map(t => t.id),
+    });
 
-    return [defaultTeam];
-  } catch {
+    return teams;
+  } catch (error) {
+    dbLogger.error('Error fetching user teams', {
+      error,
+      userId,
+    });
     return [];
+  } finally {
+    await pool.end();
   }
 }
 
 /**
- * Add a user to a team
- * Placeholder implementation for future team management
+ * Add a user to a team in the database
  */
 export async function addUserToTeam(
-  _userId: string,
-  _teamId: string,
-  _assignedBy?: string
+  userId: string,
+  teamId: string,
+  assignedBy: string
 ): Promise<boolean> {
-  // Placeholder implementation
-  // In a full implementation, this would add a user to a team in Better Auth
-  // Parameters acknowledged for future implementation
-  if (_userId && _teamId && (_assignedBy || true)) {
+  const pool = getDbPool();
+
+  try {
+    // Verify user exists
+    const user = await auth.api.getUser({
+      body: { userId },
+    });
+
+    if (!user) {
+      throw new Error('User not found');
+    }
+
+    // Verify team exists
+    const teamCheck = await pool.query('SELECT id FROM teams WHERE id = $1', [teamId]);
+    if (teamCheck.rows.length === 0) {
+      throw new Error('Team not found');
+    }
+
+    // Check if user is already in the team
+    const existingAssignment = await pool.query(
+      'SELECT id FROM user_teams WHERE user_id = $1 AND team_id = $2',
+      [userId, teamId]
+    );
+
+    if (existingAssignment.rows.length > 0) {
+      dbLogger.info('User already assigned to team', { userId, teamId });
+      return true; // Already assigned, consider it successful
+    }
+
+    // Add user to team
+    await pool.query('INSERT INTO user_teams (user_id, team_id, assigned_by) VALUES ($1, $2, $3)', [
+      userId,
+      teamId,
+      assignedBy,
+    ]);
+
+    dbLogger.info('User successfully assigned to team', {
+      userId,
+      teamId,
+      assignedBy,
+    });
+
     return true;
+  } catch (error) {
+    dbLogger.error('Error assigning user to team', {
+      error,
+      userId,
+      teamId,
+      assignedBy,
+    });
+    throw error;
+  } finally {
+    await pool.end();
   }
-  return true;
 }
 
 /**
- * Remove a user from a team
- * Placeholder implementation for future team management
+ * Remove a user from a team in the database
  */
 export async function removeUserFromTeam(
-  _userId: string,
-  _teamId: string,
-  _removedBy?: string
+  userId: string,
+  teamId: string,
+  removedBy?: string
 ): Promise<boolean> {
-  // Placeholder implementation
-  // In a full implementation, this would remove a user from a team in Better Auth
-  // Parameters acknowledged for future implementation
-  if (_userId && _teamId && (_removedBy || true)) {
-    return true;
+  const pool = getDbPool();
+
+  try {
+    // Verify the assignment exists
+    const existingAssignment = await pool.query(
+      'SELECT id FROM user_teams WHERE user_id = $1 AND team_id = $2',
+      [userId, teamId]
+    );
+
+    if (existingAssignment.rows.length === 0) {
+      dbLogger.info('User not assigned to team', { userId, teamId });
+      return true; // Not assigned, consider removal successful
+    }
+
+    // Remove user from team
+    const result = await pool.query('DELETE FROM user_teams WHERE user_id = $1 AND team_id = $2', [
+      userId,
+      teamId,
+    ]);
+
+    dbLogger.info('User successfully removed from team', {
+      userId,
+      teamId,
+      removedBy: removedBy || 'system',
+      removedCount: result.rowCount ?? 0,
+    });
+
+    return (result.rowCount ?? 0) > 0;
+  } catch (error) {
+    dbLogger.error('Error removing user from team', {
+      error,
+      userId,
+      teamId,
+      removedBy,
+    });
+    throw error;
+  } finally {
+    await pool.end();
   }
-  return true;
 }
 
 /**
- * Get all teams in the system
- * Placeholder implementation for future team management
+ * Get all teams in the system from the database with member counts
  */
-export async function getAllTeams(): Promise<Team[]> {
+export async function getAllTeams(): Promise<TeamWithMemberCount[]> {
+  const pool = getDbPool();
+
   try {
-    // This would query Better Auth for all teams in a full implementation
-    // For now, return a default team structure
-    return [
-      {
-        id: 'default-team',
-        name: 'Default Team',
-        description: 'Default team for all users',
-        isDefault: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
-  } catch {
+    const result = await pool.query(`
+      SELECT 
+        t.id,
+        t.name,
+        t.description,
+        t.is_default as "isDefault",
+        t.created_at as "createdAt",
+        t.updated_at as "updatedAt",
+        COUNT(ut.user_id) as member_count
+      FROM teams t
+      LEFT JOIN user_teams ut ON t.id = ut.team_id
+      GROUP BY t.id, t.name, t.description, t.is_default, t.created_at, t.updated_at
+      ORDER BY t.is_default DESC, t.name ASC
+    `);
+
+    const teams: TeamWithMemberCount[] = result.rows.map(row => ({
+      id: row.id,
+      name: row.name,
+      description: row.description || '',
+      isDefault: row.isDefault,
+      createdAt: new Date(row.createdAt),
+      updatedAt: new Date(row.updatedAt),
+      memberCount: parseInt(row.member_count) || 0,
+    }));
+
+    dbLogger.debug('Retrieved all teams', {
+      teamCount: teams.length,
+    });
+
+    return teams;
+  } catch (error) {
+    dbLogger.error('Error fetching all teams', { error });
     return [];
+  } finally {
+    await pool.end();
+  }
+}
+
+/**
+ * Create a new team in the database
+ */
+export async function createTeam(
+  teamData: {
+    name: string;
+    description?: string;
+  },
+  createdBy: string
+): Promise<Team> {
+  const pool = getDbPool();
+
+  try {
+    // Check if team name already exists
+    const existingTeam = await pool.query('SELECT id FROM teams WHERE name = $1', [teamData.name]);
+
+    if (existingTeam.rows.length > 0) {
+      throw new Error('Team name already exists');
+    }
+
+    // Create the team
+    const result = await pool.query(
+      `
+      INSERT INTO teams (name, description, created_by)
+      VALUES ($1, $2, $3)
+      RETURNING 
+        id,
+        name,
+        description,
+        is_default as "isDefault",
+        created_at as "createdAt",
+        updated_at as "updatedAt"
+    `,
+      [teamData.name, teamData.description || null, createdBy]
+    );
+
+    if (result.rows.length === 0) {
+      throw new Error('Failed to create team');
+    }
+
+    const newTeam: Team = {
+      id: result.rows[0].id,
+      name: result.rows[0].name,
+      description: result.rows[0].description || '',
+      isDefault: result.rows[0].isDefault,
+      createdAt: new Date(result.rows[0].createdAt),
+      updatedAt: new Date(result.rows[0].updatedAt),
+    };
+
+    dbLogger.info('Team created successfully', {
+      teamId: newTeam.id,
+      teamName: newTeam.name,
+      createdBy,
+    });
+
+    return newTeam;
+  } catch (error) {
+    dbLogger.error('Error creating team', {
+      error,
+      teamName: teamData.name,
+      createdBy,
+    });
+    throw error;
+  } finally {
+    await pool.end();
   }
 }

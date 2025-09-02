@@ -7,8 +7,14 @@ import {
   removeUserFromTeam,
   getUserTeams,
   getAllTeams,
+  createTeam,
 } from '../../lib/teamManagement';
-import { AssignTeamRequest, RemoveTeamAssignmentRequest, UserWithTeams } from '../../types/team';
+import {
+  AssignTeamRequest,
+  RemoveTeamAssignmentRequest,
+  UserWithTeams,
+  CreateTeamRequest,
+} from '../../types/team';
 import { Pool } from 'pg';
 import type { Logger } from 'pino';
 
@@ -43,6 +49,21 @@ interface GetUserTeamsResponse {
 // Assignment response for POST requests
 interface AssignTeamResponse {
   success: true;
+  message: string;
+}
+
+// Team creation response for POST requests
+interface CreateTeamResponse {
+  success: true;
+  data: {
+    id: string;
+    name: string;
+    description?: string;
+    memberCount: number;
+    isDefault: boolean;
+    createdAt: Date;
+    updatedAt: Date;
+  };
   message: string;
 }
 
@@ -101,12 +122,16 @@ async function getAllUsersWithRoles(): Promise<UserWithRole[]> {
  *
  * GET /api/teams - Get all teams (requires maintainer+ role)
  * GET /api/teams?users=true - Get all users with their team assignments (requires maintainer+ role)
- * POST /api/teams - Assign a user to a team (requires maintainer+ role)
+ * POST /api/teams - Create a new team OR assign a user to a team (requires maintainer+ role)
+ *   - Team creation: { name: string, description?: string }
+ *   - User assignment: { userId: string, teamId: string }
  * DELETE /api/teams - Remove a user from a team (requires maintainer+ role)
  */
 export default async function handler(
   req: NextApiRequest,
-  res: NextApiResponse<TeamResponse | GetUserTeamsResponse | AssignTeamResponse | ErrorResponse>
+  res: NextApiResponse<
+    TeamResponse | GetUserTeamsResponse | AssignTeamResponse | CreateTeamResponse | ErrorResponse
+  >
 ) {
   const reqLogger = authLogger.child({
     endpoint: '/api/teams',
@@ -143,7 +168,13 @@ export default async function handler(
         return handleGetTeams(req, res, reqLogger);
       }
     } else if (req.method === 'POST') {
-      return handleAssignUserToTeam(req, res, reqLogger, session.user.id);
+      // Check if this is a team creation request (has 'name' field)
+      if ('name' in req.body) {
+        return handleCreateTeam(req, res, reqLogger, session.user.id);
+      } else {
+        // Otherwise, it's a user assignment request
+        return handleAssignUserToTeam(req, res, reqLogger, session.user.id);
+      }
     } else if (req.method === 'DELETE') {
       return handleRemoveUserFromTeam(req, res, reqLogger);
     } else {
@@ -164,33 +195,34 @@ async function handleGetTeams(
   reqLogger: Logger
 ) {
   try {
-    // Mock teams for now - in a full implementation, this would query a teams table
-    const mockTeams = [
-      {
-        id: 'default-team',
-        name: 'Default Team',
-        description: 'Default team for all users',
-        memberCount: 1,
-        isDefault: true,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      },
-    ];
+    // Get all teams from the database
+    const allTeams = await getAllTeams();
 
-    // Mock permissions based on user role - in a full implementation, this would be based on actual role checking
+    // Transform to API response format
+    const teams = allTeams.map(team => ({
+      id: team.id,
+      name: team.name,
+      description: team.description,
+      memberCount: team.memberCount,
+      isDefault: team.isDefault,
+      createdAt: team.createdAt,
+      updatedAt: team.updatedAt,
+    }));
+
+    // Set permissions based on user role - in a full implementation, this would be based on actual role checking
     const permissions = {
       canCreateTeam: true,
       canDeleteTeam: true,
       canAssignUsers: true,
       canViewAllTeams: true,
-      assignableTeams: ['default-team'],
+      assignableTeams: teams.map(t => t.id),
     };
 
-    reqLogger.info('Successfully retrieved teams list', { teamCount: mockTeams.length });
+    reqLogger.info('Successfully retrieved teams list', { teamCount: teams.length });
 
     return res.status(200).json({
       success: true,
-      data: mockTeams,
+      data: teams,
       permissions,
     });
   } catch (error) {
@@ -263,6 +295,97 @@ async function handleGetUsersWithTeams(
     return res.status(500).json({
       success: false,
       error: 'Failed to fetch users with team assignments',
+    });
+  }
+}
+
+/**
+ * Handle POST /api/teams - Create a new team
+ */
+async function handleCreateTeam(
+  req: NextApiRequest,
+  res: NextApiResponse<CreateTeamResponse | ErrorResponse>,
+  reqLogger: Logger,
+  createdBy: string
+) {
+  try {
+    const createData: CreateTeamRequest = req.body;
+
+    // Validate required fields
+    if (!createData.name || typeof createData.name !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Team name is required and must be a string',
+      });
+    }
+
+    // Validate team name length and format
+    const trimmedName = createData.name.trim();
+    if (trimmedName.length === 0) {
+      return res.status(400).json({
+        success: false,
+        error: 'Team name cannot be empty',
+      });
+    }
+
+    if (trimmedName.length > 100) {
+      return res.status(400).json({
+        success: false,
+        error: 'Team name cannot exceed 100 characters',
+      });
+    }
+
+    // Validate description if provided
+    if (createData.description && typeof createData.description !== 'string') {
+      return res.status(400).json({
+        success: false,
+        error: 'Team description must be a string',
+      });
+    }
+
+    if (createData.description && createData.description.length > 500) {
+      return res.status(400).json({
+        success: false,
+        error: 'Team description cannot exceed 500 characters',
+      });
+    }
+
+    // Create the team
+    const newTeam = await createTeam(
+      {
+        name: trimmedName,
+        description: createData.description?.trim(),
+      },
+      createdBy
+    );
+
+    reqLogger.info('Team created successfully', {
+      teamId: newTeam.id,
+      teamName: newTeam.name,
+      createdBy,
+    });
+
+    return res.status(201).json({
+      success: true,
+      data: {
+        id: newTeam.id,
+        name: newTeam.name,
+        description: newTeam.description,
+        memberCount: 0, // New teams start with 0 members
+        isDefault: newTeam.isDefault,
+        createdAt: newTeam.createdAt,
+        updatedAt: newTeam.updatedAt,
+      },
+      message: 'Team created successfully',
+    });
+  } catch (error) {
+    logError(reqLogger, 'Error creating team', error, {
+      teamName: req.body?.name,
+      createdBy,
+    });
+    return res.status(500).json({
+      success: false,
+      error: error instanceof Error ? error.message : 'Failed to create team',
     });
   }
 }
