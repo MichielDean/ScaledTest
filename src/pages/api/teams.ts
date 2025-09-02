@@ -2,6 +2,7 @@ import type { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
 import { dbLogger as authLogger } from '@/logging/logger';
 import { logError } from '../../logging/logger';
+import { validateUuids } from '../../lib/validation';
 import {
   addUserToTeam as assignUserToTeam,
   removeUserFromTeam,
@@ -418,19 +419,15 @@ async function handleAssignUserToTeam(
     }
 
     // Validate UUID format for IDs
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(assignData.userId)) {
+    try {
+      validateUuids([
+        { value: assignData.userId, fieldName: 'User ID' },
+        { value: assignData.teamId, fieldName: 'Team ID' },
+      ]);
+    } catch (error) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid user ID format',
-      });
-    }
-
-    if (!uuidRegex.test(assignData.teamId)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid team ID format',
+        error: error instanceof Error ? error.message : 'Invalid ID format',
       });
     }
 
@@ -485,19 +482,15 @@ async function handleRemoveUserFromTeam(
     }
 
     // Validate UUID format for IDs
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-    if (!uuidRegex.test(removeData.userId)) {
+    try {
+      validateUuids([
+        { value: removeData.userId, fieldName: 'User ID' },
+        { value: removeData.teamId, fieldName: 'Team ID' },
+      ]);
+    } catch (error) {
       return res.status(400).json({
         success: false,
-        error: 'Invalid user ID format',
-      });
-    }
-
-    if (!uuidRegex.test(removeData.teamId)) {
-      return res.status(400).json({
-        success: false,
-        error: 'Invalid team ID format',
+        error: error instanceof Error ? error.message : 'Invalid ID format',
       });
     }
 

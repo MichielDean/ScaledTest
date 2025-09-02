@@ -55,7 +55,28 @@ const password = getRequiredEnvVar(
 );
 
 let timescalePool: Pool | null = null;
-let migrationsRun = false;
+let migrationsPromise: Promise<void> | null = null;
+
+// Function to run migrations safely with proper async handling
+async function runMigrationsOnce(): Promise<void> {
+  if (!migrationsPromise) {
+    migrationsPromise = (async () => {
+      try {
+        logger.info('Running database migrations automatically on startup...');
+        await ensureDatabaseSchema();
+        logger.info('Database migrations completed successfully');
+      } catch (error) {
+        logError(logger, 'Failed to run automatic database migrations', error);
+        // Re-throw to ensure calling code can handle the failure
+        throw new Error(
+          `Database migration failed during startup: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
+            'The application cannot start without a properly initialized database schema.'
+        );
+      }
+    })();
+  }
+  return migrationsPromise;
+}
 
 // Function to get or create the singleton TimescaleDB pool
 function getTimescalePool(): Pool {
@@ -83,25 +104,6 @@ function getTimescalePool(): Pool {
       connectionTimeoutMillis: 5000,
       statement_timeout: 30000,
     });
-
-    // Run migrations automatically when pool is first created
-    if (!migrationsRun) {
-      setImmediate(async () => {
-        try {
-          logger.info('Running database migrations automatically on startup...');
-          await ensureDatabaseSchema();
-          migrationsRun = true;
-          logger.info('Database migrations completed successfully');
-        } catch (error) {
-          logError(logger, 'Failed to run automatic database migrations', error);
-          // Throw error to fail fast - the application cannot continue with incomplete database schema
-          throw new Error(
-            `Database migration failed during startup: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
-              'The application cannot start without a properly initialized database schema.'
-          );
-        }
-      });
-    }
 
     // Handle pool errors to prevent unhandled error crashes
     timescalePool.on('error', (err: Error) => {
@@ -156,7 +158,9 @@ export async function checkTimescaleConnection(): Promise<boolean> {
 
 // Function to ensure the test_reports hypertable is ready
 export const ensureTestReportsTableExists = async (): Promise<void> => {
-  // Simple check that the table exists - migrations should have been run at startup
+  // Ensure migrations are completed before checking table existence
+  await runMigrationsOnce();
+
   let client: PoolClient | null = null;
   try {
     client = await getTimescalePool().connect();
@@ -543,7 +547,7 @@ export const shutdownTimescaleDB = async (): Promise<void> => {
     if (timescalePool) {
       await timescalePool.end();
       timescalePool = null; // Clear the singleton instance
-      migrationsRun = false; // Reset migrations flag for next startup
+      migrationsPromise = null; // Reset migrations promise for next startup
     }
   } catch {
     // We're shutting down, so we don't care about errors

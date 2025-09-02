@@ -8,13 +8,44 @@ import { dbLogger } from '../logging/logger';
  * Provides team-related functionality for users using PostgreSQL backend
  */
 
+// Singleton database pool instance
+let dbPool: Pool | null = null;
+
 /**
- * Get database connection pool
+ * Get or create the singleton database connection pool
+ * Reuses the same pool instance across all function calls to prevent connection exhaustion
  */
 function getDbPool(): Pool {
-  return new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+  if (!dbPool) {
+    dbPool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+      max: 20, // Maximum number of clients in the pool
+      idleTimeoutMillis: 30000, // Close clients after 30 seconds of inactivity
+      connectionTimeoutMillis: 5000, // Return an error after 5 seconds if connection could not be established
+    });
+
+    // Handle pool errors
+    dbPool.on('error', err => {
+      dbLogger.error('Database pool error', { error: err.message });
+    });
+
+    // Log when pool is created
+    dbLogger.debug('Database connection pool created for team management');
+  }
+
+  return dbPool;
+}
+
+/**
+ * Gracefully shutdown the database pool
+ * Should be called when the application is shutting down
+ */
+export async function shutdownTeamManagementPool(): Promise<void> {
+  if (dbPool) {
+    await dbPool.end();
+    dbPool = null;
+    dbLogger.debug('Team management database pool shutdown completed');
+  }
 }
 
 /**
@@ -74,8 +105,6 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
       userId,
     });
     return [];
-  } finally {
-    await pool.end();
   }
 }
 
@@ -138,8 +167,6 @@ export async function addUserToTeam(
       assignedBy,
     });
     throw error;
-  } finally {
-    await pool.end();
   }
 }
 
@@ -187,8 +214,6 @@ export async function removeUserFromTeam(
       removedBy,
     });
     throw error;
-  } finally {
-    await pool.end();
   }
 }
 
@@ -232,8 +257,6 @@ export async function getAllTeams(): Promise<TeamWithMemberCount[]> {
   } catch (error) {
     dbLogger.error('Error fetching all teams', { error });
     return [];
-  } finally {
-    await pool.end();
   }
 }
 
@@ -300,7 +323,14 @@ export async function createTeam(
       createdBy,
     });
     throw error;
-  } finally {
-    await pool.end();
   }
 }
+
+// Graceful shutdown handlers
+process.on('SIGINT', async () => {
+  await shutdownTeamManagementPool();
+});
+
+process.on('SIGTERM', async () => {
+  await shutdownTeamManagementPool();
+});

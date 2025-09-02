@@ -1,6 +1,8 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
 import { dbLogger as authLogger } from '@/logging/logger';
+import { validateUuid } from '@/lib/validation';
+import { addUserToTeam, removeUserFromTeam, getUserTeams } from '@/lib/teamManagement';
 
 interface UserTeamRequest {
   userId: string;
@@ -49,31 +51,73 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
 
-    // Update user metadata with teams using Better Auth admin API
+    // Validate userId format
     try {
-      // TODO: Implement proper Better Auth user metadata update
-      // This is a placeholder for now - teams are stored in user metadata
-      // await auth.api.admin.updateUser({
-      //   userId,
-      //   metadata: { teams },
-      // });
+      validateUuid(userId, 'User ID');
+    } catch (error) {
+      return res.status(400).json({
+        success: false,
+        error: error instanceof Error ? error.message : 'Invalid User ID format',
+      });
+    }
 
-      authLogger.info('User teams update requested', {
+    // Validate team IDs
+    for (const team of teams) {
+      if (!team.id || typeof team.id !== 'string') {
+        return res.status(400).json({
+          success: false,
+          error: 'Each team must have a valid ID',
+        });
+      }
+      try {
+        validateUuid(team.id, 'Team ID');
+      } catch (validationError) {
+        return res.status(400).json({
+          success: false,
+          error:
+            validationError instanceof Error
+              ? validationError.message
+              : `Invalid team ID format: ${team.id}`,
+        });
+      }
+    }
+
+    // Update user team assignments using proper database operations
+    try {
+      // Get current user teams to determine what needs to be added/removed
+      const currentTeams = await getUserTeams(userId);
+      const currentTeamIds = new Set(currentTeams.map(t => t.id));
+      const newTeamIds = new Set(teams.map(t => t.id));
+
+      // Remove user from teams they're no longer assigned to
+      const teamsToRemove = currentTeams.filter(team => !newTeamIds.has(team.id));
+      for (const team of teamsToRemove) {
+        await removeUserFromTeam(userId, team.id, session.user.id);
+      }
+
+      // Add user to new teams
+      const teamsToAdd = teams.filter(team => !currentTeamIds.has(team.id));
+      for (const team of teamsToAdd) {
+        await addUserToTeam(userId, team.id, session.user.id);
+      }
+
+      authLogger.info('User teams updated successfully', {
         userId,
-        teams,
+        removedTeams: teamsToRemove.map(t => ({ id: t.id, name: t.name })),
+        addedTeams: teamsToAdd.map(t => ({ id: t.id, name: t.name })),
         updatedBy: session.user.id,
-        note: 'Placeholder implementation - teams stored in user metadata',
       });
 
       return res.status(200).json({
         success: true,
-        message: 'User teams updated successfully (placeholder)',
+        message: 'User teams updated successfully',
       });
     } catch (updateError) {
       authLogger.error('Failed to update user teams', {
         error: updateError,
         userId,
         teams,
+        updatedBy: session.user.id,
       });
 
       return res.status(500).json({

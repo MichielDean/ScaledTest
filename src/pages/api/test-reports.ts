@@ -149,10 +149,9 @@ async function handlePost(
     // Validate the request body using Zod schema
     const ctrfReport = CtrfReportSchema.parse(req.body);
 
-    // Ensure reportId exists
-    if (!ctrfReport.reportId) {
-      ctrfReport.reportId = crypto.randomUUID();
-    }
+    // Ensure reportId exists and store in a variable for safe access
+    const reportId = ctrfReport.reportId || crypto.randomUUID();
+    ctrfReport.reportId = reportId;
 
     // Ensure timestamp exists
     if (!ctrfReport.timestamp) {
@@ -181,7 +180,7 @@ async function handlePost(
     // Store report with user's current teams
     const reportWithMeta = {
       ...ctrfReport,
-      reportId: ctrfReport.reportId!, // We ensure this exists above
+      reportId,
       storedAt: new Date().toISOString(),
       metadata: {
         uploadedBy: req.user.id,
@@ -194,7 +193,7 @@ async function handlePost(
 
     reqLogger.info(
       {
-        reportId: ctrfReport.reportId!,
+        reportId,
         tool: ctrfReport.results.tool.name,
         testCount: ctrfReport.results.summary.tests,
         storageMode: 'timescale-only',
@@ -204,7 +203,7 @@ async function handlePost(
 
     return res.status(201).json({
       success: true,
-      id: ctrfReport.reportId,
+      id: reportId,
       message: 'CTRF report stored successfully',
       summary: {
         tests: ctrfReport.results.summary.tests,
