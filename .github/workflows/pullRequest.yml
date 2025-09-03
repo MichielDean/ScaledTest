@@ -26,7 +26,7 @@ jobs:
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
 
       # Database configuration
-      DATABASE_URL: postgresql://scaledtest:password@localhost:5432/scaledtest
+      DATABASE_URL: postgresql://scaledtest:password@localhost:5432/auth
 
       # Test users
       TEST_API_USERNAME: maintainer@example.com
