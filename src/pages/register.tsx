@@ -75,7 +75,8 @@ export default function RegisterPage() {
       if (response.data?.user) {
         logger.info('User registered successfully with Better Auth');
         // Better Auth handles authentication automatically after registration
-        window.location.href = '/dashboard';
+        // Use Next.js router for better navigation in tests
+        await router.push('/dashboard');
       } else if (response.error) {
         logger.error({ error: response.error }, 'Registration failed');
         setError(response.error.message || 'Registration failed');
