@@ -172,7 +172,7 @@ class CleanTestReporter implements Reporter {
       process.stderr.write('🚀 Application Logs:\n');
       appLogs.forEach(log => {
         const level = this.getLevelName(log.level);
-        const time = new Date(log.time).toISOString().substr(11, 12); // HH:mm:ss.sss
+        const time = new Date(log.time).toISOString().slice(11, 23); // HH:mm:ss.sss
         const logModule = log.module ? `[${log.module}]` : '';
         process.stderr.write(`  ${time} ${level} ${logModule} ${log.msg}\n`);
 
@@ -188,7 +188,7 @@ class CleanTestReporter implements Reporter {
       process.stderr.write('🧪 Test Infrastructure Logs:\n');
       testLogs.forEach(log => {
         const level = this.getLevelName(log.level);
-        const time = new Date(log.time).toISOString().substr(11, 12); // HH:mm:ss.sss
+        const time = new Date(log.time).toISOString().slice(11, 23); // HH:mm:ss.sss
         const logModule = log.module ? `[${log.module}]` : '';
         process.stderr.write(`  ${time} ${level} ${logModule} ${log.msg}\n`);
 

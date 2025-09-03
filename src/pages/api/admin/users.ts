@@ -14,7 +14,9 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const offset = (page - 1) * pageSize;
 
     // Note: Better Auth listUsers() doesn't support server-side pagination
-    // For large user bases, this should be replaced with direct database queries
+    // TODO: Replace with direct database queries using LIMIT/OFFSET for better performance:
+    // SELECT * FROM user ORDER BY created_at DESC LIMIT $1 OFFSET $2
+    // This current approach loads all users into memory and is not scalable
     const allUsers = await auth.api.listUsers();
 
     // Client-side pagination (not ideal for large datasets)
@@ -88,12 +90,12 @@ const handleDelete: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     // Delete user from Better Auth
     await auth.api.deleteUser({ userId });
 
-    reqLogger.info({ userId }, 'User deleted successfully');
+    reqLogger.info({ userIdHash: userId.slice(0, 8) + '...' }, 'User deleted successfully');
 
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
     logError(reqLogger, 'Error deleting user', error, {
-      userId: req.query?.userId,
+      userIdHash: req.query?.userId ? String(req.query.userId).slice(0, 8) + '...' : 'unknown',
     });
 
     // Handle specific Better Auth errors
@@ -136,7 +138,7 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
 
     reqLogger.info(
       {
-        userId,
+        userIdHash: userId.slice(0, 8) + '...',
         grantMaintainer,
         newRole,
       },
@@ -146,7 +148,7 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     return res.status(200).json({ message });
   } catch (error) {
     logError(reqLogger, 'Error updating user role', error, {
-      userId: req.body?.userId,
+      userIdHash: req.body?.userId ? String(req.body.userId).slice(0, 8) + '...' : 'unknown',
       grantMaintainer: req.body?.grantMaintainer,
     });
 
