@@ -37,7 +37,7 @@ export async function getTeamsWithMemberCounts(): Promise<TeamWithMemberCount[]>
  * TODO: Implement with PostgreSQL
  */
 export async function getUserTeams(userId: string): Promise<Team[]> {
-  logger.info('getUserTeams called for user', { userId });
+  logger.info({ userId }, 'getUserTeams called for user');
   // Return a default team for now to prevent errors
   return [
     {
@@ -56,8 +56,8 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
  * TODO: Implement with PostgreSQL
  */
 export async function createTeam(teamData: CreateTeamRequest): Promise<Team> {
-  logger.warn('createTeam called but not yet implemented with Better Auth', { teamData });
-  throw new Error('Team creation not yet implemented with Better Auth');
+  logger.warn({ teamData }, 'createTeam called but not yet implemented with Better Auth');
+  throw new Error('Team creation not yet implemented');
 }
 
 /**
@@ -65,7 +65,7 @@ export async function createTeam(teamData: CreateTeamRequest): Promise<Team> {
  * TODO: Implement with PostgreSQL
  */
 export async function getTeamById(teamId: string): Promise<Team | null> {
-  logger.warn('getTeamById called but not yet implemented with Better Auth', { teamId });
+  logger.warn({ teamId }, 'getTeamById called but not yet implemented with Better Auth');
   return null;
 }
 
@@ -73,9 +73,9 @@ export async function getTeamById(teamId: string): Promise<Team | null> {
  * Update team
  * TODO: Implement with PostgreSQL
  */
-export async function updateTeam(teamId: string, updateData: UpdateTeamRequest): Promise<void> {
-  logger.warn('updateTeam called but not yet implemented with Better Auth', { teamId, updateData });
-  throw new Error('Team update not yet implemented with Better Auth');
+export async function updateTeam(teamId: string, updateData: UpdateTeamRequest): Promise<Team> {
+  logger.warn({ teamId, updateData }, 'updateTeam called but not yet implemented with Better Auth');
+  throw new Error('Team update not yet implemented');
 }
 
 /**
@@ -83,8 +83,8 @@ export async function updateTeam(teamId: string, updateData: UpdateTeamRequest):
  * TODO: Implement with PostgreSQL
  */
 export async function deleteTeam(teamId: string): Promise<void> {
-  logger.warn('deleteTeam called but not yet implemented with Better Auth', { teamId });
-  throw new Error('Team deletion not yet implemented with Better Auth');
+  logger.warn({ teamId }, 'deleteTeam called but not yet implemented with Better Auth');
+  throw new Error('Team deletion not yet implemented');
 }
 
 /**
@@ -96,11 +96,14 @@ export async function addUserToTeam(
   teamId: string,
   assignedBy?: string
 ): Promise<void> {
-  logger.warn('addUserToTeam called but not yet implemented with Better Auth', {
-    userId,
-    teamId,
-    assignedBy,
-  });
+  logger.warn(
+    {
+      userId,
+      teamId,
+      assignedBy,
+    },
+    'addUserToTeam called but not yet implemented with Better Auth'
+  );
   throw new Error('Adding user to team not yet implemented with Better Auth');
 }
 
@@ -125,11 +128,14 @@ export async function removeUserFromTeam(
   teamId: string,
   removedBy?: string
 ): Promise<void> {
-  logger.warn('removeUserFromTeam called but not yet implemented with Better Auth', {
-    userId,
-    teamId,
-    removedBy,
-  });
+  logger.warn(
+    {
+      userId,
+      teamId,
+      removedBy,
+    },
+    'removeUserFromTeam called but not yet implemented with Better Auth'
+  );
   throw new Error('Removing user from team not yet implemented with Better Auth');
 }
 
@@ -138,7 +144,7 @@ export async function removeUserFromTeam(
  * TODO: Implement with PostgreSQL
  */
 export async function getTeamMembers(teamId: string): Promise<unknown[]> {
-  logger.warn('getTeamMembers called but not yet implemented with Better Auth', { teamId });
+  logger.warn({ teamId }, 'getTeamMembers called but not yet implemented with Better Auth');
   return [];
 }
 
@@ -147,10 +153,13 @@ export async function getTeamMembers(teamId: string): Promise<unknown[]> {
  * TODO: Implement with Better Auth roles
  */
 export async function canUserManageTeam(userId: string, teamId: string): Promise<boolean> {
-  logger.warn('canUserManageTeam called but not yet implemented with Better Auth', {
-    userId,
-    teamId,
-  });
+  logger.warn(
+    {
+      userId,
+      teamId,
+    },
+    'canUserManageTeam called but not yet implemented with Better Auth'
+  );
   return false;
 }
 
@@ -159,10 +168,13 @@ export async function canUserManageTeam(userId: string, teamId: string): Promise
  * TODO: Implement with Better Auth roles
  */
 export async function getTeamPermissions(userId: string, teamId: string): Promise<TeamPermissions> {
-  logger.warn('getTeamPermissions called but not yet implemented with Better Auth', {
-    userId,
-    teamId,
-  });
+  logger.warn(
+    {
+      userId,
+      teamId,
+    },
+    'getTeamPermissions called but not yet implemented with Better Auth'
+  );
   return {
     canCreateTeam: false,
     canDeleteTeam: false,
@@ -178,9 +190,12 @@ export async function getAllTeams(): Promise<Team[]> {
 }
 
 export async function addUserToTeams(userId: string, teamIds: string[]): Promise<void> {
-  logger.warn('addUserToTeams called but not yet implemented with Better Auth', {
-    userId,
-    teamIds,
-  });
+  logger.warn(
+    {
+      userId,
+      teamIds,
+    },
+    'addUserToTeams called but not yet implemented with Better Auth'
+  );
   // No-op for now
 }

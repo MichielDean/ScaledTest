@@ -136,7 +136,7 @@ async function assignUserRole(userId: string, role: string, userEmail: string): 
     }
 
     const result = await response.json();
-    scriptLogger.info(`Successfully assigned role '${role}' to user: ${userEmail}`, { result });
+    scriptLogger.info({ result }, `Successfully assigned role '${role}' to user: ${userEmail}`);
   } catch (error) {
     scriptLogger.error({ err: error, userId, role, userEmail }, 'Failed to assign role to user');
     throw error;

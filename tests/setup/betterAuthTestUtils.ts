@@ -60,10 +60,13 @@ export async function getAuthHeaders(
 
     if (!signInResponse.ok) {
       const errorText = await signInResponse.text();
-      testLogger.error(`Authentication failed for ${testUser.email}:`, {
-        status: signInResponse.status,
-        response: errorText,
-      });
+      testLogger.error(
+        {
+          status: signInResponse.status,
+          response: errorText,
+        },
+        'Authentication failed for ${testUser.email}:'
+      );
       throw new Error(`Authentication failed: ${signInResponse.status} ${errorText}`);
     }
 
@@ -107,17 +110,20 @@ export async function getAuthHeaders(
       .filter(Boolean)
       .join('; ');
 
-    testLogger.debug(`Successfully authenticated ${testUser.email}`, {
-      cookieCount: cookieHeaders.length,
-      cookieLength: cookies.length,
-    });
+    testLogger.debug(
+      {
+        cookieCount: cookieHeaders.length,
+        cookieLength: cookies.length,
+      },
+      'Successfully authenticated ${testUser.email}'
+    );
 
     return {
       'Content-Type': 'application/json',
       Cookie: cookies,
     };
   } catch (error) {
-    testLogger.error(`Failed to authenticate ${testUser.email}:`, error);
+    testLogger.error({ error }, `Failed to authenticate ${testUser.email}:`);
     throw error;
   }
 }
@@ -146,12 +152,15 @@ export async function createAuthenticatedAgent(app: string, testUser: TestUser =
     password: testUser.password,
   });
 
-  testLogger.info(`Authentication response status: ${authResponse.status}`, {
-    user: testUser.email,
-    body: authResponse.body,
-    headers: authResponse.headers,
-    cookies: authResponse.headers['set-cookie'],
-  });
+  testLogger.info(
+    {
+      user: testUser.email,
+      body: authResponse.body,
+      headers: authResponse.headers,
+      cookies: authResponse.headers['set-cookie'],
+    },
+    'Authentication response status: ${authResponse.status}'
+  );
 
   // Better Auth typically returns 200 for successful sign-in
   if (authResponse.status !== 200) {
@@ -160,7 +169,7 @@ export async function createAuthenticatedAgent(app: string, testUser: TestUser =
       text: authResponse.text,
       body: authResponse.body,
     };
-    testLogger.error(`Authentication failed for ${testUser.email}:`, errorDetails);
+    testLogger.error(errorDetails, `Authentication failed for ${testUser.email}:`);
     throw new Error(
       `Authentication failed: ${authResponse.status} ${JSON.stringify(errorDetails)}`
     );

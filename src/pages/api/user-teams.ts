@@ -29,11 +29,14 @@ const handleGet: BetterAuthMethodHandler<GetUserTeamsResponse | ErrorResponse> =
     // Get teams for the current user
     const userTeams = await getUserTeams(userId);
 
-    reqLogger.info('Successfully retrieved user teams', {
-      userId,
-      teamCount: userTeams.length,
-      teamIds: userTeams.map(t => t.id),
-    });
+    reqLogger.info(
+      {
+        userId,
+        teamCount: userTeams.length,
+        teamIds: userTeams.map(t => t.id),
+      },
+      'Successfully retrieved user teams'
+    );
 
     return res.status(200).json({
       success: true,

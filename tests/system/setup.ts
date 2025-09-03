@@ -67,7 +67,7 @@ export async function setupBetterAuth() {
 
     testLogger.info('Better Auth test users setup completed successfully');
   } catch (error) {
-    testLogger.error('Failed to setup Better Auth test users:', error);
+    testLogger.error({ error }, 'Failed to setup Better Auth test users:');
     throw new Error('Better Auth test user setup failed');
   }
 }

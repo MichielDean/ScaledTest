@@ -87,7 +87,7 @@ function loadConfig(): PlaywrightConfig {
 
       return mergedConfig;
     } catch (error) {
-      testLogger.warn('Failed to load jest-playwright config, using defaults:', { error });
+      testLogger.warn({ error }, 'Failed to load jest-playwright config, using defaults:');
     }
   }
 
@@ -127,7 +127,7 @@ const setupPlaywright = async (): Promise<void> => {
           global as unknown as NodeJS.Global
         ).context.newPage();
       } catch (error) {
-        testLogger.warn('Error resetting page:', { error });
+        testLogger.warn({ error }, 'Error resetting page:');
         // Fallback: recreate the entire context
         await (global as unknown as NodeJS.Global).jestPlaywright.resetContext();
       }
@@ -147,7 +147,7 @@ const setupPlaywright = async (): Promise<void> => {
           global as unknown as NodeJS.Global
         ).context.newPage();
       } catch (error) {
-        testLogger.warn('Error resetting context:', { error });
+        testLogger.warn({ error }, 'Error resetting context:');
         // Fallback: recreate the entire browser
         await (global as unknown as NodeJS.Global).jestPlaywright.resetBrowser(newOptions);
       }
@@ -170,7 +170,7 @@ const setupPlaywright = async (): Promise<void> => {
           global as unknown as NodeJS.Global
         ).context.newPage();
       } catch (error) {
-        testLogger.error('Error resetting browser:', { error });
+        testLogger.error({ error }, 'Error resetting browser:');
         throw error;
       }
     },
@@ -185,7 +185,7 @@ const teardownPlaywright = async (): Promise<void> => {
       await (global as unknown as NodeJS.Global).page.close().catch(() => {});
     }
   } catch (error) {
-    testLogger.warn('Error closing page:', { error });
+    testLogger.warn({ error }, 'Error closing page:');
   }
 
   try {
@@ -193,7 +193,7 @@ const teardownPlaywright = async (): Promise<void> => {
       await (global as unknown as NodeJS.Global).context.close().catch(() => {});
     }
   } catch (error) {
-    testLogger.warn('Error closing context:', { error });
+    testLogger.warn({ error }, 'Error closing context:');
   }
 
   try {
@@ -201,7 +201,7 @@ const teardownPlaywright = async (): Promise<void> => {
       await (global as unknown as NodeJS.Global).browser.close().catch(() => {});
     }
   } catch (error) {
-    testLogger.warn('Error closing browser:', { error });
+    testLogger.warn({ error }, 'Error closing browser:');
   }
 
   // Clear globals
@@ -225,12 +225,12 @@ const teardownPlaywright = async (): Promise<void> => {
     // Check if jestPlaywright is available before calling resetPage
     await (global as unknown as NodeJS.Global).jestPlaywright.resetPage();
   } catch (error) {
-    testLogger.warn('Error in beforeEach reset:', { error });
+    testLogger.warn({ error }, 'Error in beforeEach reset:');
     // Try to reinitialize if reset fails
     try {
       await setupPlaywright();
     } catch (setupError) {
-      testLogger.error('Failed to reinitialize Playwright in beforeEach:', { error: setupError });
+      testLogger.error({ error: setupError }, 'Failed to reinitialize Playwright in beforeEach:');
       throw setupError;
     }
   }

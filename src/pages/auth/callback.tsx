@@ -12,16 +12,22 @@ export default function AuthCallback() {
 
     if (session) {
       // User is authenticated, redirect to dashboard
-      apiLogger.info('Social auth callback successful', {
-        userId: session.user.id,
-        provider: router.query.provider,
-      });
+      apiLogger.info(
+        {
+          userId: session.user.id,
+          provider: router.query.provider,
+        },
+        'Social auth callback successful'
+      );
       router.push('/dashboard');
     } else {
       // Authentication failed, redirect to login with error
-      apiLogger.error('Social auth callback failed', {
-        provider: router.query.provider,
-      });
+      apiLogger.error(
+        {
+          provider: router.query.provider,
+        },
+        'Social auth callback failed'
+      );
       router.push('/login?error=social_auth_failed');
     }
   }, [session, isPending, router]);

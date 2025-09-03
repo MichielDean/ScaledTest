@@ -62,7 +62,7 @@ export async function authenticateRequest(
         };
       }
     } catch (sessionError) {
-      logger.debug('Session authentication failed, trying token auth', { error: sessionError });
+      logger.debug({ error: sessionError }, 'Session authentication failed, trying token auth');
     }
 
     // If session auth failed and we have a token, try token validation
@@ -84,13 +84,13 @@ export async function authenticateRequest(
           };
         }
       } catch (tokenError) {
-        logger.debug('Bearer token authentication failed', { error: tokenError });
+        logger.debug({ error: tokenError }, 'Bearer token authentication failed');
       }
     }
 
     return null;
   } catch (error) {
-    logger.error('Authentication error', { error });
+    logger.error({ error }, 'Authentication error');
     return null;
   }
 }

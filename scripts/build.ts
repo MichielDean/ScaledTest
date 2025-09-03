@@ -22,24 +22,41 @@ export class SmartBuildProgress {
   ];
   private interval: NodeJS.Timeout | null = null;
   private isComplete = false;
+  private isTTY = false;
+
+  constructor() {
+    // Check if we're running in a TTY environment (supports cursor control)
+    this.isTTY = Boolean(
+      process.stdout.isTTY &&
+        typeof process.stdout.clearLine === 'function' &&
+        typeof process.stdout.cursorTo === 'function'
+    );
+  }
 
   start() {
-    // Ensure we start on a fresh line
-    console.log(''); // Add a newline before starting progress
-    this.showProgress();
+    if (this.isTTY) {
+      // TTY environment: Use interactive progress bar
+      console.log(''); // Add a newline before starting progress
+      this.showProgress();
 
-    // Fallback timer to ensure progress moves even if we miss some output
-    this.interval = setInterval(() => {
-      if (!this.isComplete && this.currentStage < this.stages.length - 1) {
-        // Slowly advance if we haven't seen output for a while
-        this.currentStage = Math.min(this.currentStage + 0.1, this.stages.length - 1);
-        this.showProgress();
-      }
-    }, 1000);
+      // Fallback timer to ensure progress moves even if we miss some output
+      this.interval = setInterval(() => {
+        if (!this.isComplete && this.currentStage < this.stages.length - 1) {
+          // Slowly advance if we haven't seen output for a while
+          this.currentStage = Math.min(this.currentStage + 0.1, this.stages.length - 1);
+          this.showProgress();
+        }
+      }, 1000);
+    } else {
+      // Non-TTY environment: Use simple text output
+      buildLogger.info('→ Starting build process...');
+    }
   }
 
   updateFromOutput(output: string) {
     if (this.isComplete) return;
+
+    const previousStage = this.currentStage;
 
     // Update stage based on build output patterns
     const outputLower = output.toLowerCase();
@@ -64,10 +81,22 @@ export class SmartBuildProgress {
       }
     }
 
-    this.showProgress();
+    // Show progress differently based on environment
+    if (this.isTTY) {
+      this.showProgress();
+    } else {
+      // In non-TTY environments, only log when we advance to a new stage
+      if (Math.floor(this.currentStage) > Math.floor(previousStage)) {
+        const stage = this.stages[Math.floor(this.currentStage)];
+        const percentage = Math.floor((stage.weight / 100) * 100);
+        buildLogger.info(`→ [${percentage}%] ${stage.name}`);
+      }
+    }
   }
 
   private showProgress() {
+    if (!this.isTTY) return; // Only show interactive progress in TTY environments
+
     const stage = this.stages[Math.floor(this.currentStage)];
     const progress = stage.weight / 100;
     const barLength = 30;
@@ -88,9 +117,19 @@ export class SmartBuildProgress {
     this.isComplete = true;
     this.currentStage = this.stages.length - 1;
 
-    // Clear the progress line and write completion message
-    process.stdout.clearLine(0);
-    process.stdout.cursorTo(0);
+    if (this.isTTY) {
+      // TTY environment: Clear the progress line and write completion message
+      try {
+        if (process.stdout.clearLine && process.stdout.cursorTo) {
+          process.stdout.clearLine(0);
+          process.stdout.cursorTo(0);
+        }
+      } catch (error) {
+        // If clearing fails, just add a newline
+        process.stdout.write('\n');
+      }
+    }
+
     console.log('✅ Build completed successfully');
   }
 }

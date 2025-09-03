@@ -15,7 +15,7 @@ let dbPool: Pool | null = null;
  * Get or create the singleton database connection pool
  * Reuses the same pool instance across all function calls to prevent connection exhaustion
  */
-function getDbPool(): Pool {
+export function getDbPool(): Pool {
   if (!dbPool) {
     dbPool = new Pool({
       connectionString: process.env.DATABASE_URL,
@@ -26,7 +26,7 @@ function getDbPool(): Pool {
 
     // Handle pool errors
     dbPool.on('error', err => {
-      dbLogger.error('Database pool error', { error: err.message });
+      dbLogger.error({ error: err.message }, 'Database pool error');
     });
 
     // Log when pool is created
@@ -92,18 +92,24 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
       updatedAt: new Date(row.updatedAt),
     }));
 
-    dbLogger.debug('Retrieved user teams', {
-      userId,
-      teamCount: teams.length,
-      teamIds: teams.map(t => t.id),
-    });
+    dbLogger.debug(
+      {
+        userId,
+        teamCount: teams.length,
+        teamIds: teams.map(t => t.id),
+      },
+      'Retrieved user teams'
+    );
 
     return teams;
   } catch (error) {
-    dbLogger.error('Error fetching user teams', {
-      error,
-      userId,
-    });
+    dbLogger.error(
+      {
+        error,
+        userId,
+      },
+      'Error fetching user teams'
+    );
     return [];
   }
 }
@@ -141,7 +147,7 @@ export async function addUserToTeam(
     );
 
     if (existingAssignment.rows.length > 0) {
-      dbLogger.info('User already assigned to team', { userId, teamId });
+      dbLogger.info({ userId, teamId }, 'User already assigned to team');
       return true; // Already assigned, consider it successful
     }
 
@@ -152,20 +158,26 @@ export async function addUserToTeam(
       assignedBy,
     ]);
 
-    dbLogger.info('User successfully assigned to team', {
-      userId,
-      teamId,
-      assignedBy,
-    });
+    dbLogger.info(
+      {
+        userId,
+        teamId,
+        assignedBy,
+      },
+      'User successfully assigned to team'
+    );
 
     return true;
   } catch (error) {
-    dbLogger.error('Error assigning user to team', {
-      error,
-      userId,
-      teamId,
-      assignedBy,
-    });
+    dbLogger.error(
+      {
+        error,
+        userId,
+        teamId,
+        assignedBy,
+      },
+      'Error assigning user to team'
+    );
     throw error;
   }
 }
@@ -188,7 +200,7 @@ export async function removeUserFromTeam(
     );
 
     if (existingAssignment.rows.length === 0) {
-      dbLogger.info('User not assigned to team', { userId, teamId });
+      dbLogger.info({ userId, teamId }, 'User not assigned to team');
       return true; // Not assigned, consider removal successful
     }
 
@@ -198,21 +210,27 @@ export async function removeUserFromTeam(
       teamId,
     ]);
 
-    dbLogger.info('User successfully removed from team', {
-      userId,
-      teamId,
-      removedBy: removedBy || 'system',
-      removedCount: result.rowCount ?? 0,
-    });
+    dbLogger.info(
+      {
+        userId,
+        teamId,
+        removedBy: removedBy || 'system',
+        removedCount: result.rowCount ?? 0,
+      },
+      'User successfully removed from team'
+    );
 
     return (result.rowCount ?? 0) > 0;
   } catch (error) {
-    dbLogger.error('Error removing user from team', {
-      error,
-      userId,
-      teamId,
-      removedBy,
-    });
+    dbLogger.error(
+      {
+        error,
+        userId,
+        teamId,
+        removedBy,
+      },
+      'Error removing user from team'
+    );
     throw error;
   }
 }
@@ -249,13 +267,16 @@ export async function getAllTeams(): Promise<TeamWithMemberCount[]> {
       memberCount: parseInt(row.member_count) || 0,
     }));
 
-    dbLogger.debug('Retrieved all teams', {
-      teamCount: teams.length,
-    });
+    dbLogger.debug(
+      {
+        teamCount: teams.length,
+      },
+      'Retrieved all teams'
+    );
 
     return teams;
   } catch (error) {
-    dbLogger.error('Error fetching all teams', { error });
+    dbLogger.error({ error }, 'Error fetching all teams');
     return [];
   }
 }
@@ -309,19 +330,25 @@ export async function createTeam(
       updatedAt: new Date(result.rows[0].updatedAt),
     };
 
-    dbLogger.info('Team created successfully', {
-      teamId: newTeam.id,
-      teamName: newTeam.name,
-      createdBy,
-    });
+    dbLogger.info(
+      {
+        teamId: newTeam.id,
+        teamName: newTeam.name,
+        createdBy,
+      },
+      'Team created successfully'
+    );
 
     return newTeam;
   } catch (error) {
-    dbLogger.error('Error creating team', {
-      error,
-      teamName: teamData.name,
-      createdBy,
-    });
+    dbLogger.error(
+      {
+        error,
+        teamName: teamData.name,
+        createdBy,
+      },
+      'Error creating team'
+    );
     throw error;
   }
 }

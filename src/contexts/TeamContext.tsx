@@ -110,7 +110,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
         setSelectedTeamIds(teams.map(team => team.id));
       }
     } catch (err) {
-      uiLogger.error('Failed to fetch user teams', { error: err, userId });
+      uiLogger.error({ error: err, userId }, 'Failed to fetch user teams');
       setError('Failed to load team information');
       setUserTeams([]);
     }
@@ -133,7 +133,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
       }
     } catch (err) {
       // Non-admin users can't access this endpoint, which is expected
-      uiLogger.debug('Could not fetch all teams', { error: err });
+      uiLogger.debug({ error: err }, 'Could not fetch all teams');
       setAllTeams([]);
     }
   }, [isAuthenticated, token]);

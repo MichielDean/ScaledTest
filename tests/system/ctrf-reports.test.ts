@@ -21,7 +21,7 @@ describe('CTRF Reports API System Tests', () => {
       api = await createAuthenticatedAgent(API_URL, TestUsers.OWNER);
       testLogger.debug('Successfully created authenticated agent for CTRF tests');
     } catch (error) {
-      testLogger.error('Failed to create authenticated agent in beforeAll:', error);
+      testLogger.error({ error }, 'Failed to create authenticated agent in beforeAll:');
       throw error;
     }
   }, 30000);
@@ -34,29 +34,38 @@ describe('CTRF Reports API System Tests', () => {
         password: TestUsers.OWNER.password,
       });
 
-      testLogger.info('Re-authentication response:', {
-        status: reAuthResponse.status,
-        body: reAuthResponse.body,
-        cookies: reAuthResponse.headers['set-cookie'],
-      });
+      testLogger.info(
+        {
+          status: reAuthResponse.status,
+          body: reAuthResponse.body,
+          cookies: reAuthResponse.headers['set-cookie'],
+        },
+        'Re-authentication response:'
+      );
 
       expect(reAuthResponse.status).toBe(200);
 
       // Now verify that our authenticated agent actually works
       const sessionResponse = await api.get('/api/auth/get-session');
-      testLogger.info('Session check response:', {
-        status: sessionResponse.status,
-        body: sessionResponse.body,
-        headers: sessionResponse.headers,
-        user: sessionResponse.body?.user?.email || 'No user',
-        session: sessionResponse.body?.session?.id || 'No session',
-      });
-
-      if (sessionResponse.status !== 200 || !sessionResponse.body) {
-        testLogger.error('Session check failed - no valid session:', {
+      testLogger.info(
+        {
           status: sessionResponse.status,
           body: sessionResponse.body,
-        });
+          headers: sessionResponse.headers,
+          user: sessionResponse.body?.user?.email || 'No user',
+          session: sessionResponse.body?.session?.id || 'No session',
+        },
+        'Session check response:'
+      );
+
+      if (sessionResponse.status !== 200 || !sessionResponse.body) {
+        testLogger.error(
+          {
+            status: sessionResponse.status,
+            body: sessionResponse.body,
+          },
+          'Session check failed - no valid session:'
+        );
         throw new Error(
           `Authentication session not valid: status ${sessionResponse.status}, body: ${JSON.stringify(sessionResponse.body)}`
         );

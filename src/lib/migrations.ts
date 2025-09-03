@@ -70,22 +70,28 @@ const runSingleDatabaseMigration = async (
 
     migrationProcess.on('close', (code: number) => {
       if (code === 0) {
-        logger.info(`${dbName} database migrations completed successfully`, {
-          output: stdout.trim() || 'No pending migrations',
-        });
+        logger.info(
+          {
+            output: stdout.trim() || 'No pending migrations',
+          },
+          '${dbName} database migrations completed successfully'
+        );
         resolve();
       } else {
-        logger.error(`${dbName} database migrations failed`, {
-          exitCode: code,
-          stdout: stdout.trim(),
-          stderr: stderr.trim(),
-        });
+        logger.error(
+          {
+            exitCode: code,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+          },
+          '${dbName} database migrations failed'
+        );
         reject(new Error(`${dbName} migration failed with exit code ${code}: ${stderr.trim()}`));
       }
     });
 
     migrationProcess.on('error', (error: Error) => {
-      logger.error(`Failed to start ${dbName} migration process`, { error: error.message });
+      logger.error({ error: error.message }, 'Failed to start ${dbName} migration process');
       reject(error);
     });
   });
@@ -157,23 +163,29 @@ const checkSingleDatabaseMigrationStatus = async (
       if (code === 0) {
         // Check if there are pending migrations
         const hasPendingMigrations = stdout.includes('Would run') || stdout.includes('migration');
-        logger.debug(`${dbName} migration status check completed`, {
-          hasPendingMigrations,
-          output: stdout.trim(),
-        });
+        logger.debug(
+          {
+            hasPendingMigrations,
+            output: stdout.trim(),
+          },
+          '${dbName} migration status check completed'
+        );
         resolve(hasPendingMigrations);
       } else {
-        logger.error(`${dbName} migration status check failed`, {
-          exitCode: code,
-          stdout: stdout.trim(),
-          stderr: stderr.trim(),
-        });
+        logger.error(
+          {
+            exitCode: code,
+            stdout: stdout.trim(),
+            stderr: stderr.trim(),
+          },
+          '${dbName} migration status check failed'
+        );
         reject(new Error(`${dbName} migration status check failed: ${stderr.trim()}`));
       }
     });
 
     statusProcess.on('error', (error: Error) => {
-      logger.error(`Failed to check ${dbName} migration status`, { error: error.message });
+      logger.error({ error: error.message }, 'Failed to check ${dbName} migration status');
       reject(error);
     });
   });
@@ -197,9 +209,12 @@ export const ensureDatabaseSchema = async (): Promise<void> => {
       logger.info('Database schema is up to date');
     }
   } catch (error) {
-    logger.error('Failed to ensure database schema is up to date', {
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    logger.error(
+      {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      'Failed to ensure database schema is up to date'
+    );
     throw error;
   }
 };

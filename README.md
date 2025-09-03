@@ -202,12 +202,10 @@ ScaledTest uses Better Auth for authentication with:
 ScaledTest implements three permission levels:
 
 1. **Read-only User**
-
    - Can view test results and dashboards
    - Cannot modify any data
 
 2. **Maintainer User**
-
    - Read permissions plus ability to upload test results
    - Can edit test metadata and tags
 
@@ -257,13 +255,11 @@ ScaledTest consists of two main components:
 The system automatically creates these test users for development and testing:
 
 1. **Read-only User**
-
    - Username: `readonly@example.com`
    - Password: `ReadOnly123!`
    - Role: readonly
 
 2. **Maintainer User**
-
    - Username: `maintainer@example.com`
    - Password: `Maintainer123!`
    - Roles: readonly, maintainer

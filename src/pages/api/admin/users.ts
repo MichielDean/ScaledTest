@@ -8,10 +8,32 @@ import { auth } from '../../../lib/auth';
  */
 const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
-    const users = await auth.api.listUsers();
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 1000); // Max 1000 users per page
+    const offset = (page - 1) * pageSize;
+
+    // Note: Better Auth listUsers() doesn't support server-side pagination
+    // For large user bases, this should be replaced with direct database queries
+    const allUsers = await auth.api.listUsers();
+
+    // Client-side pagination (not ideal for large datasets)
+    const paginatedUsers = allUsers.slice(offset, offset + pageSize);
+
+    // Log warning if dataset is large
+    if (allUsers.length > 1000) {
+      reqLogger.warn(
+        {
+          totalUsers: allUsers.length,
+          recommendation:
+            'Consider implementing server-side pagination with direct database queries',
+        },
+        'Large user dataset detected - client-side pagination in use'
+      );
+    }
 
     // Transform Better Auth users to include role information
-    const usersWithRoles = users.map(
+    const usersWithRoles = paginatedUsers.map(
       (user: {
         id: string;
         email: string;
@@ -31,7 +53,20 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       })
     );
 
-    return res.status(200).json(usersWithRoles);
+    // Add pagination metadata to response
+    const response = {
+      users: usersWithRoles,
+      pagination: {
+        page,
+        pageSize,
+        total: allUsers.length,
+        totalPages: Math.ceil(allUsers.length / pageSize),
+        hasNext: offset + pageSize < allUsers.length,
+        hasPrev: page > 1,
+      },
+    };
+
+    return res.status(200).json(response);
   } catch (error) {
     logError(reqLogger, 'Error fetching users', error);
     return res.status(500).json({ error: 'Failed to fetch users' });
@@ -53,7 +88,7 @@ const handleDelete: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     // Delete user from Better Auth
     await auth.api.deleteUser({ userId });
 
-    reqLogger.info('User deleted successfully', { userId });
+    reqLogger.info({ userId }, 'User deleted successfully');
 
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -99,11 +134,14 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       ? 'Successfully granted maintainer role'
       : 'Successfully revoked maintainer role';
 
-    reqLogger.info('User role updated successfully', {
-      userId,
-      grantMaintainer,
-      newRole,
-    });
+    reqLogger.info(
+      {
+        userId,
+        grantMaintainer,
+        newRole,
+      },
+      'User role updated successfully'
+    );
 
     return res.status(200).json({ message });
   } catch (error) {

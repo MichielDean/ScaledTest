@@ -66,7 +66,7 @@ async function getAuthToken(): Promise<string> {
     logger.info('Successfully obtained Bearer token for API access');
     return bearerToken;
   } catch (error) {
-    logger.error('Failed to get auth token', { error });
+    logger.error({ error }, 'Failed to get auth token');
     throw error;
   }
 }
@@ -141,11 +141,14 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
 
     // Check if the CTRF report exists
     if (!fs.existsSync(ctrfReportPath)) {
-      scriptLogger.error('CTRF report not found', {
-        reportPath: ctrfReportPath,
-        suggestion:
-          'Make sure tests have been run and the jest-ctrf-json-reporter has generated the report.',
-      });
+      scriptLogger.error(
+        {
+          reportPath: ctrfReportPath,
+          suggestion:
+            'Make sure tests have been run and the jest-ctrf-json-reporter has generated the report.',
+        },
+        'CTRF report not found'
+      );
       process.exit(1);
     }
 
@@ -156,14 +159,17 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
   try {
     const enhancedReport = enhanceReport(reportData);
 
-    scriptLogger.info('Preparing to send test results to API', {
-      reportId: enhancedReport.reportId,
-      testCount: enhancedReport.results.summary.tests,
-      passed: enhancedReport.results.summary.passed,
-      failed: enhancedReport.results.summary.failed,
-      skipped: enhancedReport.results.summary.skipped,
-      pending: enhancedReport.results.summary.pending,
-    });
+    scriptLogger.info(
+      {
+        reportId: enhancedReport.reportId,
+        testCount: enhancedReport.results.summary.tests,
+        passed: enhancedReport.results.summary.passed,
+        failed: enhancedReport.results.summary.failed,
+        skipped: enhancedReport.results.summary.skipped,
+        pending: enhancedReport.results.summary.pending,
+      },
+      'Preparing to send test results to API'
+    );
 
     // Get authentication token
     const authToken = await getAuthToken();
@@ -186,7 +192,7 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
       process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || 'http://localhost:3000';
     const apiUrl = `${apiBaseUrl}/api/test-reports`;
 
-    scriptLogger.info('Sending test results to API', { apiUrl });
+    scriptLogger.info({ apiUrl }, 'Sending test results to API');
 
     const response = await axios.post(apiUrl, enhancedReport, {
       headers,
@@ -195,23 +201,29 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
     });
 
     if (response.status === 200 || response.status === 201) {
-      scriptLogger.info('Test results successfully sent to API', {
-        status: response.status,
-        responseData: response.data,
-      });
+      scriptLogger.info(
+        {
+          status: response.status,
+          responseData: response.data,
+        },
+        'Test results successfully sent to API'
+      );
 
       // Optionally clean up the report file
       if (process.env.CLEANUP_CTRF_REPORT === 'true' && ctrfReportPath) {
         fs.unlinkSync(ctrfReportPath);
-        scriptLogger.info('Cleaned up CTRF report file', { reportPath: ctrfReportPath });
+        scriptLogger.info({ reportPath: ctrfReportPath }, 'Cleaned up CTRF report file');
       }
     } else {
-      scriptLogger.error('API returned error status', {
-        status: response.status,
-        statusText: response.statusText,
-        responseData: response.data,
-        headers: response.headers,
-      });
+      scriptLogger.error(
+        {
+          status: response.status,
+          statusText: response.statusText,
+          responseData: response.data,
+          headers: response.headers,
+        },
+        'API returned error status'
+      );
       process.exit(1);
     }
   } catch (error) {
@@ -220,34 +232,43 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
     if (error && typeof error === 'object' && 'response' in error) {
       const axiosError = error as AxiosError;
       if (axiosError.response) {
-        scriptLogger.error('API response error details', {
-          status: axiosError.response.status,
-          statusText: axiosError.response.statusText,
-          data: axiosError.response.data,
-        });
+        scriptLogger.error(
+          {
+            status: axiosError.response.status,
+            statusText: axiosError.response.statusText,
+            data: axiosError.response.data,
+          },
+          'API response error details'
+        );
       }
     }
 
     if (error && typeof error === 'object' && 'request' in error && !('response' in error)) {
       const apiBaseUrl =
         process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || 'http://localhost:3000';
-      scriptLogger.error('No response received from API server', {
-        apiUrl: apiBaseUrl,
-        suggestion: 'Check if the API server is running and accessible',
-      });
+      scriptLogger.error(
+        {
+          apiUrl: apiBaseUrl,
+          suggestion: 'Check if the API server is running and accessible',
+        },
+        'No response received from API server'
+      );
     }
 
     // Show troubleshooting tips
-    scriptLogger.error('Troubleshooting suggestions', {
-      tips: [
-        'Make sure your application server is running',
-        'Verify the API_BASE_URL or NEXT_PUBLIC_API_URL environment variable',
-        'Check Better Auth credentials (TEST_API_USERNAME, TEST_API_PASSWORD)',
-        'Ensure the /api/test-reports endpoint is accessible',
-        'Verify Better Auth is configured correctly (BETTER_AUTH_SECRET, BETTER_AUTH_URL)',
-        'Check that the test user exists and has the correct role',
-      ],
-    });
+    scriptLogger.error(
+      {
+        tips: [
+          'Make sure your application server is running',
+          'Verify the API_BASE_URL or NEXT_PUBLIC_API_URL environment variable',
+          'Check Better Auth credentials (TEST_API_USERNAME, TEST_API_PASSWORD)',
+          'Ensure the /api/test-reports endpoint is accessible',
+          'Verify Better Auth is configured correctly (BETTER_AUTH_SECRET, BETTER_AUTH_URL)',
+          'Check that the test user exists and has the correct role',
+        ],
+      },
+      'Troubleshooting suggestions'
+    );
 
     process.exit(1);
   }

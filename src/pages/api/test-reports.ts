@@ -22,7 +22,7 @@ const CtrfReportSchema = z.object({
       name: z.string(),
       version: z.string().optional(),
       url: z.string().optional(),
-      extra: z.record(z.unknown()).optional(),
+      extra: z.record(z.string(), z.unknown()).optional(),
     }),
     summary: z.object({
       tests: z.number().int().min(0),
@@ -34,7 +34,7 @@ const CtrfReportSchema = z.object({
       suites: z.number().int().min(0).optional(),
       start: z.number().int(),
       stop: z.number().int(),
-      extra: z.record(z.unknown()).optional(),
+      extra: z.record(z.string(), z.unknown()).optional(),
     }),
     tests: z.array(
       z.object({
@@ -66,21 +66,21 @@ const CtrfReportSchema = z.object({
               name: z.string(),
               contentType: z.string(),
               path: z.string(),
-              extra: z.record(z.unknown()).optional(),
+              extra: z.record(z.string(), z.unknown()).optional(),
             })
           )
           .optional(),
-        parameters: z.record(z.unknown()).optional(),
+        parameters: z.record(z.string(), z.unknown()).optional(),
         steps: z
           .array(
             z.object({
               name: z.string(),
               status: z.enum(['passed', 'failed', 'skipped', 'pending', 'other']),
-              extra: z.record(z.unknown()).optional(),
+              extra: z.record(z.string(), z.unknown()).optional(),
             })
           )
           .optional(),
-        extra: z.record(z.unknown()).optional(),
+        extra: z.record(z.string(), z.unknown()).optional(),
       })
     ),
     environment: z
@@ -99,12 +99,12 @@ const CtrfReportSchema = z.object({
         osRelease: z.string().optional(),
         osVersion: z.string().optional(),
         testEnvironment: z.string().optional(),
-        extra: z.record(z.unknown()).optional(),
+        extra: z.record(z.string(), z.unknown()).optional(),
       })
       .optional(),
-    extra: z.record(z.unknown()).optional(),
+    extra: z.record(z.string(), z.unknown()).optional(),
   }),
-  extra: z.record(z.unknown()).optional(),
+  extra: z.record(z.string(), z.unknown()).optional(),
 });
 
 // Define response types
@@ -170,12 +170,15 @@ async function handlePost(
     const teamIds = userTeams.map(team => team.id);
 
     // Debug logging to understand team assignment
-    reqLogger.info('User team information for upload', {
-      userId: req.user.id,
-      userTeamsCount: userTeams.length,
-      teamIds: teamIds,
-      firstTeamId: teamIds[0] || 'none',
-    });
+    reqLogger.info(
+      {
+        userId: req.user.id,
+        userTeamsCount: userTeams.length,
+        teamIds: teamIds,
+        firstTeamId: teamIds[0] || 'none',
+      },
+      'User team information for upload'
+    );
 
     // Store report with user's current teams
     const reportWithMeta = {
@@ -226,7 +229,7 @@ async function handlePost(
       return res.status(400).json({
         success: false,
         error: 'CTRF report validation failed',
-        details: error.errors,
+        details: error.issues,
       });
     }
 
@@ -305,12 +308,15 @@ async function handleGet(
       extra: report.extra,
     }));
 
-    reqLogger.info('Retrieved CTRF reports', {
-      page: pageNum,
-      size: pageSize,
-      total,
-      filters: { status, tool, environment },
-    });
+    reqLogger.info(
+      {
+        page: pageNum,
+        size: pageSize,
+        total,
+        filters: { status, tool, environment },
+      },
+      'Retrieved CTRF reports'
+    );
 
     return res.status(200).json({
       success: true,
@@ -348,12 +354,15 @@ async function handleGet(
       process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
 
     if (isDatabaseError && isTestEnvironment) {
-      reqLogger.warn('Database unavailable in test environment, returning empty results', {
-        error: error instanceof Error ? error.message : String(error),
-        code:
-          error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
-        environment: process.env.NODE_ENV,
-      });
+      reqLogger.warn(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          code:
+            error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
+          environment: process.env.NODE_ENV,
+        },
+        'Database unavailable in test environment, returning empty results'
+      );
 
       return res.status(200).json({
         success: true,
@@ -369,12 +378,15 @@ async function handleGet(
 
     // In production environments, return proper service unavailable status for database issues
     if (isDatabaseError) {
-      reqLogger.error('Database service unavailable in production', {
-        error: error instanceof Error ? error.message : String(error),
-        code:
-          error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
-        environment: process.env.NODE_ENV,
-      });
+      reqLogger.error(
+        {
+          error: error instanceof Error ? error.message : String(error),
+          code:
+            error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
+          environment: process.env.NODE_ENV,
+        },
+        'Database service unavailable in production'
+      );
 
       return res.status(503).json({
         success: false,

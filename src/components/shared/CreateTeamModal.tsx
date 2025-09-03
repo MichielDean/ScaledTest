@@ -74,17 +74,20 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClose, onTe
 
       const result = await response.json();
 
-      uiLogger.info('Team created successfully', {
-        teamId: result.data?.id,
-        teamName: data.name,
-      });
+      uiLogger.info(
+        {
+          teamId: result.data?.id,
+          teamName: data.name,
+        },
+        'Team created successfully'
+      );
 
       // Reset form and close modal
       form.reset();
       onClose();
       onTeamCreated();
     } catch (error) {
-      uiLogger.error('Failed to create team', { error, formData: data });
+      uiLogger.error({ error, formData: data }, 'Failed to create team');
 
       // Set form error
       form.setError('root', {

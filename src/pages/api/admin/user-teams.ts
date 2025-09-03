@@ -101,24 +101,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         await addUserToTeam(userId, team.id, session.user.id);
       }
 
-      authLogger.info('User teams updated successfully', {
-        userId,
-        removedTeams: teamsToRemove.map(t => ({ id: t.id, name: t.name })),
-        addedTeams: teamsToAdd.map(t => ({ id: t.id, name: t.name })),
-        updatedBy: session.user.id,
-      });
+      authLogger.info(
+        {
+          userId,
+          removedTeams: teamsToRemove.map(t => ({ id: t.id, name: t.name })),
+          addedTeams: teamsToAdd.map(t => ({ id: t.id, name: t.name })),
+          updatedBy: session.user.id,
+        },
+        'User teams updated successfully'
+      );
 
       return res.status(200).json({
         success: true,
         message: 'User teams updated successfully',
       });
     } catch (updateError) {
-      authLogger.error('Failed to update user teams', {
-        error: updateError,
-        userId,
-        teams,
-        updatedBy: session.user.id,
-      });
+      authLogger.error(
+        {
+          error: updateError,
+          userId,
+          teams,
+          updatedBy: session.user.id,
+        },
+        'Failed to update user teams'
+      );
 
       return res.status(500).json({
         success: false,
@@ -126,11 +132,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
   } catch (error) {
-    authLogger.error('Failed to handle user team assignment', {
-      error,
-      method: req.method,
-      url: req.url,
-    });
+    authLogger.error(
+      {
+        error,
+        method: req.method,
+        url: req.url,
+      },
+      'Failed to handle user team assignment'
+    );
 
     return res.status(500).json({
       success: false,

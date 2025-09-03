@@ -95,7 +95,7 @@ describe('Team-Based Analytics Integration', () => {
         },
       };
 
-      logger.info('Testing team filter building logic', { teamIds, expectedFilter });
+      logger.info({ teamIds, expectedFilter }, 'Testing team filter building logic');
 
       // This verifies the structure we expect in team-based queries
       expect(expectedFilter.terms['metadata.userTeams.keyword']).toEqual(teamIds);
@@ -105,7 +105,7 @@ describe('Team-Based Analytics Integration', () => {
       const teamIds: string[] = [];
 
       // When no teams are provided, the filter should be minimal
-      logger.info('Testing empty team filter handling', { teamIds });
+      logger.info({ teamIds }, 'Testing empty team filter handling');
 
       // The system should handle empty team arrays gracefully
       expect(teamIds.length).toBe(0);
@@ -121,10 +121,13 @@ describe('Team-Based Analytics Integration', () => {
 
       const expectedTeamIds = ['team-1', 'team-2'];
 
-      logger.info('Testing team-based access control', {
-        userTeams,
-        expectedTeamIds,
-      });
+      logger.info(
+        {
+          userTeams,
+          expectedTeamIds,
+        },
+        'Testing team-based access control'
+      );
 
       // User should be able to access data from all their teams
       expect(userTeams.map(team => team.id)).toEqual(expectedTeamIds);
@@ -134,10 +137,13 @@ describe('Team-Based Analytics Integration', () => {
       const userId = 'user-123';
       const uploadedBy = 'user-123';
 
-      logger.info('Testing user data access control', {
-        userId,
-        uploadedBy,
-      });
+      logger.info(
+        {
+          userId,
+          uploadedBy,
+        },
+        'Testing user data access control'
+      );
 
       // User should always be able to access data they uploaded
       expect(userId).toBe(uploadedBy);
@@ -152,11 +158,14 @@ describe('Team-Based Analytics Integration', () => {
       // 2. Reports uploaded by the user
       const accessConditions = [{ teamAccess: userTeams.length > 0 }, { userUploadAccess: true }];
 
-      logger.info('Testing combined access logic', {
-        userTeams,
-        userId,
-        accessConditions,
-      });
+      logger.info(
+        {
+          userTeams,
+          userId,
+          accessConditions,
+        },
+        'Testing combined access logic'
+      );
 
       // At least one access condition should be true
       const hasAccess = accessConditions.some(
@@ -214,10 +223,13 @@ describe('Team-Based Analytics Integration', () => {
         metadata: { userTeams: ['team-2'] },
       };
 
-      logger.info('Testing data isolation between teams', {
-        team1Data,
-        team2Data,
-      });
+      logger.info(
+        {
+          team1Data,
+          team2Data,
+        },
+        'Testing data isolation between teams'
+      );
 
       // Reports should be properly tagged with team information
       expect(team1Data.metadata.userTeams).not.toEqual(team2Data.metadata.userTeams);
@@ -230,11 +242,14 @@ describe('Team-Based Analytics Integration', () => {
       // User from team-1 should not see team-2 data
       const hasOverlap = userTeam1Teams.some(team => userTeam2Teams.includes(team));
 
-      logger.info('Testing cross-team data isolation', {
-        userTeam1Teams,
-        userTeam2Teams,
-        hasOverlap,
-      });
+      logger.info(
+        {
+          userTeam1Teams,
+          userTeam2Teams,
+          hasOverlap,
+        },
+        'Testing cross-team data isolation'
+      );
 
       expect(hasOverlap).toBe(false);
     });
@@ -251,10 +266,13 @@ describe('Team-Based Analytics Integration', () => {
 
       const teamIds = manyTeams.map(team => team.id);
 
-      logger.info('Testing performance with many teams', {
-        teamCount: manyTeams.length,
-        sampleTeams: teamIds.slice(0, 3),
-      });
+      logger.info(
+        {
+          teamCount: manyTeams.length,
+          sampleTeams: teamIds.slice(0, 3),
+        },
+        'Testing performance with many teams'
+      );
 
       // System should handle users with many teams
       expect(teamIds.length).toBe(50);
@@ -271,10 +289,13 @@ describe('Team-Based Analytics Integration', () => {
         },
       };
 
-      logger.info('Testing efficient team query structure', {
-        teamIds,
-        queryStructure,
-      });
+      logger.info(
+        {
+          teamIds,
+          queryStructure,
+        },
+        'Testing efficient team query structure'
+      );
 
       // Terms query is efficient for multiple team ID matching
       expect(queryStructure.terms['metadata.userTeams.keyword']).toEqual(teamIds);

@@ -60,7 +60,7 @@ export async function getAuthToken(
     });
 
     if (result.data) {
-      logger.info('Authentication successful for test user', { email });
+      logger.info({ email }, 'Authentication successful for test user');
       return {
         success: true,
         user: result.data.user,
@@ -70,13 +70,13 @@ export async function getAuthToken(
         },
       };
     } else {
-      logger.error('Authentication failed for test user', { email, error: result.error });
+      logger.error({ email, error: result.error }, 'Authentication failed for test user');
       return {
         success: false,
       };
     }
   } catch (error) {
-    logger.error('Authentication error for test user', { email, error });
+    logger.error({ email, error }, 'Authentication error for test user');
     return {
       success: false,
     };

@@ -28,11 +28,11 @@ export const SocialLogin: React.FC<SocialLoginProps> = ({ onSuccess, onError }) 
         throw new Error(result.error.message || `${provider} login failed`);
       }
 
-      apiLogger.info('Social login successful', { provider });
+      apiLogger.info({ provider }, 'Social login successful');
       onSuccess?.();
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : `${provider} login failed`;
-      apiLogger.error('Social login failed', { error, provider });
+      apiLogger.error({ error, provider }, 'Social login failed');
       setError(errorMessage);
       onError?.(errorMessage);
     } finally {

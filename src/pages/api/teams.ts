@@ -9,6 +9,7 @@ import {
   getUserTeams,
   getAllTeams,
   createTeam,
+  getDbPool,
 } from '../../lib/teamManagement';
 import {
   AssignTeamRequest,
@@ -16,7 +17,6 @@ import {
   UserWithTeams,
   CreateTeamRequest,
 } from '../../types/team';
-import { Pool } from 'pg';
 import type { Logger } from 'pino';
 
 // Team response for GET requests
@@ -93,14 +93,20 @@ interface UserWithRole {
 
 /**
  * Get all users with roles from Better Auth database
+ * @param limit - Maximum number of users to return (default: 1000)
+ * @param offset - Number of users to skip (default: 0)
  */
-async function getAllUsersWithRoles(): Promise<UserWithRole[]> {
-  const pool = new Pool({
-    connectionString: process.env.DATABASE_URL,
-  });
+async function getAllUsersWithRoles(
+  limit: number = 1000,
+  offset: number = 0
+): Promise<UserWithRole[]> {
+  const pool = getDbPool();
 
   try {
-    const result = await pool.query('SELECT id, email, name, role FROM "user" ORDER BY email');
+    const result = await pool.query(
+      'SELECT id, email, name, role FROM "user" ORDER BY email LIMIT $1 OFFSET $2',
+      [limit, offset]
+    );
     const users = result.rows;
 
     // Map database users to our expected format
@@ -113,8 +119,9 @@ async function getAllUsersWithRoles(): Promise<UserWithRole[]> {
       roles: user.role ? [user.role] : [],
       isMaintainer: user.role === 'maintainer' || user.role === 'owner',
     }));
-  } finally {
-    await pool.end();
+  } catch (error) {
+    authLogger.error({ error }, 'Failed to fetch users with roles');
+    throw error;
   }
 }
 
@@ -219,7 +226,7 @@ async function handleGetTeams(
       assignableTeams: teams.map(t => t.id),
     };
 
-    reqLogger.info('Successfully retrieved teams list', { teamCount: teams.length });
+    reqLogger.info({ teamCount: teams.length }, 'Successfully retrieved teams list');
 
     return res.status(200).json({
       success: true,
@@ -244,8 +251,13 @@ async function handleGetUsersWithTeams(
   reqLogger: Logger
 ) {
   try {
-    // Get all users with roles
-    const usersWithRoles = await getAllUsersWithRoles();
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 1000); // Max 1000 users per page
+    const offset = (page - 1) * pageSize;
+
+    // Get all users with roles (with pagination)
+    const usersWithRoles = await getAllUsersWithRoles(pageSize, offset);
 
     // Get all teams for reference
     const allTeams = await getAllTeams();
@@ -282,10 +294,13 @@ async function handleGetUsersWithTeams(
       })
     );
 
-    reqLogger.info('Successfully retrieved users with team assignments', {
-      userCount: usersWithTeams.length,
-      teamCount: allTeams.length,
-    });
+    reqLogger.info(
+      {
+        userCount: usersWithTeams.length,
+        teamCount: allTeams.length,
+      },
+      'Successfully retrieved users with team assignments'
+    );
 
     return res.status(200).json({
       success: true,
@@ -360,11 +375,14 @@ async function handleCreateTeam(
       createdBy
     );
 
-    reqLogger.info('Team created successfully', {
-      teamId: newTeam.id,
-      teamName: newTeam.name,
-      createdBy,
-    });
+    reqLogger.info(
+      {
+        teamId: newTeam.id,
+        teamName: newTeam.name,
+        createdBy,
+      },
+      'Team created successfully'
+    );
 
     return res.status(201).json({
       success: true,
@@ -433,11 +451,14 @@ async function handleAssignUserToTeam(
 
     await assignUserToTeam(assignData.userId, assignData.teamId, assignedBy);
 
-    reqLogger.info('User assigned to team successfully', {
-      userId: assignData.userId,
-      teamId: assignData.teamId,
-      assignedBy,
-    });
+    reqLogger.info(
+      {
+        userId: assignData.userId,
+        teamId: assignData.teamId,
+        assignedBy,
+      },
+      'User assigned to team successfully'
+    );
 
     return res.status(200).json({
       success: true,
@@ -496,10 +517,13 @@ async function handleRemoveUserFromTeam(
 
     await removeUserFromTeam(removeData.userId, removeData.teamId);
 
-    reqLogger.info('User removed from team successfully', {
-      userId: removeData.userId,
-      teamId: removeData.teamId,
-    });
+    reqLogger.info(
+      {
+        userId: removeData.userId,
+        teamId: removeData.teamId,
+      },
+      'User removed from team successfully'
+    );
 
     return res.status(200).json({
       success: true,

@@ -37,15 +37,15 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
       });
 
       if (response.data?.user) {
-        logger.info('Login successful with Better Auth', { email });
+        logger.info({ email }, 'Login successful with Better Auth');
         // Better Auth handles authentication automatically
         window.location.href = '/dashboard';
       } else if (response.error) {
-        logger.error('Login failed', { error: response.error, email });
+        logger.error({ error: response.error, email }, 'Login failed');
         setError(response.error.message || 'Invalid email or password');
       }
     } catch (err) {
-      logger.error('Login error', { error: err, email });
+      logger.error({ error: err, email }, 'Login error');
       setError('Login failed. Please try again.');
     } finally {
       setIsLoading(false);
@@ -116,7 +116,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
                   window.location.href = '/dashboard';
                 }}
                 onError={error => {
-                  logger.error('Social login failed', { error });
+                  logger.error({ error }, 'Social login failed');
                   setError(error);
                 }}
               />

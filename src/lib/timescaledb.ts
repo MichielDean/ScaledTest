@@ -22,21 +22,27 @@ const trackQueryPerformance = async <T>(
     const result = await queryFn();
     const duration = Date.now() - startTime;
 
-    logger.info('Query performance', {
-      queryName,
-      duration,
-      status: 'success',
-    });
+    logger.info(
+      {
+        queryName,
+        duration,
+        status: 'success',
+      },
+      'Query performance'
+    );
 
     return result;
   } catch (error) {
     const duration = Date.now() - startTime;
-    logger.error('Query performance', {
-      queryName,
-      duration,
-      status: 'error',
-      error: error instanceof Error ? error.message : 'Unknown error',
-    });
+    logger.error(
+      {
+        queryName,
+        duration,
+        status: 'error',
+        error: error instanceof Error ? error.message : 'Unknown error',
+      },
+      'Query performance'
+    );
     throw error;
   }
 };
@@ -108,10 +114,13 @@ function getTimescalePool(): Pool {
     // Handle pool errors to prevent unhandled error crashes
     timescalePool.on('error', (err: Error) => {
       // Only log errors that occur during normal operation (not shutdown)
-      logger.error('TimescaleDB pool error', {
-        error: err?.message || 'Unknown error',
-        code: getErrorCode(err),
-      });
+      logger.error(
+        {
+          error: err?.message || 'Unknown error',
+          code: getErrorCode(err),
+        },
+        'TimescaleDB pool error'
+      );
     });
 
     // Handle pool connect events for debugging
@@ -285,12 +294,15 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
 
       const storedReportId = result.rows[0]?.report_id || report.reportId;
 
-      logger.info('CTRF report stored successfully in TimescaleDB', {
-        reportId: storedReportId,
-        tool: report.results?.tool?.name,
-        testCount: report.results?.summary?.tests,
-        userTeams: report.metadata?.userTeams,
-      });
+      logger.info(
+        {
+          reportId: storedReportId,
+          tool: report.results?.tool?.name,
+          testCount: report.results?.summary?.tests,
+          userTeams: report.metadata?.userTeams,
+        },
+        'CTRF report stored successfully in TimescaleDB'
+      );
 
       return storedReportId;
     } catch (error) {
@@ -318,7 +330,7 @@ export const getTimescaleReportCount = async (): Promise<number> => {
     const result = await client.query('SELECT COUNT(*) as count FROM test_reports');
     const count = parseInt(result.rows[0].count, 10);
 
-    logger.debug('Retrieved TimescaleDB report count', { count });
+    logger.debug({ count }, 'Retrieved TimescaleDB report count');
     return count;
   } catch (error) {
     logError(logger, 'Failed to get TimescaleDB report count', error);
@@ -517,13 +529,16 @@ export const searchCtrfReports = async (
         };
       });
 
-      logger.debug('Retrieved CTRF reports from TimescaleDB', {
-        uploadedBy,
-        userTeams,
-        total,
-        returnedCount: reports.length,
-        filters,
-      });
+      logger.debug(
+        {
+          uploadedBy,
+          userTeams,
+          total,
+          returnedCount: reports.length,
+          filters,
+        },
+        'Retrieved CTRF reports from TimescaleDB'
+      );
 
       return { reports, total };
     } catch (error) {

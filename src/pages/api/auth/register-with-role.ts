@@ -41,16 +41,18 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       });
     }
 
-    // TODO: Set user role using Better Auth admin API
-    // For now, we'll just log the intended role assignment
-    apiLogger.info('User registered with Better Auth', {
-      userId: result.data.user.id,
-      email,
-      role,
-      name: result.data.user.name,
-    });
+    // User registration successful, now set their role
+    apiLogger.info(
+      {
+        userId: result.data.user.id,
+        email,
+        role,
+        name: result.data.user.name,
+      },
+      'User registered with Better Auth'
+    );
 
-    // CRITICAL SECURITY FIX: Actually set the user role using Better Auth admin API
+    // Set the user role using Better Auth admin API
     try {
       await auth.api.setRole({
         body: {
@@ -59,18 +61,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         },
       });
 
-      apiLogger.info('User role successfully set', {
-        userId: result.data.user.id,
-        role,
-        email,
-      });
+      apiLogger.info(
+        {
+          userId: result.data.user.id,
+          role,
+          email,
+        },
+        'User role successfully set'
+      );
     } catch (roleError) {
-      apiLogger.error('Failed to set user role - CRITICAL SECURITY ISSUE', {
-        userId: result.data.user.id,
-        email,
-        intendedRole: role,
-        error: roleError,
-      });
+      apiLogger.error(
+        {
+          userId: result.data.user.id,
+          email,
+          intendedRole: role,
+          error: roleError,
+        },
+        'Failed to set user role - CRITICAL SECURITY ISSUE'
+      );
 
       // This is a critical security issue - user was created but role not set
       // In production, you might want to delete the user or mark them as needing manual role assignment
@@ -90,7 +98,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
       },
     });
   } catch (error) {
-    apiLogger.error('Registration error', { error, email: req.body?.email });
+    apiLogger.error({ error, email: req.body?.email }, 'Registration error');
     return res.status(500).json({
       error: 'Failed to register user',
     });

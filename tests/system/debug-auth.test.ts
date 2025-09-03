@@ -18,23 +18,29 @@ describe('Authentication Debug', () => {
       password: 'Owner123!',
     });
 
-    testLogger.info('Authentication response:', {
-      status: authResponse.status,
-      headers: authResponse.headers,
-      body: authResponse.body,
-      cookies: authResponse.headers['set-cookie'],
-    });
+    testLogger.info(
+      {
+        status: authResponse.status,
+        headers: authResponse.headers,
+        body: authResponse.body,
+        cookies: authResponse.headers['set-cookie'],
+      },
+      'Authentication response:'
+    );
 
     expect(authResponse.status).toBe(200);
 
     // Step 2: Test authenticated endpoint
     const testResponse = await agent.get('/api/auth/get-session');
 
-    testLogger.info('Session check response:', {
-      status: testResponse.status,
-      headers: testResponse.headers,
-      body: testResponse.body,
-    });
+    testLogger.info(
+      {
+        status: testResponse.status,
+        headers: testResponse.headers,
+        body: testResponse.body,
+      },
+      'Session check response:'
+    );
 
     // Step 3: Test the actual API endpoint
     const apiResponse = await agent.post('/api/test-reports').send({
@@ -62,10 +68,13 @@ describe('Authentication Debug', () => {
       },
     });
 
-    testLogger.info('API response:', {
-      status: apiResponse.status,
-      headers: apiResponse.headers,
-      body: apiResponse.body,
-    });
+    testLogger.info(
+      {
+        status: apiResponse.status,
+        headers: apiResponse.headers,
+        body: apiResponse.body,
+      },
+      'API response:'
+    );
   });
 });

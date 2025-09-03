@@ -60,10 +60,10 @@ const AdminUsersView: React.FC = () => {
       }
 
       const data = await response.json();
-      logger.debug('User fetch API response', { userCount: data.data?.length || 0 });
+      logger.debug({ userCount: data.data?.length || 0 }, 'User fetch API response');
       setUsers(data.data || []);
     } catch (err) {
-      logger.error('Failed to fetch users', { error: err });
+      logger.error({ error: err }, 'Failed to fetch users');
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
       setUsersLoading(false);
@@ -92,11 +92,14 @@ const AdminUsersView: React.FC = () => {
         // Remove user from local state
         setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
 
-        logger.info('User deleted successfully', {
-          userId,
-          username,
-          component: 'AdminUsersView',
-        });
+        logger.info(
+          {
+            userId,
+            username,
+            component: 'AdminUsersView',
+          },
+          'User deleted successfully'
+        );
       } catch (error) {
         logError(logger, 'Error deleting user', error, {
           userId,

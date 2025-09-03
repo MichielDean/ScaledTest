@@ -35,16 +35,19 @@ describe('Real Authentication Integration', () => {
     const result = await testAuthenticationViaAPI('maintainer@example.com', 'Maintainer123!');
 
     if (!result.success) {
-      logger.error('Authentication failed', { status: result.status, data: result.data });
+      logger.error({ status: result.status, data: result.data }, 'Authentication failed');
     }
 
     expect(result.success).toBe(true);
     expect(result.status).toBe(200);
     expect(result.data).toBeDefined();
 
-    logger.info('Successfully authenticated maintainer user via API', {
-      status: result.status,
-    });
+    logger.info(
+      {
+        status: result.status,
+      },
+      'Successfully authenticated maintainer user via API'
+    );
   });
 
   it('should authenticate readonly@example.com successfully', async () => {
@@ -54,9 +57,12 @@ describe('Real Authentication Integration', () => {
     expect(result.status).toBe(200);
     expect(result.data).toBeDefined();
 
-    logger.info('Successfully authenticated readonly user via API', {
-      status: result.status,
-    });
+    logger.info(
+      {
+        status: result.status,
+      },
+      'Successfully authenticated readonly user via API'
+    );
   });
 
   it('should authenticate owner@example.com successfully', async () => {
@@ -66,9 +72,12 @@ describe('Real Authentication Integration', () => {
     expect(result.status).toBe(200);
     expect(result.data).toBeDefined();
 
-    logger.info('Successfully authenticated owner user via API', {
-      status: result.status,
-    });
+    logger.info(
+      {
+        status: result.status,
+      },
+      'Successfully authenticated owner user via API'
+    );
   });
 
   it('should reject invalid credentials', async () => {
@@ -77,8 +86,11 @@ describe('Real Authentication Integration', () => {
     expect(result.success).toBe(false);
     expect(result.status).toBe(401);
 
-    logger.info('Correctly rejected invalid credentials', {
-      status: result.status,
-    });
+    logger.info(
+      {
+        status: result.status,
+      },
+      'Correctly rejected invalid credentials'
+    );
   });
 });

@@ -801,12 +801,10 @@ git push  # May need credentials setup
    ```
 
 2. **Look for interactive prompts and respond:**
-
    - If you see `Ok to proceed? (y)` - the command is waiting for input
    - Cancel current approach and restart with auto-answer method
 
 3. **Identify command type:**
-
    - Server/watcher: Should have been started with background job control
    - Interactive tool: Needs --yes flag or auto-answer
    - Quick command: Should complete within 1-2 minutes
@@ -971,12 +969,10 @@ echo -e "y\ny\ny" | command
 **MOST COMMON ESLINT VIOLATIONS TO PREVENT:**
 
 1. **`no-console`** - Never use `console.log`, `console.error`, etc.
-
    - Use structured logger: `import { logger } from '../logging/logger';`
    - Use appropriate log levels: `logger.info()`, `logger.error()`, `logger.debug()`
 
 2. **`@typescript-eslint/no-explicit-any`** - Never use `any` type
-
    - Define proper interfaces in `src/types/`
    - Use specific union types: `string | number` instead of `any`
    - Use generic constraints: `<T extends SomeInterface>` instead of `<T = any>`
@@ -1408,7 +1404,6 @@ interface User {
 **Authentication Implementation Standards:**
 
 - **ALWAYS use the established authentication hooks and components:**
-
   - `useAuth()` hook from BetterAuthProvider for authentication state and functions
   - `withAuth` higher-order component for protecting pages
   - `UserRole` enum for role-based access control
@@ -1542,21 +1537,18 @@ const getFormattedError = (backendError: string): string => {
 **ALWAYS follow established performance optimization practices:**
 
 - **Component Optimization:**
-
   - Use React.memo for expensive pure components
   - Implement useMemo for computationally intensive calculations
   - Apply useCallback for event handlers passed to child components
   - Create virtualized lists for large datasets using established patterns
 
 - **Next.js Optimizations:**
-
   - Use Image component for optimized image loading and display
   - Implement proper code splitting with dynamic imports
   - Apply getStaticProps/getServerSideProps appropriately based on data requirements
   - Utilize Incremental Static Regeneration for dynamic content that changes infrequently
 
 - **Data Fetching Strategies:**
-
   - Follow SWR patterns for client-side data fetching
   - Implement proper loading and error states for all data fetching operations
   - Use appropriate caching strategies based on data volatility
@@ -1775,7 +1767,6 @@ test('Admin functionality should work', async () => {
   ```
 
 - **Page Object Pattern** for UI tests:
-
   - Create page models in `tests/ui/pages/` directory
   - Implement methods for common interactions
   - Abstract implementation details from test cases
@@ -1785,7 +1776,6 @@ test('Admin functionality should work', async () => {
   - **Missing ID handling** - If an ID does not exist in the HTML element that needs to be tested, you MUST first add the ID to the HTML element in the source code, then reference it in the tests
 
 - **Test Data Management:**
-
   - Use the `tests/data/` directory for test data generation (avoid generic names like "utils")
   - Prefer generated data over hardcoded test values
   - Clean up test data in afterEach/afterAll blocks

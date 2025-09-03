@@ -442,7 +442,7 @@ const TestResultsView: React.FC = () => {
                               className="cursor-pointer hover:bg-muted/50"
                               onClick={() => {
                                 // TODO: Add navigation to detailed report view
-                                logger.info('Navigate to report details', { reportId: report._id });
+                                logger.info({ reportId: report._id }, 'Navigate to report details');
                               }}
                             >
                               <TableCell className="font-medium">

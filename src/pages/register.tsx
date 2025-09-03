@@ -48,7 +48,7 @@ export default function RegisterPage() {
         // For now, just set empty teams list
         setAvailableTeams([]);
       } catch (err) {
-        logger.error('Failed to load teams for registration', { error: err });
+        logger.error({ error: err }, 'Failed to load teams for registration');
         // Continue without teams - they're optional
       } finally {
         setLoadingTeams(false);
@@ -77,11 +77,11 @@ export default function RegisterPage() {
         // Better Auth handles authentication automatically after registration
         window.location.href = '/dashboard';
       } else if (response.error) {
-        logger.error('Registration failed', { error: response.error });
+        logger.error({ error: response.error }, 'Registration failed');
         setError(response.error.message || 'Registration failed');
       }
     } catch (err) {
-      logger.error('Registration failed', { error: err, email: data.email });
+      logger.error({ error: err, email: data.email }, 'Registration failed');
       setError('Registration failed. Please try again.');
     } finally {
       setIsLoading(false);

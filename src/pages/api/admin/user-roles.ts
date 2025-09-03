@@ -33,7 +33,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(405).json({ error: 'Method not allowed' });
     }
   } catch (error) {
-    apiLogger.error('Error in user roles API authentication', { error });
+    apiLogger.error({ error }, 'Error in user roles API authentication');
     return res.status(500).json({ error: 'Internal server error' });
   }
 }
@@ -75,11 +75,14 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       },
     });
 
-    apiLogger.info('Role assigned successfully', {
-      userId,
-      role,
-      assignedBy: req.headers['user-id'] || 'admin',
-    });
+    apiLogger.info(
+      {
+        userId,
+        role,
+        assignedBy: req.headers['user-id'] || 'admin',
+      },
+      'Role assigned successfully'
+    );
 
     return res.status(200).json({
       success: true,
@@ -88,11 +91,14 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       role,
     });
   } catch (error) {
-    apiLogger.error('Error assigning role', {
-      error,
-      userId: req.body?.userId,
-      role: req.body?.role,
-    });
+    apiLogger.error(
+      {
+        error,
+        userId: req.body?.userId,
+        role: req.body?.role,
+      },
+      'Error assigning role'
+    );
 
     // Check if this is a Better Auth error
     if (error instanceof Error && error.message.includes('User not found')) {
@@ -132,7 +138,7 @@ async function handleGetUserRole(req: NextApiRequest, res: NextApiResponse) {
     const userWithRole = user as { role?: string };
     const userRole = userWithRole.role || 'readonly'; // Default to readonly if no role set
 
-    apiLogger.info('Role retrieved successfully', { userId, role: userRole });
+    apiLogger.info({ userId, role: userRole }, 'Role retrieved successfully');
 
     return res.status(200).json({
       success: true,
@@ -142,10 +148,13 @@ async function handleGetUserRole(req: NextApiRequest, res: NextApiResponse) {
       name: user.name,
     });
   } catch (error) {
-    apiLogger.error('Error retrieving user role', {
-      error,
-      userId: req.query.userId,
-    });
+    apiLogger.error(
+      {
+        error,
+        userId: req.query.userId,
+      },
+      'Error retrieving user role'
+    );
 
     // Check if this is a Better Auth error
     if (error instanceof Error && error.message.includes('User not found')) {
