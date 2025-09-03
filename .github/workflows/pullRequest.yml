@@ -24,6 +24,7 @@ jobs:
       BETTER_AUTH_SECRET: test-secret-key-for-ci-environment-32-chars
       BETTER_AUTH_URL: http://localhost:3000
       NEXT_PUBLIC_BASE_URL: http://localhost:3000
+      NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
 
       # Database configuration
       DATABASE_URL: postgresql://scaledtest:password@localhost:5432/auth
@@ -39,10 +40,14 @@ jobs:
       TIMESCALEDB_USERNAME: scaledtest
       TIMESCALEDB_PASSWORD: password
 
-      # Required OpenSearch configuration
-      OPENSEARCH_HOST: http://localhost:9200
-      OPENSEARCH_USERNAME: admin
-      OPENSEARCH_PASSWORD: admin
+      # Social OAuth providers (empty for CI tests)
+      GITHUB_CLIENT_ID: ''
+      GITHUB_CLIENT_SECRET: ''
+      GOOGLE_CLIENT_ID: ''
+      GOOGLE_CLIENT_SECRET: ''
+
+      # Test environment configuration
+      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
 
@@ -69,5 +74,18 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Start required services with Docker Compose
+        run: |
+          cd docker
+          docker-compose up -d postgres
+          # Wait for PostgreSQL to be ready
+          timeout 60 bash -c 'until docker-compose exec -T postgres pg_isready -U scaledtest -d scaledtest; do sleep 2; done'
+
       - name: Run all tests
         run: npm run test
+
+      - name: Cleanup services
+        if: always()
+        run: |
+          cd docker
+          docker-compose down -v

@@ -52,10 +52,12 @@ class CleanTestReporter implements Reporter {
       this.testEndTimes.set(test.path, Date.now());
     }
 
-    // Debug output to verify the reporter is working
-    process.stderr.write(
-      `\n🔍 CleanTestReporter: Test ${test.path} completed with ${testResult.numFailingTests} failing tests\n`
-    );
+    // Debug output to verify the reporter is working (only when debug enabled)
+    if (process.env.CLEAN_TEST_REPORTER_DEBUG === 'true') {
+      process.stderr.write(
+        `\n🔍 CleanTestReporter: Test ${test.path} completed with ${testResult.numFailingTests} failing tests\n`
+      );
+    }
 
     // Only show logs if the test failed
     if (testResult.numFailingTests > 0) {

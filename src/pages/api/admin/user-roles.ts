@@ -48,6 +48,11 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // Get session for audit logging
+    const session = await auth.api.getSession({
+      headers: new Headers(req.headers as Record<string, string>),
+    });
+
     // Validate role
     const validRoles = Object.values(roleNames);
     if (!validRoles.includes(role)) {
@@ -79,7 +84,7 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       {
         userId,
         role,
-        assignedBy: req.headers['user-id'] || 'admin',
+        assignedBy: session?.user?.id || 'unknown',
       },
       'Role assigned successfully'
     );

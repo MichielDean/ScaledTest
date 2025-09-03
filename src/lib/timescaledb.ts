@@ -1,6 +1,6 @@
 import { Pool, PoolClient } from 'pg';
 import { dbLogger as logger, logError } from '../logging/logger';
-import { getRequiredEnvVar, getOptionalEnvVar } from '../environment/env';
+import { getRequiredEnvVar, getOptionalEnvVar, parseIntEnvVar } from '../environment/env';
 import { CtrfSchema } from '../schemas/ctrf/ctrf';
 import { ensureDatabaseSchema } from './migrations';
 
@@ -98,6 +98,10 @@ function getTimescalePool(): Pool {
       'Configuring TimescaleDB client'
     );
 
+    // Read max connections from environment, default to 30
+    const maxConnections = parseIntEnvVar('TIMESCALEDB_MAX_CONNECTIONS', 30);
+    logger.debug({ maxConnections }, 'TimescaleDB pool max connections');
+
     // Create TimescaleDB connection pool with optimized settings
     timescalePool = new Pool({
       host,
@@ -105,7 +109,7 @@ function getTimescalePool(): Pool {
       database,
       user,
       password,
-      max: 30,
+      max: maxConnections,
       idleTimeoutMillis: 60000,
       connectionTimeoutMillis: 5000,
       statement_timeout: 30000,

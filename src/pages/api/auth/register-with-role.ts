@@ -94,7 +94,7 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
         id: result.data.user.id,
         email: result.data.user.email,
         name: result.data.user.name,
-        role: role, // Role assignment pending implementation
+        role: role,
       },
     });
   } catch (error) {

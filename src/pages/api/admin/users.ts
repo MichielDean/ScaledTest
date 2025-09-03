@@ -14,9 +14,10 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const offset = (page - 1) * pageSize;
 
     // Note: Better Auth listUsers() doesn't support server-side pagination
-    // TODO: Replace with direct database queries using LIMIT/OFFSET for better performance:
+    // TODO: Implement server-side pagination for production scalability:
+    // Replace with direct database queries using LIMIT/OFFSET for better performance:
     // SELECT * FROM user ORDER BY created_at DESC LIMIT $1 OFFSET $2
-    // This current approach loads all users into memory and is not scalable
+    // This current approach loads all users into memory and is not scalable for large user bases
     const allUsers = await auth.api.listUsers();
 
     // Client-side pagination (not ideal for large datasets)
