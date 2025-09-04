@@ -3,10 +3,10 @@
  * Provides reusable validation functions to avoid duplication
  */
 
-// General UUID validation regex - supports all UUID versions (1-5)
-// Fixed: version field allows any hex digit for version 5 UUIDs
+// General UUID validation regex - supports all standard UUID versions (1-5)
+// The version field (first character of third group) is restricted to [1-5] as per RFC 4122
 export const UUID_REGEX =
-  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 // UUID v4 specific validation regex
 export const UUID_V4_REGEX =
