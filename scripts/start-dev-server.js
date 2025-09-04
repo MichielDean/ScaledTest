@@ -10,6 +10,7 @@ import { spawn, execSync } from 'child_process';
 import { fileURLToPath, pathToFileURL } from 'url';
 import { dirname, join } from 'path';
 import process from 'process';
+import { config } from 'dotenv';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -17,6 +18,9 @@ const projectRoot = join(__dirname, '..');
 
 // Set the working directory to project root
 process.chdir(projectRoot);
+
+// Load environment variables from .env file
+config();
 
 const PROCESS_NAME = 'scaledtest-dev';
 
@@ -27,6 +31,64 @@ const getSpawnOptions = (inheritStdio = true) => ({
   windowsHide: true, // Prevent command windows on Windows
   detached: false,
 });
+
+// Function to run database migrations
+function runMigrations() {
+  return new Promise((resolve, reject) => {
+    console.log('🗃️ Running database migrations...');
+
+    // Run Better Auth migrations first
+    console.log('📝 Running Better Auth migrations...');
+    const betterAuthProcess = spawn(
+      'npx',
+      ['@better-auth/cli', 'migrate', '--yes'],
+      getSpawnOptions()
+    );
+
+    betterAuthProcess.on('close', code => {
+      if (code === 0) {
+        console.log('✅ Better Auth migrations completed successfully');
+
+        // Run TimescaleDB migrations
+        console.log('📝 Running TimescaleDB migrations...');
+        const timescaleProcess = spawn(
+          'npx',
+          ['node-pg-migrate', 'up', '--migrations-dir', 'migrations/scaledtest'],
+          {
+            ...getSpawnOptions(),
+            env: {
+              ...process.env,
+              DATABASE_URL: process.env.TIMESCALE_DATABASE_URL, // Use TIMESCALE_DATABASE_URL for node-pg-migrate
+            },
+          }
+        );
+
+        timescaleProcess.on('close', code => {
+          if (code === 0) {
+            console.log('✅ TimescaleDB migrations completed successfully');
+            resolve();
+          } else {
+            console.error(`❌ TimescaleDB migration failed with exit code ${code}`);
+            reject(new Error(`TimescaleDB migration failed with exit code ${code}`));
+          }
+        });
+
+        timescaleProcess.on('error', error => {
+          console.error('❌ Error running TimescaleDB migrations:', error);
+          reject(error);
+        });
+      } else {
+        console.error(`❌ Better Auth migration failed with exit code ${code}`);
+        reject(new Error(`Better Auth migration failed with exit code ${code}`));
+      }
+    });
+
+    betterAuthProcess.on('error', error => {
+      console.error('❌ Error running Better Auth migrations:', error);
+      reject(error);
+    });
+  });
+}
 
 // Function to start Docker Compose
 function startDockerCompose() {
@@ -101,7 +163,7 @@ export function stopPM2() {
     });
     console.log('✅ PM2 process stopped successfully');
     return true;
-  } catch (error) {
+  } catch {
     console.log('ℹ️ No PM2 process to stop or already stopped');
     return false;
   }
@@ -117,7 +179,7 @@ export function deletePM2() {
     });
     console.log('✅ PM2 processes deleted successfully');
     return true;
-  } catch (error) {
+  } catch {
     console.log('ℹ️ No PM2 processes to delete');
     return false;
   }
@@ -182,6 +244,7 @@ async function startDevelopmentServer(environment = 'development') {
     console.log(`🌍 Environment: ${environment}`);
 
     await startDockerCompose();
+    await runMigrations();
     startNextDev(environment);
   } catch (error) {
     console.error('❌ Failed to start development environment:', error);
@@ -212,7 +275,6 @@ async function main() {
       break;
     default:
       // Default behavior when run without arguments (for PM2 compatibility)
-      await startDockerCompose();
       await startDevelopmentServer(environment);
       break;
   }

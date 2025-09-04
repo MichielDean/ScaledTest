@@ -65,8 +65,9 @@ async function buildAndTest(args: string[] = []): Promise<void> {
     execSync(testCommand, { stdio: 'inherit' });
   } catch (error) {
     if (error instanceof Error && 'status' in error) {
-      process.stdout.write(`Command failed with exit code ${(error as any).status}\n`);
-      process.exit((error as any).status);
+      const execError = error as Error & { status: number };
+      process.stdout.write(`Command failed with exit code ${execError.status}\n`);
+      process.exit(execError.status);
     } else {
       process.stdout.write(`Command failed with unknown error: ${error}\n`);
       process.exit(1);

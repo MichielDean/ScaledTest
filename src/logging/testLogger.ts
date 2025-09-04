@@ -82,24 +82,26 @@ export const uiTestLogger = () => {
 export async function closeTestLogger(): Promise<void> {
   try {
     if (loggerInstance) {
-      const pinoInstance = loggerInstance as unknown as Record<string | symbol, unknown>;
-      const transport = pinoInstance[Symbol.for('pino.transport')] as
-        | { end?: () => Promise<void> }
-        | undefined;
+      // Access Pino's transport symbol using proper type casting
+      const transportSymbol = Symbol.for('pino.transport');
+      const pinoWithTransport = loggerInstance as unknown as {
+        [key: symbol]: { end?: () => Promise<void> } | undefined;
+      };
+
+      const transport = pinoWithTransport[transportSymbol];
       if (transport && typeof transport.end === 'function') {
         await transport.end();
       }
     }
   } catch (error) {
     // Silently handle any errors during cleanup - use stderr to avoid no-console rule
-    process.stderr.write(`Error closing test logger: ${error}\n`);
+    process.stderr.write(`Error closing test logger: ${error}
+`);
   } finally {
     // Reset the singleton and cached child loggers
     loggerInstance = null;
     _authTestLogger = undefined;
     _apiTestLogger = undefined;
-    _dbTestLogger = undefined;
-    _uiTestLogger = undefined;
   }
 }
 

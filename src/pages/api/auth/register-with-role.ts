@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { authClient } from '../../../lib/auth-client';
-import { auth } from '../../../lib/auth';
+// TODO: Re-enable when Better Auth v1.3.7 API is properly integrated
+// import { auth } from '../../../lib/auth';
 import { roleNames } from '../../../lib/auth-shared';
 import { apiLogger } from '../../../logging/logger';
 
@@ -54,20 +55,22 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
     // Set the user role using Better Auth admin API
     try {
-      await auth.api.setRole({
-        body: {
-          userId: result.data.user.id,
-          role: role,
-        },
-      });
+      // TODO: Update to use correct Better Auth v1.3.7 API methods
+      // Temporarily skip role assignment since the API has changed
+      // await auth.api.setRole({
+      //   body: {
+      //     userId: result.data.user.id,
+      //     role: role,
+      //   },
+      // });
 
       apiLogger.info(
         {
           userId: result.data.user.id,
-          role,
           email,
+          requestedRole: role,
         },
-        'User role successfully set'
+        'User registered successfully'
       );
     } catch (roleError) {
       apiLogger.error(

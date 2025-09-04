@@ -11,6 +11,7 @@
 
 import { getRequiredEnvVar } from '../src/environment/env';
 import { apiLogger as logger } from '../src/logging/logger';
+import { Pool } from 'pg';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -100,45 +101,57 @@ async function createUserViaBetterAuth(user: TestUser): Promise<string | null> {
 }
 
 /**
- * Check if user exists and return user info
- * For now, we'll rely on the signup API error handling to detect duplicates
+ * Check if user exists and return user info from database
  */
 async function checkUserExists(email: string): Promise<{ id: string; email: string } | null> {
-  // Better Auth signup API will handle duplicate detection
-  // We'll implement user lookup via admin API in the future if needed
-  return null;
+  try {
+    const databaseUrl = getRequiredEnvVar('DATABASE_URL');
+    const pool = new Pool({ connectionString: databaseUrl });
+
+    const result = await pool.query('SELECT id, email FROM "user" WHERE email = $1', [email]);
+
+    await pool.end();
+
+    if (result.rows.length > 0) {
+      return {
+        id: result.rows[0].id,
+        email: result.rows[0].email,
+      };
+    }
+
+    return null;
+  } catch (error) {
+    scriptLogger.error({ err: error, email }, 'Failed to check if user exists');
+    return null;
+  }
 }
 
 /**
- * Assign role to user using Better Auth admin API via HTTP
+ * Assign role to user using direct database update
  */
-async function assignUserRole(userId: string, role: string, userEmail: string): Promise<void> {
-  const baseUrl = getRequiredEnvVar('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000');
-
+async function assignUserRole(userId: string, role: string, _userEmail: string): Promise<void> {
   try {
-    scriptLogger.info(`Assigning role '${role}' to user: ${userEmail} (${userId})`);
+    scriptLogger.info(`Assigning role '${role}' to user: ${_userEmail} (${userId})`);
 
-    // Use Better Auth admin API to set user role
-    const response = await fetch(`${baseUrl}/api/auth/admin/set-role`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        userId: userId,
-        role: role,
-      }),
-    });
+    // Get database connection string
+    const databaseUrl = getRequiredEnvVar('DATABASE_URL');
+    const pool = new Pool({ connectionString: databaseUrl });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`Role assignment failed - HTTP ${response.status}: ${errorText}`);
+    // Update user role directly in the database
+    const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [role, userId]);
+
+    await pool.end();
+
+    if (result.rowCount === 1) {
+      scriptLogger.info(`Successfully assigned role '${role}' to user: ${_userEmail}`);
+    } else {
+      throw new Error(`User not found or role update failed. Rows affected: ${result.rowCount}`);
     }
-
-    const result = await response.json();
-    scriptLogger.info({ result }, `Successfully assigned role '${role}' to user: ${userEmail}`);
   } catch (error) {
-    scriptLogger.error({ err: error, userId, role, userEmail }, 'Failed to assign role to user');
+    scriptLogger.error(
+      { err: error, userId, role, userEmail: _userEmail },
+      'Failed to assign role to user'
+    );
     throw error;
   }
 }

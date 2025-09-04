@@ -36,7 +36,8 @@ describe('API Authentication Middleware', () => {
   let mockResponse: Partial<NextApiResponse>;
   let mockHandler: jest.Mock;
   let mockGetSession: jest.Mock;
-  let mockVerifyBearer: jest.Mock;
+  // TODO: Re-enable when Better Auth API is updated
+  // let mockVerifyBearer: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -56,11 +57,12 @@ describe('API Authentication Middleware', () => {
 
     // Get the mocked functions
     mockGetSession = auth.api.getSession as jest.Mock;
-    mockVerifyBearer = auth.api.verifyBearer as jest.Mock;
+    // TODO: Update when Better Auth v1.3.7 API is properly integrated
+    // mockVerifyBearer = auth.api.verifyBearer as jest.Mock;
 
     // Default mock implementation - return null (no authentication)
     mockGetSession.mockResolvedValue({ data: null });
-    mockVerifyBearer.mockResolvedValue({ data: null });
+    // mockVerifyBearer.mockResolvedValue({ data: null });
   });
 
   describe('Authentication Validation', () => {
@@ -90,7 +92,8 @@ describe('API Authentication Middleware', () => {
 
       // Mock session and bearer token to fail
       mockGetSession.mockResolvedValue({ data: null });
-      mockVerifyBearer.mockResolvedValue({ data: null });
+      // TODO: Re-enable when Better Auth API is updated
+      // mockVerifyBearer.mockResolvedValue({ data: null });
 
       const protectedHandler = withApiAuth(mockHandler, [UserRole.READONLY]);
 

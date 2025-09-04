@@ -27,7 +27,8 @@ jobs:
       NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
 
       # Database configuration
-      DATABASE_URL: postgresql://scaledtest:password@localhost:5432/auth
+      DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/auth
+      TIMESCALE_DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/scaledtest
 
       # Test users
       TEST_API_USERNAME: maintainer@example.com
@@ -39,12 +40,6 @@ jobs:
       TIMESCALEDB_DATABASE: scaledtest
       TIMESCALEDB_USERNAME: scaledtest
       TIMESCALEDB_PASSWORD: password
-
-      # Social OAuth providers (empty for CI tests)
-      GITHUB_CLIENT_ID: ''
-      GITHUB_CLIENT_SECRET: ''
-      GOOGLE_CLIENT_ID: ''
-      GOOGLE_CLIENT_SECRET: ''
 
       # Test environment configuration
       NODE_ENV: test

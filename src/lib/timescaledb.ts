@@ -2,7 +2,6 @@ import { Pool, PoolClient } from 'pg';
 import { dbLogger as logger, logError } from '../logging/logger';
 import { getRequiredEnvVar, getOptionalEnvVar, parseIntEnvVar } from '../environment/env';
 import { CtrfSchema } from '../schemas/ctrf/ctrf';
-import { ensureDatabaseSchema } from './migrations';
 
 // Type-safe error code extraction
 const getErrorCode = (err: unknown): string => {
@@ -61,28 +60,6 @@ const password = getRequiredEnvVar(
 );
 
 let timescalePool: Pool | null = null;
-let migrationsPromise: Promise<void> | null = null;
-
-// Function to run migrations safely with proper async handling
-async function runMigrationsOnce(): Promise<void> {
-  if (!migrationsPromise) {
-    migrationsPromise = (async () => {
-      try {
-        logger.info('Running database migrations automatically on startup...');
-        await ensureDatabaseSchema();
-        logger.info('Database migrations completed successfully');
-      } catch (error) {
-        logError(logger, 'Failed to run automatic database migrations', error);
-        // Re-throw to ensure calling code can handle the failure
-        throw new Error(
-          `Database migration failed during startup: ${error instanceof Error ? error.message : 'Unknown error'}. ` +
-            'The application cannot start without a properly initialized database schema.'
-        );
-      }
-    })();
-  }
-  return migrationsPromise;
-}
 
 // Function to get or create the singleton TimescaleDB pool
 function getTimescalePool(): Pool {
@@ -151,7 +128,8 @@ export interface TimescaleCtrfReport extends CtrfSchema {
 export async function checkTimescaleConnection(): Promise<boolean> {
   let client;
   try {
-    client = await getTimescalePool().connect();
+    const pool = getTimescalePool();
+    client = await pool.connect();
     await client.query('SELECT 1');
     return true;
   } catch (error) {
@@ -171,12 +149,10 @@ export async function checkTimescaleConnection(): Promise<boolean> {
 
 // Function to ensure the test_reports hypertable is ready
 export const ensureTestReportsTableExists = async (): Promise<void> => {
-  // Ensure migrations are completed before checking table existence
-  await runMigrationsOnce();
-
   let client: PoolClient | null = null;
   try {
-    client = await getTimescalePool().connect();
+    const pool = getTimescalePool();
+    client = await pool.connect();
 
     const result = await client.query(`
       SELECT EXISTS (
@@ -209,7 +185,8 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
   return trackQueryPerformance('storeCtrfReport', async () => {
     let client: PoolClient | null = null;
     try {
-      client = await getTimescalePool().connect();
+      const pool = getTimescalePool();
+      client = await pool.connect();
 
       // Insert the report into TimescaleDB
       const insertQuery = `
@@ -278,7 +255,7 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
         report.results?.environment?.appName || null, // $18
         report.results?.environment?.appVersion || null, // $19
         report.results?.environment?.buildName || null, // $20
-        report.results?.environment?.buildNumber || null, // $21
+        report.results?.environment?.buildNumber || '', // $21 - Use empty string for varchar field
         report.results?.environment?.branchName || null, // $22
         report.results?.environment?.testEnvironment || null, // $23
         report.metadata?.uploadedBy || null, // $24
@@ -566,7 +543,6 @@ export const shutdownTimescaleDB = async (): Promise<void> => {
     if (timescalePool) {
       await timescalePool.end();
       timescalePool = null; // Clear the singleton instance
-      migrationsPromise = null; // Reset migrations promise for next startup
     }
   } catch {
     // We're shutting down, so we don't care about errors

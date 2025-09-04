@@ -1,5 +1,4 @@
 import { sendTestResults } from './send-test-results';
-import { testLogger } from '../src/logging/logger';
 import logger from '../src/logging/logger';
 import { ReportFormat } from '../src/schemas/ctrf/ctrf';
 import crypto from 'crypto';

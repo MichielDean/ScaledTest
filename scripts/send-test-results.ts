@@ -1,6 +1,6 @@
 import fs from 'fs';
 import path from 'path';
-import axios, { AxiosResponse, AxiosError } from 'axios';
+import axios, { AxiosError } from 'axios';
 import os from 'os';
 import crypto from 'crypto';
 import logger, { logError } from '../src/logging/logger.js';
@@ -8,21 +8,6 @@ import { CtrfSchema } from '../src/schemas/ctrf/ctrf.js';
 
 // Create a script-specific logger
 const scriptLogger = logger.child({ module: 'send-test-results' });
-
-// Type definitions
-interface BetterAuthTokenResponse {
-  success: boolean;
-  user?: {
-    id: string;
-    email: string;
-    name: string;
-    role?: string;
-  };
-  session?: {
-    token: string;
-    expiresAt: string;
-  };
-}
 
 /**
  * Get authentication token for API access using Better Auth

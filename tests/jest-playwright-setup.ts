@@ -68,7 +68,7 @@ function loadConfig(): PlaywrightConfig {
   if (fs.existsSync(configPath)) {
     try {
       // We need to dynamically import the config file - import() can't be used with variable paths
-      // eslint-disable-next-line @typescript-eslint/no-var-requires, @typescript-eslint/no-require-imports
+      // eslint-disable-next-line @typescript-eslint/no-require-imports
       const userConfig = require(configPath);
       // Create a merged config by manually applying properties to ensure type safety
       const mergedConfig = { ...defaultConfig };

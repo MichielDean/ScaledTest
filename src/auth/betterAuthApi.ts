@@ -50,7 +50,7 @@ export async function authenticateRequest(
     // Try session-based authentication first (cookies)
     try {
       const session = await auth.api.getSession({
-        headers: req.headers as Record<string, string>,
+        headers: new Headers(req.headers as Record<string, string>),
       });
 
       if (session?.user) {
@@ -68,11 +68,12 @@ export async function authenticateRequest(
     // If session auth failed and we have a token, try token validation
     if (token) {
       try {
-        // Use Better Auth's bearer token validation
-        const tokenResult = await auth.api.verifyBearer({
-          headers: {
-            authorization: `Bearer ${token}`,
-          },
+        // Use Better Auth's session validation with bearer token
+        const headers = new Headers();
+        headers.set('authorization', `Bearer ${token}`);
+
+        const tokenResult = await auth.api.getSession({
+          headers,
         });
 
         if (tokenResult?.user) {

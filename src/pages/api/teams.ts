@@ -9,7 +9,7 @@ import {
   getUserTeams,
   getAllTeams,
   createTeam,
-  getDbPool,
+  getAuthDbPool,
 } from '../../lib/teamManagement';
 import {
   AssignTeamRequest,
@@ -100,7 +100,7 @@ async function getAllUsersWithRoles(
   limit: number = 1000,
   offset: number = 0
 ): Promise<UserWithRole[]> {
-  const pool = getDbPool();
+  const pool = getAuthDbPool(); // Use auth database pool to access user table
 
   try {
     const result = await pool.query(

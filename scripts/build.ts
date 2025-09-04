@@ -124,7 +124,7 @@ export class SmartBuildProgress {
           process.stdout.clearLine(0);
           process.stdout.cursorTo(0);
         }
-      } catch (error) {
+      } catch {
         // If clearing fails, just add a newline
         process.stdout.write('\n');
       }
@@ -145,7 +145,7 @@ function runBuildWithProgress(): Promise<{ output: string; progress: SmartBuildP
     // Use cmd on Windows to run the actual build commands
     const isWindows = process.platform === 'win32';
     const command = isWindows ? 'cmd' : 'sh';
-    const buildCommand = 'npm run format && next lint && tsc && next build';
+    const buildCommand = 'npm run format && npm run lint && tsc && next build';
     const args = isWindows ? ['/c', buildCommand] : ['-c', buildCommand];
 
     const child = spawn(command, args, {
