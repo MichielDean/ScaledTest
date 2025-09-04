@@ -1,109 +1,126 @@
-import { NextApiRequest, NextApiResponse } from 'next';
-import { authClient } from '../../../lib/auth-client';
-// TODO: Re-enable when Better Auth v1.3.7 API is properly integrated
-// import { auth } from '../../../lib/auth';
-import { roleNames } from '../../../lib/auth-shared';
+import { type NextApiRequest, type NextApiResponse } from 'next';
 import { apiLogger } from '../../../logging/logger';
+import { authClient } from '../../../lib/auth-client';
+import { roleNames } from '../../../lib/auth-shared';
 
-export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+interface RegisterRequest {
+  email: string;
+  password: string;
+  name: string;
+  role?: string;
+}
+
+interface RegisterResponse {
+  success: boolean;
+  message: string;
+  userId?: string;
+}
+
+export default async function handler(
+  req: NextApiRequest,
+  res: NextApiResponse<RegisterResponse>
+) {
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).json({ error: 'Method not allowed' });
+    apiLogger.warn('Invalid method for registration endpoint', { method: req.method });
+    return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
   try {
-    const { email, password, name, role = 'readonly' } = req.body;
+    const { email, password, name, role }: RegisterRequest = req.body;
 
-    if (!email || !password) {
-      return res.status(400).json({
-        error: 'Missing required fields: email and password',
+    // Validate required fields
+    if (!email || !password || !name) {
+      apiLogger.warn('Missing required fields for registration', { 
+        hasEmail: !!email, 
+        hasPassword: !!password, 
+        hasName: !!name 
+      });
+      return res.status(400).json({ 
+        success: false, 
+        message: 'Email, password, and name are required' 
       });
     }
 
     // Validate role if provided
-    const validRoles = Object.values(roleNames);
-    if (!validRoles.includes(role)) {
-      return res.status(400).json({
-        error: 'Invalid role. Must be one of: ' + validRoles.join(', '),
+    if (role && !Object.values(roleNames).includes(role as any)) {
+      apiLogger.warn('Invalid role provided for registration', { role, validRoles: Object.values(roleNames) });
+      return res.status(400).json({ 
+        success: false, 
+        message: `Invalid role. Must be one of: ${Object.values(roleNames).join(', ')}` 
       });
     }
 
-    // Register user with Better Auth
-    const result = await authClient.signUp.email({
+    // First, create the user using Better Auth
+    const signUpResult = await authClient.signUp.email({
       email,
       password,
-      name: name || email.split('@')[0], // Use email prefix as default name
+      name,
     });
 
-    if (!result.data) {
-      return res.status(400).json({
-        error: 'Registration failed',
-        details: result.error || 'Unknown error',
+    if (!signUpResult.data?.user) {
+      apiLogger.error('User creation failed', { email, signUpResult });
+      return res.status(400).json({ 
+        success: false, 
+        message: signUpResult.error?.message || 'Failed to create user' 
       });
     }
 
-    // User registration successful, now set their role
-    apiLogger.info(
-      {
-        userId: result.data.user.id,
-        email,
-        role,
-        name: result.data.user.name,
-      },
-      'User registered with Better Auth'
-    );
+    const userId = signUpResult.data.user.id;
+    const assignedRole = role || roleNames.USER;
 
-    // Set the user role using Better Auth admin API
+    // Assign role to the user using Better Auth admin API
     try {
-      // TODO: Update to use correct Better Auth v1.3.7 API methods
-      // Temporarily skip role assignment since the API has changed
-      // await auth.api.setRole({
-      //   body: {
-      //     userId: result.data.user.id,
-      //     role: role,
-      //   },
-      // });
+      const roleResult = await authClient.admin.setRole({
+        userId,
+        role: assignedRole,
+      });
 
-      apiLogger.info(
-        {
-          userId: result.data.user.id,
-          email,
-          requestedRole: role,
-        },
-        'User registered successfully'
-      );
+      if (!roleResult.data) {
+        apiLogger.error('Role assignment failed', { 
+          userId, 
+          role: assignedRole, 
+          error: roleResult.error 
+        });
+        // User was created but role assignment failed
+        return res.status(500).json({ 
+          success: false, 
+          message: 'User created but role assignment failed' 
+        });
+      }
+
+      apiLogger.info('User registered successfully with role', { 
+        userId, 
+        email, 
+        role: assignedRole 
+      });
+
+      return res.status(201).json({ 
+        success: true, 
+        message: 'User registered successfully',
+        userId 
+      });
+
     } catch (roleError) {
-      apiLogger.error(
-        {
-          userId: result.data.user.id,
-          email,
-          intendedRole: role,
-          error: roleError,
-        },
-        'Failed to set user role - CRITICAL SECURITY ISSUE'
-      );
-
-      // This is a critical security issue - user was created but role not set
-      // In production, you might want to delete the user or mark them as needing manual role assignment
-      return res.status(500).json({
-        error: 'User registered but role assignment failed - contact administrator',
-        userId: result.data.user.id,
+      apiLogger.error('Role assignment threw exception', { 
+        userId, 
+        role: assignedRole, 
+        error: roleError 
+      });
+      return res.status(500).json({ 
+        success: false, 
+        message: 'User created but role assignment failed' 
       });
     }
 
-    return res.status(201).json({
-      message: 'User registered successfully',
-      user: {
-        id: result.data.user.id,
-        email: result.data.user.email,
-        name: result.data.user.name,
-        role: role,
-      },
-    });
   } catch (error) {
-    apiLogger.error({ error, email: req.body?.email }, 'Registration error');
-    return res.status(500).json({
-      error: 'Failed to register user',
+    apiLogger.error('Registration process failed', { 
+      error: error instanceof Error ? error.message : 'Unknown error',
+      stack: error instanceof Error ? error.stack : undefined
+    });
+
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Internal server error during registration' 
     });
   }
 }
