@@ -150,7 +150,7 @@ async function handlePost(
     const ctrfReport = CtrfReportSchema.parse(req.body);
 
     // Ensure reportId exists and store in a variable for safe access
-    const reportId = ctrfReport.reportId || crypto.randomUUID();
+    const reportId = ctrfReport.reportId ?? crypto.randomUUID();
     ctrfReport.reportId = reportId;
 
     // Ensure timestamp exists
@@ -348,50 +348,55 @@ async function handleGet(
         'code' in error &&
         ['ECONNREFUSED', 'ENOTFOUND', 'ETIMEDOUT'].includes(String(error.code)));
 
-    // In test environments, return empty results for database connectivity issues
-    // to allow tests to pass when database is not available
+    // Environment-aware error handling for production vs. test environments
     const isTestEnvironment =
       process.env.NODE_ENV === 'test' || process.env.JEST_WORKER_ID !== undefined;
 
-    if (isDatabaseError && isTestEnvironment) {
-      reqLogger.warn(
-        {
-          error: error instanceof Error ? error.message : String(error),
-          code:
-            error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
-          environment: process.env.NODE_ENV,
-        },
-        'Database unavailable in test environment, returning empty results'
-      );
-
-      return res.status(200).json({
-        success: true,
-        data: [],
-        total: 0,
-        pagination: {
-          page: parseInt(req.query.page as string, 10) || 1,
-          size: Math.min(parseInt(req.query.size as string, 10) || 20, 100),
-          total: 0,
-        },
-      });
-    }
-
-    // In production environments, return proper service unavailable status for database issues
     if (isDatabaseError) {
-      reqLogger.error(
-        {
-          error: error instanceof Error ? error.message : String(error),
-          code:
-            error && typeof error === 'object' && 'code' in error ? String(error.code) : undefined,
-          environment: process.env.NODE_ENV,
-        },
-        'Database service unavailable in production'
-      );
+      if (isTestEnvironment) {
+        // In test environments, return empty results for database connectivity issues
+        // to allow tests to pass when database is not available
+        reqLogger.warn(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            code:
+              error && typeof error === 'object' && 'code' in error
+                ? String(error.code)
+                : undefined,
+            environment: process.env.NODE_ENV,
+          },
+          'Database unavailable in test environment, returning empty results'
+        );
 
-      return res.status(503).json({
-        success: false,
-        error: 'Database service unavailable',
-      });
+        return res.status(200).json({
+          success: true,
+          data: [],
+          total: 0,
+          pagination: {
+            page: parseInt(req.query.page as string, 10) || 1,
+            size: Math.min(parseInt(req.query.size as string, 10) || 20, 100),
+            total: 0,
+          },
+        });
+      } else {
+        // In production environments, return proper service unavailable status for database issues
+        reqLogger.error(
+          {
+            error: error instanceof Error ? error.message : String(error),
+            code:
+              error && typeof error === 'object' && 'code' in error
+                ? String(error.code)
+                : undefined,
+            environment: process.env.NODE_ENV,
+          },
+          'Database service unavailable in production'
+        );
+
+        return res.status(503).json({
+          success: false,
+          error: 'Database service unavailable',
+        });
+      }
     }
 
     // Handle other non-database errors
