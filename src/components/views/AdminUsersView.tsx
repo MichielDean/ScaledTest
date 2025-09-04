@@ -47,19 +47,34 @@ const AdminUsersView: React.FC = () => {
       setError(null);
 
       // Better Auth uses cookie-based authentication, no need for Bearer tokens
-      const response = await fetch('/api/teams?users=true', {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        credentials: 'include', // Important: include cookies
-      });
+      let response: Response;
+      try {
+        response = await fetch('/api/teams?users=true', {
+          headers: {
+            'Content-Type': 'application/json',
+          },
+          credentials: 'include', // Important: include cookies
+        });
+      } catch (networkError) {
+        throw new Error(
+          `Network error: ${networkError instanceof Error ? networkError.message : 'Unable to connect to server'}`
+        );
+      }
 
       if (!response.ok) {
         const errorText = await response.text();
         throw new Error(`Failed to fetch users: ${response.status} ${errorText}`);
       }
 
-      const data = await response.json();
+      let data;
+      try {
+        data = await response.json();
+      } catch (jsonError) {
+        throw new Error(
+          `Invalid response format: ${jsonError instanceof Error ? jsonError.message : 'Response is not valid JSON'}`
+        );
+      }
+
       logger.debug({ userCount: data.data?.length || 0 }, 'User fetch API response');
       setUsers(data.data || []);
     } catch (err) {

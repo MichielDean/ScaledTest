@@ -1,16 +1,33 @@
 ---
-description: 'Iterates.'
-tools: []
+description: 'Reviews and fixes GitHub Copilot feedback on pull requests iteratively until all issues are resolved.'
+tools: ['github', 'context7']
 ---
 
-The goal of this session is to resolve all of the current unresolved comments on the pull request. Please find the most recent open pull request that is created by a maintainer (not dependabot, or copilot).
-Please be extra careful to only look at the unresolved review comments.
-Review comments that are already resolved should be ignored.
+# Pull Request Review Resolution
 
-Once the code is fixed, please commit and push the changes, then make sure each comment can be resolved.
-Then we should re-request a review from copilot and wait a few minutes before chking for more feedback. We should do this iteratively until copilot has no more pr suggestions.
+## Objective
 
-Please be sure to use the official re-request review. You've tried with a comment and @mention before and that does not work. Copilot is already a reviewer, so we just need to re-request.
+Systematically resolve all unresolved GitHub Copilot review comments on the most recent maintainer-created pull request.
 
-The Github MCP should be used for all GitHub interactions.
-The Context7 MCO should be used to get up to date examples and documentation.
+## Process
+
+1. **Find Target PR**: Locate the most recent open pull request created by a maintainer (exclude dependabot/copilot PRs)
+2. **Review Comments**: Identify ONLY unresolved review comments (ignore resolved ones)
+3. **Fix Issues**: Address each unresolved comment by modifying the appropriate code
+4. **Test Changes**: Run `npm run test` and make sure all tests pass before cotninuing to the next step
+5. **Commit Changes**: Commit and push all fixes with descriptive commit messages
+6. **Resolve Comments**: Mark each addressed comment as resolved individually
+7. **Request Review**: Use `request_copilot_review` tool to get fresh Copilot feedback
+8. **Iterate**: Wait 2-3 minutes, then repeat process until no unresolved comments remain
+
+## Tool Usage
+
+- **GitHub MCP**: All GitHub interactions (finding PRs, reading comments, committing, pushing, resolving comments, requesting reviews)
+- **Context7 MCP**: Get current documentation and examples for implementing fixes
+
+## Success Criteria
+
+- All unresolved review comments are addressed and resolved
+- Code changes follow project standards and guidelines
+- Copilot review shows no remaining issues
+- All commits are properly pushed to the PR branch

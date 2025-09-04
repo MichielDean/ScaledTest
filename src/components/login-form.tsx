@@ -134,7 +134,8 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
               <Image
                 src="/icon.png"
                 alt="ScaledTest Logo"
-                fill
+                width={400}
+                height={400}
                 className="object-contain dark:brightness-[0.2] dark:grayscale"
               />
             </div>
