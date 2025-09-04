@@ -130,13 +130,13 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
             </div>
           </form>
           <div className="bg-muted relative hidden md:flex md:items-center md:justify-center">
-            <div className="relative h-full w-full max-w-md">
+            <div className="relative w-full max-w-sm">
               <Image
                 src="/icon.png"
                 alt="ScaledTest Logo"
-                width={400}
-                height={400}
-                className="object-contain dark:brightness-[0.2] dark:grayscale"
+                width={384}
+                height={384}
+                className="object-contain"
               />
             </div>
           </div>

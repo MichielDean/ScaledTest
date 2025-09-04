@@ -1,7 +1,8 @@
-import { type NextApiRequest, type NextApiResponse } from 'next';
-import { apiLogger } from '../../../logging/logger';
+import { NextApiRequest, NextApiResponse } from 'next';
 import { authClient } from '../../../lib/auth-client';
 import { roleNames } from '../../../lib/auth-shared';
+import { apiLogger } from '../../../logging/logger';
+import { Pool } from 'pg';
 
 interface RegisterRequest {
   email: string;
@@ -21,7 +22,7 @@ export default async function handler(
   res: NextApiResponse<RegisterResponse>
 ) {
   if (req.method !== 'POST') {
-    apiLogger.warn('Invalid method for registration endpoint', { method: req.method });
+    apiLogger.warn('Invalid method for registration endpoint');
     return res.status(405).json({ success: false, message: 'Method not allowed' });
   }
 
@@ -30,11 +31,7 @@ export default async function handler(
 
     // Validate required fields
     if (!email || !password || !name) {
-      apiLogger.warn('Missing required fields for registration', { 
-        hasEmail: !!email, 
-        hasPassword: !!password, 
-        hasName: !!name 
-      });
+      apiLogger.warn('Missing required fields for registration');
       return res.status(400).json({ 
         success: false, 
         message: 'Email, password, and name are required' 
@@ -43,7 +40,7 @@ export default async function handler(
 
     // Validate role if provided
     if (role && !Object.values(roleNames).includes(role as any)) {
-      apiLogger.warn('Invalid role provided for registration', { role, validRoles: Object.values(roleNames) });
+      apiLogger.warn('Invalid role provided for registration');
       return res.status(400).json({ 
         success: false, 
         message: `Invalid role. Must be one of: ${Object.values(roleNames).join(', ')}` 
@@ -58,7 +55,7 @@ export default async function handler(
     });
 
     if (!signUpResult.data?.user) {
-      apiLogger.error('User creation failed', { email, signUpResult });
+      apiLogger.error('User creation failed');
       return res.status(400).json({ 
         success: false, 
         message: signUpResult.error?.message || 'Failed to create user' 
@@ -66,57 +63,40 @@ export default async function handler(
     }
 
     const userId = signUpResult.data.user.id;
-    const assignedRole = role || roleNames.USER;
+    const assignedRole = role || roleNames.readonly;
 
-    // Assign role to the user using Better Auth admin API
+    // Set the user role using direct database update
     try {
-      const roleResult = await authClient.admin.setRole({
-        userId,
-        role: assignedRole,
+      const pool = new Pool({
+        connectionString: process.env.DATABASE_URL,
       });
 
-      if (!roleResult.data) {
-        apiLogger.error('Role assignment failed', { 
-          userId, 
-          role: assignedRole, 
-          error: roleResult.error 
+      try {
+        // Update user role in the database
+        await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [assignedRole, userId]);
+
+        apiLogger.info('User registered and role assigned successfully');
+
+        return res.status(201).json({ 
+          success: true, 
+          message: 'User registered successfully',
+          userId 
         });
-        // User was created but role assignment failed
-        return res.status(500).json({ 
-          success: false, 
-          message: 'User created but role assignment failed' 
-        });
+
+      } finally {
+        await pool.end();
       }
-
-      apiLogger.info('User registered successfully with role', { 
-        userId, 
-        email, 
-        role: assignedRole 
-      });
-
-      return res.status(201).json({ 
-        success: true, 
-        message: 'User registered successfully',
-        userId 
-      });
-
     } catch (roleError) {
-      apiLogger.error('Role assignment threw exception', { 
-        userId, 
-        role: assignedRole, 
-        error: roleError 
-      });
-      return res.status(500).json({ 
-        success: false, 
-        message: 'User created but role assignment failed' 
+      apiLogger.error('Role assignment failed after user registration');
+
+      return res.status(500).json({
+        success: false,
+        message: 'User registered, but failed to assign role',
       });
     }
 
   } catch (error) {
-    apiLogger.error('Registration process failed', { 
-      error: error instanceof Error ? error.message : 'Unknown error',
-      stack: error instanceof Error ? error.stack : undefined
-    });
+    apiLogger.error('Registration process failed');
 
     return res.status(500).json({ 
       success: false, 

@@ -93,11 +93,11 @@ interface UserWithRole {
 
 /**
  * Get all users with roles from Better Auth database
- * @param limit - Maximum number of users to return (default: 1000)
+ * @param limit - Maximum number of users to return (default: 100)
  * @param offset - Number of users to skip (default: 0)
  */
 async function getAllUsersWithRoles(
-  limit: number = 1000,
+  limit: number = 100,
   offset: number = 0
 ): Promise<UserWithRole[]> {
   const pool = getAuthDbPool(); // Use auth database pool to access user table
