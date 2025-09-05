@@ -17,10 +17,7 @@ interface RegisterResponse {
   userId?: string;
 }
 
-export default async function handler(
-  req: NextApiRequest,
-  res: NextApiResponse<RegisterResponse>
-) {
+export default async function handler(req: NextApiRequest, res: NextApiResponse<RegisterResponse>) {
   if (req.method !== 'POST') {
     apiLogger.warn('Invalid method for registration endpoint');
     return res.status(405).json({ success: false, message: 'Method not allowed' });
@@ -32,18 +29,18 @@ export default async function handler(
     // Validate required fields
     if (!email || !password || !name) {
       apiLogger.warn('Missing required fields for registration');
-      return res.status(400).json({ 
-        success: false, 
-        message: 'Email, password, and name are required' 
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, and name are required',
       });
     }
 
     // Validate role if provided
-    if (role && !Object.values(roleNames).includes(role as any)) {
+    if (role && !Object.values(roleNames).includes(role as keyof typeof roleNames)) {
       apiLogger.warn('Invalid role provided for registration');
-      return res.status(400).json({ 
-        success: false, 
-        message: `Invalid role. Must be one of: ${Object.values(roleNames).join(', ')}` 
+      return res.status(400).json({
+        success: false,
+        message: `Invalid role. Must be one of: ${Object.values(roleNames).join(', ')}`,
       });
     }
 
@@ -56,9 +53,9 @@ export default async function handler(
 
     if (!signUpResult.data?.user) {
       apiLogger.error('User creation failed');
-      return res.status(400).json({ 
-        success: false, 
-        message: signUpResult.error?.message || 'Failed to create user' 
+      return res.status(400).json({
+        success: false,
+        message: signUpResult.error?.message || 'Failed to create user',
       });
     }
 
@@ -77,16 +74,15 @@ export default async function handler(
 
         apiLogger.info('User registered and role assigned successfully');
 
-        return res.status(201).json({ 
-          success: true, 
+        return res.status(201).json({
+          success: true,
           message: 'User registered successfully',
-          userId 
+          userId,
         });
-
       } finally {
         await pool.end();
       }
-    } catch (roleError) {
+    } catch {
       apiLogger.error('Role assignment failed after user registration');
 
       return res.status(500).json({
@@ -94,13 +90,12 @@ export default async function handler(
         message: 'User registered, but failed to assign role',
       });
     }
-
-  } catch (error) {
+  } catch {
     apiLogger.error('Registration process failed');
 
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Internal server error during registration' 
+    return res.status(500).json({
+      success: false,
+      message: 'Internal server error during registration',
     });
   }
 }

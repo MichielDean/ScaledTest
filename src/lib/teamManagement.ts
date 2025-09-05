@@ -104,20 +104,23 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
   const pool = getDbPool();
 
   try {
-    // For now, skip user verification since the Better Auth API methods have changed
-    // TODO: Update to use correct Better Auth v1.3.7 API methods
-    // const userList = await auth.api.listUsers({
-    //   body: {
-    //     searchValue: userId,
-    //     searchField: 'email',
-    //     searchOperator: 'eq',
-    //     limit: 1
-    //   },
-    // });
+    const authPool = getAuthDbPool();
 
-    // if (!userList?.users || userList.users.length === 0) {
-    //   return [];
-    // }
+    try {
+      // Verify user existence in the authentication database
+      const userResult = await authPool.query(
+        `
+          SELECT id FROM "user" WHERE id = $1
+        `,
+        [userId]
+      );
+      if (userResult.rowCount === 0) {
+        dbLogger.warn({ userId }, 'User does not exist in authentication database');
+        return [];
+      }
+    } finally {
+      await authPool.end();
+    }
 
     // Query user's teams from the database
     const result = await pool.query(

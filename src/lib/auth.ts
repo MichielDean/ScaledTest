@@ -41,14 +41,9 @@ function getAuth(): ReturnType<typeof betterAuth> {
       }),
       emailAndPassword: {
         enabled: true,
-<<<<<<< HEAD
-        // Enable email verification in production, keep disabled for testing
-        requireEmailVerification: process.env.NODE_ENV === 'production',
-=======
         requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION
           ? process.env.REQUIRE_EMAIL_VERIFICATION === 'true'
           : true, // Default to true for safety
->>>>>>> fdcc3eb (Fix: Disable email verification for test environment)
       },
       socialProviders: {
         github: {

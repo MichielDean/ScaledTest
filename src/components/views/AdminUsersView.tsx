@@ -32,7 +32,7 @@ import {
 import { Trash2 } from 'lucide-react';
 
 const AdminUsersView: React.FC = () => {
-  const { isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
+  const { isAuthenticated, hasRole, loading: authLoading } = useAuth();
 
   // Users state
   const [users, setUsers] = useState<UserWithTeams[]>([]);
@@ -84,67 +84,61 @@ const AdminUsersView: React.FC = () => {
       setUsersLoading(false);
     }
   }, []); // Delete user function
-  const handleDeleteUser = useCallback(
-    async (userId: string, username: string) => {
-      try {
-        setDeletingUserId(userId);
-        setError(null);
+  const handleDeleteUser = useCallback(async (userId: string, username: string) => {
+    try {
+      setDeletingUserId(userId);
+      setError(null);
 
-        if (!token) {
-          throw new Error('No authentication token available');
-        }
+      const response = await axios.delete(`/api/admin/users?userId=${userId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        withCredentials: true, // Include cookies for authentication
+      });
 
-        const response = await axios.delete(`/api/admin/users?userId=${userId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
+      if (response.status !== 200) {
+        throw new Error(`Failed to delete user: ${response.statusText}`);
+      }
 
-        if (response.status !== 200) {
-          throw new Error(`Failed to delete user: ${response.statusText}`);
-        }
+      // Remove user from local state
+      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
 
-        // Remove user from local state
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-
-        logger.info(
-          {
-            userId,
-            username,
-            component: 'AdminUsersView',
-          },
-          'User deleted successfully'
-        );
-      } catch (error) {
-        logError(logger, 'Error deleting user', error, {
+      logger.info(
+        {
           userId,
           username,
           component: 'AdminUsersView',
-        });
+        },
+        'User deleted successfully'
+      );
+    } catch (error) {
+      logError(logger, 'Error deleting user', error, {
+        userId,
+        username,
+        component: 'AdminUsersView',
+      });
 
-        if (axios.isAxiosError(error)) {
-          if (error.response?.status === 404) {
-            setError('User not found');
-          } else if (error.response?.status === 403) {
-            setError('Insufficient permissions to delete user');
-          } else {
-            setError(error.response?.data?.error || 'Failed to delete user');
-          }
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          setError('User not found');
+        } else if (error.response?.status === 403) {
+          setError('Insufficient permissions to delete user');
         } else {
-          setError('Failed to delete user. Please try again later.');
+          setError(error.response?.data?.error || 'Failed to delete user');
         }
-      } finally {
-        setDeletingUserId(null);
+      } else {
+        setError('Failed to delete user. Please try again later.');
       }
-    },
-    [token]
-  );
+    } finally {
+      setDeletingUserId(null);
+    }
+  }, []);
 
   useEffect(() => {
-    if (token) {
+    if (isAuthenticated) {
       fetchUsers();
     }
-  }, [token, fetchUsers]);
+  }, [isAuthenticated, fetchUsers]);
 
   if (!isAuthenticated || authLoading) {
     return <div>Loading...</div>;

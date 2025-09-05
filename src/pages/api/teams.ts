@@ -19,6 +19,13 @@ import {
 } from '../../types/team';
 import type { Logger } from 'pino';
 
+interface AuthenticatedUser {
+  id: string;
+  email: string;
+  name: string;
+  role?: string;
+}
+
 // Team response for GET requests
 interface TeamResponse {
   success: boolean;
@@ -93,13 +100,22 @@ interface UserWithRole {
 
 /**
  * Get all users with roles from Better Auth database
+ * @param currentUser - The authenticated user making the request
  * @param limit - Maximum number of users to return (default: 100)
  * @param offset - Number of users to skip (default: 0)
  */
 async function getAllUsersWithRoles(
+  currentUser: AuthenticatedUser,
   limit: number = 100,
   offset: number = 0
 ): Promise<UserWithRole[]> {
+  // Only allow users with 'admin', 'owner', or 'maintainer' role to view user lists
+  const allowedRoles = ['admin', 'owner', 'maintainer'];
+  if (!currentUser || !currentUser.role || !allowedRoles.includes(currentUser.role)) {
+    authLogger.warn({ userId: currentUser?.id }, 'Unauthorized attempt to access user list');
+    throw new Error('Unauthorized: insufficient permissions to view user list');
+  }
+
   const pool = getAuthDbPool(); // Use auth database pool to access user table
 
   try {
@@ -171,7 +187,7 @@ export default async function handler(
     if (req.method === 'GET') {
       // Check if requesting user assignments
       if (req.query.users === 'true') {
-        return handleGetUsersWithTeams(req, res, reqLogger);
+        return handleGetUsersWithTeams(req, res, reqLogger, session.user);
       } else {
         return handleGetTeams(req, res, reqLogger);
       }
@@ -248,16 +264,17 @@ async function handleGetTeams(
 async function handleGetUsersWithTeams(
   req: NextApiRequest,
   res: NextApiResponse<GetUserTeamsResponse | ErrorResponse>,
-  reqLogger: Logger
+  reqLogger: Logger,
+  currentUser: AuthenticatedUser
 ) {
   try {
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 1000); // Max 1000 users per page
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100); // Max 100 users per page
     const offset = (page - 1) * pageSize;
 
     // Get all users with roles (with pagination)
-    const usersWithRoles = await getAllUsersWithRoles(pageSize, offset);
+    const usersWithRoles = await getAllUsersWithRoles(currentUser, pageSize, offset);
 
     // Get all teams for reference
     const allTeams = await getAllTeams();
