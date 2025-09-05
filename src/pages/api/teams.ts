@@ -111,8 +111,12 @@ async function getAllUsersWithRoles(
 ): Promise<UserWithRole[]> {
   // Only allow users with 'admin', 'owner', or 'maintainer' role to view user lists
   const allowedRoles = ['admin', 'owner', 'maintainer'];
+
   if (!currentUser || !currentUser.role || !allowedRoles.includes(currentUser.role)) {
-    authLogger.warn({ userId: currentUser?.id }, 'Unauthorized attempt to access user list');
+    authLogger.warn(
+      { userId: currentUser?.id, userRole: currentUser?.role },
+      'Unauthorized attempt to access user list'
+    );
     throw new Error('Unauthorized: insufficient permissions to view user list');
   }
 
