@@ -106,21 +106,20 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
   try {
     const authPool = getAuthDbPool();
 
-    try {
-      // Verify user existence in the authentication database
-      const userResult = await authPool.query(
-        `
+    // Verify user existence in the authentication database
+    const userResult = await authPool.query(
+      `
           SELECT id FROM "user" WHERE id = $1
         `,
-        [userId]
-      );
-      if (userResult.rowCount === 0) {
-        dbLogger.warn({ userId }, 'User does not exist in authentication database');
-        return [];
-      }
-    } finally {
-      await authPool.end();
+      [userId]
+    );
+    if (userResult.rowCount === 0) {
+      dbLogger.warn({ userId }, 'User does not exist in authentication database');
+      return [];
     }
+    // NOTE: Do NOT call authPool.end() here. getAuthDbPool() returns a shared
+    // singleton pool used across the application; closing it on every call
+    // breaks pooling and causes connection exhaustion for subsequent requests.
 
     // Query user's teams from the database
     const result = await pool.query(

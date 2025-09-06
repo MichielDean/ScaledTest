@@ -83,7 +83,9 @@ const AdminUsersView: React.FC = () => {
     } finally {
       setUsersLoading(false);
     }
-  }, []); // Delete user function
+  }, []);
+
+  // Delete user function
   const handleDeleteUser = useCallback(async (userId: string, username: string) => {
     try {
       setDeletingUserId(userId);

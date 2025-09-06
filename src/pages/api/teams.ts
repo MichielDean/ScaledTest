@@ -193,7 +193,7 @@ export default async function handler(
       if (req.query.users === 'true') {
         return handleGetUsersWithTeams(req, res, reqLogger, session.user);
       } else {
-        return handleGetTeams(req, res, reqLogger);
+        return handleGetTeams(req, res, reqLogger, session.user);
       }
     } else if (req.method === 'POST') {
       // Check if this is a team creation request (has 'name' field)
@@ -220,7 +220,8 @@ export default async function handler(
 async function handleGetTeams(
   req: NextApiRequest,
   res: NextApiResponse<TeamResponse>,
-  reqLogger: Logger
+  reqLogger: Logger,
+  currentUser: AuthenticatedUser
 ) {
   try {
     // Get all teams from the database
@@ -237,13 +238,14 @@ async function handleGetTeams(
       updatedAt: team.updatedAt,
     }));
 
-    // Set permissions based on user role - in a full implementation, this would be based on actual role checking
+    // Determine permissions from the current user's role
+    const userRole = currentUser?.role ?? '';
     const permissions = {
-      canCreateTeam: true,
-      canDeleteTeam: true,
-      canAssignUsers: true,
-      canViewAllTeams: true,
-      assignableTeams: teams.map(t => t.id),
+      canCreateTeam: ['maintainer', 'owner'].includes(userRole),
+      canDeleteTeam: ['owner'].includes(userRole),
+      canAssignUsers: ['maintainer', 'owner'].includes(userRole),
+      canViewAllTeams: ['maintainer', 'owner'].includes(userRole),
+      assignableTeams: ['owner'].includes(userRole) ? teams.map(t => t.id) : [],
     };
 
     reqLogger.info({ teamCount: teams.length }, 'Successfully retrieved teams list');
@@ -466,7 +468,8 @@ async function handleAssignUserToTeam(
     } catch (error) {
       return res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Invalid ID format',
+        // validateUuids throws Error with field-specific message when available
+        error: error instanceof Error ? error.message : 'Invalid UUID format for userId or teamId',
       });
     }
 
@@ -492,7 +495,10 @@ async function handleAssignUserToTeam(
     });
     return res.status(500).json({
       success: false,
-      error: 'Failed to assign user to team',
+      error:
+        error instanceof Error
+          ? `Failed to assign user to team: ${error.message}`
+          : 'Failed to assign user to team',
     });
   }
 }
@@ -532,7 +538,7 @@ async function handleRemoveUserFromTeam(
     } catch (error) {
       return res.status(400).json({
         success: false,
-        error: error instanceof Error ? error.message : 'Invalid ID format',
+        error: error instanceof Error ? error.message : 'Invalid UUID format for userId or teamId',
       });
     }
 
@@ -557,7 +563,10 @@ async function handleRemoveUserFromTeam(
     });
     return res.status(500).json({
       success: false,
-      error: 'Failed to remove user from team',
+      error:
+        error instanceof Error
+          ? `Failed to remove user from team: ${error.message}`
+          : 'Failed to remove user from team',
     });
   }
 }

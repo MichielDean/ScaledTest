@@ -26,39 +26,15 @@ Systematically resolve all unresolved GitHub Copilot pull request review comment
 ## Process
 
 1. **Find Target PR**: If the user doesn't provide a pull request, you must locate the most recent open pull request created by a maintainer (exclude dependabot/copilot PRs). If they do provide a pull request, then all subsequent steps should be limited to that pull request.
-2. **Review Comments**: Identify ONLY unresolved pull request review comments (ignore resolved ones) using GraphQL to get review threads with `isResolved: false` status. Use the GitHub CLI with this GraphQL query:
-   ```bash
-   gh api graphql -f query='query {
-     repository(owner: "OWNER", name: "REPO") {
-       pullRequest(number: PR_NUMBER) {
-         reviewThreads(first: 50) {
-           nodes {
-             id
-             isResolved
-             comments(first: 5) {
-               nodes {
-                 body
-                 author {
-                   login
-                 }
-                 path
-                 line
-               }
-             }
-           }
-         }
-       }
-     }
-   }'
-   ```
-   Filter the results for `isResolved == false` and `author.login == "copilot-pull-request-reviewer"` using jq.
-3. **Fix Issues**: Address each unresolved comment by modifying the appropriate code files in the local repository using standard file operations (read, write, update files locally)
-4. **Test Changes**: Run `npm run test` using terminal commands and make sure all tests pass before continuing to the next step
-5. **Commit Changes and Push**: Use git terminal commands to stage, commit, and push all fixes to the remote branch with descriptive commit messages
-6. **Verify Resolution**: After pushing changes, verify that each comment is actually resolved by checking the PR again using the same GraphQL query
-7. **Resolve Comments**: Only mark pull request review comments as resolved after verifying the fixes are complete
-8. **Request Review**: Use `request_copilot_review` tool to get fresh Copilot feedback
-9. **Iterate**: Wait 2-3 minutes for copilot to add a new review on the pull request, then repeat steps 1 through 9 until no unresolved pull request review comments remain
+2. **Review Comments**: Use the local helper script to fetch and summarise review threads. The script calls the GitHub API under the hood and prints structured output; prefer running it instead of issuing raw GraphQL queries.
+
+Run the script from the repository root (PowerShell example):
+
+```powershell
+npx tsx scripts\pr-review-comments.ts <PR_NUMBER>
+```
+
+The script currently filters out outdated threads and prints unresolved thread summaries (author, path, body). If you still want raw GraphQL access you can use `gh api graphql` directly, but the script is the supported workflow for this repo. 3. **Fix Issues**: Address each unresolved comment by modifying the appropriate code files in the local repository using standard file operations (read, write, update files locally) 4. **Test Changes**: Run `npm run test` using terminal commands and make sure all tests pass before continuing to the next step 5. **Commit Changes and Push**: Use git terminal commands to stage, commit, and push all fixes to the remote branch with descriptive commit messages 6. **Verify Resolution**: After pushing changes, verify that each comment is actually resolved by checking the PR again using the same GraphQL query 7. **Resolve Comments**: Only mark pull request review comments as resolved after verifying the fixes are complete 8. **Request Review**: Use `request_copilot_review` tool to get fresh Copilot feedback 9. **Iterate**: Wait 2-3 minutes for copilot to add a new review on the pull request, then repeat steps 1 through 9 until no unresolved pull request review comments remain
 
 ## Tool Usage
 
