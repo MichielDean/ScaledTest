@@ -24,6 +24,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
   }
 
   try {
+    if (typeof req.body !== 'object' || req.body === null || Array.isArray(req.body)) {
+      apiLogger.warn('Invalid request body for registration');
+      return res.status(400).json({
+        success: false,
+        message: 'Request body must be a JSON object',
+      });
+    }
+
     const { email, password, name, role }: RegisterRequest = req.body;
 
     // Validate required fields
