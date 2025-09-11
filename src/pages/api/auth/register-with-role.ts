@@ -95,8 +95,8 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         message: 'User registered, but failed to assign role',
       });
     }
-  } catch {
-    apiLogger.error('Registration process failed');
+  } catch (err) {
+    apiLogger.error({ err }, 'Registration process failed');
 
     return res.status(500).json({
       success: false,
