@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useRouter } from 'next/router';
 import { useAuth } from '../../hooks/useAuth';
 import { TestReport, TestReportsResponse, DashboardFilters } from '../../types/dashboard';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -45,6 +46,7 @@ import logger from '../../logging/logger';
 
 const TestResultsView: React.FC = () => {
   const { token } = useAuth();
+  const router = useRouter();
   const [reports, setReports] = useState<TestReport[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -441,7 +443,10 @@ const TestResultsView: React.FC = () => {
                               key={report?._id || `report-${index}`}
                               className="cursor-pointer hover:bg-muted/50"
                               onClick={() => {
-                                // TODO: Add navigation to detailed report view
+                                // Navigate to detailed report view by report ID
+                                if (report?._id) {
+                                  void router.push(`/reports/${report._id}`);
+                                }
                                 logger.info({ reportId: report._id }, 'Navigate to report details');
                               }}
                             >

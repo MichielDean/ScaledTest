@@ -136,27 +136,43 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    // TODO: Update to use correct Better Auth v1.3.7 API methods
-    // Temporarily skip user update since the API has changed
-    // await auth.api.updateUser({
-    //   userId,
-    //   role: newRole,
-    // });
+    // Determine desired role
+    const newRole = grantMaintainer ? 'maintainer' : 'readonly';
 
-    const message = grantMaintainer
-      ? 'Successfully granted maintainer role (currently disabled due to API changes)'
-      : 'Successfully revoked maintainer role (currently disabled due to API changes)';
+    try {
+      // Prefer using Better Auth admin API when available
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const authModule: any = (await import('../../../lib/auth')).auth;
+      if (authModule && authModule.api && typeof authModule.api.updateUser === 'function') {
+        // Attempt to use admin API to update role
+        await authModule.api.updateUser({ userId, role: newRole });
+      } else {
+        // Fallback: update role column in auth DB directly
+        const pool = getAuthDbPool();
+        await pool.query('UPDATE "user" SET role = $1, "updatedAt" = now() WHERE id = $2', [
+          newRole,
+          userId,
+        ]);
+      }
 
-    reqLogger.info(
-      {
-        userIdHash: userId.slice(0, 8) + '...',
-        grantMaintainer,
-        requestedRole: grantMaintainer ? 'maintainer' : 'readonly',
-      },
-      'User role update requested (currently disabled due to API changes)'
-    );
+      const message = grantMaintainer
+        ? 'Successfully granted maintainer role'
+        : 'Successfully revoked maintainer role';
 
-    return res.status(200).json({ message });
+      reqLogger.info(
+        {
+          userIdHash: userId.slice(0, 8) + '...',
+          grantMaintainer,
+          requestedRole: newRole,
+        },
+        'User role update completed'
+      );
+
+      return res.status(200).json({ message });
+    } catch (err) {
+      apiLogger.error({ err, userId, grantMaintainer }, 'Failed to update user role');
+      return res.status(500).json({ error: 'Failed to update user role' });
+    }
   } catch (error) {
     apiLogger.error(
       {

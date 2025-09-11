@@ -1,6 +1,7 @@
 import React, { createContext, useContext, ReactNode } from 'react';
 import { useSession } from '@/lib/auth-client';
 import { authClient } from '@/lib/auth-client';
+import logger from '@/logging/logger';
 import { type Role, type Permission, rolePermissions } from '@/lib/permissions';
 
 // Better Auth user interface
@@ -134,9 +135,7 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
       // Redirect to login page after logout
       window.location.href = '/login';
     } catch (error) {
-      // TODO: Use structured logger when imported
-      // logger.error('Logout failed', { error });
-      void error; // Explicitly mark as intentionally unused for now
+      logger.error({ error }, 'Logout failed');
     }
   };
 

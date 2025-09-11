@@ -1,11 +1,4 @@
-/**
- * Team Management Service
- *
- * This service handles team operations using Better Auth and database storage.
- * TODO: Implement team management with Better Auth and PostgreSQL
- */
-
-import { dbLogger as logger } from '../logging/logger';
+import * as teamLib from '../lib/teamManagement';
 import {
   Team,
   TeamWithMemberCount,
@@ -13,104 +6,86 @@ import {
   UpdateTeamRequest,
   TeamPermissions,
 } from '../types/team';
+import { dbLogger as logger } from '../logging/logger';
 
-/**
- * Get all teams
- * TODO: Implement with PostgreSQL
- */
+// Compatibility wrapper delegating to centralized team management helpers in
+// `src/lib/teamManagement`. This file exists so older imports continue to work
+// during migration. The heavy lifting and Better Auth/DB integration live in
+// the lib module.
+
 export async function getTeams(): Promise<Team[]> {
-  logger.warn('getTeams called but not yet implemented with Better Auth');
-  return [];
+  try {
+    // `getAllTeams` in the shared lib returns teams with member counts.
+    const teamsWithCounts = await teamLib.getAllTeams();
+    // Map to the older `Team` shape for compatibility
+    return teamsWithCounts.map(t => ({
+      id: t.id,
+      name: t.name,
+      description: t.description,
+      isDefault: t.isDefault,
+      createdAt: t.createdAt,
+      updatedAt: t.updatedAt,
+    }));
+  } catch (err) {
+    logger.error({ err }, 'getTeams wrapper error');
+    return [];
+  }
 }
 
-/**
- * Get teams with member counts
- * TODO: Implement with PostgreSQL
- */
 export async function getTeamsWithMemberCounts(): Promise<TeamWithMemberCount[]> {
-  logger.warn('getTeamsWithMemberCounts called but not yet implemented with Better Auth');
-  return [];
+  try {
+    // The shared lib exposes getAllTeams which includes member counts
+    return await teamLib.getAllTeams();
+  } catch (err) {
+    logger.error({ err }, 'getTeamsWithMemberCounts wrapper error');
+    return [];
+  }
 }
 
-/**
- * Get teams for a specific user
- * TODO: Implement with PostgreSQL
- */
 export async function getUserTeams(userId: string): Promise<Team[]> {
-  logger.info({ userId }, 'getUserTeams called for user');
-  // Return a default team for now to prevent errors
-  return [
-    {
-      id: 'default-team',
-      name: 'Default Team',
-      description: 'Default team during migration',
-      isDefault: true,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    },
-  ];
+  return teamLib.getUserTeams(userId);
 }
 
-/**
- * Create a new team
- * TODO: Implement with PostgreSQL
- */
 export async function createTeam(teamData: CreateTeamRequest): Promise<Team> {
-  logger.warn({ teamData }, 'createTeam called but not yet implemented with Better Auth');
-  throw new Error('Team creation not yet implemented');
+  try {
+    // Shared lib requires a createdBy argument; default to 'system' for wrappers
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    return await (teamLib.createTeam as any)(teamData, 'system');
+  } catch (err) {
+    logger.error({ err, teamData }, 'createTeam wrapper failed');
+    throw err;
+  }
 }
 
-/**
- * Get team by ID
- * TODO: Implement with PostgreSQL
- */
 export async function getTeamById(teamId: string): Promise<Team | null> {
-  logger.warn({ teamId }, 'getTeamById called but not yet implemented with Better Auth');
-  return null;
+  // Shared lib does not expose a direct getTeamById; fall back to fetching all teams
+  const all = await getTeams();
+  return all.find(t => t.id === teamId) ?? null;
 }
 
-/**
- * Update team
- * TODO: Implement with PostgreSQL
- */
 export async function updateTeam(teamId: string, updateData: UpdateTeamRequest): Promise<Team> {
-  logger.warn({ teamId, updateData }, 'updateTeam called but not yet implemented with Better Auth');
-  throw new Error('Team update not yet implemented');
+  // Mark parameters as used to satisfy lint rules
+  void teamId;
+  void updateData;
+  logger.warn({ teamId }, 'updateTeam called but not implemented in teamLib');
+  throw new Error('Team update not implemented');
 }
 
-/**
- * Delete team
- * TODO: Implement with PostgreSQL
- */
 export async function deleteTeam(teamId: string): Promise<void> {
-  logger.warn({ teamId }, 'deleteTeam called but not yet implemented with Better Auth');
-  throw new Error('Team deletion not yet implemented');
+  void teamId;
+  logger.warn({ teamId }, 'deleteTeam called but not implemented in teamLib');
+  throw new Error('Team deletion not implemented');
 }
 
-/**
- * Add user to team
- * TODO: Implement with PostgreSQL
- */
 export async function addUserToTeam(
   userId: string,
   teamId: string,
   assignedBy?: string
 ): Promise<void> {
-  logger.warn(
-    {
-      userId,
-      teamId,
-      assignedBy,
-    },
-    'addUserToTeam called but not yet implemented with Better Auth'
-  );
-  throw new Error('Adding user to team not yet implemented with Better Auth');
+  // lib.addUserToTeam returns a boolean and requires assignedBy string
+  await teamLib.addUserToTeam(userId, teamId, assignedBy ?? 'system');
 }
 
-/**
- * Assign user to team (alias for addUserToTeam)
- * TODO: Implement with PostgreSQL
- */
 export async function assignUserToTeam(
   userId: string,
   teamId: string,
@@ -119,62 +94,30 @@ export async function assignUserToTeam(
   return addUserToTeam(userId, teamId, assignedBy);
 }
 
-/**
- * Remove user from team
- * TODO: Implement with PostgreSQL
- */
 export async function removeUserFromTeam(
   userId: string,
   teamId: string,
   removedBy?: string
 ): Promise<void> {
-  logger.warn(
-    {
-      userId,
-      teamId,
-      removedBy,
-    },
-    'removeUserFromTeam called but not yet implemented with Better Auth'
-  );
-  throw new Error('Removing user from team not yet implemented with Better Auth');
+  await teamLib.removeUserFromTeam(userId, teamId, removedBy ?? 'system');
 }
 
-/**
- * Get team members
- * TODO: Implement with PostgreSQL
- */
 export async function getTeamMembers(teamId: string): Promise<unknown[]> {
-  logger.warn({ teamId }, 'getTeamMembers called but not yet implemented with Better Auth');
+  void teamId;
+  // Not implemented in shared lib; return empty for compatibility
   return [];
 }
 
-/**
- * Check if user can manage team
- * TODO: Implement with Better Auth roles
- */
 export async function canUserManageTeam(userId: string, teamId: string): Promise<boolean> {
-  logger.warn(
-    {
-      userId,
-      teamId,
-    },
-    'canUserManageTeam called but not yet implemented with Better Auth'
-  );
+  void userId;
+  void teamId;
+  // Role checks live elsewhere; conservatively return false for now
   return false;
 }
 
-/**
- * Get team permissions for user
- * TODO: Implement with Better Auth roles
- */
 export async function getTeamPermissions(userId: string, teamId: string): Promise<TeamPermissions> {
-  logger.warn(
-    {
-      userId,
-      teamId,
-    },
-    'getTeamPermissions called but not yet implemented with Better Auth'
-  );
+  void userId;
+  void teamId;
   return {
     canCreateTeam: false,
     canDeleteTeam: false,
@@ -184,18 +127,28 @@ export async function getTeamPermissions(userId: string, teamId: string): Promis
   };
 }
 
-// Add exports for compatibility with existing code
 export async function getAllTeams(): Promise<Team[]> {
   return getTeams();
 }
 
 export async function addUserToTeams(userId: string, teamIds: string[]): Promise<void> {
-  logger.warn(
-    {
-      userId,
-      teamIds,
-    },
-    'addUserToTeams called but not yet implemented with Better Auth'
-  );
-  // No-op for now
+  for (const tid of teamIds) await addUserToTeam(userId, tid);
 }
+
+export default {
+  getTeams,
+  getTeamsWithMemberCounts,
+  getUserTeams,
+  createTeam,
+  getTeamById,
+  updateTeam,
+  deleteTeam,
+  addUserToTeam,
+  assignUserToTeam,
+  removeUserFromTeam,
+  getTeamMembers,
+  canUserManageTeam,
+  getTeamPermissions,
+  getAllTeams,
+  addUserToTeams,
+};
