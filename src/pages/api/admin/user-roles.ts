@@ -37,6 +37,22 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
+/**
+ * Typed interface for the subset of Better Auth admin API used here.
+ * Keeping this narrow avoids pervasive `as unknown as` assertions.
+ */
+interface BetterAuthAdminApi {
+  getUser: (opts: {
+    body: { userId: string };
+  }) => Promise<{ id: string; role?: string; email?: string; name?: string } | null>;
+  setRole: (opts: { body: { userId: string; role: string } }) => Promise<void>;
+}
+
+function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthAdminApi {
+  const obj = candidate as Record<string, unknown> | undefined;
+  return !!obj && typeof obj.getUser === 'function' && typeof obj.setRole === 'function';
+}
+
 async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
   try {
     const { userId, role } = req.body;
@@ -62,22 +78,15 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
 
     // Prefer to use the Better Auth admin API if available
     try {
-      if (
-        auth?.api &&
-        typeof (auth.api as unknown as Record<string, unknown>).setRole === 'function'
-      ) {
+      const maybeAdmin = (auth as unknown as { api?: unknown }).api;
+      if (maybeAdmin && isBetterAuthAdminApi(maybeAdmin)) {
         // Validate user exists
-        // @ts-expect-error - runtime check above ensures method presence
-        const targetUser = await (auth.api as unknown as Record<string, unknown>).getUser({
-          body: { userId },
-        });
+        const targetUser = await maybeAdmin.getUser({ body: { userId } });
         if (!targetUser) {
           return res.status(404).json({ error: 'User not found' });
         }
 
-        // @ts-expect-error - runtime check above ensures method presence
-        await (auth.api as unknown as Record<string, unknown>).setRole({ body: { userId, role } });
-
+        await maybeAdmin.setRole({ body: { userId, role } });
         apiLogger.info(
           {
             userId,
