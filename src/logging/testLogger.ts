@@ -82,15 +82,31 @@ export const uiTestLogger = () => {
 export async function closeTestLogger(): Promise<void> {
   try {
     if (loggerInstance) {
-      // Access Pino's transport symbol using proper type casting
-      const transportSymbol = Symbol.for('pino.transport');
-      const pinoWithTransport = loggerInstance as unknown as {
-        [key: symbol]: { end?: () => Promise<void> } | undefined;
-      };
+      // Use documented cleanup methods if available
+      interface LoggerWithCleanup {
+        flush?: () => Promise<void> | void;
+        close?: () => Promise<void> | void;
+      }
 
-      const transport = pinoWithTransport[transportSymbol];
-      if (transport && typeof transport.end === 'function') {
-        await transport.end();
+      const logger = loggerInstance as unknown as LoggerWithCleanup;
+      if (typeof logger.flush === 'function') {
+        await logger.flush();
+      } else if (typeof logger.close === 'function') {
+        await logger.close();
+      } else {
+        // Fallback: try to access transport for cleanup (with error handling)
+        try {
+          const transportSymbol = Symbol.for('pino.transport');
+          const pinoWithTransport = loggerInstance as unknown as {
+            [key: symbol]: { end?: () => Promise<void> } | undefined;
+          };
+          const transport = pinoWithTransport[transportSymbol];
+          if (transport && typeof transport.end === 'function') {
+            await transport.end();
+          }
+        } catch {
+          // Ignore transport cleanup errors
+        }
       }
     }
   } catch (error) {
