@@ -136,11 +136,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
                 alt="ScaledTest Logo"
                 width={384}
                 height={384}
-                className="object-contain"
-                style={{
-                  width: 'var(--logo-size)',
-                  height: 'var(--logo-size)',
-                }}
+                className="object-contain w-48 h-48 md:w-64 md:h-64 lg:w-80 lg:h-80"
               />
             </div>
           </div>
