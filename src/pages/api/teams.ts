@@ -123,14 +123,45 @@ async function getAllUsersWithRoles(
   const pool = getAuthDbPool(); // Use auth database pool to access user table
 
   try {
-    const result = await pool.query(
-      'SELECT id, email, name, role FROM "user" ORDER BY email LIMIT $1 OFFSET $2',
-      [limit, offset]
-    );
-    const users = result.rows;
+    let rows: BetterAuthUser[] = [];
+
+    // Owners and admins can see all users
+    if (currentUser.role === 'owner' || currentUser.role === 'admin') {
+      const result = await pool.query(
+        'SELECT id, email, name, role FROM "user" ORDER BY email LIMIT $1 OFFSET $2',
+        [limit, offset]
+      );
+      rows = result.rows;
+    } else if (currentUser.role === 'maintainer') {
+      // Maintainers can only see users who share teams with them
+      const userTeams = await getUserTeams(currentUser.id);
+      const teamIds = userTeams.map(t => t.id);
+
+      if (teamIds.length === 0) return [];
+
+      const result = await pool.query(
+        `
+        SELECT DISTINCT u.id, u.email, u.name, u.role
+        FROM "user" u
+        INNER JOIN user_teams ut ON u.id = ut.user_id
+        WHERE ut.team_id = ANY($1)
+        ORDER BY u.email
+        LIMIT $2 OFFSET $3
+      `,
+        [teamIds, limit, offset]
+      );
+      rows = result.rows;
+    } else {
+      // Other roles cannot list users
+      authLogger.warn(
+        { userId: currentUser.id, role: currentUser.role },
+        'User attempted to list users without permission'
+      );
+      throw new Error('Unauthorized: insufficient permissions to view user list');
+    }
 
     // Map database users to our expected format
-    return users.map((user: BetterAuthUser) => ({
+    return rows.map((user: BetterAuthUser) => ({
       id: user.id,
       username: user.name || user.email || 'Unknown',
       email: user.email,
@@ -169,9 +200,16 @@ export default async function handler(
 
   try {
     // Get session from Better Auth
-    const session = await auth.api.getSession({
-      headers: new Headers(req.headers as Record<string, string>),
-    });
+    const normalizedHeaders = new Headers(
+      Object.fromEntries(
+        Object.entries(req.headers).map(([k, v]) => [
+          k,
+          Array.isArray(v) ? v.join(', ') : String(v ?? ''),
+        ])
+      )
+    );
+
+    const session = await auth.api.getSession({ headers: normalizedHeaders });
 
     if (!session?.user) {
       return res.status(401).json({ success: false, error: 'Unauthorized' });

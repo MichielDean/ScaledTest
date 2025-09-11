@@ -1,5 +1,8 @@
-// TODO: Re-enable when Better Auth v1.3.7 API is properly integrated
-// import { auth } from './auth';
+// Better Auth integration - prefer server-side admin API when available.
+// Import the shared Better Auth instance. We use feature detection at runtime
+// so this module remains robust in environments where the admin API might
+// not be wired or available (for example, during some tests).
+import { auth } from './auth';
 import { Team, TeamWithMemberCount } from '../types/team';
 import { Pool } from 'pg';
 import { dbLogger } from '../logging/logger';
@@ -46,6 +49,113 @@ export function getDbPool(): Pool {
 }
 
 /**
+ * Feature-detect whether the Better Auth admin API surface is available.
+ * We check for the presence of auth.api and a likely admin method. This
+ * keeps the module resilient while the project migrates to the latest
+ * Better Auth API.
+ */
+function isAuthApiAvailable(): boolean {
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const a = auth as any;
+    return !!(
+      a &&
+      a.api &&
+      (typeof a.api.getUser === 'function' || typeof a.api.getSession === 'function')
+    );
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Verify a user exists using Better Auth admin API when available, otherwise
+ * fall back to querying the auth database directly.
+ */
+export async function verifyUserExists(userId: string): Promise<boolean> {
+  // Prefer using Better Auth admin API if present
+  if (isAuthApiAvailable()) {
+    try {
+      // Try the common admin method shapes that may be present across
+      // Better Auth versions. We attempt both `{ userId }` and `{ id }` in
+      // case the API changed between versions.
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const api: any = (auth as any).api;
+
+      if (typeof api.getUser === 'function') {
+        try {
+          const user = await api.getUser({ userId });
+          if (user && (user.id || user.userId)) return true;
+        } catch {
+          // Try alternate parameter shape
+        }
+
+        try {
+          const user = await api.getUser({ id: userId });
+          if (user && (user.id || user.userId)) return true;
+        } catch (err) {
+          dbLogger.debug({ err, userId }, 'Better Auth API getUser attempts failed');
+        }
+      }
+
+      // If getUser isn't available but getSession is, use session lookup as a secondary check
+      if (typeof api.getSession === 'function') {
+        try {
+          // Some Better Auth versions accept headers; provide minimal headers object
+          const session = await api.getSession({ headers: new Headers() });
+          if (session && session.user && session.user.id === userId) return true;
+        } catch (err) {
+          dbLogger.debug({ err, userId }, 'Better Auth API getSession attempt failed');
+        }
+      }
+    } catch (err) {
+      dbLogger.debug({ err, userId }, 'Auth admin API feature-detection threw an error');
+    }
+  }
+
+  // Fallback: query the auth database directly
+  try {
+    const pool = getAuthDbPool();
+    const result = await pool.query('SELECT id FROM "user" WHERE id = $1', [userId]);
+    // rowCount can be undefined in some client types; guard defensively
+    const count = Number(
+      result?.rowCount ?? (Array.isArray(result?.rows) ? result.rows.length : 0)
+    );
+    return count > 0;
+  } catch (err) {
+    dbLogger.warn({ err, userId }, 'Auth DB lookup failed while verifying user existence');
+    // If even the DB lookup fails, conservatively return false so callers
+    // can handle the absence appropriately.
+    return false;
+  }
+}
+
+/**
+ * Factory: create a new DB pool instance. Caller manages lifecycle.
+ * Useful for tests or DI where module-level singletons are undesirable.
+ */
+export function createDbPool(): Pool {
+  const databaseUrl = getRequiredEnvVar(
+    'TIMESCALE_DATABASE_URL',
+    'Team management requires a valid database connection'
+  );
+
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  pool.on('error', err => {
+    dbLogger.error({ error: err.message }, 'Database pool error');
+  });
+
+  dbLogger.debug('Database connection pool created (factory) for team management');
+  return pool;
+}
+
+/**
  * Get or create the singleton database connection pool for authentication (auth)
  * Reuses the same pool instance across all function calls to prevent connection exhaustion
  */
@@ -77,6 +187,30 @@ export function getAuthDbPool(): Pool {
 }
 
 /**
+ * Factory: create a new auth DB pool instance. Caller manages lifecycle.
+ */
+export function createAuthDbPool(): Pool {
+  const databaseUrl = getRequiredEnvVar(
+    'DATABASE_URL',
+    'Auth database connection required for user management'
+  );
+
+  const pool = new Pool({
+    connectionString: databaseUrl,
+    max: 20,
+    idleTimeoutMillis: 30000,
+    connectionTimeoutMillis: 5000,
+  });
+
+  pool.on('error', err => {
+    dbLogger.error({ error: err.message }, 'Auth database pool error');
+  });
+
+  dbLogger.debug('Auth database connection pool created (factory) for user management');
+  return pool;
+}
+
+/**
  * Gracefully shutdown the database pools
  * Should be called when the application is shutting down
  */
@@ -98,23 +232,30 @@ export async function shutdownTeamManagementPool(): Promise<void> {
 }
 
 /**
+ * Test / DI helper - allow overriding the module-level pools for tests or DI.
+ * Use sparingly and only from test setup code.
+ */
+export function setTeamManagementPools(pools: { dbPool?: Pool | null; authPool?: Pool | null }) {
+  if (Object.prototype.hasOwnProperty.call(pools, 'dbPool')) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    dbPool = pools.dbPool as any;
+  }
+  if (Object.prototype.hasOwnProperty.call(pools, 'authPool')) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    authDbPool = pools.authPool as any;
+  }
+}
+
+/**
  * Get teams for a user from the database
  */
 export async function getUserTeams(userId: string): Promise<Team[]> {
   const pool = getDbPool();
 
   try {
-    const authPool = getAuthDbPool();
-
-    // Verify user existence in the authentication database
-    const userResult = await authPool.query(
-      `
-          SELECT id FROM "user" WHERE id = $1
-        `,
-      [userId]
-    );
-    if (userResult.rowCount === 0) {
-      dbLogger.warn({ userId }, 'User does not exist in authentication database');
+    const exists = await verifyUserExists(userId);
+    if (!exists) {
+      dbLogger.warn({ userId }, 'User does not exist according to auth provider or auth DB');
       return [];
     }
     // NOTE: Do NOT call authPool.end() here. getAuthDbPool() returns a shared
@@ -182,15 +323,14 @@ export async function addUserToTeam(
   const pool = getDbPool();
 
   try {
-    // Skip user verification for now since Better Auth API methods have changed
-    // TODO: Update to use correct Better Auth v1.3.7 API methods
-    // const user = await auth.api.getUser({
-    //   body: { userId },
-    // });
-
-    // if (!user) {
-    //   throw new Error('User not found');
-    // }
+    // Verify user existence using Better Auth admin API when available and
+    // fall back to the auth DB. If verification fails, throw a clear error so
+    // callers can react appropriately.
+    const exists = await verifyUserExists(userId);
+    if (!exists) {
+      dbLogger.warn({ userId }, 'User verification failed; refusing to assign to team');
+      throw new Error('User not found');
+    }
 
     // Verify team exists
     const teamCheck = await pool.query('SELECT id FROM teams WHERE id = $1', [teamId]);

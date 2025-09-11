@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { authClient } from '../../../lib/auth-client';
 import { roleNames } from '../../../lib/auth-shared';
 import { apiLogger } from '../../../logging/logger';
-import { Pool } from 'pg';
+import { getAuthDbPool } from '../../../lib/teamManagement';
 
 interface RegisterRequest {
   email: string;
@@ -62,28 +62,32 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const userId = signUpResult.data.user.id;
     const assignedRole = role || roleNames.readonly;
 
-    // Set the user role using direct database update
+    // Set the user role using shared auth DB pool
     try {
-      const pool = new Pool({
-        connectionString: process.env.DATABASE_URL,
-      });
+      const pool = getAuthDbPool();
 
-      try {
-        // Update user role in the database
-        await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [assignedRole, userId]);
+      const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [
+        assignedRole,
+        userId,
+      ]);
 
-        apiLogger.info('User registered and role assigned successfully');
-
-        return res.status(201).json({
-          success: true,
-          message: 'User registered successfully',
-          userId,
+      if ((result?.rowCount ?? 0) === 0) {
+        apiLogger.error({ userId }, 'Role assignment affected no rows');
+        return res.status(500).json({
+          success: false,
+          message: 'User registered, but failed to assign role',
         });
-      } finally {
-        await pool.end();
       }
-    } catch {
-      apiLogger.error('Role assignment failed after user registration');
+
+      apiLogger.info('User registered and role assigned successfully');
+
+      return res.status(201).json({
+        success: true,
+        message: 'User registered successfully',
+        userId,
+      });
+    } catch (err) {
+      apiLogger.error({ err }, 'Role assignment failed after user registration');
 
       return res.status(500).json({
         success: false,

@@ -11,7 +11,7 @@
 
 import { getRequiredEnvVar } from '../src/environment/env';
 import { apiLogger as logger } from '../src/logging/logger';
-import { Pool } from 'pg';
+import { createAuthDbPool } from '../src/lib/teamManagement';
 import { config } from 'dotenv';
 
 // Load environment variables
@@ -105,21 +105,13 @@ async function createUserViaBetterAuth(user: TestUser): Promise<string | null> {
  */
 async function checkUserExists(email: string): Promise<{ id: string; email: string } | null> {
   try {
-    const databaseUrl = getRequiredEnvVar('DATABASE_URL');
-    const pool = new Pool({ connectionString: databaseUrl });
-
-    const result = await pool.query('SELECT id, email FROM "user" WHERE email = $1', [email]);
-
-    await pool.end();
-
-    if (result.rows.length > 0) {
-      return {
-        id: result.rows[0].id,
-        email: result.rows[0].email,
-      };
+    const pool = createAuthDbPool();
+    try {
+      const result = await pool.query('SELECT id, email FROM "user" WHERE email = $1', [email]);
+      return result.rows.length > 0 ? { id: result.rows[0].id, email: result.rows[0].email } : null;
+    } finally {
+      await pool.end();
     }
-
-    return null;
   } catch (error) {
     scriptLogger.error({ err: error, email }, 'Failed to check if user exists');
     return null;
@@ -134,18 +126,18 @@ async function assignUserRole(userId: string, role: string, _userEmail: string):
     scriptLogger.info(`Assigning role '${role}' to user: ${_userEmail} (${userId})`);
 
     // Get database connection string
-    const databaseUrl = getRequiredEnvVar('DATABASE_URL');
-    const pool = new Pool({ connectionString: databaseUrl });
-
-    // Update user role directly in the database
-    const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [role, userId]);
-
-    await pool.end();
-
-    if (result.rowCount === 1) {
-      scriptLogger.info(`Successfully assigned role '${role}' to user: ${_userEmail}`);
-    } else {
-      throw new Error(`User not found or role update failed. Rows affected: ${result.rowCount}`);
+    const pool = createAuthDbPool();
+    try {
+      const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [role, userId]);
+      if ((result?.rowCount ?? 0) === 1) {
+        scriptLogger.info(`Successfully assigned role '${role}' to user: ${_userEmail}`);
+      } else {
+        throw new Error(
+          `User not found or role update failed. Rows affected: ${result?.rowCount ?? 0}`
+        );
+      }
+    } finally {
+      await pool.end();
     }
   } catch (error) {
     scriptLogger.error(
