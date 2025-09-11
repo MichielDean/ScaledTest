@@ -88,16 +88,43 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
           await adminApi.deleteUser({ userId });
           apiLogger.info({ userId, reason }, 'Successfully rolled back user creation');
         } else {
-          apiLogger.warn(
-            { userId, reason },
-            'Cannot rollback user creation: Better Auth admin API deleteUser not available'
+          const warningMessage =
+            'Cannot rollback user creation: Better Auth admin API deleteUser not available';
+          apiLogger.warn({ userId, reason }, warningMessage);
+
+          // Alert administrators about manual cleanup requirement
+          apiLogger.error(
+            {
+              userId,
+              reason,
+              alertType: 'ADMIN_ATTENTION_REQUIRED',
+              action: 'MANUAL_USER_CLEANUP_NEEDED',
+              instructions: `User ${userId} was created but role assignment failed. Manual deletion required.`,
+            },
+            'ADMIN ALERT: Manual user cleanup required due to missing admin API'
           );
         }
       } catch (cleanupErr) {
+        // Critical error: automatic cleanup failed, requires immediate administrator attention
+        const criticalError = {
+          userId,
+          reason,
+          cleanupError: cleanupErr,
+          alertType: 'CRITICAL_CLEANUP_FAILURE',
+          action: 'IMMEDIATE_MANUAL_INTERVENTION_REQUIRED',
+          severity: 'HIGH',
+          instructions: `User ${userId} exists but role assignment failed and automatic cleanup failed. Immediate manual intervention required to prevent orphaned accounts.`,
+          timestamp: new Date().toISOString(),
+        };
+
         apiLogger.error(
-          { cleanupErr, userId, reason },
-          'Failed to rollback user creation - manual cleanup may be required'
+          criticalError,
+          'CRITICAL ALERT: Failed to rollback user creation - immediate manual cleanup required'
         );
+
+        // TODO: Implement cleanup retry queue or alerting system
+        // This could integrate with monitoring systems, send notifications, or queue for retry
+        // For now, we ensure the error is prominently logged with clear action items
       }
     };
 
