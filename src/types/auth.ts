@@ -72,3 +72,70 @@ export interface MethodRoleConfig {
   PATCH?: UserRole[];
   DELETE?: UserRole[];
 }
+
+/**
+ * Better Auth Admin API interfaces for user management
+ * These interfaces represent the admin API methods used for user operations
+ */
+
+// User data returned by Better Auth admin API
+export interface BetterAuthUser {
+  id?: string;
+  userId?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+}
+
+// Parameter shapes for getUser method - Better Auth may accept different formats
+export interface GetUserByUserId {
+  userId: string;
+}
+
+export interface GetUserById {
+  id: string;
+}
+
+export type GetUserParams = GetUserByUserId | GetUserById;
+
+// Session data from Better Auth admin API
+export interface BetterAuthSessionData {
+  user?: BetterAuthUser;
+  id?: string;
+  userId?: string;
+}
+
+export interface GetSessionParams {
+  headers?: Headers;
+}
+
+// Better Auth admin API interface for type safety - flexible to work with actual API
+export interface BetterAuthAdminApi {
+  getUser?: (...args: unknown[]) => Promise<BetterAuthUser | null>;
+  getSession?: (...args: unknown[]) => Promise<BetterAuthSessionData | null>;
+  updateUser?: (...args: unknown[]) => Promise<void>;
+  deleteUser?: (...args: unknown[]) => Promise<void>;
+  [key: string]: unknown; // Allow for additional properties
+}
+
+// Auth object with admin API - more flexible interface
+export interface AuthWithAdminApi {
+  api?: Record<string, unknown>; // Flexible to work with actual Better Auth API
+  [key: string]: unknown; // Allow for additional properties
+}
+
+/**
+ * Error types for Better Auth operations
+ */
+export interface BetterAuthError extends Error {
+  code?: string;
+  statusCode?: number;
+  details?: unknown;
+}
+
+export interface BetterAuthApiError {
+  message: string;
+  code?: string;
+  userId?: string;
+  operation?: string;
+}
