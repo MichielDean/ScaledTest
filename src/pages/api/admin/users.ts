@@ -2,6 +2,7 @@
 import { BetterAuthMethodHandler, createBetterAuthApi } from '../../../auth/betterAuthApi';
 import { apiLogger } from '../../../logging/logger';
 import { getAuthDbPool, verifyUserExists } from '../../../lib/teamManagement';
+import { AuthAdminApi, authAdminApi } from '../../../lib/auth';
 
 /**
  * Handle GET requests - retrieve all users with their roles
@@ -141,11 +142,10 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
 
     try {
       // Prefer using Better Auth admin API when available
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const authModule: any = (await import('../../../lib/auth')).auth;
-      if (authModule && authModule.api && typeof authModule.api.updateUser === 'function') {
+      const adminApi: AuthAdminApi | null = authAdminApi;
+      if (adminApi && typeof adminApi.updateUser === 'function') {
         // Attempt to use admin API to update role
-        await authModule.api.updateUser({ userId, role: newRole });
+        await adminApi.updateUser({ userId, role: newRole });
       } else {
         // Fallback: update role column in auth DB directly
         const pool = getAuthDbPool();

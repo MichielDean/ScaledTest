@@ -27,6 +27,21 @@ export const roles = {
 // Better Auth instance
 let authInstance: ReturnType<typeof betterAuth> | null = null;
 
+// Public surface for the admin API used by the application
+export interface AuthAdminApi {
+  // Update a user's attributes (role, name, email, etc.)
+  updateUser?: (opts: {
+    userId: string;
+    role?: string;
+    name?: string;
+    email?: string;
+  }) => Promise<void>;
+  // Delete a user by id
+  deleteUser?: (opts: { userId: string }) => Promise<void>;
+  // Additional admin helpers may be present depending on Better Auth plugins
+  [key: string]: unknown;
+}
+
 // Function to get or create the Better Auth instance
 function getAuth(): ReturnType<typeof betterAuth> {
   if (!authInstance) {
@@ -84,3 +99,8 @@ function getAuth(): ReturnType<typeof betterAuth> {
 
 // Export the auth instance
 export const auth = getAuth();
+
+// Export the admin API surface if present on the Better Auth instance
+// Use unknown-to-typed cast to avoid `any` lint rule while still capturing runtime shape
+export const authAdminApi: AuthAdminApi | null =
+  (auth as unknown as { api?: AuthAdminApi })?.api ?? null;

@@ -1,65 +1,173 @@
 ---
+
 description: 'Reviews and fixes GitHub Copilot feedback on pull requests iteratively until all issues are resolved.'
 tools:
-  [
-    'github',
-    'context7',
-    'runCommands',
-    'terminalSelection',
-    'terminalLastCommand',
-    'codebase',
-    'usages',
-    'editFiles',
-    'problems',
-    'search',
-    'searchResults',
-    'think',
-  ]
+[
+'github',
+'context7',
+'runCommands',
+'terminalSelection',
+'terminalLastCommand',
+'codebase',
+````chatmode
 ---
 
-# Pull Request Review Resolution
+description: 'Iteratively fetch and resolve one GitHub Copilot review comment at a time using the local helper script until no unresolved comments remain.'
+tools:
+[
+'github',
+'context7',
+'runCommands',
+'terminalSelection',
+'terminalLastCommand',
+'codebase',
+'usages',
+'editFiles',
+'problems',
+'search',
+'searchResults',
+'think',
+]
 
-## Objective
+    ---
 
-Systematically resolve all unresolved GitHub Copilot pull request review comments on the most recent maintainer-created pull request.
+    # Pull Request Review Resolution (one comment at a time)
 
-## Process
+    ## Objective
 
-1. **Find Target PR**: If the user doesn't provide a pull request, you must locate the most recent open pull request created by a maintainer (exclude dependabot/copilot PRs). If they do provide a pull request, then all subsequent steps should be limited to that pull request.
-2. **Review Comments**: Use the local helper script to fetch and summarise review threads. The script calls the GitHub API under the hood and prints structured output; prefer running it instead of issuing raw GraphQL queries.
+    Resolve all unresolved GitHub Copilot pull request review comments on a target PR by iterating: fetch the single most-recent visible Copilot comment, fix it locally, verify tests, push, then resolve the thread via the helper script. Repeat until none remain.
 
-Run the script from the repository root (PowerShell example):
+    ## Key principles (must follow)
 
-```powershell
-npx tsx scripts\pr-review-comments.ts <PR_NUMBER>
-```
+    - Always address every unresolved review comment. Do not skip or partially resolve comments.
+    - Work iteratively: get one visible comment, fix it, verify, push, resolve; then repeat.
+    - Avoid interactive confirmations during the loop unless absolutely necessary. The workflow is intended to be continuous and automated where possible.
+    - Make local code changes, run tests, and push before marking a thread resolved.
 
-The script currently filters out outdated threads and prints unresolved thread summaries (author, path, body). If you still want raw GraphQL access you can use `gh api graphql` directly, but the script is the supported workflow for this repo. 3. **Fix Issues**: Address each unresolved comment by modifying the appropriate code files in the local repository using standard file operations (read, write, update files locally) 4. **Test Changes**: Run `npm run test` using terminal commands and make sure all tests pass before continuing to the next step 5. **Commit Changes and Push**: Use git terminal commands to stage, commit, and push all fixes to the remote branch with descriptive commit messages 6. **Verify Resolution**: After pushing changes, verify that each comment is actually resolved by checking the PR again using the same GraphQL query 7. **Resolve Comments**: Only mark pull request review comments as resolved after verifying the fixes are complete 8. **Request Review**: Use `request_copilot_review` tool to get fresh Copilot feedback 9. **Iterate**: Wait 2-3 minutes for copilot to add a new review on the pull request, then repeat steps 1 through 9 until no unresolved pull request review comments remain
+    ## Process
 
-## Tool Usage
+    1. Find the target PR. If not supplied, locate the most recent open PR created by a maintainer (exclude dependabot/copilot PRs). If provided, operate only on that PR.
 
-- **git**: Local git operations using terminal commands (git add, git commit, git push)
-- **run_in_terminal**: Execute terminal commands for testing and git operations
-- **GitHub MCP**: GitHub interactions only (finding PRs, reading pull request review comments via GraphQL, resolving pull request review comments, requesting reviews)
-- **Context7 MCP**: Get current documentation and examples for implementing fixes
-- **File Operations**: Standard local file reading, writing, and updating (NOT through GitHub MCP)
+    2. Use the repository helper script to fetch the single most-recent visible Copilot review comment and optionally resolve it. The script already implements visibility heuristics (hide drafts, minimized, outdated) and conservative Copilot-only filtering. Prefer this script over raw GraphQL calls.
 
-## Implementation Guidelines
+    Run the script from the repository root (PowerShell example) to just fetch the selected comment:
 
-- **Local File Changes**: Always modify files locally using standard file operations, never through GitHub MCP
-- **Terminal Git Usage**: Use `run_in_terminal` with git commands like `git add .`, `git commit -m "message"`, `git push`
-- **Testing**: Use `run_in_terminal` to execute `npm run test` and verify all tests pass
-- **GitHub API**: Use `gh api graphql -f query='...'` for GraphQL queries to get review threads with resolution status
-- **Review Comments vs Regular Comments**: Use GraphQL to access pull request review threads with resolution status. Regular pull request comments (issue comments) don't have resolution status.
-- **Copilot User**: Filter for `author.login == "copilot-pull-request-reviewer"` (not "Copilot" or "github-copilot[bot]")
+    ```powershell
+    npx tsx scripts\\pr-review-comments.ts <PR_NUMBER>
+    ```
 
-## Success Criteria
+    Run the script to fetch *and* resolve the selected comment's thread:
 
-- All unresolved GitHub Copilot pull request review comments are identified and addressed
-- Code changes follow established project standards and coding instructions
-- All tests pass (`npm run test`) after implementing fixes
-- Changes are committed and successfully pushed to the PR branch using local git commands
-- Previously unresolved pull request review comments are verified as resolved after pushing fixes
-- Pull request review comments are properly marked as resolved in the GitHub interface
-- Fresh Copilot review shows no new unresolved issues
-- Process iterates until Copilot indicates the PR is ready for merge
+    ```powershell
+    `````chatmode
+    ---
+    description: 'Reviews and fixes GitHub Copilot feedback on pull requests iteratively until all issues are resolved.'
+    tools:
+      [
+        'github',
+        'context7',
+        'runCommands',
+        'terminalSelection',
+        'terminalLastCommand',
+        'codebase',
+      ]
+
+    ---
+
+    # Pull Request Review Resolution (one comment at a time)
+
+    ## Objective
+
+    Resolve all unresolved GitHub Copilot pull request review comments on a target PR by iterating: fetch the single most-recent visible Copilot comment, fix it locally, verify tests, push, then resolve the thread via the helper script. Repeat until none remain.
+
+    ## Key principles (must follow)
+
+    - Address every visible, unresolved Copilot comment. Do not skip or partially resolve comments.
+    - Work iteratively: fetch one visible comment, fix it locally, verify tests, push, then mark the thread resolved using the helper script.
+    - Prefer automation: avoid interactive confirmations during the loop unless tests fail or a human decision is required.
+    - Always run tests locally and push the fix before marking a thread resolved.
+
+    ## Script behavior notes (important)
+
+    - The repository helper script is `scripts/pr-review-comments.ts`.
+    - When re-requesting a reviewer the script prefers the PR's currently requested reviewer if the PR has exactly one requested reviewer and that reviewer looks like a Copilot identity.
+    - The script normalizes Copilot-like identities to the canonical app login `Copilot` when making REST reviewer requests. This avoids failures caused by suffix-variant logins (for example `copilot-pull-request-reviewer[bot]`).
+    - The script checks collaborator status and logs the result. Even if the collaborator check fails (404), the script will attempt the reviewer POST because GitHub can accept and normalize app/bot reviewer identities in practice. If the POST itself fails the script will set a non-zero exit code so CI or test harnesses can detect the failure.
+
+    ## Process
+
+    1. Find the target PR. If not supplied, operate on the specified target PR only.
+
+    2. Use the helper script to fetch the single most-recent visible Copilot review comment. The script implements visibility heuristics (hides drafts, minimized and outdated comments) and conservative Copilot-only filtering.
+
+    Run the script from the repository root (PowerShell example) to fetch the selected comment only:
+
+    ```powershell
+    npx tsx scripts\pr-review-comments.ts <PR_NUMBER>
+    ```
+
+    Run the script to fetch and resolve the selected comment's thread (resolve uses GraphQL):
+
+    ```powershell
+    # fetch and resolve the newest visible Copilot comment's thread
+    npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --resolve
+    ```
+
+    3. Fix the selected comment locally. Make changes in the repository working tree — do not edit files via the GitHub API.
+
+    4. Run the full test suite and build checks locally. Do not resolve the comment until tests pass.
+
+    ```powershell
+    npm run test
+    ```
+
+    5. Commit and push your fix to the PR branch using local git commands.
+
+    ```powershell
+    git add -A
+    git commit -m "Fix: address PR comment <short description>"
+    git push
+    ```
+
+    6. After push, run the helper script again with `--resolve`/`-r` to mark the selected thread resolved. If you need to re-request the Copilot reviewer (the script will prefer the PR's requested reviewer or normalize to `Copilot`), use the `--request-review`/`-R` flag:
+
+    ```powershell
+    # re-request the PR's single requested reviewer (or canonical Copilot identity)
+    npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --request-review
+    ```
+
+    7. Repeat steps 2–6 until the script reports there are no visible unresolved Copilot review threads for the PR.
+
+    Example loop (PowerShell) — resolve one comment at a time until none remain:
+
+    ```powershell
+    $pr = 43
+    while ($true) {
+      npx tsx scripts\pr-review-comments.ts $pr --resolve 2>&1 | Tee-Object -Variable out
+      $o = $out -join "`n"
+      Write-Output $o
+      if ($o -match 'No visible, unresolved review threads found' -or $o -match 'No visible comments found in candidate threads') { break }
+      if ($LASTEXITCODE -ne 0) { break }
+      Start-Sleep -Seconds 2
+    }
+    ```
+
+    ## Tool usage and cautions
+
+    - Use local git for changes. Avoid patching files over the API.
+    - The script will log collaborator checks and normalization steps — inspect logs if behavior seems unexpected.
+    - If the helper script's reviewer POST fails, it sets a non-zero exit code; investigate the logged error and do not mark the thread resolved until the issue is fixed.
+
+    ## Implementation guidelines
+
+    - Always edit files locally and run `npm run test` before resolving a thread.
+    - Use `--request-review` only when you explicitly want the script to re-request the Copilot reviewer for the PR.
+    - For debugging: set `DIAG=true` or `DIAG_FULL=true` in the environment before running the script to get additional diagnostic output.
+
+    ## Success criteria
+
+    - All visible, unresolved GitHub Copilot review comments are addressed and verified by tests.
+    - Fixes are committed and pushed to the PR branch.
+    - Threads for fixed comments are marked resolved via the helper script.
+
+    ````
