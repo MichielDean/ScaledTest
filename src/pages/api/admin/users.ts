@@ -15,7 +15,7 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const offset = (page - 1) * pageSize;
 
     // Get users from database with server-side pagination using shared pool
-    const pool = (await import('../../../lib/teamManagement')).getAuthDbPool();
+    const pool = getAuthDbPool();
 
     // Get total count
     const countResult = await pool.query('SELECT COUNT(*) FROM "user"');
