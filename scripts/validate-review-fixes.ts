@@ -58,7 +58,7 @@ async function validateResolvedComments() {
     const loginFormPath = join(process.cwd(), 'src/components/login-form.tsx');
     const loginFormContent = await fs.readFile(loginFormPath, 'utf-8');
 
-    if (loginFormContent.includes('width={400}') && loginFormContent.includes('height={400}')) {
+    if (loginFormContent.includes('width={384}') && loginFormContent.includes('height={384}')) {
       console.log('✅ Image component fix: Width and height attributes found');
     } else {
       console.log('⚠️  Image component fix: Width and height attributes not found');
