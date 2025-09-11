@@ -15,7 +15,7 @@ import { getRequiredEnvVar } from '../environment/env';
 
 // Singleton database pool instances
 let dbPool: Pool | null = null;
-let authDbPool: Pool | null = null;
+let authDbPool: Pool | null = null; // kept for backward-compat type, but no longer used for auth lookups
 
 /**
  * Get or create the singleton database connection pool for the main application (scaledtest)
@@ -138,21 +138,13 @@ export async function verifyUserExists(userId: string): Promise<boolean> {
     }
   }
 
-  // Fallback: query the auth database directly
-  try {
-    const pool = getAuthDbPool();
-    const result = await pool.query('SELECT id FROM "user" WHERE id = $1', [userId]);
-    // rowCount can be undefined in some client types; guard defensively
-    const count = Number(
-      result?.rowCount ?? (Array.isArray(result?.rows) ? result.rows.length : 0)
-    );
-    return count > 0;
-  } catch (err) {
-    dbLogger.warn({ err, userId }, 'Auth DB lookup failed while verifying user existence');
-    // If even the DB lookup fails, conservatively return false so callers
-    // can handle the absence appropriately.
-    return false;
-  }
+  // Do NOT fall back to direct auth DB queries. If the admin API is not
+  // available or did not confirm the user, treat the user as non-existent.
+  dbLogger.debug(
+    { userId },
+    'Auth admin API not available or user not found; not falling back to auth DB'
+  );
+  return false;
 }
 
 /**
@@ -184,56 +176,15 @@ export function createDbPool(): Pool {
  * Get or create the singleton database connection pool for authentication (auth)
  * Reuses the same pool instance across all function calls to prevent connection exhaustion
  */
-export function getAuthDbPool(): Pool {
-  if (!authDbPool) {
-    // Auth database contains Better Auth tables including users
-    const databaseUrl = getRequiredEnvVar(
-      'DATABASE_URL',
-      'Auth database connection required for user management'
-    );
-
-    authDbPool = new Pool({
-      connectionString: databaseUrl,
-      max: 20, // Maximum number of clients in the pool
-      idleTimeoutMillis: 30000, // Close clients after 30 seconds of inactivity
-      connectionTimeoutMillis: 5000, // Return an error after 5 seconds if connection could not be established
-    });
-
-    // Handle pool errors
-    authDbPool.on('error', err => {
-      dbLogger.error({ error: err.message }, 'Auth database pool error');
-    });
-
-    // Log when pool is created
-    dbLogger.debug('Auth database connection pool created for user management');
-  }
-
-  return authDbPool;
-}
+// NOTE: Direct access to the auth database has been removed. All auth
+// user lookups and modifications must go through the Better Auth admin API.
+// The previous `getAuthDbPool()` helper has been intentionally removed to
+// prevent accidental DB fallbacks.
 
 /**
  * Factory: create a new auth DB pool instance. Caller manages lifecycle.
  */
-export function createAuthDbPool(): Pool {
-  const databaseUrl = getRequiredEnvVar(
-    'DATABASE_URL',
-    'Auth database connection required for user management'
-  );
-
-  const pool = new Pool({
-    connectionString: databaseUrl,
-    max: 20,
-    idleTimeoutMillis: 30000,
-    connectionTimeoutMillis: 5000,
-  });
-
-  pool.on('error', err => {
-    dbLogger.error({ error: err.message }, 'Auth database pool error');
-  });
-
-  dbLogger.debug('Auth database connection pool created (factory) for user management');
-  return pool;
-}
+// createAuthDbPool removed for the same reason as getAuthDbPool.
 
 /**
  * Gracefully shutdown the database pools
@@ -260,14 +211,10 @@ export async function shutdownTeamManagementPool(): Promise<void> {
  * Test / DI helper - allow overriding the module-level pools for tests or DI.
  * Use sparingly and only from test setup code.
  */
-export function setTeamManagementPools(pools: { dbPool?: Pool | null; authPool?: Pool | null }) {
+export function setTeamManagementPools(pools: { dbPool?: Pool | null }) {
   if (Object.prototype.hasOwnProperty.call(pools, 'dbPool')) {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     dbPool = pools.dbPool as any;
-  }
-  if (Object.prototype.hasOwnProperty.call(pools, 'authPool')) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    authDbPool = pools.authPool as any;
   }
 }
 

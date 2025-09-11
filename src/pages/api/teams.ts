@@ -1,5 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { auth } from '@/lib/auth';
+import { auth, authAdminApi } from '@/lib/auth';
 import { dbLogger as authLogger } from '@/logging/logger';
 import { logError } from '../../logging/logger';
 import { validateUuids } from '../../lib/validation';
@@ -9,7 +9,6 @@ import {
   getUserTeams,
   getAllTeams,
   createTeam,
-  getAuthDbPool,
 } from '../../lib/teamManagement';
 import {
   AssignTeamRequest,
@@ -81,13 +80,6 @@ interface ErrorResponse {
   error: string;
 }
 
-interface BetterAuthUser {
-  id: string;
-  email: string;
-  name?: string;
-  role?: string;
-}
-
 interface UserWithRole {
   id: string;
   username: string;
@@ -120,48 +112,77 @@ async function getAllUsersWithRoles(
     throw new Error('Unauthorized: insufficient permissions to view user list');
   }
 
-  const pool = getAuthDbPool(); // Use auth database pool to access user table
+  // Use Better Auth admin API for listing users with roles
+  type ListUsersResponse = {
+    data?: {
+      users: Array<{ id: string; email: string; name?: string; role?: string }>;
+      total: number;
+    };
+    users?: Array<{ id: string; email: string; name?: string; role?: string }>;
+    total?: number;
+  };
 
-  try {
-    let rows: BetterAuthUser[] = [];
+  const maybeAdmin = authAdminApi as
+    | {
+        listUsers?: (opts?: {
+          query?: { limit?: number; offset?: number };
+        }) => Promise<ListUsersResponse>;
+        admin?: {
+          listUsers?: (opts?: {
+            query?: { limit?: number; offset?: number };
+          }) => Promise<ListUsersResponse>;
+        };
+      }
+    | null
+    | undefined;
 
-    // Owners and admins can see all users
-    if (currentUser.role === 'owner' || currentUser.role === 'admin') {
-      const result = await pool.query(
-        'SELECT id, email, name, role FROM "user" ORDER BY email LIMIT $1 OFFSET $2',
-        [limit, offset]
-      );
-      rows = result.rows;
-    } else if (currentUser.role === 'maintainer') {
-      // Maintainers can only see users who share teams with them
-      const userTeams = await getUserTeams(currentUser.id);
-      const teamIds = userTeams.map(t => t.id);
+  const listFn:
+    | ((opts?: { query?: { limit?: number; offset?: number } }) => Promise<ListUsersResponse>)
+    | undefined =
+    typeof maybeAdmin?.listUsers === 'function'
+      ? maybeAdmin.listUsers.bind(maybeAdmin)
+      : typeof maybeAdmin?.admin?.listUsers === 'function'
+        ? maybeAdmin.admin.listUsers.bind(maybeAdmin.admin)
+        : undefined;
 
-      if (teamIds.length === 0) return [];
+  if (!listFn) {
+    authLogger.warn('Auth admin API listUsers not available');
+    throw new Error('User listing not supported by current auth provider');
+  }
 
-      const result = await pool.query(
-        `
-        SELECT DISTINCT u.id, u.email, u.name, u.role
-        FROM "user" u
-        INNER JOIN user_teams ut ON u.id = ut.user_id
-        WHERE ut.team_id = ANY($1)
-        ORDER BY u.email
-        LIMIT $2 OFFSET $3
-      `,
-        [teamIds, limit, offset]
-      );
-      rows = result.rows;
-    } else {
-      // Other roles cannot list users
-      authLogger.warn(
-        { userId: currentUser.id, role: currentUser.role },
-        'User attempted to list users without permission'
-      );
-      throw new Error('Unauthorized: insufficient permissions to view user list');
-    }
+  // Helper to call listFn with different argument shapes that different
+  // Better Auth client versions may expect. Return the first response
+  // that contains users.
+  async function callListUsers(limitArg: number, offsetArg: number) {
+    const tryResp = async (arg: unknown) => {
+      try {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const r = await (listFn as any)(arg);
+        return r as ListUsersResponse | undefined;
+      } catch {
+        return undefined;
+      }
+    };
 
-    // Map database users to our expected format
-    return rows.map((user: BetterAuthUser) => ({
+    // Try nested `query` shape first
+    let resp = await tryResp({ query: { limit: limitArg, offset: offsetArg } });
+    if ((resp?.data?.users?.length ?? resp?.users?.length ?? 0) > 0) return resp;
+
+    // Try flat { limit, offset }
+    resp = await tryResp({ limit: limitArg, offset: offsetArg });
+    if ((resp?.data?.users?.length ?? resp?.users?.length ?? 0) > 0) return resp;
+
+    // Try no-arg call
+    resp = await tryResp(undefined);
+    return resp;
+  }
+
+  // Owners and admins can see all users; maintainers see scoped users
+  if (currentUser.role === 'owner' || currentUser.role === 'admin') {
+    const resp = (await callListUsers(limit, offset)) ?? { users: [], total: 0 };
+    const rows: Array<{ id: string; email: string; name?: string; role?: string }> =
+      resp?.data?.users ?? resp?.users ?? [];
+    return rows.map((user: { id: string; email: string; name?: string; role?: string }) => ({
       id: user.id,
       username: user.name || user.email || 'Unknown',
       email: user.email,
@@ -170,10 +191,49 @@ async function getAllUsersWithRoles(
       roles: user.role ? [user.role] : [],
       isMaintainer: user.role === 'maintainer' || user.role === 'owner',
     }));
-  } catch (error) {
-    authLogger.error({ error }, 'Failed to fetch users with roles');
-    throw error;
   }
+
+  if (currentUser.role === 'maintainer') {
+    const userTeams = await getUserTeams(currentUser.id);
+    const teamIds = userTeams.map(t => t.id);
+
+    if (teamIds.length === 0) return [];
+
+    // No direct DB query to join user_teams available via auth admin API;
+    // We'll request a paginated list and filter client-side by team membership
+    const resp = await listFn({ query: { limit: 1000, offset: 0 } });
+    const allUsers = resp?.data?.users ?? resp?.users ?? [];
+
+    // Fetch teams for each user and filter to those that share teams
+    const filtered: Array<{ id: string; email: string; name?: string; role?: string }> = [];
+    for (const user of allUsers) {
+      try {
+        const userTeamsForUser = await getUserTeams(user.id);
+        if (userTeamsForUser.some(ut => teamIds.includes(ut.id))) {
+          filtered.push(user);
+        }
+      } catch {
+        // ignore per-user team fetch failures
+      }
+    }
+
+    const paged = filtered.slice(offset, offset + limit);
+    return paged.map((user: { id: string; email: string; name?: string; role?: string }) => ({
+      id: user.id,
+      username: user.name || user.email || 'Unknown',
+      email: user.email,
+      firstName: user.name?.split(' ')[0] || '',
+      lastName: user.name?.split(' ').slice(1).join(' ') || '',
+      roles: user.role ? [user.role] : [],
+      isMaintainer: user.role === 'maintainer' || user.role === 'owner',
+    }));
+  }
+
+  authLogger.warn(
+    { userId: currentUser.id, role: currentUser.role },
+    'User attempted to list users without permission'
+  );
+  throw new Error('Unauthorized: insufficient permissions to view user list');
 }
 
 /**

@@ -1,8 +1,23 @@
 // Admin API for user management
 import { BetterAuthMethodHandler, createBetterAuthApi } from '../../../auth/betterAuthApi';
 import { apiLogger } from '../../../logging/logger';
-import { getAuthDbPool, verifyUserExists } from '../../../lib/teamManagement';
+import { verifyUserExists } from '../../../lib/teamManagement';
 import { AuthAdminApi, authAdminApi } from '../../../lib/auth';
+
+interface ListUser {
+  id: string;
+  email: string;
+  name?: string;
+  role?: string;
+  emailVerified?: boolean;
+  createdAt?: string;
+  updatedAt?: string;
+}
+
+interface ListUsersResponse {
+  users: ListUser[];
+  total: number;
+}
 
 /**
  * Handle GET requests - retrieve all users with their roles
@@ -14,20 +29,33 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const pageSize = Math.min(parseInt(req.query.size as string) || 100, 1000); // Max 1000 users per page
     const offset = (page - 1) * pageSize;
 
-    // Get users from database with server-side pagination using shared pool
-    const pool = getAuthDbPool();
+    // Prefer using Better Auth admin API for listing users. Support both
+    // shapes: `api.listUsers` and `api.admin.listUsers` depending on
+    // Better Auth client versions.
+    type ListUsersFn = (opts?: {
+      query?: { limit?: number; offset?: number };
+    }) => Promise<ListUsersResponse>;
 
-    // Get total count
-    const countResult = await pool.query('SELECT COUNT(*) FROM "user"');
-    const total = parseInt(countResult.rows[0].count, 10);
+    const maybeAdmin = authAdminApi as unknown as {
+      listUsers?: ListUsersFn;
+      admin?: { listUsers?: ListUsersFn };
+    } | null;
 
-    // Get paginated users
-    const usersResult = await pool.query(
-      'SELECT id, email, name, "emailVerified", "createdAt", "updatedAt", role FROM "user" ORDER BY "createdAt" DESC LIMIT $1 OFFSET $2',
-      [pageSize, offset]
-    );
+    const listFn: ListUsersFn | undefined =
+      typeof maybeAdmin?.listUsers === 'function'
+        ? maybeAdmin.listUsers.bind(maybeAdmin)
+        : typeof maybeAdmin?.admin?.listUsers === 'function'
+          ? maybeAdmin.admin.listUsers.bind(maybeAdmin.admin)
+          : undefined;
 
-    const paginatedUsers = usersResult.rows;
+    if (!listFn) {
+      apiLogger.warn('Auth admin API listUsers not available');
+      return res.status(501).json({ error: 'User listing not supported by current auth provider' });
+    }
+
+    const listResp = await listFn({ query: { limit: pageSize, offset } });
+    const paginatedUsers = listResp?.users ?? [];
+    const total = listResp?.total ?? 0;
 
     reqLogger.info(
       {
@@ -93,19 +121,23 @@ const handleDelete: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    // Use shared auth DB pool and centralized verification helper
-    const pool = getAuthDbPool();
+    // Centralized verification helper will use auth admin API only
 
-    // Verify user exists via auth API or DB
-    const exists = await verifyUserExists(userId);
-    if (!exists) {
-      return res.status(404).json({ error: 'User not found' });
+    // Prefer using Better Auth admin API for deletion
+    const adminApiDel: AuthAdminApi | null = authAdminApi;
+    if (!adminApiDel || typeof adminApiDel.deleteUser !== 'function') {
+      apiLogger.warn('Auth admin API deleteUser not available');
+      return res
+        .status(501)
+        .json({ error: 'User deletion not supported by current auth provider' });
     }
 
-    // Delete user from database
-    await pool.query('DELETE FROM "user" WHERE id = $1', [userId]);
+    // Verify user exists via admin API
+    const exists = await verifyUserExists(userId);
+    if (!exists) return res.status(404).json({ error: 'User not found' });
 
-    reqLogger.info({ userId }, 'User deleted successfully');
+    await adminApiDel.deleteUser({ userId });
+    reqLogger.info({ userId }, 'User deleted successfully via auth API');
 
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
@@ -141,19 +173,16 @@ const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const newRole = grantMaintainer ? 'maintainer' : 'readonly';
 
     try {
-      // Prefer using Better Auth admin API when available
+      // Use Better Auth admin API for role updates
       const adminApi: AuthAdminApi | null = authAdminApi;
-      if (adminApi && typeof adminApi.updateUser === 'function') {
-        // Attempt to use admin API to update role
-        await adminApi.updateUser({ userId, role: newRole });
-      } else {
-        // Fallback: update role column in auth DB directly
-        const pool = getAuthDbPool();
-        await pool.query('UPDATE "user" SET role = $1, "updatedAt" = now() WHERE id = $2', [
-          newRole,
-          userId,
-        ]);
+      if (!adminApi || typeof adminApi.updateUser !== 'function') {
+        apiLogger.warn('Auth admin API updateUser not available');
+        return res
+          .status(501)
+          .json({ error: 'Role updates not supported by current auth provider' });
       }
+
+      await adminApi.updateUser({ userId, role: newRole });
 
       const message = grantMaintainer
         ? 'Successfully granted maintainer role'

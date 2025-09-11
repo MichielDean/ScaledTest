@@ -2,7 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { authClient } from '../../../lib/auth-client';
 import { roleNames } from '../../../lib/auth-shared';
 import { apiLogger } from '../../../logging/logger';
-import { getAuthDbPool } from '../../../lib/teamManagement';
+import { authAdminApi } from '../../../lib/auth';
 
 interface RegisterRequest {
   email: string;
@@ -80,24 +80,53 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     const userId = signUpResult.data.user.id;
     const assignedRole = role || roleNames.readonly;
 
-    // Set the user role using shared auth DB pool
+    // Helper function to perform atomic cleanup of created user
+    const rollbackUserCreation = async (reason: string): Promise<void> => {
+      try {
+        const adminApi = authAdminApi;
+        if (adminApi && typeof adminApi.deleteUser === 'function') {
+          await adminApi.deleteUser({ userId });
+          apiLogger.info({ userId, reason }, 'Successfully rolled back user creation');
+        } else {
+          apiLogger.warn(
+            { userId, reason },
+            'Cannot rollback user creation: Better Auth admin API deleteUser not available'
+          );
+        }
+      } catch (cleanupErr) {
+        apiLogger.error(
+          { cleanupErr, userId, reason },
+          'Failed to rollback user creation - manual cleanup may be required'
+        );
+      }
+    };
+
+    // Attempt to set the user role. MUST use the Better Auth admin API when
+    // available — do NOT modify the auth DB directly from the application code.
+    // This implements a transaction-like pattern with automatic rollback on failure.
     try {
-      const pool = getAuthDbPool();
+      const adminApi = authAdminApi;
 
-      const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [
-        assignedRole,
-        userId,
-      ]);
+      if (!adminApi || typeof adminApi.updateUser !== 'function') {
+        // We must not touch the auth DB directly. Fail with a clear error and rollback.
+        apiLogger.error(
+          { userId },
+          'Better Auth admin API is not available; cannot assign role without direct DB access'
+        );
 
-      if ((result?.rowCount ?? 0) === 0) {
-        apiLogger.error({ userId }, 'Role assignment affected no rows');
+        await rollbackUserCreation('admin API unavailable for role assignment');
+
         return res.status(500).json({
           success: false,
-          message: 'User registered, but failed to assign role',
+          message:
+            'Registration failed: role assignment is not possible because the Better Auth admin API is not available. Please contact an administrator.',
         });
       }
 
-      apiLogger.info('User registered and role assigned successfully');
+      // Atomic operation: assign role to the created user
+      await adminApi.updateUser({ userId, role: assignedRole });
+
+      apiLogger.info({ userId, assignedRole }, 'User registered and role assigned successfully');
 
       return res.status(201).json({
         success: true,
@@ -105,11 +134,17 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
         userId,
       });
     } catch (err) {
-      apiLogger.error({ err }, 'Role assignment failed after user registration');
+      apiLogger.error(
+        { err, userId, assignedRole },
+        'Role assignment failed after user registration'
+      );
+
+      // Automatic rollback: remove the created user to maintain consistency
+      await rollbackUserCreation('role assignment failure');
 
       return res.status(500).json({
         success: false,
-        message: 'User registered, but failed to assign role',
+        message: 'Registration failed: user could not be created with the specified role',
       });
     }
   } catch (err) {
