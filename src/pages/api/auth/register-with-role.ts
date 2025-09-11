@@ -61,10 +61,19 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     });
 
     if (!signUpResult.data?.user) {
-      apiLogger.error('User creation failed');
+      // Try to extract the most informative error message possible
+      let errorMessage = 'Failed to create user';
+      if (signUpResult.error) {
+        if (signUpResult.error.message) {
+          errorMessage = signUpResult.error.message;
+        } else {
+          errorMessage = JSON.stringify(signUpResult.error);
+        }
+      }
+      apiLogger.error({ error: signUpResult.error }, 'User creation failed');
       return res.status(400).json({
         success: false,
-        message: signUpResult.error?.message || 'Failed to create user',
+        message: errorMessage,
       });
     }
 
