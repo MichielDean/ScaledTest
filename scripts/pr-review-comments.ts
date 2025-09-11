@@ -362,7 +362,17 @@ function isCopilotReviewer(login?: string | null): boolean {
   if (!login) return false;
   const normalized = String(login).toLowerCase().trim();
   if (detectedCopilotLogin) {
-    return normalized === String(detectedCopilotLogin).toLowerCase().trim();
+    const detectedNorm = String(detectedCopilotLogin).toLowerCase().trim();
+    // Handle variants: exact match OR bot vs non-bot versions
+    if (normalized === detectedNorm) return true;
+    // If detected has [bot] suffix but login doesn't, or vice versa
+    if (
+      (detectedNorm.endsWith('[bot]') && normalized === detectedNorm.replace('[bot]', '')) ||
+      (normalized.endsWith('[bot]') && detectedNorm === normalized.replace('[bot]', ''))
+    ) {
+      return true;
+    }
+    return false;
   }
 
   // Fallbacks: accept common Copilot actor variants when detection isn't available.
@@ -400,6 +410,11 @@ export async function main(): Promise<void> {
   const requestFlagIndex = argv.findIndex(a => a === '--request-review' || a === '-R');
   const shouldRequestReview = requestFlagIndex !== -1;
   if (shouldRequestReview) argv.splice(requestFlagIndex, 1);
+
+  // Support optional flag: --count or -C to return just the count of unresolved comments (quiet mode)
+  const countFlagIndex = argv.findIndex(a => a === '--count' || a === '-C');
+  const shouldReturnCount = countFlagIndex !== -1;
+  if (shouldReturnCount) argv.splice(countFlagIndex, 1);
 
   // Support optional flag: --poll or -P to wait for Copilot to post a new review comment
   const pollFlagIndex = argv.findIndex(a => a === '--poll' || a === '-P');
@@ -451,10 +466,6 @@ export async function main(): Promise<void> {
     const hideOutdated = true;
 
     // Use top-level helpers: isThreadResolved, getVisibleComments, isCopilotReviewer
-    function isCopilotReviewer(login?: string | null): boolean {
-      if (!login) return false;
-      return String(login).toLowerCase().trim() === 'copilot-pull-request-reviewer';
-    }
 
     // Select only unresolved threads where all visible comments are authored by Copilot reviewer
     const candidateThreads = threads.filter(t => {
@@ -503,7 +514,16 @@ export async function main(): Promise<void> {
     }
 
     if (candidateThreads.length === 0) {
+      if (shouldReturnCount) {
+        console.log('0');
+        return;
+      }
       logger.info({ prNumber }, 'No visible, unresolved review threads found');
+      return;
+    }
+
+    if (shouldReturnCount) {
+      console.log(candidateThreads.length.toString());
       return;
     }
 
