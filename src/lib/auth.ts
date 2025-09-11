@@ -5,6 +5,7 @@ import { createAccessControl } from 'better-auth/plugins/access';
 import { statement } from './auth-shared';
 import { getRequiredEnvVar } from '../environment/env';
 import { dbLogger as logger } from '../logging/logger';
+import { randomBytes } from 'crypto';
 
 // Create access controller
 const ac = createAccessControl(statement);
@@ -86,7 +87,7 @@ function getAuth(): ReturnType<typeof betterAuth> {
       },
       advanced: {
         database: {
-          generateId: () => crypto.randomUUID(), // Use UUID v4
+          generateId: () => generateId(),
         },
       },
     });
@@ -95,6 +96,40 @@ function getAuth(): ReturnType<typeof betterAuth> {
   }
 
   return authInstance;
+}
+
+/**
+ * Generate a UUID v4 string. Prefer built-in crypto.randomUUID when available,
+ * otherwise fall back to a small randomBytes-based implementation.
+ */
+function generateId(): string {
+  try {
+    const g = globalThis as unknown as { crypto?: { randomUUID?: () => string } };
+    if (typeof g.crypto?.randomUUID === 'function') {
+      return g.crypto!.randomUUID!();
+    }
+  } catch {
+    // ignore and fallback
+  }
+
+  // Fallback: generate UUID v4 from random bytes
+  const bytes = randomBytes(16);
+  // Per RFC4122 v4: set version and variant bits
+  bytes[6] = (bytes[6] & 0x0f) | 0x40;
+  bytes[8] = (bytes[8] & 0x3f) | 0x80;
+
+  const hex = bytes.toString('hex');
+  return (
+    hex.substring(0, 8) +
+    '-' +
+    hex.substring(8, 12) +
+    '-' +
+    hex.substring(12, 16) +
+    '-' +
+    hex.substring(16, 20) +
+    '-' +
+    hex.substring(20)
+  );
 }
 
 // Export the auth instance
