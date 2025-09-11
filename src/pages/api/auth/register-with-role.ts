@@ -35,8 +35,9 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
 
-    // Validate role if provided
-    if (role && !Object.values(roleNames).includes(role as keyof typeof roleNames)) {
+    // Validate role if provided - check against the allowed string values
+    const allowedRoles = Object.values(roleNames) as string[];
+    if (role && !allowedRoles.includes(role)) {
       apiLogger.warn('Invalid role provided for registration');
       return res.status(400).json({
         success: false,
