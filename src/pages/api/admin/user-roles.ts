@@ -147,13 +147,21 @@ async function handleGetUserRole(req: NextApiRequest, res: NextApiResponse) {
       });
     }
 
+    // Type guard for BetterAuthApi
+    interface BetterAuthApi {
+      getUser: (params: { body: { userId: string } }) => Promise<unknown>;
+    }
+    function isBetterAuthApi(obj: unknown): obj is BetterAuthApi {
+      return (
+        typeof obj === 'object' &&
+        obj !== null &&
+        typeof (obj as { getUser?: unknown }).getUser === 'function'
+      );
+    }
+
     try {
-      if (
-        auth?.api &&
-        typeof (auth.api as unknown as Record<string, unknown>).getUser === 'function'
-      ) {
-        // @ts-expect-error - runtime check above ensures method presence
-        const user = await (auth.api as unknown as Record<string, unknown>).getUser({
+      if (auth?.api && isBetterAuthApi(auth.api)) {
+        const user = await auth.api.getUser({
           body: { userId },
         });
         if (!user) {
