@@ -94,9 +94,20 @@ export async function closeTestLogger(): Promise<void> {
       }
     }
   } catch (error) {
-    // Silently handle any errors during cleanup - use stderr to avoid no-console rule
-    process.stderr.write(`Error closing test logger: ${error}
-`);
+    // Silently handle any errors during cleanup - serialize error details and use stderr
+    let errorDetails: string;
+    if (error instanceof Error) {
+      errorDetails = `${error.message}\n${error.stack ?? ''}`;
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        errorDetails = JSON.stringify(error);
+      } catch {
+        errorDetails = String(error);
+      }
+    } else {
+      errorDetails = String(error);
+    }
+    process.stderr.write(`Error closing test logger: ${errorDetails}\n`);
   } finally {
     // Reset the singleton and cached child loggers
     loggerInstance = null;
