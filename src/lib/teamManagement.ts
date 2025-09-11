@@ -49,6 +49,32 @@ export function getDbPool(): Pool {
 }
 
 /**
+ * Type guard to check if auth object has admin API methods available
+ */
+interface AuthWithApi {
+  api?: {
+    getUser?: (...args: unknown[]) => unknown;
+    getSession?: (...args: unknown[]) => unknown;
+  };
+}
+
+/**
+ * Type guard to check if the auth object has admin API methods
+ */
+function hasAuthApi(obj: unknown): obj is AuthWithApi {
+  if (typeof obj !== 'object' || obj === null) {
+    return false;
+  }
+
+  const authObj = obj as Record<string, unknown>;
+  if (!('api' in authObj) || typeof authObj.api !== 'object' || authObj.api === null) {
+    return false;
+  }
+
+  return true;
+}
+
+/**
  * Feature-detect whether the Better Auth admin API surface is available.
  * We check for the presence of auth.api and a likely admin method. This
  * keeps the module resilient while the project migrates to the latest
@@ -56,19 +82,18 @@ export function getDbPool(): Pool {
  */
 function isAuthApiAvailable(): boolean {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const a = auth as any;
+    if (!hasAuthApi(auth)) {
+      return false;
+    }
+
     return !!(
-      a &&
-      a.api &&
-      (typeof a.api.getUser === 'function' || typeof a.api.getSession === 'function')
+      auth.api &&
+      (typeof auth.api.getUser === 'function' || typeof auth.api.getSession === 'function')
     );
   } catch {
     return false;
   }
-}
-
-/**
+} /**
  * Verify a user exists using Better Auth admin API when available, otherwise
  * fall back to querying the auth database directly.
  */
