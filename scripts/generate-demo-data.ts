@@ -757,8 +757,12 @@ function listScenarios(): void {
   );
 }
 
-// Handle command line execution
-if (require.main === module) {
+// Handle command line execution (ES module-compatible)
+// Compare the script's URL to the executed script path when running via `node`.
+const executedScriptPath = process.argv && process.argv.length > 1 ? process.argv[1] : undefined;
+const thisModulePath =
+  typeof import.meta !== 'undefined' ? new URL(import.meta.url).pathname : undefined;
+if (executedScriptPath && thisModulePath && executedScriptPath.endsWith(thisModulePath)) {
   generateAndSendDemoData().catch(error => {
     demoLogger.error('Unhandled error:', { error });
     process.exit(1);
