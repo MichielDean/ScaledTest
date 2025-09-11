@@ -1,5 +1,4 @@
 /* Temporary minimal CSS module for ModernVisualizationPlayground */
-/* TODO: Migrate to Tailwind CSS classes */
 
 .draggableField {
   @apply p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-move;
