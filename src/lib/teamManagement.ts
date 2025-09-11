@@ -3,14 +3,9 @@
 // so this module remains robust in environments where the admin API might
 // not be wired or available (for example, during some tests).
 import { auth } from './auth';
+import { createAuthAdapter } from './auth-adapter';
 import { Team, TeamWithMemberCount } from '../types/team';
-import {
-  AuthWithAdminApi,
-  BetterAuthUser,
-  BetterAuthApiError,
-  BetterAuthSessionData,
-  GetUserParams,
-} from '../types/auth';
+import { AuthWithAdminApi } from '../types/auth';
 import { Pool } from 'pg';
 import { dbLogger } from '../logging/logger';
 import { getRequiredEnvVar } from '../environment/env';
@@ -89,24 +84,6 @@ function isBetterAuthAdminApi(api: unknown): api is Record<string, unknown> {
 }
 
 /**
- * Create a properly typed Better Auth error for consistent error handling
- */
-function createBetterAuthError(
-  message: string,
-  originalError?: unknown,
-  context?: Partial<BetterAuthApiError>
-): BetterAuthApiError {
-  const errorMessage =
-    originalError instanceof Error ? originalError.message : String(originalError);
-  return {
-    message: `${message}: ${errorMessage}`,
-    code: context?.code || 'BETTER_AUTH_ERROR',
-    userId: context?.userId,
-    operation: context?.operation,
-  };
-}
-
-/**
  * Feature-detect whether the Better Auth admin API surface is available.
  * We check for the presence of auth.api and a likely admin method. This
  * keeps the module resilient while the project migrates to the latest
@@ -126,7 +103,7 @@ function isAuthApiAvailable(): boolean {
   }
 } /**
  * Verify a user exists using Better Auth admin API when available.
- * This function eliminates 'any' casting and implements comprehensive error handling.
+ * Uses an adapter pattern to provide a stable interface over Better Auth API variations.
  */
 export async function verifyUserExists(userId: string): Promise<boolean> {
   // Prefer using Better Auth admin API if present
@@ -144,69 +121,18 @@ export async function verifyUserExists(userId: string): Promise<boolean> {
         return false;
       }
 
-      // Primary method: try to get user directly using available getUser methods
-      if (typeof api.getUser === 'function') {
-        // Try both parameter shapes that Better Auth might accept
-        const getUserParams: GetUserParams[] = [{ userId }, { id: userId }];
+      // Use the adapter pattern to handle API version differences cleanly
+      const authAdapter = createAuthAdapter(authWithApi);
+      const userExists = await authAdapter.userExists(userId);
 
-        for (const params of getUserParams) {
-          try {
-            // Use safe function call with unknown return type
-            const user = await (
-              api.getUser as (params: GetUserParams) => Promise<BetterAuthUser | null>
-            )(params);
-            if (user && (user.id || user.userId)) {
-              dbLogger.debug(
-                { userId, userFound: true },
-                'User found via Better Auth admin API getUser'
-              );
-              return true;
-            }
-          } catch (err) {
-            const authError = createBetterAuthError('Better Auth getUser method failed', err, {
-              userId,
-              operation: 'getUser',
-            });
-            dbLogger.debug({ authError, params }, 'Better Auth getUser attempt failed');
-            // Continue to try next parameter shape
-          }
-        }
+      if (userExists) {
+        dbLogger.debug({ userId, userFound: true }, 'User found via Better Auth admin API adapter');
+        return true;
       }
 
-      // Fallback method: try session lookup if getUser didn't work
-      if (typeof api.getSession === 'function') {
-        try {
-          // Use safe function call for session lookup
-          const session = await (
-            api.getSession as (params: {
-              headers?: Headers;
-            }) => Promise<BetterAuthSessionData | null>
-          )({
-            headers: new Headers(),
-          });
-          if (session?.user && session.user.id === userId) {
-            dbLogger.debug(
-              { userId, sessionFound: true },
-              'User found via Better Auth session lookup'
-            );
-            return true;
-          }
-        } catch (err) {
-          const authError = createBetterAuthError('Better Auth getSession method failed', err, {
-            userId,
-            operation: 'getSession',
-          });
-          dbLogger.debug({ authError }, 'Better Auth getSession attempt failed');
-        }
-      }
-
-      dbLogger.debug({ userId }, 'User not found via any Better Auth admin API method');
+      dbLogger.debug({ userId }, 'User not found via Better Auth admin API adapter');
     } catch (err) {
-      const authError = createBetterAuthError('Better Auth admin API verification failed', err, {
-        userId,
-        operation: 'verifyUserExists',
-      });
-      dbLogger.warn({ authError }, 'Error during Better Auth API user verification');
+      dbLogger.warn({ userId, error: err }, 'Error during Better Auth API user verification');
     }
   }
 
