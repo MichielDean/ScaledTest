@@ -137,6 +137,10 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
                 width={384}
                 height={384}
                 className="object-contain"
+                style={{
+                  width: 'var(--logo-size)',
+                  height: 'var(--logo-size)',
+                }}
               />
             </div>
           </div>
