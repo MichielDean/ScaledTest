@@ -40,14 +40,23 @@ const AdminUsersView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
+  // Debug authentication state
+  logger.debug(
+    { isAuthenticated, authLoading, hasOwnerRole: hasRole(UserRole.OWNER) },
+    'AdminUsersView authentication state'
+  );
+
   // Fetch users with teams
   const fetchUsers = useCallback(async () => {
     try {
       setUsersLoading(true);
       setError(null);
 
+      logger.debug('Starting fetchUsers API call');
+
       // Use cookie-based authentication (include credentials) consistent across the app
       const response = await axios.get('/api/teams?users=true', { withCredentials: true });
+      logger.debug({ status: response.status }, 'API call completed');
       if (response.status !== 200) {
         throw new Error(`Failed to fetch users: ${response.status} ${response.statusText}`);
       }
@@ -115,8 +124,12 @@ const AdminUsersView: React.FC = () => {
   }, []);
 
   useEffect(() => {
+    logger.debug({ isAuthenticated, authLoading }, 'AdminUsersView useEffect triggered');
     if (isAuthenticated) {
+      logger.debug('Authentication confirmed, calling fetchUsers');
       fetchUsers();
+    } else {
+      logger.debug('Not authenticated, skipping fetchUsers');
     }
   }, [isAuthenticated, fetchUsers]);
 
