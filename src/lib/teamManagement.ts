@@ -211,8 +211,7 @@ export async function shutdownTeamManagementPool(): Promise<void> {
  */
 export function setTeamManagementPools(pools: { dbPool?: Pool | null }) {
   if (Object.prototype.hasOwnProperty.call(pools, 'dbPool')) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    dbPool = pools.dbPool as any;
+    dbPool = pools.dbPool ?? null;
   }
 }
 
