@@ -275,8 +275,11 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
 
       const result = await client.query(insertQuery, values);
 
-      const storedReportId = result.rows[0]?.report_id || report.reportId;
+      if (!result.rowCount || !result.rows[0]) {
+        throw new Error('Failed to insert CTRF report: no rows returned from database.');
+      }
 
+      const storedReportId = result.rows[0].report_id;
       logger.info(
         {
           reportId: storedReportId,
