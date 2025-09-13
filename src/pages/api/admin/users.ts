@@ -36,17 +36,20 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       query?: { limit?: number; offset?: number };
     }) => Promise<ListUsersResponse>;
 
-    const maybeAdmin = authAdminApi as unknown as {
-      listUsers?: ListUsersFn;
-      admin?: { listUsers?: ListUsersFn };
-    } | null;
+    // Type guards for listUsers at root or under admin
+    function hasListUsers(obj: any): obj is { listUsers: ListUsersFn } {
+      return !!obj && typeof obj.listUsers === 'function';
+    }
+    function hasAdminListUsers(obj: any): obj is { admin: { listUsers: ListUsersFn } } {
+      return !!obj && !!obj.admin && typeof obj.admin.listUsers === 'function';
+    }
 
-    const listFn: ListUsersFn | undefined =
-      typeof maybeAdmin?.listUsers === 'function'
-        ? maybeAdmin.listUsers.bind(maybeAdmin)
-        : typeof maybeAdmin?.admin?.listUsers === 'function'
-          ? maybeAdmin.admin.listUsers.bind(maybeAdmin.admin)
-          : undefined;
+    let listFn: ListUsersFn | undefined;
+    if (hasListUsers(authAdminApi)) {
+      listFn = authAdminApi.listUsers.bind(authAdminApi);
+    } else if (hasAdminListUsers(authAdminApi)) {
+      listFn = authAdminApi.admin.listUsers.bind(authAdminApi.admin);
+    }
 
     if (!listFn) {
       apiLogger.warn('Auth admin API listUsers not available');
