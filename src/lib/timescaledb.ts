@@ -257,7 +257,7 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
         report.results?.environment?.appName || null, // $18
         report.results?.environment?.appVersion || null, // $19
         report.results?.environment?.buildName || null, // $20
-        report.results?.environment?.buildNumber || '', // $21 - Use empty string for varchar field
+        report.results?.environment?.buildNumber || null, // $21 - Use null for missing buildNumber
         report.results?.environment?.branchName || null, // $22
         report.results?.environment?.testEnvironment || null, // $23
         report.metadata?.uploadedBy || null, // $24

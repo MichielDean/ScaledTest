@@ -61,7 +61,7 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     let listFn: ListUsersFn | undefined;
     if (hasListUsers(authAdminApi)) {
       listFn = authAdminApi.listUsers.bind(authAdminApi);
-    } else if (hasAdminListUsers(authAdminApi)) {
+    } else if (hasAdminListUsers(authAdminApi) && authAdminApi.admin) {
       listFn = authAdminApi.admin.listUsers.bind(authAdminApi.admin);
     }
 
