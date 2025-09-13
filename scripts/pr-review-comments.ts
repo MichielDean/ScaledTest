@@ -38,6 +38,12 @@ interface ReviewThreadNode {
   comments?: { nodes?: CommentNode[] } | null;
 }
 
+interface RequestedReviewer {
+  login?: string;
+  id?: string;
+  type?: string;
+}
+
 interface GraphQLResponse {
   data?: {
     repository?: {
@@ -222,11 +228,13 @@ async function requestCopilotReview(
       'copilot-pull-request-reviewer[bot]',
     ];
 
-    const wasAdded = requestedReviewers.some((r: any) => possibleLogins.includes(r?.login));
+    const wasAdded = requestedReviewers.some(
+      (r: RequestedReviewer) => r?.login && possibleLogins.includes(r.login)
+    );
 
     if (wasAdded) {
-      const actualLogin = requestedReviewers.find((r: any) =>
-        possibleLogins.includes(r?.login)
+      const actualLogin = requestedReviewers.find(
+        (r: RequestedReviewer) => r?.login && possibleLogins.includes(r.login)
       )?.login;
       logger.info(
         {
@@ -274,25 +282,6 @@ async function requestCopilotReview(
     }
 
     process.exitCode = 1;
-    return false;
-  }
-}
-
-// Check whether a given login is a collaborator for the repository.
-async function isCollaborator(login: string): Promise<boolean> {
-  if (!login) return false;
-  try {
-    const owner = 'MichielDean';
-    const repo = 'ScaledTest';
-    const endpoint = `/repos/${owner}/${repo}/collaborators/${encodeURIComponent(login)}`;
-    // gh api will exit non-zero for 404; resolve true only when call succeeds
-    await execFileAsync('gh', ['api', endpoint], { encoding: 'utf8' });
-    return true;
-  } catch (err) {
-    logger.info(
-      { err: String(err), login },
-      'Collaborator check failed or user is not a collaborator'
-    );
     return false;
   }
 }
@@ -381,11 +370,6 @@ function isCommentVisible(comment: CommentNode, hideOutdated = true): boolean {
   return true;
 }
 
-function threadHasVisibleComments(thread: ReviewThreadNode, hideOutdated = true): boolean {
-  const comments = Array.isArray(thread?.comments?.nodes) ? thread!.comments!.nodes! : [];
-  return comments.some(c => isCommentVisible(c, hideOutdated));
-}
-
 // Helper: conservative detector for whether a thread is resolved.
 // Primary signal: thread.isResolved or resolvedBy. Secondary signals: comments with
 // state/minimizedReason that explicitly indicate resolution. We keep this conservative
@@ -424,16 +408,6 @@ function isCopilotReviewer(login?: string | null): boolean {
 
 // Normalize various Copilot actor login variants to the canonical login used
 // when requesting reviewers. GitHub often exposes both a bot-like login
-// (copilot-pull-request-reviewer[bot]) and the app login (Copilot). Use the
-// canonical 'Copilot' when we detect a Copilot-like identity so the REST API
-// receives a stable identifier.
-function normalizeCopilotLogin(login?: string | null): string | null {
-  if (!login) return null;
-  const s = String(login).trim();
-  if (s.toLowerCase().includes('copilot')) return 'Copilot';
-  return s;
-}
-
 // bot author detection removed: do not exclude threads purely based on author name
 
 export async function main(): Promise<void> {
