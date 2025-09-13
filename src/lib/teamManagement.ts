@@ -228,9 +228,6 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
       dbLogger.warn({ userId }, 'User does not exist according to auth provider or auth DB');
       return [];
     }
-    // NOTE: Do NOT call authPool.end() here. getAuthDbPool() returns a shared
-    // singleton pool used across the application; closing it on every call
-    // breaks pooling and causes connection exhaustion for subsequent requests.
 
     // Query user's teams from the database
     const result = await pool.query(
