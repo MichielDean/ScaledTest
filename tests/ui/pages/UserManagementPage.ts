@@ -25,7 +25,7 @@ export class UserManagementPage extends BasePage {
    * Navigate to the admin dashboard (users section)
    */
   async goto() {
-    await super.goto('/dashboard?view=admin-users');
+    await super.goto('/admin/users');
   }
 
   /**
@@ -184,27 +184,23 @@ export class UserManagementPage extends BasePage {
    * Check if access denied message is shown when accessing without proper permissions
    */
   async expectAccessDenied() {
-    // We expect to stay on the dashboard but see an access denied alert
-    await expect(this.page).toHaveURL(/\/dashboard/, { timeout: 5000 });
-    // Check for the access denied alert using Shadcn Alert component selector
-    const accessDeniedAlert = this.page.locator('[data-slot="alert"]', {
-      hasText: "You don't have permission to manage users",
-    });
-    await expect(accessDeniedAlert).toBeVisible();
+    // With the protected admin pages, users are redirected to unauthorized page
+    await expect(this.page).toHaveURL(/\/unauthorized/, { timeout: 5000 });
+    // Check for the access denied message on the unauthorized page
+    const accessDeniedMessage = this.page.locator('text=Access Denied');
+    await expect(accessDeniedMessage).toBeVisible();
   }
 
   /**
    * Check if access denied message is shown when accessing without proper permissions
-   * In the SPA structure, we show access denied messages inline instead of redirecting
+   * In the protected admin pages, users are redirected to unauthorized page
    */
   async expectUnauthorizedPage() {
-    // In SPA, we expect to stay on the same page but see an access denied alert
-    await expect(this.page).toHaveURL(/\/dashboard\?view=admin-users/, { timeout: 10000 });
+    // With the protected admin pages, users are redirected to unauthorized page
+    await expect(this.page).toHaveURL(/\/unauthorized/, { timeout: 10000 });
 
-    // Check for the access denied alert message
-    const accessDeniedAlert = this.page.locator('[data-slot="alert"]', {
-      hasText: "You don't have permission to manage users",
-    });
-    await expect(accessDeniedAlert).toBeVisible();
+    // Check for the access denied message on the unauthorized page
+    const accessDeniedMessage = this.page.locator('text=Access Denied');
+    await expect(accessDeniedMessage).toBeVisible();
   }
 }
