@@ -1,6 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
 import { apiLogger } from '@/logging/logger';
+import { BetterAuthUserManagementApi } from '@/types/auth';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -37,18 +38,7 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
   }
 }
 
-/**
- * Typed interface for the subset of Better Auth admin API used here.
- * Keeping this narrow avoids pervasive `as unknown as` assertions.
- */
-interface BetterAuthAdminApi {
-  getUser: (opts: {
-    body: { userId: string };
-  }) => Promise<{ id: string; role?: string; email?: string; name?: string } | null>;
-  setRole: (opts: { body: { userId: string; role: string } }) => Promise<void>;
-}
-
-function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthAdminApi {
+function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthUserManagementApi {
   const obj = candidate as Record<string, unknown> | undefined;
   if (!obj || typeof obj.getUser !== 'function' || typeof obj.setRole !== 'function') {
     return false;

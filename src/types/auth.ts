@@ -118,6 +118,14 @@ export interface BetterAuthAdminApi {
   [key: string]: unknown; // Allow for additional properties
 }
 
+// Specific typed interface for Better Auth admin API user operations
+export interface BetterAuthUserManagementApi {
+  getUser: (opts: {
+    body: { userId: string };
+  }) => Promise<{ id: string; role?: string; email?: string; name?: string } | null>;
+  setRole: (opts: { body: { userId: string; role: string } }) => Promise<void>;
+}
+
 // Auth object with admin API - more flexible interface
 export interface AuthWithAdminApi {
   api?: Record<string, unknown>; // Flexible to work with actual Better Auth API
