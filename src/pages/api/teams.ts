@@ -1,6 +1,5 @@
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { auth } from '@/lib/auth';
-import { APIError } from 'better-auth/api';
+import { auth } from '../../lib/auth';
 import { dbLogger as authLogger } from '@/logging/logger';
 import { logError } from '../../logging/logger';
 import { validateUuids } from '../../lib/validation';
@@ -141,43 +140,7 @@ function processUsersForRole(
 }
 
 /**
- * Fallback user list when admin API is not available
- * This provides minimal functionality to keep the UI working
- */
-async function getFallbackUserList(
-  currentUser: AuthenticatedUser,
-  limit: number
-): Promise<UserWithRole[]> {
-  authLogger.debug('Using fallback user list - limited functionality');
-
-  // This is a minimal implementation that should be replaced
-  // when the Better Auth admin API is properly integrated
-  const mockUsers: BetterAuthUser[] = [
-    {
-      id: 'readonly-user-id',
-      email: 'readonly@example.com',
-      name: 'Readonly User',
-      role: 'readonly',
-    },
-    {
-      id: 'maintainer-user-id',
-      email: 'maintainer@example.com',
-      name: 'Maintainer User',
-      role: 'maintainer',
-    },
-    {
-      id: 'owner-user-id',
-      email: 'owner@example.com',
-      name: 'Owner User',
-      role: 'owner',
-    },
-  ];
-
-  return processUsersForRole(mockUsers, currentUser, limit);
-}
-
-/**
- * Get all users with roles from Better Auth database
+ * Get all users with roles from Better Auth database using the admin API
  * @param currentUser - The authenticated user making the request
  * @param headers - Request headers containing session cookies
  * @param limit - Maximum number of users to return (default: 100)
@@ -202,106 +165,88 @@ async function getAllUsersWithRoles(
 
   authLogger.info(
     { userId: currentUser.id, role: currentUser.role, limit, offset },
-    'Starting getAllUsersWithRoles'
+    'Starting getAllUsersWithRoles with Better Auth admin API'
   );
 
   try {
-    // Attempt to use Better Auth admin API - properly configured with our admin plugin
-    authLogger.debug('Attempting to call Better Auth admin API listUsers');
+    // Use Better Auth admin API to get users through the admin plugin
+    authLogger.debug('Calling Better Auth admin plugin listUsers method');
 
-    // Check if the admin API is available through the auth instance
-    // Based on Better Auth docs, the admin plugin provides server-side API methods
-    const authWithApi = auth as {
-      api?: {
-        listUsers?: (params: unknown) => Promise<{ users?: BetterAuthUser[]; total?: number }>;
+    // Better Auth admin API call through auth.api.listUsers (admin plugin method)
+    // The listUsers method is available as confirmed by our test, but TypeScript needs casting
+    const authWithAdminApi = auth as typeof auth & {
+      api: typeof auth.api & {
+        listUsers: (params: {
+          query?: {
+            searchValue?: string;
+            searchField?: 'email' | 'name';
+            searchOperator?: 'contains' | 'starts_with' | 'ends_with';
+            limit?: string | number;
+            offset?: string | number;
+            sortBy?: string;
+            sortDirection?: 'asc' | 'desc';
+            filterField?: string;
+            filterValue?: string | number | boolean;
+            filterOperator?: 'eq' | 'ne' | 'lt' | 'lte' | 'gt' | 'gte';
+          };
+          headers?: Record<string, string>;
+        }) => Promise<{
+          users: BetterAuthUser[];
+          total: number;
+          limit?: number;
+          offset?: number;
+        }>;
       };
     };
 
-    if (authWithApi && authWithApi.api && typeof authWithApi.api.listUsers === 'function') {
-      try {
-        authLogger.debug('Better Auth admin API listUsers method found, calling with headers');
+    const listUsersResponse = await authWithAdminApi.api.listUsers({
+      query: {
+        limit: String(limit),
+        offset: String(offset),
+        sortBy: 'name',
+        sortDirection: 'asc',
+      },
+      headers,
+    });
 
-        const usersResponse = await authWithApi.api.listUsers({
-          query: {
-            limit,
-            offset,
-            sortBy: 'name',
-            sortDirection: 'asc',
-          },
-          headers,
-        });
-
-        authLogger.debug(
-          {
-            responseType: typeof usersResponse,
-            hasUsers: !!usersResponse?.users,
-            userCount: usersResponse?.users?.length,
-            total: usersResponse?.total,
-          },
-          'Better Auth admin API response received'
-        );
-
-        // Handle the response structure from Better Auth admin API
-        const users = usersResponse?.users || [];
-        const total = usersResponse?.total || users.length;
-
-        authLogger.info(
-          { userCount: users.length, total },
-          'Successfully retrieved users from Better Auth admin API'
-        );
-
-        // Process users and return in the expected format
-        return processUsersForRole(users, currentUser, limit);
-      } catch (adminApiError) {
-        authLogger.warn(
-          {
-            error: adminApiError,
-            errorMessage: adminApiError instanceof Error ? adminApiError.message : 'Unknown error',
-            userId: currentUser.id,
-          },
-          'Better Auth admin API listUsers failed, will use fallback approach'
-        );
-      }
-    } else {
-      authLogger.debug(
-        {
-          hasAuth: !!auth,
-          hasApi: !!(auth && auth.api),
-          apiMethods: auth && auth.api ? Object.keys(auth.api) : [],
-        },
-        'Better Auth admin API listUsers method not available'
-      );
-    }
-
-    // Fallback: Use mock data temporarily until full admin API integration is resolved
-    authLogger.debug('Using fallback user retrieval approach');
-
-    const fallbackUsers = await getFallbackUserList(currentUser, limit);
-
-    authLogger.info(
-      { userCount: fallbackUsers.length },
-      'Using fallback user retrieval method (temporary until full admin API integration)'
+    authLogger.debug(
+      {
+        responseType: typeof listUsersResponse,
+        hasUsers: !!listUsersResponse?.users,
+        userCount: listUsersResponse?.users?.length,
+        total: listUsersResponse?.total,
+      },
+      'Better Auth admin API listUsers response received'
     );
 
-    return fallbackUsers;
+    // Extract users from response
+    const users = listUsersResponse?.users || [];
+    const total = listUsersResponse?.total || users.length;
+
+    authLogger.info(
+      { userCount: users.length, total, limit, offset },
+      'Successfully retrieved users from Better Auth admin API'
+    );
+
+    // Process and filter users based on role permissions
+    return processUsersForRole(users, currentUser, limit);
   } catch (error) {
-    if (error instanceof APIError) {
-      authLogger.error(
-        {
-          message: error.message,
-          status: error.status,
-          userId: currentUser.id,
-          role: currentUser.role,
-        },
-        'Better Auth API error in getAllUsersWithRoles'
-      );
+    authLogger.error(
+      {
+        error,
+        errorMessage: error instanceof Error ? error.message : 'Unknown error',
+        userId: currentUser.id,
+        role: currentUser.role,
+      },
+      'Error calling Better Auth admin API in getAllUsersWithRoles'
+    );
+
+    // Re-throw with proper error message
+    if (error instanceof Error) {
+      throw new Error(`Failed to retrieve users: ${error.message}`);
     } else {
-      authLogger.error(
-        { error, userId: currentUser.id, role: currentUser.role },
-        'Error in getAllUsersWithRoles'
-      );
+      throw new Error('Failed to retrieve users from authentication system');
     }
-    throw error;
   }
 }
 

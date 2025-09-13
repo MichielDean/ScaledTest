@@ -76,6 +76,8 @@ function getAuth(): ReturnType<typeof betterAuth> {
           ac,
           roles,
           defaultRole: 'readonly',
+          adminRoles: ['owner', 'maintainer'], // Include our custom admin roles
+          adminUserIds: ['a8eea405-616c-468f-b4dc-e8246843f1a2'], // Include the specific owner user ID we saw in logs
         }), // Enables admin functionality with RBAC
         bearer(), // Enables Bearer token authentication for API
         twoFactor(), // Optional: 2FA support
