@@ -94,19 +94,7 @@ export async function closeTestLogger(): Promise<void> {
       } else if (typeof logger.close === 'function') {
         await logger.close();
       } else {
-        // Fallback: try to access transport for cleanup (with error handling)
-        try {
-          const transportSymbol = Symbol.for('pino.transport');
-          const pinoWithTransport = loggerInstance as unknown as {
-            [key: symbol]: { end?: () => Promise<void> } | undefined;
-          };
-          const transport = pinoWithTransport[transportSymbol];
-          if (transport && typeof transport.end === 'function') {
-            await transport.end();
-          }
-        } catch {
-          // Ignore transport cleanup errors
-        }
+        // No documented cleanup method available; skipping transport cleanup to avoid accessing internals.
       }
     }
   } catch (error) {
