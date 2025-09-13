@@ -26,7 +26,7 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
     // Parse pagination parameters
     const page = parseInt(req.query.page as string) || 1;
-    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 1000); // Max 1000 users per page
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100); // Max 100 users per page
     const offset = (page - 1) * pageSize;
 
     // Prefer using Better Auth admin API for listing users. Support both
