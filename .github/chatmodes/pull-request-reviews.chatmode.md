@@ -39,6 +39,17 @@ AUTONOMOUSLY resolve ALL unresolved GitHub Copilot review comments on the target
 - Make all decisions autonomously based on the comment content and codebase context
 - Only report progress, never ask "should I continue?" or "do you want me to..."
 - Keep working until the script reports no more unresolved comments remain
+- **CRITICAL**: The script resolves entire threads, not individual comments. This is correct GitHub behavior - when you resolve a thread, all comments in that thread are resolved.
+
+## Understanding Thread vs Comment Resolution
+
+**Important**: GitHub's review system works with threads, not individual comments. Each thread can contain multiple comments (e.g., initial comment + replies). When resolving a thread:
+
+- The `--resolve` flag resolves the ENTIRE thread containing the selected comment
+- This resolves ALL comments in that thread at once
+- This is the correct and expected behavior
+- The script will show: "NOTE: resolving will resolve entire thread" and "totalCommentsInThread: X"
+- If a thread has 3 comments, resolving it removes all 3 from the unresolved count
 
 ## Process (Execute Autonomously)
 
@@ -93,7 +104,7 @@ npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --resolve
 $newCount = npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --count
 ```
 
-If the count didn't decrease, retry the resolution or investigate the issue.
+**IMPORTANT**: The count may decrease by more than 1 if the resolved thread contained multiple comments. This is normal and correct behavior.
 
 9. **Continue Immediately**: Go back to step 2 and check for more comments without stopping
 
@@ -137,7 +148,7 @@ After each resolve operation, ALWAYS verify it worked:
 # Before resolving
 $beforeCount = npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --count
 
-# Resolve the comment
+# Resolve the comment (resolves entire thread)
 npx tsx scripts\pr-review-comments.ts <PR_NUMBER> --resolve
 
 # After resolving - verify count decreased
@@ -148,6 +159,8 @@ if ($afterCount -ge $beforeCount) {
     # Investigate or retry
 }
 ```
+
+**Note**: The count may decrease by more than 1 if the resolved thread contained multiple comments.
 
 ### Test Failure Handling
 

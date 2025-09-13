@@ -69,25 +69,15 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     );
 
     // Transform Better Auth users to include role information
-    const usersWithRoles = paginatedUsers.map(
-      (user: {
-        id: string;
-        email: string;
-        name?: string;
-        emailVerified?: boolean;
-        createdAt?: string;
-        updatedAt?: string;
-        role?: string;
-      }) => ({
-        id: user.id,
-        email: user.email,
-        name: user.name,
-        emailVerified: user.emailVerified,
-        createdAt: user.createdAt,
-        updatedAt: user.updatedAt,
-        role: user.role || 'readonly', // Default to readonly if no role specified
-      })
-    );
+    const usersWithRoles = paginatedUsers.map((user: ListUser) => ({
+      id: user.id,
+      email: user.email,
+      name: user.name,
+      emailVerified: user.emailVerified,
+      createdAt: user.createdAt,
+      updatedAt: user.updatedAt,
+      role: user.role || 'readonly', // Default to readonly if no role specified
+    }));
 
     // Add pagination metadata to response
     const response = {

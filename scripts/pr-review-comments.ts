@@ -150,7 +150,7 @@ async function resolveThreadGraphQL(threadId: string): Promise<boolean> {
 
   const mutation = `
     mutation {
-  resolveReviewThread(input: { threadId: "${threadId}" }) {
+      resolveReviewThread(input: { threadId: "${threadId}" }) {
         thread { id isResolved }
       }
     }`.trim();
@@ -161,6 +161,16 @@ async function resolveThreadGraphQL(threadId: string): Promise<boolean> {
     });
     const parsed = JSON.parse(stdout as string);
     const resolved = Boolean(parsed?.data?.resolveReviewThread?.thread?.isResolved);
+
+    if (resolved) {
+      logger.info({ threadId }, 'Thread resolved successfully via GraphQL');
+    } else {
+      logger.warn(
+        { threadId, response: parsed },
+        'GraphQL mutation executed but thread not marked as resolved'
+      );
+    }
+
     return resolved;
   } catch (error) {
     logger.error({ error, threadId }, 'Failed to resolve review thread via GraphQL');
@@ -168,9 +178,8 @@ async function resolveThreadGraphQL(threadId: string): Promise<boolean> {
   }
 }
 
-// Strict: only request a review for the explicit reviewer login provided. Do not
-// fall back to alternative usernames. If reviewerLogin is not provided or null,
-// this function will refuse to act and return false.
+// Request a review from the detected Copilot reviewer. Uses the exact login that was
+// detected from existing reviews or requested reviewers, without normalization.
 async function requestCopilotReview(
   prNumber: number,
   reviewerLogin: string | null
@@ -182,37 +191,88 @@ async function requestCopilotReview(
     );
     return false;
   }
-  // Normalize copilot-like variants to the canonical 'Copilot' login used by the
-  // REST API when requesting an app reviewer.
-  const normalized = normalizeCopilotLogin(reviewerLogin) ?? reviewerLogin;
 
-  try {
-    const collaborator = await isCollaborator(normalized);
-    if (!collaborator) {
-      logger.info(
-        { prNumber, reviewerLogin: normalized },
-        'Detected Copilot reviewer is not a repository collaborator; will attempt request anyway'
-      );
-    }
-  } catch (err) {
-    logger.info(
-      { err, prNumber, reviewerLogin: normalized },
-      'Failed to verify collaborator status for detected Copilot reviewer; will attempt request'
-    );
-  }
+  // Use the exact detected login without normalization
+  const loginToUse = reviewerLogin;
+
+  logger.info(
+    { prNumber, reviewerLogin: loginToUse },
+    'Attempting to request review from detected Copilot reviewer'
+  );
 
   try {
     const owner = 'MichielDean';
     const repo = 'ScaledTest';
     const endpoint = `/repos/${owner}/${repo}/pulls/${prNumber}/requested_reviewers`;
-    const args = ['api', endpoint, '--method', 'POST', '-f', `reviewers[]=${normalized}`];
-    await execFileAsync('gh', args, { encoding: 'utf8' });
-    return true;
+    const args = ['api', endpoint, '--method', 'POST', '-f', `reviewers[]=${loginToUse}`];
+    const { stdout } = await execFileAsync('gh', args, { encoding: 'utf8' });
+
+    // Verify the request was successful by checking the response
+    const response = JSON.parse(stdout);
+    const requestedReviewers = Array.isArray(response?.requested_reviewers)
+      ? response.requested_reviewers
+      : [];
+
+    // GitHub may normalize the reviewer login (e.g., copilot-pull-request-reviewer[bot] -> Copilot)
+    // Check for both the exact login and known normalized variants
+    const possibleLogins = [
+      loginToUse,
+      'Copilot',
+      'copilot-pull-request-reviewer',
+      'copilot-pull-request-reviewer[bot]',
+    ];
+
+    const wasAdded = requestedReviewers.some((r: any) => possibleLogins.includes(r?.login));
+
+    if (wasAdded) {
+      const actualLogin = requestedReviewers.find((r: any) =>
+        possibleLogins.includes(r?.login)
+      )?.login;
+      logger.info(
+        {
+          prNumber,
+          requestedLogin: loginToUse,
+          actualLogin,
+        },
+        'Successfully requested Copilot review'
+      );
+      return true;
+    } else {
+      logger.warn(
+        { prNumber, reviewerLogin: loginToUse, requestedReviewers },
+        'Review request completed but no matching reviewer found in requested_reviewers list'
+      );
+      return false;
+    }
   } catch (error) {
     logger.error(
-      { error, prNumber, reviewerLogin: normalized },
+      { error, prNumber, reviewerLogin: loginToUse },
       'Failed to request Copilot review via REST API'
     );
+
+    // Try alternative approach: use team reviewers for apps
+    if (loginToUse.toLowerCase().includes('copilot')) {
+      try {
+        logger.info(
+          { prNumber },
+          'Trying alternative approach: requesting review via team_reviewers'
+        );
+        const endpoint = `/repos/MichielDean/ScaledTest/pulls/${prNumber}/requested_reviewers`;
+        const args = ['api', endpoint, '--method', 'POST', '-f', `team_reviewers[]=${loginToUse}`];
+        await execFileAsync('gh', args, { encoding: 'utf8' });
+        logger.info(
+          { prNumber, reviewerLogin: loginToUse },
+          'Successfully requested review via team_reviewers'
+        );
+        return true;
+      } catch (teamError) {
+        logger.error(
+          { teamError, prNumber, reviewerLogin: loginToUse },
+          'Failed to request review via team_reviewers as well'
+        );
+      }
+    }
+
     process.exitCode = 1;
     return false;
   }
@@ -354,33 +414,12 @@ function getVisibleComments(thread: ReviewThreadNode, hideOutdatedFlag = true) {
   return comments.filter(c => isCommentVisible(c, hideOutdatedFlag));
 }
 
-// Strict detector for Copilot reviewer only
-// Detected reviewer login (populated at runtime by inspecting PR reviews) when available.
-let detectedCopilotLogin: string | null = null;
-
+// Simple, robust Copilot reviewer detection
 function isCopilotReviewer(login?: string | null): boolean {
   if (!login) return false;
   const normalized = String(login).toLowerCase().trim();
-  if (detectedCopilotLogin) {
-    const detectedNorm = String(detectedCopilotLogin).toLowerCase().trim();
-    // Handle variants: exact match OR bot vs non-bot versions
-    if (normalized === detectedNorm) return true;
-    // If detected has [bot] suffix but login doesn't, or vice versa
-    if (
-      (detectedNorm.endsWith('[bot]') && normalized === detectedNorm.replace('[bot]', '')) ||
-      (normalized.endsWith('[bot]') && detectedNorm === normalized.replace('[bot]', ''))
-    ) {
-      return true;
-    }
-    return false;
-  }
-
-  // Fallbacks: accept common Copilot actor variants when detection isn't available.
-  if (normalized === 'copilot-pull-request-reviewer') return true;
-  if (normalized === 'copilot-pull-request-reviewer[bot]') return true;
-  // A permissive fallback if the login contains copilot and reviewer-like tokens.
-  if (normalized.includes('copilot') && normalized.includes('review')) return true;
-  return false;
+  // Simple check: if the login contains "copilot", it's probably Copilot
+  return normalized.includes('copilot');
 }
 
 // Normalize various Copilot actor login variants to the canonical login used
@@ -440,11 +479,10 @@ export async function main(): Promise<void> {
   logger.info({ owner: 'MichielDean', repo: 'ScaledTest', prNumber }, 'Fetching review threads');
 
   try {
-    // Try to detect the actual Copilot reviewer login for accurate matching and
-    // for use when requesting a reviewer via the REST API.
+    // Try to detect the actual Copilot reviewer login for use when requesting a reviewer via the REST API.
     // Prefer the PR's currently requested reviewer (if it's a single Copilot actor)
     const requestedLogin = await getRequestedCopilotReviewer(prNumber);
-    detectedCopilotLogin = requestedLogin ?? (await findCopilotReviewerLogin(prNumber));
+    const detectedCopilotLogin = requestedLogin ?? (await findCopilotReviewerLogin(prNumber));
 
     if (shouldPoll) {
       logger.info({ prNumber }, 'Polling for new visible Copilot comment');
@@ -467,31 +505,26 @@ export async function main(): Promise<void> {
 
     // Use top-level helpers: isThreadResolved, getVisibleComments, isCopilotReviewer
 
-    // Select only unresolved threads where all visible comments are authored by Copilot reviewer
+    // Select unresolved threads with Copilot comments (simple, robust logic)
     const candidateThreads = threads.filter(t => {
       if (!t) return false;
 
       // Exclude threads explicitly marked resolved
       if (isThreadResolved(t)) return false;
 
-      // Exclude collapsed threads (UI hides these by default)
-      if (t.isCollapsed) return false;
+      // Get all comments in the thread
+      const allComments = Array.isArray(t?.comments?.nodes) ? t!.comments!.nodes! : [];
+      if (allComments.length === 0) return false;
 
-      // Exclude threads that are marked outdated (UI hides outdated threads)
-      if (t.isOutdated) return false;
+      // Check if ANY comment in the thread is from Copilot (simple detection)
+      const hasCopilotComment = allComments.some(c =>
+        isCopilotReviewer(c?.author?.login ?? undefined)
+      );
+      if (!hasCopilotComment) return false;
 
-      // Get visible comments after outdated hiding
+      // Check if thread has visible comments (less restrictive - don't exclude collapsed)
       const visible = getVisibleComments(t, hideOutdated);
       if (visible.length === 0) return false;
-
-      // Keep only if every visible comment is authored by the Copilot reviewer
-      if (!visible.every(c => isCopilotReviewer(c?.author?.login ?? undefined))) return false;
-
-      // ALSO ensure the entire thread contains only Copilot comments (no human replies),
-      // including outdated/minimized comments. This prevents threads where a human later
-      // replied (but that reply might be hidden) from being included.
-      const allComments = Array.isArray(t?.comments?.nodes) ? t!.comments!.nodes! : [];
-      if (!allComments.every(c => isCopilotReviewer(c?.author?.login ?? undefined))) return false;
 
       return true;
     });
@@ -501,13 +534,29 @@ export async function main(): Promise<void> {
       for (const t of threads) {
         const id = t?.id ?? 'unknown';
         const reasons: string[] = [];
+
         if (isThreadResolved(t)) reasons.push('resolved');
         if (t?.isCollapsed) reasons.push('collapsed');
-        if (!threadHasVisibleComments(t, hideOutdated)) reasons.push('no-visible-comments');
-        if (t.isOutdated) reasons.push('outdated');
 
+        const allComments = Array.isArray(t?.comments?.nodes) ? t!.comments!.nodes! : [];
+        const hasCopilotComment = allComments.some(c =>
+          isCopilotReviewer(c?.author?.login ?? undefined)
+        );
+        if (!hasCopilotComment) reasons.push('no-copilot-comments');
+
+        const visible = getVisibleComments(t, hideOutdated);
+        if (visible.length === 0) reasons.push('no-visible-comments');
+
+        const isCandidate = candidateThreads.some(ct => ct?.id === id);
         logger.info(
-          { threadId: id, reasons: reasons.length ? reasons : ['kept'] },
+          {
+            threadId: id,
+            reasons: reasons.length ? reasons : ['kept'],
+            isCandidate,
+            totalComments: allComments.length,
+            visibleComments: visible.length,
+            commentAuthors: allComments.map(c => c?.author?.login).filter(Boolean),
+          },
           'Diagnostic thread evaluation'
         );
       }
@@ -557,10 +606,14 @@ export async function main(): Promise<void> {
       {
         prNumber,
         threadId: selected.threadId,
+        commentId: selected.comment?.id,
         comment: formatComment(selected.comment),
         url: selected.comment?.url ?? undefined,
+        totalCommentsInThread: visibleCommentsWithContext.filter(
+          c => c.threadId === selected.threadId
+        ).length,
       },
-      'Selected single review comment'
+      'Selected single review comment (NOTE: resolving will resolve entire thread)'
     );
 
     // Full diagnostic dump when DIAG_FULL=true
@@ -575,13 +628,28 @@ export async function main(): Promise<void> {
     // If requested, attempt to resolve the thread for the selected comment
     if (shouldResolve) {
       try {
-        logger.info(
-          { prNumber, threadId: selected.threadId },
-          'Attempting to resolve selected thread'
+        const commentsInThread = visibleCommentsWithContext.filter(
+          c => c.threadId === selected.threadId
         );
+        logger.info(
+          {
+            prNumber,
+            threadId: selected.threadId,
+            commentsInThread: commentsInThread.length,
+            commentIds: commentsInThread.map(c => c.comment?.id).filter(Boolean),
+          },
+          'Attempting to resolve thread (this will resolve ALL comments in the thread)'
+        );
+
         const ok = await resolveThreadGraphQL(selected.threadId);
         if (ok) {
-          logger.info({ threadId: selected.threadId }, 'Thread resolved successfully');
+          logger.info(
+            {
+              threadId: selected.threadId,
+              resolvedComments: commentsInThread.length,
+            },
+            'Thread resolved successfully - all comments in thread are now resolved'
+          );
           process.exitCode = 0;
         } else {
           logger.error({ threadId: selected.threadId }, 'GraphQL returned unresolved state');
