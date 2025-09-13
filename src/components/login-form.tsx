@@ -10,6 +10,7 @@ import Image from 'next/image';
 import { useRouter } from 'next/router';
 import { authLogger as logger } from '../logging/logger';
 import { SocialLogin } from '@/components/shared/SocialLogin';
+import { signIn } from '../lib/auth-client';
 
 export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) {
   const [email, setEmail] = useState('');
@@ -31,8 +32,6 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
 
     try {
       // Use Better Auth for login
-      const { signIn } = await import('../lib/auth-client');
-
       const response = await signIn.email({
         email,
         password,
