@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label';
 import { useState, FormEvent } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useRouter } from 'next/router';
 import { authLogger as logger } from '../logging/logger';
 import { SocialLogin } from '@/components/shared/SocialLogin';
 
@@ -15,6 +16,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
+  const router = useRouter();
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
@@ -39,7 +41,7 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
       if (response.data?.user) {
         logger.info({ email }, 'Login successful with Better Auth');
         // Better Auth handles authentication automatically
-        window.location.href = '/dashboard';
+        router.push('/dashboard');
       } else if (response.error) {
         logger.error({ error: response.error, email }, 'Login failed');
         setError(response.error.message || 'Invalid email or password');
