@@ -37,11 +37,25 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     }) => Promise<ListUsersResponse>;
 
     // Type guards for listUsers at root or under admin
-    function hasListUsers(obj: any): obj is { listUsers: ListUsersFn } {
-      return !!obj && typeof obj.listUsers === 'function';
+    function hasListUsers(obj: unknown): obj is { listUsers: ListUsersFn } {
+      return (
+        !!obj &&
+        typeof obj === 'object' &&
+        obj !== null &&
+        typeof (obj as Record<string, unknown>).listUsers === 'function'
+      );
     }
-    function hasAdminListUsers(obj: any): obj is { admin: { listUsers: ListUsersFn } } {
-      return !!obj && !!obj.admin && typeof obj.admin.listUsers === 'function';
+    function hasAdminListUsers(obj: unknown): obj is { admin: { listUsers: ListUsersFn } } {
+      const asObj = obj as Record<string, unknown>;
+      return (
+        !!obj &&
+        typeof obj === 'object' &&
+        obj !== null &&
+        !!asObj.admin &&
+        typeof asObj.admin === 'object' &&
+        asObj.admin !== null &&
+        typeof (asObj.admin as Record<string, unknown>).listUsers === 'function'
+      );
     }
 
     let listFn: ListUsersFn | undefined;
