@@ -183,15 +183,15 @@ export const mockSuccessfulApiResponse = <T>(data: T[]) => ({
   success: true,
   data,
   meta: {
-    source: 'OpenSearch',
-    index: 'ctrf-reports',
+    source: 'TimescaleDB',
+    database: 'scaledtest',
     daysRequested: data.length > 0 ? data.length : 30,
     timestamp: new Date().toISOString(),
-    opensearchHealth: {
+    databaseHealth: {
       connected: true,
-      indexExists: true,
-      documentsCount: 150,
-      clusterHealth: 'green',
+      tableExists: true,
+      recordsCount: 150,
+      status: 'healthy',
     },
   },
 });
@@ -199,7 +199,7 @@ export const mockSuccessfulApiResponse = <T>(data: T[]) => ({
 /**
  * Mock API error response
  */
-export const mockApiErrorResponse = (error: string = 'OpenSearch connection failed') => ({
+export const mockApiErrorResponse = (error: string = 'Database connection failed') => ({
   success: false,
   error,
 });

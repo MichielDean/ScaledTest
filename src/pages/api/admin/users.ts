@@ -1,73 +1,141 @@
 // Admin API for user management
-import axios from 'axios';
-import { MethodHandler, createApi } from '../../../auth/apiAuth';
-import { UserRole } from '../../../auth/keycloak';
-import { logError } from '../../../logging/logger';
-import { keycloakConfig, keycloakEndpoints } from '../../../config/keycloak';
-import {
-  getAdminToken,
-  getAllUsersWithRoles,
-  getClientId,
-} from '../../../authentication/keycloakAdminApi';
-import { KeycloakRole } from '../../../types/user';
+import { BetterAuthMethodHandler, createBetterAuthApi } from '../../../auth/betterAuthApi';
+import { apiLogger } from '../../../logging/logger';
+import { verifyUserExists } from '../../../lib/teamManagement';
+import { AuthAdminApi, authAdminApi } from '../../../lib/auth';
 
 /**
  * Handle GET requests - retrieve all users with their roles
  */
-const handleGet: MethodHandler = async (req, res, reqLogger) => {
+const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
-    await getAdminToken();
+    // Parse pagination parameters
+    const page = parseInt(req.query.page as string) || 1;
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100); // Max 100 users per page
+    const offset = (page - 1) * pageSize;
+    const search = req.query.search as string;
 
-    const usersWithRoles = await getAllUsersWithRoles();
-    return res.status(200).json(usersWithRoles);
-  } catch (error) {
-    logError(reqLogger, 'Error fetching users', error, {
-      realm: keycloakConfig.realm,
+    reqLogger.info({ page, pageSize, offset, search }, 'Fetching users with direct database query');
+
+    // Direct database query for user listing
+    const { Pool } = await import('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
     });
+
+    let query =
+      'SELECT id, email, name, role, "emailVerified", "createdAt", "updatedAt" FROM "user"';
+    let countQuery = 'SELECT COUNT(*) as total FROM "user"';
+    const queryParams: (string | number)[] = [];
+    const countParams: string[] = [];
+
+    // Add search filter if provided
+    if (search) {
+      query += ' WHERE email ILIKE $1 OR name ILIKE $1';
+      countQuery += ' WHERE email ILIKE $1 OR name ILIKE $1';
+      queryParams.push(`%${search}%`);
+      countParams.push(`%${search}%`);
+    }
+
+    // Add ordering and pagination
+    query += ' ORDER BY "createdAt" DESC';
+    if (search) {
+      query += ' LIMIT $2 OFFSET $3';
+      queryParams.push(pageSize, offset);
+    } else {
+      query += ' LIMIT $1 OFFSET $2';
+      queryParams.push(pageSize, offset);
+    }
+
+    const [result, countResult] = await Promise.all([
+      pool.query(query, queryParams),
+      pool.query(countQuery, countParams),
+    ]);
+
+    const total = parseInt(countResult.rows[0]?.total || '0');
+    await pool.end();
+
+    const users = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      emailVerified: row.emailVerified,
+      createdAt: row.createdAt?.toISOString(),
+      updatedAt: row.updatedAt?.toISOString(),
+      role: row.role || 'readonly',
+    }));
+
+    reqLogger.info(
+      {
+        page,
+        pageSize,
+        offset,
+        search,
+        totalUsers: total,
+        returnedUsers: users.length,
+      },
+      'User list retrieved via direct database query'
+    );
+
+    const response = {
+      users,
+      pagination: {
+        page,
+        pageSize,
+        total: total,
+        totalPages: Math.ceil(total / pageSize),
+        hasNext: offset + pageSize < total,
+        hasPrev: page > 1,
+      },
+    };
+
+    return res.status(200).json(response);
+  } catch (error) {
+    reqLogger.error({ error }, 'Error fetching users');
     return res.status(500).json({ error: 'Failed to fetch users' });
   }
 };
 
 /**
- * Handle DELETE requests - delete user from Keycloak
+ * Handle DELETE requests - delete user from Better Auth
  */
-const handleDelete: MethodHandler = async (req, res, reqLogger) => {
+const handleDelete: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
-    const adminToken = await getAdminToken();
-
     const { userId } = req.query;
 
-    // Validate userId to ensure it is a valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!userId || typeof userId !== 'string' || !uuidRegex.test(userId)) {
+    // Validate userId
+    if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    // Delete user from Keycloak
-    await axios.delete(keycloakEndpoints.getUserEndpoint(userId), {
-      headers: {
-        Authorization: `Bearer ${adminToken}`,
-      },
-    });
+    // Centralized verification helper will use auth admin API only
 
-    reqLogger.info('User deleted successfully', {
-      userId,
-      realm: keycloakConfig.realm,
-    });
+    // Prefer using Better Auth admin API for deletion
+    const adminApiDel: AuthAdminApi | null = authAdminApi;
+    if (!adminApiDel || typeof adminApiDel.deleteUser !== 'function') {
+      apiLogger.warn('Auth admin API deleteUser not available');
+      return res
+        .status(501)
+        .json({ error: 'User deletion not supported by current auth provider' });
+    }
+
+    // Verify user exists via admin API
+    const exists = await verifyUserExists(userId);
+    if (!exists) return res.status(404).json({ error: 'User not found' });
+
+    await adminApiDel.deleteUser({ userId });
+    reqLogger.info({ userId }, 'User deleted successfully via auth API');
 
     return res.status(200).json({ message: 'User deleted successfully' });
   } catch (error) {
-    logError(reqLogger, 'Error deleting user', error, {
-      userId: req.query?.userId,
-      realm: keycloakConfig.realm,
-    });
+    apiLogger.error({ error }, 'Error deleting user');
 
-    // Handle specific Keycloak errors
-    if (axios.isAxiosError(error)) {
-      if (error.response?.status === 404) {
+    // Handle specific Better Auth errors
+    if (error instanceof Error) {
+      if (error.message.includes('not found')) {
         return res.status(404).json({ error: 'User not found' });
       }
-      if (error.response?.status === 403) {
+      if (error.message.includes('permission')) {
         return res.status(403).json({ error: 'Insufficient permissions to delete user' });
       }
     }
@@ -79,74 +147,61 @@ const handleDelete: MethodHandler = async (req, res, reqLogger) => {
 /**
  * Handle POST requests - update user roles (grant/revoke maintainer)
  */
-const handlePost: MethodHandler = async (req, res, reqLogger) => {
+const handlePost: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
-    const adminToken = await getAdminToken();
-
     const { userId, grantMaintainer } = req.body;
 
-    // Validate userId to ensure it is a valid UUID
-    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-    if (!userId || !uuidRegex.test(userId)) {
+    // Validate userId
+    if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    // First, get the client ID
-    const clientId = await getClientId(keycloakConfig.clientId);
+    // Determine desired role
+    const newRole = grantMaintainer ? 'maintainer' : 'readonly';
 
-    if (!clientId) {
-      return res.status(404).json({ error: 'Client not found' });
-    }
-
-    const rolesResponse = await axios.get<KeycloakRole[]>(
-      keycloakEndpoints.getClientRolesEndpoint(clientId),
-      {
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-        },
+    try {
+      // Use Better Auth admin API for role updates
+      const adminApi: AuthAdminApi | null = authAdminApi;
+      if (!adminApi || typeof adminApi.updateUser !== 'function') {
+        apiLogger.warn('Auth admin API updateUser not available');
+        return res
+          .status(501)
+          .json({ error: 'Role updates not supported by current auth provider' });
       }
-    );
 
-    const roles = rolesResponse.data;
-    const maintainerRole = roles.find((role: KeycloakRole) => role.name === UserRole.MAINTAINER);
+      await adminApi.updateUser({ userId, role: newRole });
 
-    if (!maintainerRole) {
-      return res.status(404).json({ error: 'Maintainer role not found' });
-    }
+      const message = grantMaintainer
+        ? 'Successfully granted maintainer role'
+        : 'Successfully revoked maintainer role';
 
-    if (grantMaintainer) {
-      // Add maintainer role
-      await axios.post(
-        keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId),
-        [maintainerRole],
+      reqLogger.info(
         {
-          headers: {
-            Authorization: `Bearer ${adminToken}`,
-            'Content-Type': 'application/json',
-          },
-        }
+          userIdHash: userId.slice(0, 8) + '...',
+          grantMaintainer,
+          requestedRole: newRole,
+        },
+        'User role update completed'
       );
 
-      return res.status(200).json({ message: 'Successfully granted maintainer role' });
-    } else {
-      // Remove maintainer role
-      await axios.delete(keycloakEndpoints.getUserClientRolesEndpoint(userId, clientId), {
-        headers: {
-          Authorization: `Bearer ${adminToken}`,
-          'Content-Type': 'application/json',
-        },
-        data: [maintainerRole],
-      });
-
-      return res.status(200).json({ message: 'Successfully revoked maintainer role' });
+      return res.status(200).json({ message });
+    } catch (err) {
+      apiLogger.error({ err, userId, grantMaintainer }, 'Failed to update user role');
+      return res.status(500).json({ error: 'Failed to update user role' });
     }
   } catch (error) {
-    logError(reqLogger, 'Error updating user role', error, {
-      userId: req.body?.userId,
-      grantMaintainer: req.body?.grantMaintainer,
-      realm: keycloakConfig.realm,
-      clientId: keycloakConfig.clientId,
-    });
+    apiLogger.error(
+      {
+        error,
+        userId: req.body?.userId,
+        grantMaintainer: req.body?.grantMaintainer,
+      },
+      'Error updating user role'
+    );
+    if (error instanceof Error && error.message.includes('not found')) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
     return res.status(500).json({ error: 'Failed to update user role' });
   }
 };
@@ -155,15 +210,18 @@ const handlePost: MethodHandler = async (req, res, reqLogger) => {
  * Admin API for user management
  * GET    /api/admin/users - Get all users with their roles
  * POST   /api/admin/users - Update user roles (grant/revoke maintainer)
- * DELETE /api/admin/users?userId=<uuid> - Delete user from Keycloak
+ * DELETE /api/admin/users?userId=<id> - Delete user from system
  *
  * This endpoint requires OWNER role for all operations
- * Manages Keycloak user roles through admin API
+ * Manages user roles through Better Auth API
  */
 
-// Export the super-generic API with admin-only access
-export default createApi.adminOnly({
-  GET: handleGet,
-  POST: handlePost,
-  DELETE: handleDelete,
-});
+// Export the API with admin-only access (owner role required)
+export default createBetterAuthApi(
+  {
+    GET: handleGet,
+    POST: handlePost,
+    DELETE: handleDelete,
+  },
+  'owner'
+);

@@ -1,7 +1,7 @@
 import type { NextPage } from 'next';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
-import { useAuth } from '../auth/KeycloakProvider';
+import { useAuth } from '../hooks/useAuth';
 
 const Home: NextPage = () => {
   const { isAuthenticated, loading } = useAuth();

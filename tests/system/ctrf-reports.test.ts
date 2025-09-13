@@ -1,40 +1,79 @@
-import supertest from 'supertest';
 import {
   generateCtrfReport,
   generateMinimalCtrfReport,
   generateInvalidCtrfReport,
   generateLargeCtrfReport,
 } from '../data/ctrfReportGenerator';
-import { getAuthHeader } from '../authentication/tokenService';
+import { createAuthenticatedAgent, TestUsers } from '../setup/betterAuthTestUtils';
+import { testLogger } from '../../src/logging/testLogger';
 import { Status } from '../../src/schemas/ctrf/ctrf';
 import { StoredReport } from '../../src/types/database';
+import supertest from 'supertest';
 
 describe('CTRF Reports API System Tests', () => {
-  let authHeaders: Record<string, string>;
+  let api: ReturnType<typeof createAuthenticatedAgent> extends Promise<infer T> ? T : never;
   const TEST_PORT = process.env.TEST_PORT || '3000';
   const API_URL = `http://localhost:${TEST_PORT}`;
-  const api = supertest(API_URL);
 
   beforeAll(async () => {
     try {
-      // Testing CTRF API against specified URL
-      authHeaders = await getAuthHeader();
-      // Successfully authenticated with Keycloak for CTRF tests
+      // Create authenticated agent for CTRF tests
+      api = await createAuthenticatedAgent(API_URL, TestUsers.OWNER);
+      testLogger.debug('Successfully created authenticated agent for CTRF tests');
     } catch (error) {
-      console.error('Failed to authenticate in beforeAll:', error);
+      testLogger.error({ error }, 'Failed to create authenticated agent in beforeAll:');
       throw error;
     }
   }, 30000);
 
   describe('CTRF Report Storage', () => {
     it('should store a complete CTRF report successfully', async () => {
+      // Re-authenticate just before the test to ensure fresh session
+      const reAuthResponse = await api.post('/api/auth/sign-in/email').send({
+        email: TestUsers.OWNER.email,
+        password: TestUsers.OWNER.password,
+      });
+
+      testLogger.info(
+        {
+          status: reAuthResponse.status,
+          body: reAuthResponse.body,
+          cookies: reAuthResponse.headers['set-cookie'],
+        },
+        'Re-authentication response:'
+      );
+
+      expect(reAuthResponse.status).toBe(200);
+
+      // Now verify that our authenticated agent actually works
+      const sessionResponse = await api.get('/api/auth/get-session');
+      testLogger.info(
+        {
+          status: sessionResponse.status,
+          body: sessionResponse.body,
+          headers: sessionResponse.headers,
+          user: sessionResponse.body?.user?.email || 'No user',
+          session: sessionResponse.body?.session?.id || 'No session',
+        },
+        'Session check response:'
+      );
+
+      if (sessionResponse.status !== 200 || !sessionResponse.body) {
+        testLogger.error(
+          {
+            status: sessionResponse.status,
+            body: sessionResponse.body,
+          },
+          'Session check failed - no valid session:'
+        );
+        throw new Error(
+          `Authentication session not valid: status ${sessionResponse.status}, body: ${JSON.stringify(sessionResponse.body)}`
+        );
+      }
+
       const ctrfReport = generateCtrfReport();
 
-      const response = await api
-        .post('/api/test-reports')
-        .set(authHeaders)
-        .send(ctrfReport)
-        .expect(201);
+      const response = await api.post('/api/test-reports').send(ctrfReport).expect(201);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -58,7 +97,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(minimalReport)
         .expect(201);
 
@@ -84,7 +123,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(reportWithoutMeta)
         .expect(201);
 
@@ -150,7 +189,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(multiStatusReport)
         .expect(201);
 
@@ -249,7 +288,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(richReport)
         .expect(201);
 
@@ -315,7 +354,7 @@ describe('CTRF Reports API System Tests', () => {
       for (const report of reports) {
         const response = await api
           .post('/api/test-reports')
-          .set(authHeaders)
+
           .send(report)
           .expect(201);
         storedReportIds.push(response.body.id);
@@ -323,7 +362,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should retrieve all reports without filters', async () => {
-      const response = await api.get('/api/test-reports').set(authHeaders).expect(200);
+      const response = await api.get('/api/test-reports').expect(200);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -344,7 +383,7 @@ describe('CTRF Reports API System Tests', () => {
     it('should filter reports by test status', async () => {
       const response = await api
         .get('/api/test-reports?status=failed')
-        .set(authHeaders)
+
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -357,7 +396,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should filter reports by tool name', async () => {
-      const response = await api.get('/api/test-reports?tool=Jest').set(authHeaders).expect(200);
+      const response = await api.get('/api/test-reports?tool=Jest').expect(200);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -373,7 +412,7 @@ describe('CTRF Reports API System Tests', () => {
     it('should filter reports by environment', async () => {
       const response = await api
         .get('/api/test-reports?environment=CI')
-        .set(authHeaders)
+
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -388,26 +427,48 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should handle pagination', async () => {
+      // Create two test reports with clearly different tool names and timestamps
+      const now = new Date();
+      const earlier = new Date(now.getTime() - 5000); // 5 seconds earlier
+
+      const report1 = generateCtrfReport({}, earlier);
+      const report2 = generateCtrfReport({}, now);
+
+      // Override the tool names to make them clearly different
+      report1.results.tool.name = 'PaginationTest1';
+      report2.results.tool.name = 'PaginationTest2';
+
+      // Ensure reports have different IDs, timestamps, and tool names
+      expect(report1.reportId).not.toBe(report2.reportId);
+      expect(report1.timestamp).not.toBe(report2.timestamp);
+      expect(report1.results.tool.name).not.toBe(report2.results.tool.name);
+
+      await api.post('/api/test-reports').send(report1).expect(201);
+      await api.post('/api/test-reports').send(report2).expect(201);
+
       const page1Response = await api
         .get('/api/test-reports?page=1&size=1')
-        .set(authHeaders)
+
         .expect(200);
 
       expect(page1Response.body.data).toHaveLength(1);
+      expect(page1Response.body.total).toBeGreaterThanOrEqual(2);
 
-      if (page1Response.body.total > 1) {
-        const page2Response = await api
-          .get('/api/test-reports?page=2&size=1')
-          .set(authHeaders)
-          .expect(200);
+      const page2Response = await api
+        .get('/api/test-reports?page=2&size=1')
 
-        expect(page2Response.body.data).toHaveLength(1);
-        expect(page2Response.body.data[0]._id).not.toBe(page1Response.body.data[0]._id);
-      }
+        .expect(200);
+
+      expect(page2Response.body.data).toHaveLength(1);
+
+      // Check that we get different reports by comparing tool names and timestamps
+      expect(page2Response.body.data[0].results.tool.name).not.toBe(
+        page1Response.body.data[0].results.tool.name
+      );
+      expect(page2Response.body.data[0].timestamp).not.toBe(page1Response.body.data[0].timestamp);
     });
-
     it('should respect maximum page size limit', async () => {
-      const response = await api.get('/api/test-reports?size=200').set(authHeaders).expect(200);
+      const response = await api.get('/api/test-reports?size=200').expect(200);
 
       expect(response.body.data.length).toBeLessThanOrEqual(100);
     });
@@ -415,7 +476,7 @@ describe('CTRF Reports API System Tests', () => {
     it('should combine multiple filters', async () => {
       const response = await api
         .get('/api/test-reports?tool=Jest&environment=CI')
-        .set(authHeaders)
+
         .expect(200);
 
       expect(response.body).toMatchObject({
@@ -438,7 +499,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(invalidReport)
         .expect(400);
 
@@ -459,7 +520,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(incompleteReport)
         .expect(400);
 
@@ -470,18 +531,20 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should reject unsupported HTTP methods', async () => {
-      const response = await api.delete('/api/test-reports').set(authHeaders).expect(405);
+      const response = await api.delete('/api/test-reports').expect(405);
 
       expect(response.body).toMatchObject({
         success: false,
-        error: 'Method not allowed. Supported methods: GET, POST',
+        error: 'Method DELETE not allowed',
       });
     });
 
     it('should require authentication', async () => {
       const ctrfReport = generateCtrfReport();
 
-      await api.post('/api/test-reports').send(ctrfReport).expect(401);
+      // Use a non-authenticated agent
+      const unauthenticatedAgent = supertest(API_URL);
+      await unauthenticatedAgent.post('/api/test-reports').send(ctrfReport).expect(401);
     });
   });
 
@@ -492,7 +555,7 @@ describe('CTRF Reports API System Tests', () => {
       const startTime = Date.now();
       const response = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(largeReport)
         .expect(201);
       const endTime = Date.now();
@@ -511,9 +574,7 @@ describe('CTRF Reports API System Tests', () => {
     it('should handle concurrent report submissions', async () => {
       const reports = Array.from({ length: 5 }, () => generateCtrfReport());
 
-      const promises = reports.map(report =>
-        api.post('/api/test-reports').set(authHeaders).send(report)
-      );
+      const promises = reports.map(report => api.post('/api/test-reports').send(report));
 
       const responses = await Promise.all(promises);
 
@@ -533,6 +594,13 @@ describe('CTRF Reports API System Tests', () => {
 
   describe('Data Integrity', () => {
     it('should preserve all report data through storage and retrieval', async () => {
+      // Create a test report with only specific environment fields
+      const testEnvironment = {
+        appName: 'TestApp',
+        buildNumber: 'build-123',
+        extra: { customEnv: 'production' },
+      };
+
       const originalReport = generateCtrfReport({
         generatedBy: 'Data Integrity Test',
         results: {
@@ -568,11 +636,7 @@ describe('CTRF Reports API System Tests', () => {
               trace: 'Error stack trace here',
             },
           ],
-          environment: {
-            appName: 'TestApp',
-            buildNumber: 'build-123',
-            extra: { customEnv: 'production' },
-          },
+          environment: testEnvironment,
         },
         extra: {
           customReportField: 'reportValue',
@@ -581,13 +645,13 @@ describe('CTRF Reports API System Tests', () => {
 
       const storeResponse = await api
         .post('/api/test-reports')
-        .set(authHeaders)
+
         .send(originalReport)
         .expect(201);
 
       const reportId = storeResponse.body.id;
 
-      const retrieveResponse = await api.get('/api/test-reports').set(authHeaders).expect(200);
+      const retrieveResponse = await api.get('/api/test-reports').expect(200);
 
       const storedReport = retrieveResponse.body.data.find(
         (r: StoredReport) => r.reportId === reportId
@@ -600,7 +664,24 @@ describe('CTRF Reports API System Tests', () => {
       expect(storedReport.results.tool).toEqual(originalReport.results.tool);
       expect(storedReport.results.summary).toEqual(originalReport.results.summary);
       expect(storedReport.results.tests).toEqual(originalReport.results.tests);
-      expect(storedReport.results.environment).toEqual(originalReport.results.environment);
+
+      // The API may normalize environment objects by adding null fields for missing optional properties
+      // This is consistent with the CTRF specification which allows these fields to be present with null values
+      if (originalReport.results.environment) {
+        expect(storedReport.results.environment).toMatchObject(originalReport.results.environment);
+
+        // Verify that required environment fields are preserved exactly
+        expect(storedReport.results.environment?.appName).toBe(
+          originalReport.results.environment.appName
+        );
+        expect(storedReport.results.environment?.buildNumber).toBe(
+          originalReport.results.environment.buildNumber
+        );
+        expect(storedReport.results.environment?.extra).toEqual(
+          originalReport.results.environment.extra
+        );
+      }
+
       expect(storedReport.extra).toEqual(originalReport.extra);
       expect(storedReport).toHaveProperty('storedAt');
     });

@@ -44,9 +44,12 @@ export function setupPlaywright(): PlaywrightTestContext {
       context = await browser.newContext(PLAYWRIGHT_CONFIG.contextOptions);
       page = await context.newPage();
     } catch (error) {
-      testLogger.error('Failed to setup Playwright', {
-        error: error instanceof Error ? error.message : error,
-      });
+      testLogger.error(
+        {
+          error: error instanceof Error ? error.message : error,
+        },
+        'Failed to setup Playwright'
+      );
       throw error;
     }
   });
@@ -65,9 +68,12 @@ export function setupPlaywright(): PlaywrightTestContext {
         await browser.close();
       }
     } catch (error) {
-      testLogger.warn('Error during Playwright teardown', {
-        error: error instanceof Error ? error.message : error,
-      });
+      testLogger.warn(
+        {
+          error: error instanceof Error ? error.message : error,
+        },
+        'Error during Playwright teardown'
+      );
     }
   });
 
@@ -80,9 +86,12 @@ export function setupPlaywright(): PlaywrightTestContext {
         }
       }
     } catch (error) {
-      testLogger.warn('Error checking page state, recreating page', {
-        error: error instanceof Error ? error.message : error,
-      });
+      testLogger.warn(
+        {
+          error: error instanceof Error ? error.message : error,
+        },
+        'Error checking page state, recreating page'
+      );
       // If page check fails, try to reset context
       try {
         if (context) {
@@ -91,9 +100,12 @@ export function setupPlaywright(): PlaywrightTestContext {
         context = await browser.newContext(PLAYWRIGHT_CONFIG.contextOptions);
         page = await context.newPage();
       } catch (contextError) {
-        testLogger.warn('Context reset also failed, recreating browser', {
-          error: contextError instanceof Error ? contextError.message : contextError,
-        });
+        testLogger.warn(
+          {
+            error: contextError instanceof Error ? contextError.message : contextError,
+          },
+          'Context reset also failed, recreating browser'
+        );
         // Only recreate browser as last resort
         if (browser) {
           await browser.close().catch(() => {});

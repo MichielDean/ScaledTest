@@ -1,57 +1,131 @@
 /**
- * Test logger configuration that routes Pino logs to Jest console capture
- * This ensures Pino logs appear in testResult.console for the Jest reporter
+ * Test logger configuration for cleaner test output
+ * Routes test infrastructure logs to files to keep terminal clean
+ * Jest's built-in failure reporting will show relevant logs on test failures
  */
-import pino from 'pino';
+import pino, { Logger } from 'pino';
 import { randomUUID } from 'crypto';
 
 /**
- * Custom Jest transport that writes to console for Jest capture
+ * Create the main test logger instance
+ * Routes test logs to a separate file to keep terminal clean
  */
-const jestTransport: pino.TransportSingleOptions = {
-  target: 'pino/file',
-  options: {
-    destination: 1, // stdout - Jest will capture this
-  },
+function createTestLogger(): Logger {
+  // Write test logs to a file during test runs to keep terminal clean
+  const transport = {
+    target: 'pino/file',
+    options: {
+      destination: './logs/test.log',
+      mkdir: true,
+    },
+  };
+
+  return pino({
+    transport,
+    level: 'debug',
+    timestamp: pino.stdTimeFunctions.isoTime,
+    base: { app: 'scaledtest', source: 'test' },
+  });
+}
+
+// Singleton pattern to ensure only one logger instance across all Jest projects
+let loggerInstance: Logger | null = null;
+
+function getLoggerInstance(): Logger {
+  if (!loggerInstance) {
+    loggerInstance = createTestLogger();
+  }
+  return loggerInstance;
+}
+
+// Cache for child loggers
+let _authTestLogger: Logger | undefined;
+let _apiTestLogger: Logger | undefined;
+let _dbTestLogger: Logger | undefined;
+let _uiTestLogger: Logger | undefined;
+
+// Export the main test logger instance
+export const testLogger = getLoggerInstance();
+
+// Pre-configured child loggers for different modules
+export const authTestLogger = () => {
+  if (!_authTestLogger) {
+    _authTestLogger = testLogger.child({ module: 'auth' });
+  }
+  return _authTestLogger;
+};
+
+export const apiTestLogger = () => {
+  if (!_apiTestLogger) {
+    _apiTestLogger = testLogger.child({ module: 'api' });
+  }
+  return _apiTestLogger;
+};
+
+export const dbTestLogger = () => {
+  if (!_dbTestLogger) {
+    _dbTestLogger = testLogger.child({ module: 'db' });
+  }
+  return _dbTestLogger;
+};
+
+export const uiTestLogger = () => {
+  if (!_uiTestLogger) {
+    _uiTestLogger = testLogger.child({ module: 'ui' });
+  }
+  return _uiTestLogger;
 };
 
 /**
- * Create test logger with Jest-compatible transport
+ * Closes the test logger transport and resets the singleton
  */
-const createTestLogger = () => {
-  const isTest = process.env.NODE_ENV === 'test';
+export async function closeTestLogger(): Promise<void> {
+  try {
+    if (loggerInstance) {
+      // Use documented cleanup methods if available
+      interface LoggerWithCleanup {
+        flush?: () => Promise<void> | void;
+        close?: () => Promise<void> | void;
+      }
 
-  return pino({
-    level: 'debug',
-    transport: isTest
-      ? jestTransport
-      : {
-          target: 'pino-pretty',
-          options: {
-            colorize: true,
-          },
-        },
-    timestamp: pino.stdTimeFunctions.isoTime,
-    base: { app: 'scaledtest' },
-  });
-};
-
-// Create logger instance
-const logger = createTestLogger();
-
-// Pre-configured child loggers for different modules
-export const authLogger = logger.child({ module: 'auth' });
-export const apiLogger = logger.child({ module: 'api' });
-export const dbLogger = logger.child({ module: 'db' });
-export const uiLogger = logger.child({ module: 'ui' });
-export const testLogger = logger.child({ module: 'test' });
+      const logger = loggerInstance as unknown as LoggerWithCleanup;
+      if (typeof logger.flush === 'function') {
+        await logger.flush();
+      } else if (typeof logger.close === 'function') {
+        await logger.close();
+      } else {
+        // No documented cleanup method available; skipping transport cleanup to avoid accessing internals.
+      }
+    }
+  } catch (error) {
+    // Silently handle any errors during cleanup - serialize error details and use stderr
+    let errorDetails: string;
+    if (error instanceof Error) {
+      errorDetails = `${error.message}\n${error.stack ?? ''}`;
+    } else if (typeof error === 'object' && error !== null) {
+      try {
+        errorDetails = JSON.stringify(error);
+      } catch {
+        errorDetails = String(error);
+      }
+    } else {
+      errorDetails = String(error);
+    }
+    process.stderr.write(`Error closing test logger: ${errorDetails}\n`);
+  } finally {
+    // Reset the singleton and cached child loggers
+    loggerInstance = null;
+    _authTestLogger = undefined;
+    _apiTestLogger = undefined;
+  }
+}
 
 /**
  * Generate a request ID for API request logging
  */
 export function getRequestLogger(req: { headers: Record<string, string | string[] | undefined> }) {
   const requestId = req.headers['x-request-id'] || randomUUID();
-  return apiLogger.child({ requestId });
+  return apiTestLogger().child({ requestId });
 }
 
 /**
@@ -80,4 +154,4 @@ export function logError(
   );
 }
 
-export default logger;
+export default testLogger;

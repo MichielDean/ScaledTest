@@ -1,7 +1,7 @@
 {
   "name": "ScaledTest",
   "short_name": "ScaledTest",
-  "description": "Next.js application with Keycloak authentication and analytics",
+  "description": "Next.js application with Better Auth authentication and analytics",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#FDF5E6",

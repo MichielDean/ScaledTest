@@ -2,77 +2,64 @@
  * Auth-related interfaces
  *
  * This file contains shared authentication-related interfaces to reduce duplication across
- * the codebase. These interfaces represent structures used for authentication with Keycloak,
+ * the codebase. These interfaces represent structures used for authentication with Better Auth,
  * handling tokens, and user authentication.
  */
 
-import { JWTPayload } from 'jose';
 import { NextApiRequest } from 'next';
-import { UserRole } from '../auth/keycloak';
+import { UserRole } from './roles';
+
+// Re-export UserRole for convenience
+export { UserRole } from './roles';
 
 /**
- * Keycloak configuration interface
+ * Response from Better Auth authentication
  */
-export interface KeycloakConfig {
-  resource: string;
-  'auth-server-url': string;
-  realm: string;
-  [key: string]: string | boolean | number;
-}
-
-/**
- * Response from Keycloak token endpoint
- */
-export interface KeycloakTokenResponse {
-  access_token: string;
-  expires_in: number;
-  refresh_token: string;
-  refresh_expires_in: number;
-  token_type: string;
-  scope: string;
-}
-
-/**
- * Response from Keycloak admin token endpoint
- */
-export interface AdminTokenResponse {
-  access_token: string;
-  expires_in: number;
-  token_type: string;
-  refresh_token?: string;
-}
-
-/**
- * Decoded Keycloak token payload
- */
-export interface KeycloakTokenPayload extends JWTPayload {
-  // Keycloak-specific claims not covered by standard JWTPayload
-  auth_time: number;
-  typ: string;
-  azp: string;
-  session_state: string;
-  acr: string;
-  realm_access?: { roles: string[] };
-  resource_access?: {
-    [key: string]: {
-      roles: string[];
-    };
+export interface BetterAuthTokenResponse {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
   };
-  scope: string;
-  sid: string;
-  email_verified: boolean;
-  name?: string;
-  preferred_username?: string;
-  given_name?: string;
-  family_name?: string;
+  token: string;
+  redirect: boolean;
+  url?: string;
+}
+
+/**
+ * Better Auth session data
+ */
+export interface BetterAuthSession {
+  user: {
+    id: string;
+    email: string;
+    name: string;
+    role?: string;
+  };
+  session: {
+    id: string;
+    userId: string;
+    expiresAt: Date;
+    token: string;
+  };
+}
+
+/**
+ * Decoded Better Auth token payload
+ */
+export interface BetterAuthTokenPayload {
+  // Better Auth specific claims
+  userId: string;
   email?: string;
+  role?: string;
 }
 
 /**
  * Extended NextApiRequest to include the authenticated user
  */
 export interface AuthenticatedRequest extends NextApiRequest {
-  user: KeycloakTokenPayload;
+  user: BetterAuthTokenPayload;
 }
 
 /**
@@ -84,4 +71,79 @@ export interface MethodRoleConfig {
   PUT?: UserRole[];
   PATCH?: UserRole[];
   DELETE?: UserRole[];
+}
+
+/**
+ * Better Auth Admin API interfaces for user management
+ * These interfaces represent the admin API methods used for user operations
+ */
+
+// User data returned by Better Auth admin API
+export interface BetterAuthUser {
+  id?: string;
+  userId?: string;
+  email?: string;
+  name?: string;
+  role?: string;
+}
+
+// Parameter shapes for getUser method - Better Auth may accept different formats
+export interface GetUserByUserId {
+  userId: string;
+}
+
+export interface GetUserById {
+  id: string;
+}
+
+export type GetUserParams = GetUserByUserId | GetUserById;
+
+// Session data from Better Auth admin API
+export interface BetterAuthSessionData {
+  user?: BetterAuthUser;
+  id?: string;
+  userId?: string;
+}
+
+export interface GetSessionParams {
+  headers?: Headers;
+}
+
+// Better Auth admin API interface for type safety - flexible to work with actual API
+export interface BetterAuthAdminApi {
+  getUser?: (...args: unknown[]) => Promise<BetterAuthUser | null>;
+  getSession?: (...args: unknown[]) => Promise<BetterAuthSessionData | null>;
+  updateUser?: (...args: unknown[]) => Promise<void>;
+  deleteUser?: (...args: unknown[]) => Promise<void>;
+  [key: string]: unknown; // Allow for additional properties
+}
+
+// Specific typed interface for Better Auth admin API user operations
+export interface BetterAuthUserManagementApi {
+  getUser: (opts: {
+    body: { userId: string };
+  }) => Promise<{ id: string; role?: string; email?: string; name?: string } | null>;
+  setRole: (opts: { body: { userId: string; role: string } }) => Promise<void>;
+}
+
+// Auth object with admin API - more flexible interface
+export interface AuthWithAdminApi {
+  api?: Record<string, unknown>; // Flexible to work with actual Better Auth API
+  [key: string]: unknown; // Allow for additional properties
+}
+
+/**
+ * Error types for Better Auth operations
+ */
+export interface BetterAuthError extends Error {
+  code?: string;
+  statusCode?: number;
+  details?: unknown;
+}
+
+export interface BetterAuthApiError {
+  message: string;
+  code?: string;
+  userId?: string;
+  operation?: string;
 }

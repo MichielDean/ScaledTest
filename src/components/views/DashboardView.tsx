@@ -1,8 +1,8 @@
 import React from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { useAuth } from '../../auth/KeycloakProvider';
-import { UserRole } from '../../auth/keycloak';
+import { useAuth } from '../../hooks/useAuth';
+import { UserRole } from '../../types/roles';
 import { useSPANavigation } from '../../contexts/SPANavigationContext';
 
 const DashboardView: React.FC = () => {

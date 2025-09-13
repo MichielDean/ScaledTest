@@ -19,6 +19,9 @@ export class ProfilePage extends BasePage {
    */
   async goto() {
     await super.goto('/profile');
+    // Wait for redirect to dashboard?view=profile and for content to load
+    await this.page.waitForURL('**/dashboard?view=profile');
+    await this.page.waitForLoadState('networkidle');
   }
 
   /**

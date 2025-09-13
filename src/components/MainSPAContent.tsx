@@ -11,6 +11,7 @@ import {
 import { Separator } from '@/components/ui/separator';
 import { SidebarInset, SidebarProvider, SidebarTrigger } from '@/components/ui/sidebar';
 import { useSPANavigation, SPAView } from '../contexts/SPANavigationContext';
+import { uiLogger as logger } from '../logging/logger';
 
 // Import all the view components
 import DashboardView from './views/DashboardView';
@@ -73,6 +74,8 @@ const MainSPAContent: React.FC = () => {
   const { currentView } = useSPANavigation();
   const config = viewConfigs[currentView];
   const CurrentViewComponent = config.component;
+
+  logger.debug({ currentView, configTitle: config.title }, 'MainSPAContent rendering view');
 
   return (
     <div className="relative min-h-screen">

@@ -1,5 +1,12 @@
 /**
- * Shared utilities for accessibility testing
+ * Shared utilities for accessibi  testLogger.error({
+    violations: violations.map(v => ({
+      id: v.id,
+      impact: v.impact,
+      description: v.description,
+      nodes: v.nodes.length,
+    })),
+  }, logMessage);ting
  */
 
 import { injectAxe, getViolations } from 'axe-playwright';
@@ -35,21 +42,30 @@ export const logAccessibilityViolations = (
     ? `${violationType} violations on ${pageName}`
     : `Accessibility violations on ${pageName}`;
 
-  testLogger.error(logMessage, {
-    violations: violations.map(v => ({
-      id: v.id,
-      impact: v.impact,
-      description: v.description,
-      nodes: v.nodes ? v.nodes.length : 0,
-    })),
-  });
+  testLogger.error(
+    {
+      violations: violations.map(v => ({
+        id: v.id,
+        impact: v.impact,
+        description: v.description,
+        nodes: v.nodes ? v.nodes.length : 0,
+      })),
+    },
+    logMessage
+  );
 };
 
 /**
  * Helper function to wait for page to be fully loaded
  */
 export const waitForPageLoad = async (page: Page, timeout = 1500) => {
-  await page.waitForLoadState('networkidle');
+  try {
+    // Try networkidle but with shorter timeout
+    await page.waitForLoadState('networkidle', { timeout: 10000 });
+  } catch {
+    // Fallback to domcontentloaded if networkidle fails
+    await page.waitForLoadState('domcontentloaded');
+  }
   await page.waitForSelector('main, body', { state: 'visible' });
   await page.waitForTimeout(timeout);
 };

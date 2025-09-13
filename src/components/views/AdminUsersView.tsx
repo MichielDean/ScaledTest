@@ -1,9 +1,19 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { useAuth } from '../../auth/KeycloakProvider';
-import { UserRole } from '../../auth/keycloak';
+import { useAuth } from '../../hooks/useAuth';
+import { UserRole } from '../../types/roles';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../logging/logger';
 import { UserWithTeams } from '../../types/team';
+
+// Better Auth user interface
+interface BetterAuthUser {
+  id: string;
+  name?: string;
+  email: string;
+  role?: string;
+  createdAt?: string;
+  updatedAt?: string;
+}
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -32,7 +42,7 @@ import {
 import { Trash2 } from 'lucide-react';
 
 const AdminUsersView: React.FC = () => {
-  const { isAuthenticated, hasRole, loading: authLoading, token } = useAuth();
+  const { isAuthenticated, hasRole, loading: authLoading } = useAuth();
 
   // Users state
   const [users, setUsers] = useState<UserWithTeams[]>([]);
@@ -40,96 +50,116 @@ const AdminUsersView: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [deletingUserId, setDeletingUserId] = useState<string | null>(null);
 
+  // Debug authentication state
+  logger.debug(
+    { isAuthenticated, authLoading, hasOwnerRole: hasRole(UserRole.OWNER) },
+    'AdminUsersView authentication state'
+  );
+
   // Fetch users with teams
   const fetchUsers = useCallback(async () => {
     try {
       setUsersLoading(true);
       setError(null);
 
-      if (!token) {
-        throw new Error('No authentication token available');
-      }
+      logger.debug('Starting admin users API call');
 
-      const response = await axios.get('/api/admin/team-assignments', {
+      // Use our backend admin API endpoint
+      const response = await axios.get('/api/admin/users', {
         headers: {
-          Authorization: `Bearer ${token}`,
+          'Content-Type': 'application/json',
         },
+        withCredentials: true, // Include cookies for authentication
       });
 
-      if (response.status !== 200) {
-        throw new Error(`Failed to fetch users: ${response.statusText}`);
-      }
+      logger.debug({ response: response.data }, 'Admin users API response');
 
-      setUsers(response.data.data);
-    } catch (error) {
-      logError(logger, 'Error fetching users with teams', error, {
-        component: 'AdminUsersView',
-      });
-      setError('Failed to fetch users. Please try again later.');
+      // Handle our API response format
+      const users = response.data?.users || [];
+
+      logger.debug({ userCount: users.length }, 'Admin users API response');
+
+      // Convert API users to our UserWithTeams format
+      const usersData = users.map((user: BetterAuthUser) => ({
+        id: user.id,
+        username: user.name || 'Unknown',
+        email: user.email,
+        firstName: user.name || 'Unknown',
+        lastName: '',
+        roles: [user.role || 'readonly'],
+        teams: [], // Teams could be enhanced later
+        isMaintainer: user.role === 'maintainer' || user.role === 'owner',
+      }));
+
+      setUsers(usersData);
+    } catch (err) {
+      logger.error({ error: err }, 'Failed to fetch users from admin API');
+      setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
       setUsersLoading(false);
     }
-  }, [token]);
+  }, []);
 
   // Delete user function
-  const handleDeleteUser = useCallback(
-    async (userId: string, username: string) => {
-      try {
-        setDeletingUserId(userId);
-        setError(null);
+  const handleDeleteUser = useCallback(async (userId: string, username: string) => {
+    try {
+      setDeletingUserId(userId);
+      setError(null);
 
-        if (!token) {
-          throw new Error('No authentication token available');
-        }
+      const response = await axios.delete(`/api/admin/users?userId=${userId}`, {
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        withCredentials: true, // Include cookies for authentication
+      });
 
-        const response = await axios.delete(`/api/admin/users?userId=${userId}`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        if (response.status !== 200) {
-          throw new Error(`Failed to delete user: ${response.statusText}`);
-        }
-
-        // Remove user from local state
-        setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
-
-        logger.info('User deleted successfully', {
-          userId,
-          username,
-          component: 'AdminUsersView',
-        });
-      } catch (error) {
-        logError(logger, 'Error deleting user', error, {
-          userId,
-          username,
-          component: 'AdminUsersView',
-        });
-
-        if (axios.isAxiosError(error)) {
-          if (error.response?.status === 404) {
-            setError('User not found');
-          } else if (error.response?.status === 403) {
-            setError('Insufficient permissions to delete user');
-          } else {
-            setError(error.response?.data?.error || 'Failed to delete user');
-          }
-        } else {
-          setError('Failed to delete user. Please try again later.');
-        }
-      } finally {
-        setDeletingUserId(null);
+      if (response.status !== 200) {
+        throw new Error(`Failed to delete user: ${response.statusText}`);
       }
-    },
-    [token]
-  );
+
+      // Remove user from local state
+      setUsers(prevUsers => prevUsers.filter(user => user.id !== userId));
+
+      logger.info(
+        {
+          userId,
+          username,
+          component: 'AdminUsersView',
+        },
+        'User deleted successfully'
+      );
+    } catch (error) {
+      logError(logger, 'Error deleting user', error, {
+        userId,
+        username,
+        component: 'AdminUsersView',
+      });
+
+      if (axios.isAxiosError(error)) {
+        if (error.response?.status === 404) {
+          setError('User not found');
+        } else if (error.response?.status === 403) {
+          setError('Insufficient permissions to delete user');
+        } else {
+          setError(error.response?.data?.error || 'Failed to delete user');
+        }
+      } else {
+        setError('Failed to delete user. Please try again later.');
+      }
+    } finally {
+      setDeletingUserId(null);
+    }
+  }, []);
 
   useEffect(() => {
-    if (token) {
+    logger.debug({ isAuthenticated, authLoading }, 'AdminUsersView useEffect triggered');
+    if (isAuthenticated) {
+      logger.debug('Authentication confirmed, calling fetchUsers');
       fetchUsers();
+    } else {
+      logger.debug('Not authenticated, skipping fetchUsers');
     }
-  }, [token, fetchUsers]);
+  }, [isAuthenticated, fetchUsers]);
 
   if (!isAuthenticated || authLoading) {
     return <div>Loading...</div>;
@@ -176,70 +206,72 @@ const AdminUsersView: React.FC = () => {
               ))}
             </div>
           ) : (
-            <Table id="users-table">
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Username</TableHead>
-                  <TableHead>Email</TableHead>
-                  <TableHead>Teams</TableHead>
-                  <TableHead>Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {users.map(user => (
-                  <TableRow key={user.id}>
-                    <TableCell>{user.username}</TableCell>
-                    <TableCell>{user.email}</TableCell>
-                    <TableCell>
-                      <div className="flex gap-1 flex-wrap">
-                        {user.teams?.map(team => (
-                          <Badge key={team.id} variant="secondary">
-                            {team.name}
-                          </Badge>
-                        )) || <span className="text-muted-foreground">No teams</span>}
-                      </div>
-                    </TableCell>
-                    <TableCell>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button
-                            variant="destructive"
-                            size="sm"
-                            disabled={deletingUserId === user.id}
-                            id={`delete-user-${user.id}`}
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            {deletingUserId === user.id ? 'Deleting...' : 'Delete User'}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>Delete User</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              Are you sure you want to delete user <strong>{user.username}</strong>{' '}
-                              ({user.email})?
-                              <br />
-                              <br />
-                              This action cannot be undone. The user will be permanently removed
-                              from the system and will lose access to the application.
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
-                            <AlertDialogAction
-                              onClick={() => handleDeleteUser(user.id, user.username)}
-                              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                            >
-                              Delete User
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
-                    </TableCell>
+            <>
+              <Table id="users-table">
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Username</TableHead>
+                    <TableHead>Email</TableHead>
+                    <TableHead>Teams</TableHead>
+                    <TableHead>Actions</TableHead>
                   </TableRow>
-                ))}
-              </TableBody>
-            </Table>
+                </TableHeader>
+                <TableBody>
+                  {users.map(user => (
+                    <TableRow key={user.id}>
+                      <TableCell>{user.username}</TableCell>
+                      <TableCell>{user.email}</TableCell>
+                      <TableCell>
+                        <div className="flex gap-1 flex-wrap">
+                          {user.teams?.map(team => (
+                            <Badge key={team.id} variant="secondary">
+                              {team.name}
+                            </Badge>
+                          )) || <span className="text-muted-foreground">No teams</span>}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <AlertDialog>
+                          <AlertDialogTrigger asChild>
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              disabled={deletingUserId === user.id}
+                              id={`delete-user-${user.id}`}
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              {deletingUserId === user.id ? 'Deleting...' : 'Delete User'}
+                            </Button>
+                          </AlertDialogTrigger>
+                          <AlertDialogContent>
+                            <AlertDialogHeader>
+                              <AlertDialogTitle>Delete User</AlertDialogTitle>
+                              <AlertDialogDescription>
+                                Are you sure you want to delete user{' '}
+                                <strong>{user.username}</strong> ({user.email})?
+                                <br />
+                                <br />
+                                This action cannot be undone. The user will be permanently removed
+                                from the system and will lose access to the application.
+                              </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                              <AlertDialogCancel>Cancel</AlertDialogCancel>
+                              <AlertDialogAction
+                                onClick={() => handleDeleteUser(user.id, user.username)}
+                                className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                              >
+                                Delete User
+                              </AlertDialogAction>
+                            </AlertDialogFooter>
+                          </AlertDialogContent>
+                        </AlertDialog>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </>
           )}
         </CardContent>
       </Card>
