@@ -40,23 +40,18 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthUserManagementApi {
   const obj = candidate as Record<string, unknown> | undefined;
-  if (!obj || typeof obj.getUser !== 'function' || typeof obj.setRole !== 'function') {
+  if (
+    !obj ||
+    typeof obj.getUser !== 'function' ||
+    typeof obj.setRole !== 'function'
+  ) {
     return false;
   }
-  // Check that getUser and setRole accept one argument and return a Promise (duck typing)
-  try {
-    // Check getUser
-    const getUserResult = obj.getUser({ body: { userId: '' } });
-    if (!getUserResult || typeof getUserResult.then !== 'function') {
-      return false;
-    }
-    // Check setRole
-    const setRoleResult = obj.setRole({ body: { userId: '', role: '' } });
-    if (!setRoleResult || typeof setRoleResult.then !== 'function') {
-      return false;
-    }
-  } catch {
-    // If calling the functions throws, it's not the right shape
+  // Optionally check arity (number of arguments)
+  if (
+    (obj.getUser as Function).length < 1 ||
+    (obj.setRole as Function).length < 1
+  ) {
     return false;
   }
   return true;
