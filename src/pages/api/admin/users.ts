@@ -4,21 +4,6 @@ import { apiLogger } from '../../../logging/logger';
 import { verifyUserExists } from '../../../lib/teamManagement';
 import { AuthAdminApi, authAdminApi } from '../../../lib/auth';
 
-interface ListUser {
-  id: string;
-  email: string;
-  name?: string;
-  role?: string;
-  emailVerified?: boolean;
-  createdAt?: string;
-  updatedAt?: string;
-}
-
-interface ListUsersResponse {
-  users: ListUser[];
-  total: number;
-}
-
 /**
  * Handle GET requests - retrieve all users with their roles
  */
@@ -28,77 +13,72 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     const page = parseInt(req.query.page as string) || 1;
     const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100); // Max 100 users per page
     const offset = (page - 1) * pageSize;
+    const search = req.query.search as string;
 
-    // Prefer using Better Auth admin API for listing users. Support both
-    // shapes: `api.listUsers` and `api.admin.listUsers` depending on
-    // Better Auth client versions.
-    type ListUsersFn = (opts?: {
-      query?: { limit?: number; offset?: number };
-    }) => Promise<ListUsersResponse>;
+    reqLogger.info({ page, pageSize, offset, search }, 'Fetching users with direct database query');
 
-    // Type guards for listUsers at root or under admin
-    function hasListUsers(obj: unknown): obj is { listUsers: ListUsersFn } {
-      return (
-        !!obj &&
-        typeof obj === 'object' &&
-        obj !== null &&
-        typeof (obj as Record<string, unknown>).listUsers === 'function'
-      );
-    }
-    function hasAdminListUsers(obj: unknown): obj is { admin: { listUsers: ListUsersFn } } {
-      const asObj = obj as Record<string, unknown>;
-      return (
-        !!obj &&
-        typeof obj === 'object' &&
-        obj !== null &&
-        !!asObj.admin &&
-        typeof asObj.admin === 'object' &&
-        asObj.admin !== null &&
-        typeof (asObj.admin as Record<string, unknown>).listUsers === 'function'
-      );
+    // Direct database query for user listing
+    const { Pool } = await import('pg');
+    const pool = new Pool({
+      connectionString: process.env.DATABASE_URL,
+    });
+
+    let query =
+      'SELECT id, email, name, role, "emailVerified", "createdAt", "updatedAt" FROM "user"';
+    let countQuery = 'SELECT COUNT(*) as total FROM "user"';
+    const queryParams: (string | number)[] = [];
+    const countParams: string[] = [];
+
+    // Add search filter if provided
+    if (search) {
+      query += ' WHERE email ILIKE $1 OR name ILIKE $1';
+      countQuery += ' WHERE email ILIKE $1 OR name ILIKE $1';
+      queryParams.push(`%${search}%`);
+      countParams.push(`%${search}%`);
     }
 
-    let listFn: ListUsersFn | undefined;
-    if (hasListUsers(authAdminApi)) {
-      listFn = authAdminApi.listUsers.bind(authAdminApi);
-    } else if (hasAdminListUsers(authAdminApi) && authAdminApi.admin) {
-      listFn = authAdminApi.admin.listUsers.bind(authAdminApi.admin);
+    // Add ordering and pagination
+    query += ' ORDER BY "createdAt" DESC';
+    if (search) {
+      query += ' LIMIT $2 OFFSET $3';
+      queryParams.push(pageSize, offset);
+    } else {
+      query += ' LIMIT $1 OFFSET $2';
+      queryParams.push(pageSize, offset);
     }
 
-    if (!listFn) {
-      apiLogger.warn('Auth admin API listUsers not available');
-      return res.status(501).json({ error: 'User listing not supported by current auth provider' });
-    }
+    const [result, countResult] = await Promise.all([
+      pool.query(query, queryParams),
+      pool.query(countQuery, countParams),
+    ]);
 
-    const listResp = await listFn({ query: { limit: pageSize, offset } });
-    const paginatedUsers = listResp?.users ?? [];
-    const total = listResp?.total ?? 0;
+    const total = parseInt(countResult.rows[0]?.total || '0');
+    await pool.end();
+
+    const users = result.rows.map(row => ({
+      id: row.id,
+      email: row.email,
+      name: row.name,
+      emailVerified: row.emailVerified,
+      createdAt: row.createdAt?.toISOString(),
+      updatedAt: row.updatedAt?.toISOString(),
+      role: row.role || 'readonly',
+    }));
 
     reqLogger.info(
       {
         page,
         pageSize,
         offset,
+        search,
         totalUsers: total,
-        returnedUsers: paginatedUsers.length,
+        returnedUsers: users.length,
       },
-      'User list retrieved with server-side pagination'
+      'User list retrieved via direct database query'
     );
 
-    // Transform Better Auth users to include role information
-    const usersWithRoles = paginatedUsers.map((user: ListUser) => ({
-      id: user.id,
-      email: user.email,
-      name: user.name,
-      emailVerified: user.emailVerified,
-      createdAt: user.createdAt,
-      updatedAt: user.updatedAt,
-      role: user.role || 'readonly', // Default to readonly if no role specified
-    }));
-
-    // Add pagination metadata to response
     const response = {
-      users: usersWithRoles,
+      users,
       pagination: {
         page,
         pageSize,
@@ -111,7 +91,7 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
 
     return res.status(200).json(response);
   } catch (error) {
-    apiLogger.error({ error }, 'Error fetching users');
+    reqLogger.error({ error }, 'Error fetching users');
     return res.status(500).json({ error: 'Failed to fetch users' });
   }
 };

@@ -121,29 +121,103 @@ async function checkUserExists(email: string): Promise<{ id: string; email: stri
 }
 
 /**
- * Assign role to user using direct database update
+ * Verify email for test users directly in database
  */
-async function assignUserRole(userId: string, role: string, _userEmail: string): Promise<void> {
+async function verifyUserEmail(email: string): Promise<void> {
+  const { Pool } = await import('pg');
+
   try {
-    scriptLogger.info(`Assigning role '${role}' to user: ${_userEmail} (${userId})`);
-    // Use Better Auth admin API to set role
+    const pool = new Pool({
+      connectionString: getRequiredEnvVar('DATABASE_URL', 'Database connection required'),
+    });
+
+    const result = await pool.query('UPDATE "user" SET "emailVerified" = true WHERE email = $1', [
+      email,
+    ]);
+
+    if (result.rowCount === 0) {
+      scriptLogger.warn(`No user found with email: ${email}`);
+    } else {
+      scriptLogger.info(`Email verified for user: ${email}`);
+    }
+
+    await pool.end();
+  } catch (error) {
+    scriptLogger.error({ err: error, email }, 'Failed to verify email in database');
+    throw error;
+  }
+}
+
+/**
+ * Assign role to user using Better Auth admin API
+ */
+async function assignUserRole(userId: string, role: string, userEmail: string): Promise<void> {
+  try {
+    scriptLogger.info(`Assigning role '${role}' to user: ${userEmail} (${userId})`);
+
+    // Use Better Auth's setRole API endpoint directly
     const baseUrl = getRequiredEnvVar('NEXT_PUBLIC_BASE_URL', 'http://localhost:3000');
-    const resp = await fetch(`${baseUrl}/api/admin/user-roles`, {
+    const resp = await fetch(`${baseUrl}/api/auth/admin/set-role`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        // Note: This requires authentication, but during setup we might not have a session
+        // Better Auth admin APIs are designed to be called from server context with proper auth
+      },
       body: JSON.stringify({ userId, role }),
     });
 
     if (!resp.ok) {
-      const text = await resp.text();
-      throw new Error(`HTTP ${resp.status}: ${text}`);
+      // If Better Auth admin API fails, fall back to direct database update
+      scriptLogger.warn(
+        { status: resp.status, statusText: resp.statusText },
+        'Better Auth admin API failed, using direct database update'
+      );
+
+      await assignRoleDirectly(userId, role, userEmail);
+      return;
     }
 
-    scriptLogger.info(`Successfully assigned role '${role}' to user: ${_userEmail}`);
+    const result = await resp.json();
+    scriptLogger.info(
+      `Successfully assigned role '${role}' to user: ${userEmail} via Better Auth API`
+    );
+  } catch (error) {
+    scriptLogger.warn(
+      { err: error, userId, role, userEmail },
+      'Better Auth admin API failed, falling back to direct database update'
+    );
+
+    // Fallback to direct database update
+    await assignRoleDirectly(userId, role, userEmail);
+  }
+}
+
+/**
+ * Assign role directly in database as fallback
+ */
+async function assignRoleDirectly(userId: string, role: string, userEmail: string): Promise<void> {
+  const { Pool } = await import('pg');
+
+  try {
+    const pool = new Pool({
+      connectionString: getRequiredEnvVar('DATABASE_URL', 'Database connection required'),
+    });
+
+    const result = await pool.query('UPDATE "user" SET role = $1 WHERE id = $2', [role, userId]);
+
+    if (result.rowCount === 0) {
+      throw new Error(`No user found with ID: ${userId}`);
+    }
+
+    scriptLogger.info(
+      `Successfully assigned role '${role}' to user: ${userEmail} via direct database update`
+    );
+    await pool.end();
   } catch (error) {
     scriptLogger.error(
-      { err: error, userId, role, userEmail: _userEmail },
-      'Failed to assign role to user'
+      { err: error, userId, role, userEmail },
+      'Failed to assign role via database'
     );
     throw error;
   }
@@ -160,6 +234,7 @@ async function setupTestUsers(): Promise<void> {
       const userId = await createUserViaBetterAuth(user);
       if (userId) {
         await assignUserRole(userId, user.role, user.email);
+        await verifyUserEmail(user.email); // Verify email for test users
         scriptLogger.info(`Successfully set up user: ${user.email} with role: ${user.role}`);
       }
     } catch (error) {

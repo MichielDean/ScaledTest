@@ -4,7 +4,6 @@ import { UserRole } from '../../types/roles';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../logging/logger';
 import { UserWithTeams } from '../../types/team';
-import { authClient } from '../../lib/auth-client';
 
 // Better Auth user interface
 interface BetterAuthUser {
@@ -63,27 +62,24 @@ const AdminUsersView: React.FC = () => {
       setUsersLoading(true);
       setError(null);
 
-      logger.debug('Starting Better Auth admin listUsers API call');
+      logger.debug('Starting admin users API call');
 
-      // Use Better Auth admin client to list users
-      const response = await authClient.admin.listUsers({
-        query: {
-          limit: 100, // Get up to 100 users
+      // Use our backend admin API endpoint
+      const response = await axios.get('/api/admin/users', {
+        headers: {
+          'Content-Type': 'application/json',
         },
+        withCredentials: true, // Include cookies for authentication
       });
 
-      logger.debug({ response }, 'Better Auth admin API raw response');
+      logger.debug({ response: response.data }, 'Admin users API response');
 
-      // Handle Better Auth response format
-      const responseData = response as {
-        data?: { users?: BetterAuthUser[] };
-        users?: BetterAuthUser[];
-      };
-      const users = responseData?.data?.users || responseData?.users || [];
+      // Handle our API response format
+      const users = response.data?.users || [];
 
-      logger.debug({ userCount: users.length }, 'Better Auth admin API response');
+      logger.debug({ userCount: users.length }, 'Admin users API response');
 
-      // Convert Better Auth users to our UserWithTeams format
+      // Convert API users to our UserWithTeams format
       const usersData = users.map((user: BetterAuthUser) => ({
         id: user.id,
         username: user.name || 'Unknown',
@@ -91,13 +87,13 @@ const AdminUsersView: React.FC = () => {
         firstName: user.name || 'Unknown',
         lastName: '',
         roles: [user.role || 'readonly'],
-        teams: [], // Better Auth doesn't include teams in listUsers - could be enhanced later
+        teams: [], // Teams could be enhanced later
         isMaintainer: user.role === 'maintainer' || user.role === 'owner',
       }));
 
       setUsers(usersData);
     } catch (err) {
-      logger.error({ error: err }, 'Failed to fetch users from Better Auth admin API');
+      logger.error({ error: err }, 'Failed to fetch users from admin API');
       setError(err instanceof Error ? err.message : 'Failed to fetch users');
     } finally {
       setUsersLoading(false);
