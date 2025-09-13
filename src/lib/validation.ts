@@ -7,22 +7,22 @@
 // The version field (first character of third group) is restricted to [1-5] as per RFC 4122
 export const UUID_REGEX = new RegExp(
   `^` + // Start of string
-  `[0-9a-f]{8}-` + // 8 hex digits (time_low) + hyphen
-  `[0-9a-f]{4}-` + // 4 hex digits (time_mid) + hyphen
-  `[1-5][0-9a-f]{3}-` + // Version (1-5) + 3 hex digits (time_hi_and_version) + hyphen
-  `[89ab][0-9a-f]{3}-` + // Variant (8,9,A,B) + 3 hex digits (clock_seq) + hyphen
-  `[0-9a-f]{12}$`, // 12 hex digits (node) + end of string
+    `[0-9a-f]{8}-` + // 8 hex digits (time_low) + hyphen
+    `[0-9a-f]{4}-` + // 4 hex digits (time_mid) + hyphen
+    `[1-5][0-9a-f]{3}-` + // Version (1-5) + 3 hex digits (time_hi_and_version) + hyphen
+    `[89ab][0-9a-f]{3}-` + // Variant (8,9,A,B) + 3 hex digits (clock_seq) + hyphen
+    `[0-9a-f]{12}$`, // 12 hex digits (node) + end of string
   'i' // Case insensitive flag
 );
 
 // UUID v4 specific validation regex
 export const UUID_V4_REGEX = new RegExp(
   `^` + // Start of string
-  `[0-9a-f]{8}-` + // 8 hex digits (time_low) + hyphen
-  `[0-9a-f]{4}-` + // 4 hex digits (time_mid) + hyphen
-  `[4][0-9a-f]{3}-` + // Version 4 + 3 hex digits (time_hi_and_version) + hyphen
-  `[89ab][0-9a-f]{3}-` + // Variant (8,9,A,B) + 3 hex digits (clock_seq) + hyphen
-  `[0-9a-f]{12}$`, // 12 hex digits (node) + end of string
+    `[0-9a-f]{8}-` + // 8 hex digits (time_low) + hyphen
+    `[0-9a-f]{4}-` + // 4 hex digits (time_mid) + hyphen
+    `[4][0-9a-f]{3}-` + // Version 4 + 3 hex digits (time_hi_and_version) + hyphen
+    `[89ab][0-9a-f]{3}-` + // Variant (8,9,A,B) + 3 hex digits (clock_seq) + hyphen
+    `[0-9a-f]{12}$`, // 12 hex digits (node) + end of string
   'i' // Case insensitive flag
 );
 

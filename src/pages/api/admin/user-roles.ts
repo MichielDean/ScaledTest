@@ -40,17 +40,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
 
 function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthUserManagementApi {
   const obj = candidate as Record<string, unknown> | undefined;
-  if (
-    !obj ||
-    typeof obj.getUser !== 'function' ||
-    typeof obj.setRole !== 'function'
-  ) {
+  if (!obj || typeof obj.getUser !== 'function' || typeof obj.setRole !== 'function') {
     return false;
   }
   // Optionally check arity (number of arguments)
   if (
-    (obj.getUser as Function).length < 1 ||
-    (obj.setRole as Function).length < 1
+    (obj.getUser as (...args: unknown[]) => unknown).length < 1 ||
+    (obj.setRole as (...args: unknown[]) => unknown).length < 1
   ) {
     return false;
   }
