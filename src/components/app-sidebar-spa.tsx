@@ -66,6 +66,7 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
           {
             title: 'Administration',
             icon: Settings,
+            id: 'nav-administration',
             isActive: ['admin-users', 'admin-teams'].includes(currentView),
             items: [
               {

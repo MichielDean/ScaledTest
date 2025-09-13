@@ -3,16 +3,28 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import withAuth from '../../auth/withBetterAuth';
 import { UserRole } from '../../types/roles';
+import { SPANavigationProvider } from '../../contexts/SPANavigationContext';
+import MainSPAContent from '../../components/MainSPAContent';
+import DynamicHead from '../../components/DynamicHead';
 
 const AdminUsers: NextPage = () => {
   const router = useRouter();
 
   useEffect(() => {
-    // Redirect to the main SPA dashboard with admin view
-    router.replace('/dashboard?view=admin');
+    // Set the view parameter to show admin-users view
+    if (!router.query.view) {
+      router.replace('/admin/users?view=admin-users', undefined, { shallow: true });
+    }
   }, [router]);
 
-  return null;
+  return (
+    <>
+      <SPANavigationProvider initialView="admin-users">
+        <DynamicHead />
+        <MainSPAContent />
+      </SPANavigationProvider>
+    </>
+  );
 };
 
 export default withAuth(AdminUsers, [UserRole.OWNER]);
