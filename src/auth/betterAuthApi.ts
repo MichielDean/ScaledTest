@@ -69,8 +69,7 @@ export async function authenticateRequest(
     if (token) {
       try {
         // Use Better Auth's session validation with bearer token
-        const headers = new Headers();
-        headers.set('authorization', `Bearer ${token}`);
+        const headers = new Headers({ authorization: `Bearer ${token}` });
 
         const tokenResult = await auth.api.getSession({
           headers,
