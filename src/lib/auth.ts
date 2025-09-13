@@ -3,7 +3,7 @@ import { Pool } from 'pg';
 import { admin, twoFactor, username, bearer } from 'better-auth/plugins';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { statement } from './auth-shared';
-import { getRequiredEnvVar } from '../environment/env';
+import { getRequiredEnvVar, parseArrayEnvVar } from '../environment/env';
 import { dbLogger as logger } from '../logging/logger';
 import { randomBytes } from 'crypto';
 
@@ -77,7 +77,11 @@ function getAuth(): ReturnType<typeof betterAuth> {
           roles,
           defaultRole: 'readonly',
           adminRoles: ['owner', 'maintainer'], // Include our custom admin roles
-          adminUserIds: ['a8eea405-616c-468f-b4dc-e8246843f1a2'], // Include the specific owner user ID we saw in logs
+          adminUserIds: parseArrayEnvVar(
+            'BETTER_AUTH_ADMIN_USER_IDS',
+            ',',
+            ['a8eea405-616c-468f-b4dc-e8246843f1a2'] // Fallback to current admin user for backward compatibility
+          ),
         }), // Enables admin functionality with RBAC
         bearer(), // Enables Bearer token authentication for API
         twoFactor(), // Optional: 2FA support
