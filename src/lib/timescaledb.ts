@@ -80,7 +80,7 @@ function getTimescalePool(): Pool {
     logger.debug({ maxConnections }, 'TimescaleDB pool max connections');
 
     // Create TimescaleDB connection pool with optimized settings
-    const defaultStatementTimeout = parseIntEnvVar('TIMESCALEDB_STATEMENT_TIMEOUT_MS', 30000);
+    const defaultStatementTimeout = parseIntEnvVar('TIMESCALEDB_STATEMENT_TIMEOUT_MS', 15000);
 
     timescalePool = new Pool({
       host,
