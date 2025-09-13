@@ -1,18 +1,9 @@
 import { execSync } from 'child_process';
-import { spawn, ChildProcess } from 'child_process';
 import waitOn from 'wait-on';
 import path from 'path';
 import { teardown } from './teardown';
-import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
+import { setupTestEnv } from '../setup/environmentConfiguration';
 import { testLogger } from '../../src/logging/logger';
-import {
-  cleanupPort,
-  registerSpawnedProcess,
-  unregisterSpawnedProcess,
-} from '../../src/lib/portCleanup';
-
-// Global variables to track processes
-let nextAppProcess: ChildProcess | null = null;
 
 /**
  * Checks if Docker is running
@@ -47,16 +38,11 @@ export async function startDockerEnvironment(): Promise<void> {
 
     execSync(composeCommand, { stdio: 'inherit' });
 
-    // Wait for services to be ready with longer timeouts in CI
+    // Wait for PostgreSQL to be ready
     const serviceTimeout = isCI ? 60000 : 60000; // 60s both in CI and locally
 
     await waitOn({
-      resources: ['http://localhost:8080'],
-      timeout: serviceTimeout,
-    });
-
-    await waitOn({
-      resources: ['http://localhost:9200'],
+      resources: ['tcp:localhost:5432'],
       timeout: serviceTimeout,
     });
   } catch (error) {
@@ -66,84 +52,57 @@ export async function startDockerEnvironment(): Promise<void> {
 }
 
 /**
- * Setup Keycloak configuration
+ * Setup Better Auth test users
  */
-export async function setupKeycloak(): Promise<void> {
+export async function setupBetterAuth() {
+  testLogger.info('Setting up Better Auth test users...');
+
   try {
-    execSync('npx tsx scripts/setup-test-users.ts', { stdio: 'inherit' });
+    // Run the API-based Better Auth test user setup script
+    // This runs after the Next.js app is started so API endpoints are available
+    execSync('npx tsx scripts/setup-better-auth-test-users.ts', {
+      cwd: process.cwd(),
+      stdio: 'inherit',
+    });
+
+    testLogger.info('Better Auth test users setup completed successfully');
   } catch (error) {
-    testLogger.error({ err: error }, 'Failed to setup Keycloak');
-    throw error;
+    testLogger.error({ error }, 'Failed to setup Better Auth test users:');
+    throw new Error('Better Auth test user setup failed');
   }
 }
 
 /**
- * Start Next.js app
+ * Start Next.js application using PM2 for system tests
  */
 export async function startNextApp(): Promise<void> {
-  // Cross-platform port cleanup using TypeScript utility
-  try {
-    testLogger.debug('Checking if port 3000 is in use...');
-    const cleanupSuccess = await cleanupPort(3000, {
-      maxRetries: 2,
-      retryDelay: 1000,
-    });
+  const port = 3000;
+  testLogger.info(`Starting Next.js application using PM2 on port ${port}`);
 
-    if (cleanupSuccess) {
-      testLogger.debug('Port 3000 cleanup completed successfully');
-      // Brief wait for port to be fully released
-      await new Promise(resolve => setTimeout(resolve, 1000));
-    } else {
-      testLogger.warn('Port 3000 cleanup was not completely successful, but continuing...');
+  try {
+    // Stop any existing PM2 processes
+    try {
+      execSync('npm run pm2:stop', {
+        stdio: 'pipe',
+        timeout: 10000,
+      });
+      testLogger.debug('Stopped existing PM2 processes');
+    } catch {
+      testLogger.debug('No existing PM2 processes to stop or stop command failed');
     }
-  } catch (portError) {
-    testLogger.warn({ err: portError }, 'Port cleanup encountered issues, but continuing');
-  }
 
-  // Start the Next.js production server (build is assumed to be complete)
-  try {
-    // Start the Next.js app
-    nextAppProcess = spawn('npx', ['next', 'start'], {
+    // Start the Next.js application using PM2 with test environment
+    execSync('npm run pm2:dev', {
       stdio: 'pipe',
-      shell: true,
+      timeout: 30000,
+      env: {
+        ...process.env,
+        NODE_ENV: 'test',
+        TEST_PORT: port.toString(),
+      },
     });
 
-    // Register the process for tracking
-    if (nextAppProcess && nextAppProcess.pid) {
-      registerSpawnedProcess(nextAppProcess.pid, 3000, 'next-app');
-    }
-
-    nextAppProcess.stdout?.on('data', data => {
-      testLogger.info(`Next.js: ${data.toString('utf8').trim()}`);
-    });
-
-    nextAppProcess.stderr?.on('data', data => {
-      const output = data.toString('utf8').trim();
-      // Filter out expected npm cleanup messages during teardown
-      if (
-        output.includes('npm verbose') ||
-        output.includes('npm info') ||
-        output.includes('npm warn Unknown')
-      ) {
-        testLogger.debug(`Next.js cleanup: ${output}`);
-      } else {
-        testLogger.error(`Next.js error: ${output}`);
-      }
-    });
-
-    // Handle process exit
-    nextAppProcess.on('exit', (code, signal) => {
-      if (nextAppProcess && nextAppProcess.pid) {
-        unregisterSpawnedProcess(nextAppProcess.pid);
-      }
-      if (code !== 0 && code !== null) {
-        testLogger.error(`Next.js process exited with code ${code} and signal ${signal}`);
-      }
-    });
-
-    nextAppProcess.on('error', error => {
-      testLogger.error({ err: error }, 'Next.js process error');
-    });
+    testLogger.info('PM2 process started successfully');
 
     // Wait for Next.js to be ready with retry logic
     let retries = 0;
@@ -152,9 +111,10 @@ export async function startNextApp(): Promise<void> {
     while (retries < maxRetries) {
       try {
         await waitOn({
-          resources: ['http://localhost:3000'],
+          resources: [`http://localhost:${port}`],
           timeout: 10000, // 10 seconds per attempt
         });
+        testLogger.info(`Next.js application is ready on port ${port}`);
         break; // Success, exit the retry loop
       } catch (waitError) {
         retries++;
@@ -173,15 +133,14 @@ export async function startNextApp(): Promise<void> {
       }
     }
   } catch (error) {
-    testLogger.error({ err: error }, 'Failed to start Next.js application');
+    testLogger.error({ err: error }, 'Failed to start Next.js application with PM2');
 
     // Cleanup if startup failed
-    if (nextAppProcess && !nextAppProcess.killed) {
-      try {
-        nextAppProcess.kill('SIGTERM');
-      } catch (killError) {
-        testLogger.warn({ err: killError }, 'Failed to cleanup failed Next.js process');
-      }
+    try {
+      execSync('npm run pm2:stop', { stdio: 'pipe', timeout: 10000 });
+      testLogger.debug('Cleaned up failed PM2 process');
+    } catch (cleanupError) {
+      testLogger.warn({ err: cleanupError }, 'Failed to cleanup failed PM2 process');
     }
 
     throw error;
@@ -189,33 +148,19 @@ export async function startNextApp(): Promise<void> {
 }
 
 /**
- * Quick cleanup function for initial setup - aggressive cleanup without long timeouts
+ * Quick cleanup function using PM2 for initial setup
  */
 async function quickCleanup(): Promise<void> {
   testLogger.info('Performing quick cleanup of existing environment...');
 
-  // Quick Next.js process cleanup
-  if (nextAppProcess && !nextAppProcess.killed) {
-    try {
-      nextAppProcess.kill('SIGKILL');
-    } catch (error) {
-      testLogger.debug({ err: error }, 'Quick Next.js cleanup had issues');
-    }
-  }
-
-  // Cross-platform port 3000 cleanup using TypeScript utility
+  // Stop any existing PM2 processes
   try {
-    testLogger.debug('Quick cleanup: checking port 3000...');
-    const cleanupSuccess = await cleanupPort(3000, {
-      maxRetries: 1,
-      retryDelay: 500,
+    execSync('npm run pm2:stop', {
+      stdio: 'ignore',
+      timeout: 10000,
     });
-
-    if (!cleanupSuccess) {
-      testLogger.debug('Quick port cleanup had issues, but continuing');
-    }
-  } catch (portError) {
-    testLogger.debug({ err: portError }, 'Quick port cleanup had issues');
+  } catch (error) {
+    testLogger.debug({ err: error }, 'Quick PM2 cleanup had issues');
   }
 
   // Aggressive Docker cleanup with short timeout
@@ -258,7 +203,7 @@ async function quickCleanup(): Promise<void> {
 export default async function setup(): Promise<void> {
   try {
     // Set up required environment variables
-    setupOpenSearchTestEnv();
+    setupTestEnv();
 
     // First try to clean up any existing environment quickly
     // Use a more resilient and faster cleanup approach
@@ -274,8 +219,8 @@ export default async function setup(): Promise<void> {
 
     // Start fresh environment
     await startDockerEnvironment();
-    await setupKeycloak();
     await startNextApp();
+    await setupBetterAuth();
   } catch (error) {
     testLogger.error({ err: error }, 'System test environment setup failed');
 
@@ -289,6 +234,3 @@ export default async function setup(): Promise<void> {
     throw error;
   }
 }
-
-// Export the Next.js process for teardown
-export { nextAppProcess };

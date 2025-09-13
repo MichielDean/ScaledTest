@@ -44,7 +44,13 @@ export class BasePage {
    * Wait for page to be fully loaded with content visible
    */
   async waitForPageLoad(timeout = 1500) {
-    await this.page.waitForLoadState('networkidle');
+    try {
+      // Try networkidle but with shorter timeout
+      await this.page.waitForLoadState('networkidle', { timeout: 10000 });
+    } catch {
+      // Fallback to domcontentloaded if networkidle fails
+      await this.page.waitForLoadState('domcontentloaded');
+    }
     await this.page.waitForSelector('#main-content, main, body', { state: 'visible' });
     await this.page.waitForTimeout(timeout);
   }

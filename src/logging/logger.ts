@@ -8,11 +8,29 @@ import { randomUUID } from 'crypto';
 /**
  * Create a base logger instance with standardized configuration
  * - Uses consistent log level across all environments
- * - Uses pretty-printing for readable output
- * - Enables colorized output for better readability
+ * - Routes logs to files during tests to keep terminal clean
+ * - Uses pretty-printing for readable output in non-test environments
  */
 const createLogger = () => {
-  // Standardized logger configuration for all environments
+  const isTestEnvironment = process.env.NODE_ENV === 'test';
+
+  if (isTestEnvironment) {
+    // During tests, write application logs to a file to keep terminal clean
+    return pino({
+      level: 'debug',
+      transport: {
+        target: 'pino/file',
+        options: {
+          destination: './logs/app.log',
+          mkdir: true,
+        },
+      },
+      timestamp: pino.stdTimeFunctions.isoTime,
+      base: { app: 'scaledtest' },
+    });
+  }
+
+  // Non-test environments use pretty printing to console
   return pino({
     level: 'debug',
     transport: {

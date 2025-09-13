@@ -1,3 +1,3 @@
-import { setupOpenSearchTestEnv } from '../setup/environmentConfiguration';
+import { setupTestEnv } from '../setup/environmentConfiguration';
 
-setupOpenSearchTestEnv();
+setupTestEnv();

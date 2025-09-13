@@ -1,26 +1,41 @@
 import { NextApiRequest, NextApiResponse } from 'next';
-import { withApiAuth } from '../../src/auth/apiAuth';
-import { UserRole } from '../../src/auth/keycloak';
+import { createBetterAuthApi, BetterAuthMethodHandler } from '../../src/auth/betterAuthApi';
+import { type RoleName } from '../../src/lib/auth-shared';
 
-// Mock the modules
-jest.mock('keycloak-js', () => {
-  return function () {
-    return {};
-  };
-});
+type Role = RoleName;
 
-// Mock the jose library
-jest.mock('jose', () => ({
-  jwtVerify: jest.fn(),
-  createRemoteJWKSet: jest.fn().mockReturnValue('mocked-jwks'),
+// Backward compatibility wrapper for tests
+const withApiAuth = (handler: BetterAuthMethodHandler, roles: Role[]) => {
+  return createBetterAuthApi(
+    { GET: handler, POST: handler, PUT: handler, DELETE: handler },
+    roles[0]
+  );
+};
+
+// UserRole constants for backward compatibility
+const UserRole = {
+  READONLY: 'readonly' as Role,
+  MAINTAINER: 'maintainer' as Role,
+  OWNER: 'owner' as Role,
+};
+
+// Mock the Better Auth module
+jest.mock('../../src/lib/auth', () => ({
+  auth: {
+    api: {
+      getSession: jest.fn(),
+      verifyBearer: jest.fn(),
+    },
+  },
 }));
 
-import { jwtVerify } from 'jose';
+import { auth } from '../../src/lib/auth';
 
 describe('API Authentication Middleware', () => {
   let mockRequest: Partial<NextApiRequest>;
   let mockResponse: Partial<NextApiResponse>;
   let mockHandler: jest.Mock;
+  let mockGetSession: jest.Mock;
 
   beforeEach(() => {
     jest.clearAllMocks();
@@ -38,8 +53,12 @@ describe('API Authentication Middleware', () => {
 
     mockHandler = jest.fn();
 
-    // Default jose mock implementation - throw error for invalid tokens
-    (jwtVerify as jest.Mock).mockRejectedValue(new Error('Invalid token'));
+    // Get the mocked functions
+    mockGetSession = auth.api.getSession as jest.Mock;
+
+    // Default mock implementation - return null (no authentication)
+    mockGetSession.mockResolvedValue({ data: null });
+    // mockVerifyBearer.mockResolvedValue({ data: null });
   });
 
   describe('Authentication Validation', () => {
@@ -55,7 +74,7 @@ describe('API Authentication Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: expect.stringContaining('No valid token'),
+          error: 'Authentication required',
         })
       );
       expect(mockHandler).not.toHaveBeenCalled();
@@ -67,8 +86,8 @@ describe('API Authentication Middleware', () => {
         authorization: 'Bearer invalid-token',
       };
 
-      // Mock jwtVerify to reject
-      (jwtVerify as jest.Mock).mockRejectedValue(new Error('Invalid token'));
+      // Mock session and bearer token to fail
+      mockGetSession.mockResolvedValue({ data: null });
 
       const protectedHandler = withApiAuth(mockHandler, [UserRole.READONLY]);
 
@@ -80,7 +99,7 @@ describe('API Authentication Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: expect.stringContaining('Invalid token'),
+          error: 'Authentication required',
         })
       );
       expect(mockHandler).not.toHaveBeenCalled();
@@ -94,16 +113,13 @@ describe('API Authentication Middleware', () => {
         authorization: 'Bearer valid-token',
       };
 
-      // Mock jwtVerify to succeed but with insufficient roles
-      (jwtVerify as jest.Mock).mockResolvedValue({
-        payload: {
-          sub: 'user-123',
-          aud: 'scaledtest-client', // Add correct audience
-          resource_access: {
-            'scaledtest-client': {
-              roles: [UserRole.READONLY], // Only readonly role, not OWNER
-            },
-          },
+      // Mock session to return user with readonly role
+      mockGetSession.mockResolvedValue({
+        user: {
+          id: 'user-123',
+          email: 'user@example.com',
+          name: 'Test User',
+          role: UserRole.READONLY,
         },
       });
 
@@ -117,7 +133,7 @@ describe('API Authentication Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: expect.stringContaining('Insufficient permissions'),
+          error: 'Access denied. Required role: owner',
         })
       );
       expect(mockHandler).not.toHaveBeenCalled();
@@ -129,16 +145,13 @@ describe('API Authentication Middleware', () => {
         authorization: 'Bearer valid-token',
       };
 
-      // Mock jwtVerify to succeed with the required roles
-      (jwtVerify as jest.Mock).mockResolvedValue({
-        payload: {
-          sub: 'user-123',
-          aud: 'scaledtest-client', // Add correct audience
-          resource_access: {
-            'scaledtest-client': {
-              roles: [UserRole.OWNER, UserRole.MAINTAINER, UserRole.READONLY],
-            },
-          },
+      // Mock session to return user with maintainer role
+      mockGetSession.mockResolvedValue({
+        user: {
+          id: 'user-123',
+          email: 'maintainer@example.com',
+          name: 'Test Maintainer',
+          role: UserRole.MAINTAINER,
         },
       });
 
@@ -149,7 +162,7 @@ describe('API Authentication Middleware', () => {
 
       // Assert
       expect(mockHandler).toHaveBeenCalled();
-      expect(mockHandler).toHaveBeenCalledWith(expect.anything(), mockResponse);
+      expect(mockHandler).toHaveBeenCalledWith(expect.anything(), mockResponse, expect.anything());
     });
   });
 });

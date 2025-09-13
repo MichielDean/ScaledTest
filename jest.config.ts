@@ -5,8 +5,8 @@ const SHARED_CONFIG = {
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transformIgnorePatterns: [
     // By default, Jest ignores node_modules from transformation
-    // We need to transform keycloak-js because it uses ES modules
-    'node_modules/(?!(keycloak-js)/)',
+    // We need to transform node-pg-migrate, glob, better-auth, nanostores and their dependencies because they use ES modules
+    'node_modules/(?!(node-pg-migrate|glob|better-auth|nanostores|@better-auth|@nanostores)/)',
   ],
   globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
 };
@@ -21,7 +21,11 @@ const createBaseConfig = (): Partial<Config> => ({
 const createNodeConfig = (): Config => ({
   ...createBaseConfig(),
   testEnvironment: 'node',
+  setupFilesAfterEnv: ['<rootDir>/tests/setup/environmentConfiguration.ts'],
   extensionsToTreatAsEsm: ['.ts', '.tsx'],
+  moduleNameMapper: {
+    '^@/(.*)$': '<rootDir>/src/$1',
+  },
   transform: {
     '^.+\\.tsx?$': ['ts-jest', { useESM: true }],
   },
@@ -32,6 +36,7 @@ const createJSDOMConfig = (): Config => ({
   ...createBaseConfig(),
   testEnvironment: 'jsdom',
   setupFiles: ['<rootDir>/tests/components/jest-setup.ts'],
+  setupFilesAfterEnv: ['<rootDir>/tests/setup/environmentConfiguration.ts'],
   moduleNameMapper: {
     '^@/(.*)$': '<rootDir>/src/$1',
     '\\.(css|less|scss|sass)$': 'identity-obj-proxy',
@@ -49,10 +54,11 @@ const createJSDOMConfig = (): Config => ({
   },
 });
 
-// Reporters configuration
+// Reporters configuration - using Jest's built-in reporters for clean output
 const REPORTERS_CONFIG: Config['reporters'] = [
+  // Use default reporter for verbose test output with checkmarks
   'default',
-  // Original CTRF reporter - generates the base CTRF report
+  // Keep CTRF reporter for test result collection
   [
     'jest-ctrf-json-reporter',
     {
@@ -64,15 +70,13 @@ const REPORTERS_CONFIG: Config['reporters'] = [
       generatedBy: 'jest-ctrf-json-reporter',
     },
   ],
-  // Our enhanced reporter - captures logs and enhances the CTRF report
-  '<rootDir>/dist/src/logging/enhancedCtrfReporter.js',
 ];
 
 const config: Config = {
   reporters: REPORTERS_CONFIG,
   testTimeout: 60000,
-  verbose: true, // Enable verbose output to ensure console logs are captured
-  silent: false, // Ensure console output is not silenced
+  verbose: true, // Enable verbose to show individual test names with checkmarks
+  silent: true, // Suppress console.log from tests while keeping Jest verbose output
   projects: [
     {
       ...createNodeConfig(),
@@ -98,6 +102,7 @@ const config: Config = {
       testMatch: ['**/tests/system/**/*.test.ts', '**/tests/ui/**/*.test.ts'],
       globalSetup: '<rootDir>/tests/system/setup.ts',
       globalTeardown: '<rootDir>/tests/system/teardown.ts',
+      setupFilesAfterEnv: ['<rootDir>/tests/system/jest-setup.ts'],
     },
   ],
 };

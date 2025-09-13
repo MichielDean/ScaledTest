@@ -5,7 +5,7 @@
  * the codebase. These interfaces represent user data structures used throughout the application.
  */
 
-import { UserRole } from '../auth/keycloak';
+import { UserRole } from './roles';
 import { BaseEntity, BaseUser } from './apiResponses';
 
 /**
@@ -28,18 +28,6 @@ export interface UserProfile extends BaseUser {
 export interface UserWithRoles extends BaseUser {
   roles: string[];
   isMaintainer: boolean;
-}
-
-/**
- * Keycloak role structure
- */
-export interface KeycloakRole {
-  id: string;
-  name: string;
-  description?: string;
-  composite?: boolean;
-  clientRole?: boolean;
-  containerId?: string;
 }
 
 /**

@@ -150,7 +150,7 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
 
   return (
     <div className="space-y-6">
-      {/* OpenSearch Data Source Indicator */}
+      {/* TimescaleDB Data Source Indicator */}
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start space-x-3">
         <div className="flex-shrink-0">
           <svg
@@ -168,9 +168,9 @@ const ErrorAnalysis: React.FC<ErrorAnalysisProps> = ({ reports }) => {
           </svg>
         </div>
         <div>
-          <h4 className="text-sm font-semibold text-blue-900">Data Source: OpenSearch</h4>
+          <h4 className="text-sm font-semibold text-blue-900">Data Source: TimescaleDB</h4>
           <p className="text-sm text-blue-700">
-            Analyzing error patterns from test report data stored in OpenSearch
+            Analyzing error patterns from test report data stored in TimescaleDB
           </p>
         </div>
       </div>

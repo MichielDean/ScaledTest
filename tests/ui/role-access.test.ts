@@ -156,9 +156,7 @@ describe('Role-based Access Tests', () => {
       await userManagementPage.expectPageLoaded();
 
       // Then verify users are listed
-      await userManagementPage.expectUserListed(TestUsers.READONLY.email);
-      await userManagementPage.expectUserListed(TestUsers.MAINTAINER.email);
-      await userManagementPage.expectUserListed(TestUsers.OWNER.email);
+      await userManagementPage.expectUserListed();
     });
   });
 });

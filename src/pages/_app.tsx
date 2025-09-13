@@ -1,15 +1,15 @@
 import '../styles/globals.css';
 import type { AppProps } from 'next/app';
-import { KeycloakProvider } from '../auth/KeycloakProvider';
+import { BetterAuthProvider } from '../auth/BetterAuthProvider';
 import { TeamProvider } from '../contexts/TeamContext';
 
 function MyApp({ Component, pageProps }: AppProps) {
   return (
-    <KeycloakProvider>
+    <BetterAuthProvider>
       <TeamProvider>
         <Component {...pageProps} />
       </TeamProvider>
-    </KeycloakProvider>
+    </BetterAuthProvider>
   );
 }
 

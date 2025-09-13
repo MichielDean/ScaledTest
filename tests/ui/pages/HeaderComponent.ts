@@ -67,7 +67,7 @@ export class HeaderComponent {
   async navigateToAdminDashboard(): Promise<void> {
     // In the SPA structure, the Administration section is a collapsible menu
     // We need to expand it first to make the Users link visible
-    const administrationSection = this.page.locator('text=Administration').first();
+    const administrationSection = this.page.locator('#nav-administration').first();
 
     // Check if the Administration section exists (user has write access)
     await administrationSection.waitFor({ state: 'visible', timeout: 10000 });
@@ -151,7 +151,7 @@ export class HeaderComponent {
    */
   async expectAdminAccess() {
     await this.ensureSidebarExpanded();
-    await expect(this.page.locator('button:has-text("Administration")')).toBeVisible();
+    await expect(this.page.locator('#nav-administration')).toBeVisible();
   }
 
   /**
@@ -159,6 +159,6 @@ export class HeaderComponent {
    */
   async expectNoAdminAccess() {
     await this.ensureSidebarExpanded();
-    await expect(this.page.locator('button:has-text("Administration")')).not.toBeVisible();
+    await expect(this.page.locator('#nav-administration')).not.toBeVisible();
   }
 }

@@ -1,16 +1,15 @@
 # ScaledTest: Next.js Test Management Platform
 
-A comprehensive platform for test result management and reporting built with Next.js, featuring Keycloak authentication and OpenSearch integration.
+A comprehensive platform for test result management and reporting built with Next.js, featuring Better Auth authentication and TimescaleDB storage.
 
-## Core Features (Updated June 2025)
+## Core Features (Updated January 2025)
 
 - **Modern Tech Stack**: Built with Next.js 14+ and TypeScript
 - **Single Page Application (SPA) Navigation**: Default seamless, stateful navigation without page reloads
 - **Interactive Test Results Dashboard**: Visualize and monitor test results in real-time
-- **Role-Based Access Control (RBAC)**: Powered by Keycloak authentication
+- **Role-Based Access Control (RBAC)**: Powered by Better Auth authentication
 - **Test Report Generation**: Generate standardized CTRF test reports
-- **OpenSearch Integration**: Fast searching and analytics of test data
-- **Demo Data Generation**: Create realistic test data for dashboard visualization
+- **TimescaleDB Integration**: High-performance time-series data storage and analytics
 - **Comprehensive Testing Suite**: Unit, integration, and system tests with Jest and Playwright
 
 ## Prerequisites
@@ -37,24 +36,20 @@ npm install
 3. Create a `.env.local` file with the following:
 
 ```
-# Required Keycloak configuration
-KEYCLOAK_URL=http://localhost:8080
-KEYCLOAK_ADMIN_USERNAME=admin
-KEYCLOAK_ADMIN_PASSWORD=admin
-KEYCLOAK_REALM=scaledtest
-KEYCLOAK_REALM_DISPLAY_NAME=ScaledTest Local Realm
-KEYCLOAK_CLIENT_ID=scaledtest-client
+# Required Better Auth configuration
+BETTER_AUTH_SECRET=your-secret-key-here-should-be-at-least-32-characters-long
+BETTER_AUTH_URL=http://localhost:3000
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
 
-# Required OpenSearch configuration
-OPENSEARCH_HOST=http://localhost:9200
-OPENSEARCH_USERNAME=admin
-OPENSEARCH_PASSWORD=admin
+# Required Database configuration
+DATABASE_URL=postgresql://scaledtest:password@localhost:5432/auth
 
-# Required Next.js public variables
-NEXT_PUBLIC_KEYCLOAK_URL=http://localhost:8080
-NEXT_PUBLIC_KEYCLOAK_REALM=scaledtest
-NEXT_PUBLIC_KEYCLOAK_CLIENT_ID=scaledtest-client
-NEXT_PUBLIC_APP_BASE_URL=http://localhost:3000
+# TimescaleDB Configuration
+TIMESCALEDB_HOST=localhost
+TIMESCALEDB_PORT=5432
+TIMESCALEDB_DATABASE=scaledtest
+TIMESCALEDB_USERNAME=scaledtest
+TIMESCALEDB_PASSWORD=password
 ```
 
 ## Development Workflow
@@ -69,8 +64,8 @@ npm run dev
 
 This command will:
 
-1. Start Docker containers for Keycloak and OpenSearch
-2. Run the Keycloak setup script
+1. Start Docker containers for TimescaleDB
+2. Run database migrations
 3. Start the Next.js development server with Turbopack
 
 ### Running Tests
@@ -135,14 +130,56 @@ Ensure these environment variables are set for complete test coverage:
 
 ```bash
 # Required for integration and system tests
-KEYCLOAK_URL=http://localhost:8080
-OPENSEARCH_HOST=http://localhost:9200
-OPENSEARCH_USERNAME=admin
-OPENSEARCH_PASSWORD=admin
+DATABASE_URL=postgresql://scaledtest:password@localhost:5432/scaledtest
+BETTER_AUTH_SECRET=your-secret-key-here-should-be-at-least-32-characters-long
+NEXT_PUBLIC_BASE_URL=http://localhost:3000
+
+TIMESCALEDB_HOST=localhost
+TIMESCALEDB_PORT=5432
+TIMESCALEDB_DATABASE=scaledtest
+TIMESCALEDB_USERNAME=scaledtest
+TIMESCALEDB_PASSWORD=password
 
 # Optional: Control test execution
 JEST_TIMEOUT=60000                                   # Test timeout in milliseconds
 MAX_WORKERS=50%                                      # Control parallel test execution
+```
+
+### Database Setup and Migrations
+
+ScaledTest uses separate databases for different concerns:
+
+- **auth database**: Better Auth authentication
+- **scaledtest database**: Test results with TimescaleDB
+
+```bash
+# Run all migrations (both databases)
+npm run migrate:all
+```
+
+**Key Benefits:**
+
+- **Separate database isolation** for auth and analytics
+- **Version-controlled schema changes** with rollback capability
+- **TypeScript migrations** for type safety
+- **Production-ready** with proper error handling and logging
+- **TimescaleDB optimizations** built into migrations
+
+For detailed information about the migration system, see [MIGRATIONS.md](MIGRATIONS.md).
+
+#### Migration Commands
+
+```bash
+# Run all migrations (recommended)
+npm run migrate:all
+
+# Run specific database migrations
+npm run migrate:auth           # Auth database only
+npm run migrate:scaledtest     # ScaledTest database only
+
+# Rollback migrations
+npm run migrate:down:auth      # Rollback auth database
+npm run migrate:down:scaledtest # Rollback scaledtest database
 ```
 
 ### Code Formatting
@@ -154,23 +191,21 @@ npm run format
 
 ## Authentication System
 
-ScaledTest uses Keycloak for authentication with:
+ScaledTest uses Better Auth for authentication with:
 
-- **Custom Login Flow**: Direct login through a custom form integrated with Keycloak API
+- **Email/Password Authentication**: Secure login through Better Auth
 - **Role-Based Access**: Three progressive access levels
-- **Token Management**: Silent refresh for seamless session management
+- **Session Management**: Secure session handling with automatic refresh
 
 ## User Roles
 
 ScaledTest implements three permission levels:
 
 1. **Read-only User**
-
    - Can view test results and dashboards
    - Cannot modify any data
 
 2. **Maintainer User**
-
    - Read permissions plus ability to upload test results
    - Can edit test metadata and tags
 
@@ -188,47 +223,6 @@ The Test Results Dashboard provides:
 - CTRF-compliant report generation
 - Test result comparison features
 
-## Demo Data Generation
-
-ScaledTest includes a powerful demo data generator for testing dashboard visualizations:
-
-```bash
-# Generate random test reports (recommended for variety)
-npm run demo-data
-
-# Generate 5 random reports with different scenarios
-npm run demo-data random 5
-
-# Generate specific scenarios
-npm run demo-data improving 3    # Shows test quality improvement
-npm run demo-data flaky 2        # Shows unreliable tests
-npm run demo-data stable 1       # Shows consistent performance
-
-# List all available scenarios
-npm run demo-data list
-
-# Get help
-npm run demo-data help
-```
-
-### Available Demo Scenarios
-
-- **random**: Mixed scenarios with varied tools, environments, and performance
-- **improving**: Gradual improvement in test quality over time
-- **declining**: Quality regression scenario (useful for alerts testing)
-- **stable**: Consistent high-performance test suite
-- **flaky**: Inconsistent results with high variability
-- **large**: Enterprise-scale test suite with multiple components
-
-The demo data generator creates realistic test reports with:
-
-- Multiple test types (unit, integration, e2e, accessibility)
-- Realistic test names and error messages
-- Various performance profiles (fast, normal, slow)
-- Time-distributed reports for trend analysis
-
-See the [Demo Data Guide](docs/DEMO_DATA_GUIDE.md) for detailed information.
-
 ## Environment Configuration
 
 For detailed environment configuration, see the [Environment Configuration Guide](docs/ENVIRONMENT.md).
@@ -238,38 +232,34 @@ For detailed environment configuration, see the [Environment Configuration Guide
 In production environments, configure these secure settings:
 
 ```
-KEYCLOAK_URL=https://your-keycloak-server
-KEYCLOAK_ADMIN_USERNAME=your-admin-username
-KEYCLOAK_ADMIN_PASSWORD=your-secure-admin-password
-KEYCLOAK_REALM=your-realm-name
-KEYCLOAK_CLIENT_ID=your-client-id
-KEYCLOAK_REDIRECT_URIS=https://your-app-url/*
-KEYCLOAK_WEB_ORIGINS=https://your-app-url
-OPENSEARCH_HOST=https://your-opensearch-instance
-OPENSEARCH_USERNAME=your-opensearch-username
-OPENSEARCH_PASSWORD=your-secure-opensearch-password
+BETTER_AUTH_SECRET=your-secure-secret-key-at-least-32-characters-long
+BETTER_AUTH_URL=https://your-app-url
+NEXT_PUBLIC_BASE_URL=https://your-app-url
+DATABASE_URL=postgresql://username:password@host:port/database
+TIMESCALEDB_HOST=your-timescaledb-host
+TIMESCALEDB_DATABASE=your-database-name
+TIMESCALEDB_USERNAME=your-database-username
+TIMESCALEDB_PASSWORD=your-secure-database-password
 ```
 
 ## Component Architecture
 
-ScaledTest consists of three main components:
+ScaledTest consists of two main components:
 
-1. **Next.js Application**: Frontend and API endpoints
-2. **Keycloak Server**: Authentication and user management
-3. **OpenSearch**: Data storage and querying
+1. **Next.js Application**: Frontend, API endpoints, and authentication
+2. **TimescaleDB**: Time-series data storage and analytics
+3. **TimescaleDB**: High-performance time-series data storage
 
 ## Test Users
 
 The system automatically creates these test users for development and testing:
 
 1. **Read-only User**
-
    - Username: `readonly@example.com`
    - Password: `ReadOnly123!`
    - Role: readonly
 
 2. **Maintainer User**
-
    - Username: `maintainer@example.com`
    - Password: `Maintainer123!`
    - Roles: readonly, maintainer
@@ -279,7 +269,7 @@ The system automatically creates these test users for development and testing:
    - Password: `Owner123!`
    - Roles: readonly, maintainer, owner
 
-**Security Note**: These test users are intended for development and testing environments only. In production, create proper user accounts through Keycloak's admin interface with secure passwords following your organization's password policy.
+**Security Note**: These test users are intended for development and testing environments only. In production, create proper user accounts through the Better Auth system with secure passwords following your organization's password policy.
 
 ## CI/CD Integration
 
@@ -306,8 +296,8 @@ npm run update-deps
 ## Technologies
 
 - **Frontend**: Next.js 14+, TypeScript, React
-- **Authentication**: Keycloak with custom flows
-- **Data Storage**: OpenSearch
+- **Authentication**: Better Auth with email/password authentication
+- **Data Storage**: TimescaleDB (PostgreSQL with time-series extensions)
 - **Testing**: Jest, Playwright
 - **Infrastructure**: Docker, Docker Compose
 - **CI/CD**: GitHub Actions

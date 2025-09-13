@@ -1,62 +1,73 @@
 import { execSync } from 'child_process';
 import path from 'path';
-import { nextAppProcess } from './setup';
-import { testLogger } from '../../src/logging/logger';
-import { cleanupPort } from '../../src/lib/portCleanup';
 
 /**
- * Shutdown the Next.js app - fire and forget approach
+ * Aggressive system teardown - minimal logging, maximum efficiency
  */
-export async function stopNextApp(): Promise<void> {
-  if (nextAppProcess?.killed === false) {
-    try {
-      nextAppProcess.kill('SIGKILL');
-      nextAppProcess.removeAllListeners();
-    } catch {
-      // Ignore errors - fire and forget
-    }
-  }
-
-  // Fire and forget port cleanup
-  cleanupPort(3000, { maxRetries: 1, retryDelay: 100 }).catch(() => {
-    // Ignore errors
-  });
-}
 
 /**
- * Shutdown Docker environment - fire and forget approach
+ * Kill Next.js app using PM2
  */
-export async function stopDockerEnvironment(): Promise<void> {
-  const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
-
-  testLogger.info('Starting Docker environment teardown...');
-
-  // Fire and forget - just start the command and let it run in background
+async function killNextApp(): Promise<void> {
   try {
-    execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans`, {
+    // Stop PM2 processes
+    execSync('npm run pm2:stop', {
       stdio: 'ignore',
+      timeout: 10000,
     });
   } catch {
-    // Ignore errors - fire and forget
+    // Silent failure - try direct PM2 command
+    try {
+      execSync('npx pm2 stop scaledtest-dev', {
+        stdio: 'ignore',
+        timeout: 5000,
+      });
+    } catch {
+      // Silent failure
+    }
   }
-
-  testLogger.info('Docker environment teardown command executed');
 }
 
 /**
- * Main teardown function for Jest - fire and forget approach
+ * Force close database connections
+ */
+async function forceCloseDatabases(): Promise<void> {
+  try {
+    const { shutdownTimescaleDB } = await import('../../src/lib/timescaledb');
+    await shutdownTimescaleDB();
+  } catch {
+    // Silent failure
+  }
+}
+
+/**
+ * Force shutdown Docker environment
+ */
+async function forceKillDocker(): Promise<void> {
+  const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
+
+  try {
+    execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans --timeout 5`, {
+      stdio: 'ignore',
+      timeout: 10000, // 10 second timeout
+    });
+  } catch {
+    // Silent failure
+  }
+}
+
+/**
+ * Aggressive teardown function - kill everything quickly and quietly
  */
 export async function teardown(): Promise<void> {
-  // Fire and forget - don't wait for anything
-  stopNextApp().catch(() => {
-    // Ignore errors
-  });
+  // Parallel aggressive shutdown - don't wait for each step
+  await Promise.allSettled([forceCloseDatabases(), killNextApp()]);
 
-  stopDockerEnvironment().catch(() => {
-    // Ignore errors
-  });
+  // Brief pause for cleanup
+  await new Promise(resolve => setTimeout(resolve, 1000));
 
-  testLogger.info('System test environment teardown initiated');
+  // Final Docker cleanup
+  await forceKillDocker();
 }
 
 export default teardown;

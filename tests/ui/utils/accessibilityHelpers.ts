@@ -1,5 +1,12 @@
 /**
- * Shared utilities for accessibility testing
+ * Shared utilities for accessibi  testLogger.error({
+    violations: violations.map(v => ({
+      id: v.id,
+      impact: v.impact,
+      description: v.description,
+      nodes: v.nodes.length,
+    })),
+  }, logMessage);ting
  */
 
 import { injectAxe, getViolations } from 'axe-playwright';
@@ -35,14 +42,17 @@ export const logAccessibilityViolations = (
     ? `${violationType} violations on ${pageName}`
     : `Accessibility violations on ${pageName}`;
 
-  testLogger.error(logMessage, {
-    violations: violations.map(v => ({
-      id: v.id,
-      impact: v.impact,
-      description: v.description,
-      nodes: v.nodes ? v.nodes.length : 0,
-    })),
-  });
+  testLogger.error(
+    {
+      violations: violations.map(v => ({
+        id: v.id,
+        impact: v.impact,
+        description: v.description,
+        nodes: v.nodes ? v.nodes.length : 0,
+      })),
+    },
+    logMessage
+  );
 };
 
 /**

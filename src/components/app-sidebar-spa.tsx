@@ -12,12 +12,12 @@ import {
   SidebarHeader,
   SidebarRail,
 } from '@/components/ui/sidebar';
-import { useAuth } from '../auth/KeycloakProvider';
-import { hasWriteAccess } from '../auth/keycloak';
+import { useAuth } from '../hooks/useAuth';
+import { hasWriteAccess } from '../lib/permissions';
 import { useSPANavigation } from '../contexts/SPANavigationContext';
 
 export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>) {
-  const { userProfile, logout } = useAuth();
+  const { user: userProfile, logout } = useAuth();
   const { navigateTo, currentView } = useSPANavigation();
 
   // SPA navigation structure with click handlers instead of URLs
@@ -61,11 +61,12 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
         },
       ],
     },
-    ...(hasWriteAccess()
+    ...(hasWriteAccess(userProfile)
       ? [
           {
             title: 'Administration',
             icon: Settings,
+            id: 'nav-administration',
             isActive: ['admin-users', 'admin-teams'].includes(currentView),
             items: [
               {
@@ -106,10 +107,7 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
   ];
 
   const user = {
-    name:
-      userProfile?.firstName && userProfile?.lastName
-        ? `${userProfile.firstName} ${userProfile.lastName}`
-        : userProfile?.username || 'User',
+    name: userProfile?.name || 'User',
     email: userProfile?.email || '',
     avatar: '/icon.png',
   };

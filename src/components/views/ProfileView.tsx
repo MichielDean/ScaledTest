@@ -1,12 +1,12 @@
 import React from 'react';
-import { useAuth } from '../../auth/KeycloakProvider';
-import { UserRole } from '../../auth/keycloak';
+import { useAuth } from '../../hooks/useAuth';
+import { UserRole } from '../../types/roles';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { User, Shield, Mail, UserCheck } from 'lucide-react';
 
 const ProfileView: React.FC = () => {
-  const { userProfile, hasRole } = useAuth();
+  const { user: userProfile, hasRole } = useAuth();
 
   const userRoles = [
     {
@@ -51,9 +51,9 @@ const ProfileView: React.FC = () => {
             <div className="space-y-2">
               <div className="flex items-center gap-2">
                 <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Username</span>
+                <span className="text-sm font-medium">Name</span>
               </div>
-              <p className="text-sm text-muted-foreground pl-6">{userProfile?.username || 'N/A'}</p>
+              <p className="text-sm text-muted-foreground pl-6">{userProfile?.name || 'N/A'}</p>
             </div>
 
             <div className="space-y-2">
@@ -62,17 +62,6 @@ const ProfileView: React.FC = () => {
                 <span className="text-sm font-medium">Email</span>
               </div>
               <p className="text-sm text-muted-foreground pl-6">{userProfile?.email || 'N/A'}</p>
-            </div>
-
-            <div className="space-y-2">
-              <div className="flex items-center gap-2">
-                <User className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm font-medium">Full Name</span>
-              </div>
-              <p className="text-sm text-muted-foreground pl-6">
-                {userProfile?.firstName || ''} {userProfile?.lastName || ''}
-                {!userProfile?.firstName && !userProfile?.lastName && 'N/A'}
-              </p>
             </div>
 
             <div className="space-y-2">

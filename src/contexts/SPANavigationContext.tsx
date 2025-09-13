@@ -38,6 +38,7 @@ export const SPANavigationProvider: React.FC<SPANavigationProviderProps> = ({
   // Handle initial view from URL parameters
   useEffect(() => {
     const viewFromUrl = router.query.view as SPAView;
+
     if (viewFromUrl && viewFromUrl !== currentView) {
       const validViews: SPAView[] = [
         'dashboard',

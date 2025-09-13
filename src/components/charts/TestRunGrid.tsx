@@ -1,6 +1,6 @@
 import React from 'react';
 import { TestRunData } from '../../types/dashboard';
-import styles from '../../styles/charts/TestRunGrid.module.css';
+// Replaced CSS module with Tailwind utility classes
 
 interface TestRunGridProps {
   testRuns: TestRunData[];
@@ -48,38 +48,38 @@ const TestRunGrid: React.FC<TestRunGridProps> = ({ testRuns, testName, maxRuns =
   const gridCols = Math.min(10, Math.ceil(Math.sqrt(sortedRuns.length)));
 
   return (
-    <div className={styles.container}>
-      <div className={styles.header}>
-        <h4 className={styles.testName} title={testName}>
+    <div className="p-3 bg-white rounded-md shadow-sm">
+      <div className="flex items-center justify-between mb-2">
+        <h4 className="text-sm font-semibold text-gray-900 truncate" title={testName}>
           {testName}
         </h4>
-        <div className={styles.runCount}>
+        <div className="text-xs text-gray-500">
           {sortedRuns.length} run{sortedRuns.length !== 1 ? 's' : ''}
           {testRuns.length > maxRuns && ` (showing latest ${maxRuns})`}
         </div>
       </div>
 
       <div
-        className={styles.grid}
+        className="grid gap-1 mb-3"
         style={{
           gridTemplateColumns: `repeat(${Math.min(8, gridCols)}, 1fr)`,
           maxWidth: `${Math.min(8, gridCols) * 22}px`,
         }}
       >
         {sortedRuns.map((run, index) => {
-          const statusClass =
+          const statusBg =
             run.status === 'passed'
-              ? styles.statusPassed
+              ? 'bg-emerald-400 text-white'
               : run.status === 'failed'
-                ? styles.statusFailed
+                ? 'bg-red-400 text-white'
                 : run.status === 'skipped'
-                  ? styles.statusSkipped
-                  : styles.statusUnknown;
+                  ? 'bg-yellow-300 text-white'
+                  : 'bg-gray-300 text-gray-800';
 
           return (
-            <div key={`${run.reportId}-${index}`} className={styles.gridItem}>
+            <div key={`${run.reportId}-${index}`} className="flex items-center justify-center">
               <div
-                className={`${styles.statusBox} ${statusClass}`}
+                className={`${statusBg} w-5 h-5 flex items-center justify-center rounded-sm text-xs font-bold`}
                 title={`Status: ${run.status}\nDate: ${formatDate(run.timestamp)}\nDuration: ${formatDuration(run.duration)}${run.message ? `\nError: ${run.message}` : ''}`}
               >
                 {getStatusIcon(run.status)}
@@ -89,25 +89,25 @@ const TestRunGrid: React.FC<TestRunGridProps> = ({ testRuns, testName, maxRuns =
         })}
       </div>
 
-      <div className={styles.legend}>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendDot} ${styles.legendDotPassed}`}></div>
+      <div className="flex items-center gap-3 text-xs text-gray-600 mb-2">
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-full bg-emerald-400" />
           <span>Pass</span>
         </div>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendDot} ${styles.legendDotFailed}`}></div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-full bg-red-400" />
           <span>Fail</span>
         </div>
-        <div className={styles.legendItem}>
-          <div className={`${styles.legendDot} ${styles.legendDotSkipped}`}></div>
+        <div className="flex items-center gap-1">
+          <div className="w-3 h-3 rounded-full bg-yellow-300" />
           <span>Skip</span>
         </div>
       </div>
 
       {sortedRuns.some(run => run.status === 'failed' && run.message) && (
-        <div className={styles.failuresSummary}>
-          <h5 className={styles.failuresTitle}>Recent Failures:</h5>
-          <div className={styles.failuresList}>
+        <div className="mt-2">
+          <h5 className="text-sm font-medium mb-1">Recent Failures:</h5>
+          <div className="space-y-1 text-xs text-gray-700">
             {[
               ...new Set(
                 sortedRuns
@@ -116,7 +116,7 @@ const TestRunGrid: React.FC<TestRunGridProps> = ({ testRuns, testName, maxRuns =
                   .slice(0, 2)
               ),
             ].map((message, index) => (
-              <div key={index} className={styles.failureMessage}>
+              <div key={index} className="truncate">
                 {message!.length > 80 ? `${message!.substring(0, 80)}...` : message}
               </div>
             ))}

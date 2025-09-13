@@ -41,6 +41,10 @@
   --chart-3: var(--amber-dark);
   --chart-4: oklch(0.6 0.08 120);
   --chart-5: oklch(0.7 0.08 200);
+
+  /* Logo and branding dimensions */
+  --logo-size: 384px;
+
   --sidebar: var(--sand);
   --sidebar-foreground: var(--charcoal);
   --sidebar-primary: var(--amber);

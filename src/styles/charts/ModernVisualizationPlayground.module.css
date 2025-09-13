@@ -1,1 +1,69 @@
-/* This file has been migrated to use Tailwind CSS and Shadcn/ui components */
+/* Temporary minimal CSS module for ModernVisualizationPlayground */
+
+.draggableField {
+  @apply p-3 bg-white border border-gray-200 rounded-lg shadow-sm hover:shadow-md transition-shadow cursor-move;
+}
+
+.fieldIcon {
+  @apply w-5 h-5 text-gray-500;
+}
+
+.fieldInfo {
+  @apply flex-1 ml-3;
+}
+
+.fieldLabel {
+  @apply text-sm font-medium text-gray-900;
+}
+
+.fieldType {
+  @apply text-xs text-gray-500;
+}
+
+.dropZone {
+  @apply min-h-[100px] p-4 border-2 border-dashed border-gray-300 rounded-lg bg-gray-50;
+}
+
+.droppable {
+  @apply border-blue-400 bg-blue-50;
+}
+
+.dropZoneHeader {
+  @apply flex items-center justify-between mb-2;
+}
+
+.badge {
+  @apply inline-flex items-center px-2 py-1 text-xs font-medium bg-gray-100 text-gray-800 rounded;
+}
+
+.dropZoneContent {
+  @apply min-h-[60px];
+}
+
+.placeholder {
+  @apply text-sm text-gray-500 text-center;
+}
+
+.droppedFields {
+  @apply space-y-2;
+}
+
+.droppedField {
+  @apply flex items-center p-2 bg-white border border-gray-200 rounded;
+}
+
+.aggregationBadge {
+  @apply ml-2 px-2 py-1 text-xs bg-blue-100 text-blue-800 rounded;
+}
+
+.removeButton {
+  @apply ml-2 p-1 text-gray-400 hover:text-red-500 transition-colors;
+}
+
+.emptyState {
+  @apply text-center py-8;
+}
+
+.emptyIcon {
+  @apply w-12 h-12 mx-auto mb-4 text-gray-400;
+}
