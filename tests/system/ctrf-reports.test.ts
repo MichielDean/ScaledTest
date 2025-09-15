@@ -672,11 +672,23 @@ describe('CTRF Reports API System Tests', () => {
         },
       });
 
-      const storeResponse = await api
-        .post('/api/test-reports')
+      // Debug: log the report being sent
+      // eslint-disable-next-line no-console
+      console.log('DEBUG: originalReport', JSON.stringify(originalReport, null, 2));
 
-        .send(originalReport)
-        .expect(201);
+      let storeResponse;
+      try {
+        storeResponse = await api.post('/api/test-reports').send(originalReport).expect(201);
+      } catch (err) {
+        // eslint-disable-next-line no-console
+        if (typeof err === 'object' && err && 'response' in err && err.response) {
+          // @ts-expect-error: dynamic error shape from supertest
+          console.error('DEBUG: Store response error', err.response.status, err.response.body);
+        } else {
+          console.error('DEBUG: Store response error', err);
+        }
+        throw err;
+      }
 
       const reportId = storeResponse.body.id;
 
