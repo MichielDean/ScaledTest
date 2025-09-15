@@ -4,21 +4,39 @@ import {
   generateInvalidCtrfReport,
   generateLargeCtrfReport,
 } from '../data/ctrfReportGenerator';
-import { createAuthenticatedAgent, TestUsers } from '../setup/betterAuthTestUtils';
+import { TestUsers } from '../ui/models/TestUsers';
 import { testLogger } from '../../src/logging/logger';
 import { Status } from '../../src/schemas/ctrf/ctrf';
 import { StoredReport } from '../../src/types/database';
 import supertest from 'supertest';
 
 describe('CTRF Reports API System Tests', () => {
-  let api: ReturnType<typeof createAuthenticatedAgent> extends Promise<infer T> ? T : never;
+  let api: ReturnType<typeof supertest.agent>;
   const TEST_PORT = process.env.TEST_PORT || '3000';
   const API_URL = `http://localhost:${TEST_PORT}`;
 
   beforeAll(async () => {
     try {
-      // Create authenticated agent for CTRF tests
-      api = await createAuthenticatedAgent(API_URL, TestUsers.ADMIN);
+      // Create authenticated supertest agent and sign in using shared TestUsers
+      api = supertest.agent(API_URL);
+      const authRes = await api.post('/api/auth/sign-in/email').send({
+        email: TestUsers.ADMIN.email,
+        password: TestUsers.ADMIN.password,
+      });
+
+      testLogger.debug(
+        { status: authRes.status, body: authRes.body },
+        'Sign-in response for CTRF tests'
+      );
+
+      if (authRes.status !== 200) {
+        testLogger.error(
+          { status: authRes.status, body: authRes.body },
+          'Failed to authenticate test admin'
+        );
+        throw new Error(`Failed to authenticate test admin: ${authRes.status}`);
+      }
+
       testLogger.debug('Successfully created authenticated agent for CTRF tests');
     } catch (error) {
       testLogger.error({ error }, 'Failed to create authenticated agent in beforeAll:');

@@ -1866,7 +1866,7 @@ test('Feature should work for admin users', async () => {
 // ✅ CORRECT - Ensure proper test setup and let legitimate failures occur
 test('Admin functionality should work', async () => {
   // Use proper test user with admin privileges
-  await loginPage.loginWithUser(TestUsers.OWNER);
+  await loginPage.loginWithUser(TestUsers.ADMIN);
   await accessAdminPage(); // If this fails, the test should fail
   // test assertions - no try-catch to hide failures
 });
@@ -1875,9 +1875,8 @@ test('Admin functionality should work', async () => {
 **Test User Management:**
 
 - Use appropriate test users from `TestUsers` model for different permission levels
-- `TestUsers.READONLY` for basic user functionality
-- `TestUsers.MAINTAINER` for elevated permissions
-- `TestUsers.OWNER` for admin/owner functionality
+- `TestUsers.USER` for basic user functionality
+- `TestUsers.ADMIN` for admin/owner functionality
 - Set up proper authentication before testing restricted functionality
 - Let tests fail if permissions are insufficient - fix the test setup, don't skip the test
 
