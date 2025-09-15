@@ -33,6 +33,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
 
     const { email, password, name, role } = req.body as RegisterRequest;
 
+    // Ensure fields are strings
+    if (typeof email !== 'string' || typeof password !== 'string' || typeof name !== 'string') {
+      return res.status(400).json({
+        success: false,
+        message: 'Email, password, and name must be strings',
+      });
+    }
+
     // Basic validation
     if (!email || !password || !name) {
       return res.status(400).json({
@@ -49,6 +57,16 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
     }
 
     // Email validation
+    // Guard against extremely long input to avoid catastrophic regex cost
+    const MAX_EMAIL_LENGTH = 254; // RFC recommends 254 as a practical maximum
+    if (email.length > MAX_EMAIL_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: 'Email is too long',
+        details: { emailLength: email.length },
+      });
+    }
+
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(email)) {
       return res.status(400).json({
@@ -58,12 +76,30 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
 
-    // Password validation (minimum requirements)
+    // Password validation (minimum and maximum requirements)
+    const MAX_PASSWORD_LENGTH = 128;
     if (password.length < 8) {
       return res.status(400).json({
         success: false,
         message: 'Password must be at least 8 characters long',
         details: { passwordLength: password.length },
+      });
+    }
+    if (password.length > MAX_PASSWORD_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: 'Password is too long',
+        details: { passwordLength: password.length },
+      });
+    }
+
+    // Name length guard to avoid extremely large payloads
+    const MAX_NAME_LENGTH = 100;
+    if (name.length > MAX_NAME_LENGTH) {
+      return res.status(400).json({
+        success: false,
+        message: 'Name is too long',
+        details: { nameLength: name.length },
       });
     }
 

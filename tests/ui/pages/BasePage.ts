@@ -30,7 +30,9 @@ export class BasePage {
    * Check if page URL contains a specific path
    */
   async expectUrlToContain(path: string) {
-    await expect(this.page).toHaveURL(new RegExp(path));
+    // Escape the provided path to ensure it's used as a literal in the RegExp
+    const escapeForRegExp = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    await expect(this.page).toHaveURL(new RegExp(escapeForRegExp(path)));
   }
 
   /**
