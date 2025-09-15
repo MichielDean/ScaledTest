@@ -8,7 +8,6 @@ const SHARED_CONFIG = {
     // We need to transform node-pg-migrate, glob, better-auth, nanostores and their dependencies because they use ES modules
     'node_modules/(?!(node-pg-migrate|glob|better-auth|nanostores|@better-auth|@nanostores)/)',
   ],
-  globalTeardown: '<rootDir>/tests/teardown/handleCleanup.ts',
 };
 
 // Base configuration factory

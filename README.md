@@ -255,17 +255,17 @@ ScaledTest consists of two main components:
 The system automatically creates these test users for development and testing:
 
 1. **Read-only User**
-   - Username: `readonly@example.com`
+   - Username: `readonly@scaledtest.com`
    - Password: `ReadOnly123!`
    - Role: readonly
 
 2. **Maintainer User**
-   - Username: `maintainer@example.com`
+   - Username: `maintainer@scaledtest.com`
    - Password: `Maintainer123!`
    - Roles: readonly, maintainer
 
 3. **Owner User**
-   - Username: `owner@example.com`
+   - Username: `owner@scaledtest.com`
    - Password: `Owner123!`
    - Roles: readonly, maintainer, owner
 

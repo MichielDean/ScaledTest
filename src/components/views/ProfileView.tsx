@@ -10,18 +10,17 @@ const ProfileView: React.FC = () => {
 
   const userRoles = [
     {
-      role: UserRole.READONLY,
-      label: 'Read-only',
-      check: hasRole(UserRole.READONLY),
-      id: 'role-readonly',
+      role: UserRole.USER,
+      label: 'User',
+      check: hasRole(UserRole.USER),
+      id: 'role-user',
     },
     {
-      role: UserRole.MAINTAINER,
-      label: 'Maintainer',
-      check: hasRole(UserRole.MAINTAINER),
-      id: 'role-maintainer',
+      role: UserRole.ADMIN,
+      label: 'Admin',
+      check: hasRole(UserRole.ADMIN),
+      id: 'role-admin',
     },
-    { role: UserRole.OWNER, label: 'Owner', check: hasRole(UserRole.OWNER), id: 'role-owner' },
   ].filter(role => role.check);
 
   return (

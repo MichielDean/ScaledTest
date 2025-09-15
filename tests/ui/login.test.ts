@@ -25,7 +25,7 @@ describe('Authentication Tests', () => {
   describe('Login Functionality', () => {
     it('should redirect to dashboard after successful login', async () => {
       // Login with valid credentials
-      await loginPage.loginWithUser(TestUsers.READONLY);
+      await loginPage.loginWithUser(TestUsers.USER);
 
       // Verify we're redirected to dashboard
       await dashboardPage.expectDashboardLoaded();
@@ -33,7 +33,7 @@ describe('Authentication Tests', () => {
 
     it('should show user as logged in after successful login', async () => {
       // Login with valid credentials
-      await loginPage.loginWithUser(TestUsers.READONLY);
+      await loginPage.loginWithUser(TestUsers.USER);
 
       // Verify user is shown as logged in
       await headerComponent.expectUserLoggedIn();
@@ -45,8 +45,8 @@ describe('Authentication Tests', () => {
       // Navigate to login page first
       await loginPage.goto();
 
-      // Login with invalid credentials
-      await loginPage.login('invalid-user@email.com', 'wrong-password');
+      // Login with invalid credentials, expecting an error
+      await loginPage.loginExpectingError('invalid-user@email.com', 'wrong-password');
 
       // Verify we stay on login page with error message
       await loginPage.expectLoginError();
@@ -57,7 +57,7 @@ describe('Authentication Tests', () => {
   describe('Logout Functionality', () => {
     beforeEach(async () => {
       // Setup: Navigate to login page and login as a precondition
-      await loginPage.loginWithUser(TestUsers.READONLY);
+      await loginPage.loginWithUser(TestUsers.USER);
       await dashboardPage.expectDashboardLoaded();
     });
 

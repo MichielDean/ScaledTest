@@ -3,7 +3,7 @@
  */
 
 import supertest from 'supertest';
-import { testLogger } from '../../src/logging/testLogger';
+import { testLogger } from '../../src/logging/logger';
 
 describe('Authentication Debug', () => {
   it('should debug authentication flow', async () => {
@@ -14,8 +14,8 @@ describe('Authentication Debug', () => {
 
     // Step 1: Authenticate
     const authResponse = await agent.post('/api/auth/sign-in/email').send({
-      email: 'owner@example.com',
-      password: 'Owner123!',
+      email: 'admin@scaledtest.com',
+      password: 'Admin123!',
     });
 
     testLogger.info(

@@ -44,7 +44,7 @@ export interface UserWithTeams {
   lastName?: string;
   roles: string[];
   teams: Team[];
-  isMaintainer: boolean;
+  isAdmin: boolean;
 }
 
 /**

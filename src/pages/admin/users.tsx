@@ -27,4 +27,4 @@ const AdminUsers: NextPage = () => {
   );
 };
 
-export default withAuth(AdminUsers, [UserRole.OWNER]);
+export default withAuth(AdminUsers, [UserRole.ADMIN]);

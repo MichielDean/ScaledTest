@@ -21,4 +21,4 @@ const Dashboard: NextPage = () => {
   );
 };
 
-export default withAuth(Dashboard, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+export default withAuth(Dashboard, [UserRole.USER, UserRole.ADMIN]);

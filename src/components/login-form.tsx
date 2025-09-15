@@ -21,8 +21,11 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
+    e.stopPropagation();
     setIsLoading(true);
     setError('');
+
+    logger.info({ email }, 'Form submission started');
 
     if (!email || !password) {
       setError('Please enter both email and password');
@@ -31,11 +34,18 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
     }
 
     try {
+      logger.info({ email }, 'Attempting login with Better Auth');
+
       // Use Better Auth for login
       const response = await signIn.email({
         email,
         password,
       });
+
+      logger.info(
+        { response: !!response, error: !!response?.error, user: !!response?.data?.user },
+        'Better Auth response received'
+      );
 
       if (response.data?.user) {
         logger.info({ email }, 'Login successful with Better Auth');
@@ -44,6 +54,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
       } else if (response.error) {
         logger.error({ error: response.error, email }, 'Login failed');
         setError(response.error.message || 'Invalid email or password');
+      } else {
+        logger.error({ email }, 'Login failed - no user or error in response');
+        setError('Invalid email or password');
       }
     } catch (err) {
       logger.error({ error: err, email }, 'Login error');
@@ -56,7 +69,12 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
     <div className={cn('flex flex-col gap-6', className)} {...props}>
       <Card className="overflow-hidden p-0">
         <CardContent className="grid p-0 md:grid-cols-2">
-          <form className="p-6 md:p-8" onSubmit={handleSubmit}>
+          <form
+            className="p-6 md:p-8"
+            onSubmit={handleSubmit}
+            action="javascript:void(0)"
+            method="post"
+          >
             <div className="flex flex-col gap-6">
               <div className="flex flex-col items-center text-center">
                 <h1 className="text-2xl font-bold">Welcome back</h1>
@@ -76,9 +94,9 @@ export function LoginForm({ className, ...props }: React.ComponentProps<'div'>) 
                 <Label htmlFor="email">Email</Label>
                 <Input
                   id="email"
-                  name="username"
+                  name="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="m@scaledtest.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required

@@ -15,8 +15,4 @@ const VisualizationPlayground: NextPage = () => {
   return null;
 };
 
-export default withAuth(VisualizationPlayground, [
-  UserRole.READONLY,
-  UserRole.MAINTAINER,
-  UserRole.OWNER,
-]);
+export default withAuth(VisualizationPlayground, [UserRole.USER, UserRole.ADMIN]);

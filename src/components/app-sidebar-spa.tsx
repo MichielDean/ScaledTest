@@ -13,7 +13,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useAuth } from '../hooks/useAuth';
-import { hasWriteAccess } from '../lib/permissions';
+import { hasAdminAccess } from '../lib/permissions';
 import { useSPANavigation } from '../contexts/SPANavigationContext';
 
 export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>) {
@@ -61,7 +61,7 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
         },
       ],
     },
-    ...(hasWriteAccess(userProfile)
+    ...(hasAdminAccess(userProfile)
       ? [
           {
             title: 'Administration',

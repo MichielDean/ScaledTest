@@ -27,4 +27,4 @@ const AdminTeams: NextPage = () => {
   );
 };
 
-export default withAuth(AdminTeams, [UserRole.MAINTAINER, UserRole.OWNER]);
+export default withAuth(AdminTeams, [UserRole.ADMIN]);

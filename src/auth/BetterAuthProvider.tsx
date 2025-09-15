@@ -2,7 +2,7 @@ import React, { createContext, useContext, ReactNode } from 'react';
 import { useSession } from '@/lib/auth-client';
 import { authClient } from '@/lib/auth-client';
 import logger from '@/logging/logger';
-import { type Role, type Permission, rolePermissions } from '@/lib/permissions';
+import { type Role } from '@/lib/permissions';
 
 // Better Auth user interface
 export interface BetterAuthUser {
@@ -27,9 +27,8 @@ export interface BetterAuthContextType {
   login: typeof authClient.signIn;
   logout: () => Promise<void>;
 
-  // Role and permission checking
+  // Role checking
   hasRole: (role: Role) => boolean;
-  hasPermission: (permission: Permission) => boolean;
 
   // Team management
   getUserTeams: () => Array<{ id: string; name: string; role: string }>;
@@ -47,7 +46,6 @@ const BetterAuthContext = createContext<BetterAuthContextType>({
   login: authClient.signIn,
   logout: async () => {},
   hasRole: () => false,
-  hasPermission: () => false,
   getUserTeams: () => [],
   token: undefined,
   initialized: false,
@@ -78,7 +76,7 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
     if (!userRole) return null;
 
     // Validate that the role is one of our defined roles
-    const validRoles: Role[] = ['readonly', 'maintainer', 'owner'];
+    const validRoles: Role[] = ['admin', 'user'];
     return validRoles.includes(userRole as Role) ? (userRole as Role) : null;
   };
 
@@ -97,7 +95,7 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
         {
           id: 'default-team',
           name: 'Default Team',
-          role: getUserRole() || 'readonly',
+          role: getUserRole() || 'user',
         },
       ]
     );
@@ -106,27 +104,8 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
     const userRole = getUserRole();
     if (!userRole) return false;
 
-    // Support hierarchical roles - higher roles inherit lower role permissions
-    if (role === 'readonly') {
-      return userRole === 'readonly' || userRole === 'maintainer' || userRole === 'owner';
-    }
-    if (role === 'maintainer') {
-      return userRole === 'maintainer' || userRole === 'owner';
-    }
-    if (role === 'owner') {
-      return userRole === 'owner';
-    }
-
-    return false;
-  };
-
-  const hasPermission = (permission: Permission): boolean => {
-    const userRole = getUserRole();
-    if (!userRole) return false;
-
-    // Use the rolePermissions mapping from permissions.ts
-    const userPermissions = rolePermissions[userRole] || [];
-    return userPermissions.includes(permission);
+    // Simple role matching - Better Auth handles permissions internally
+    return userRole === role;
   };
 
   const logout = async (): Promise<void> => {
@@ -148,7 +127,6 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
     login: authClient.signIn,
     logout,
     hasRole,
-    hasPermission,
     token: sessionData?.token || undefined,
     initialized: !loading,
 

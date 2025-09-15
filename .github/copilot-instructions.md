@@ -1434,6 +1434,133 @@ interface User {
 
 ## Authentication Backend Abstraction Standards
 
+**CRITICAL: NEVER access authentication database directly. ALWAYS use Better Auth APIs.**
+
+### Database Access Prohibition
+
+**FORBIDDEN PATTERNS - These will break the authentication system:**
+
+```typescript
+// ❌ WRONG - NEVER do direct database queries against auth tables
+const { Pool } = await import('pg');
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const users = await pool.query('SELECT * FROM "user"');
+
+// ❌ WRONG - Never access auth schema directly
+const sessions = await pool.query('SELECT * FROM "session" WHERE userId = $1');
+
+// ❌ WRONG - Never manipulate auth tables directly
+await pool.query('UPDATE "user" SET role = $1 WHERE id = $2');
+```
+
+**REQUIRED PATTERNS - Always use Better Auth APIs:**
+
+```typescript
+// ✅ CORRECT - Use Better Auth server-side admin API
+const adminApi = auth.api as any; // Type cast for admin methods
+const usersResponse = await adminApi.listUsers({
+  query: { limit: 100, offset: 0 },
+});
+
+// ✅ CORRECT - Use Better Auth session API
+const session = await auth.api.getSession({
+  headers: new Headers(req.headers as Record<string, string>),
+});
+
+// ✅ CORRECT - Use Better Auth user management API
+await adminApi.setRole({ body: { userId, role: 'admin' } });
+```
+
+### Better Auth TypeScript Integration
+
+**ALWAYS use Better Auth's TypeScript inference for proper types:**
+
+```typescript
+// ✅ CORRECT - Infer types from auth instance
+export type Session = typeof auth.$Infer.Session;
+export type User = typeof auth.$Infer.User;
+
+// ✅ CORRECT - Use inferAdditionalFields plugin for client
+import { inferAdditionalFields } from 'better-auth/client/plugins';
+import type { auth } from './auth';
+
+export const authClient = createAuthClient({
+  plugins: [
+    adminClient(),
+    inferAdditionalFields<typeof auth>(), // Infers role and other custom fields
+  ],
+});
+```
+
+### Why This Abstraction Is Critical
+
+1. **Schema Independence**: Better Auth manages its own schema evolution
+2. **Security**: Direct database access bypasses Better Auth's security layers
+3. **Consistency**: All auth operations use the same validated patterns
+4. **Updates**: Better Auth plugin updates won't break your code
+5. **Type Safety**: Better Auth provides complete type inference for all fields
+
+### Admin API Usage Patterns
+
+**Server-side admin operations (in API routes):**
+
+```typescript
+import { auth } from '../../../lib/auth';
+
+// Get admin API with proper typing
+const adminApi = auth.api as any;
+
+// List users with pagination and search
+const users = await adminApi.listUsers({
+  query: {
+    limit: pageSize,
+    offset: (page - 1) * pageSize,
+    searchValue: search,
+    searchField: 'email',
+  },
+});
+
+// Create user with role
+const newUser = await adminApi.createUser({
+  body: {
+    email: 'user@example.com',
+    password: 'secure-password',
+    name: 'User Name',
+    role: 'admin',
+  },
+});
+
+// Update user role
+await adminApi.setRole({
+  body: { userId: 'user-id', role: 'admin' },
+});
+
+// Remove user
+await adminApi.removeUser({
+  body: { userId: 'user-id' },
+});
+```
+
+**Client-side admin operations (in React components):**
+
+```typescript
+import { authClient } from '../lib/auth-client';
+
+// List users on client
+const { data: users, error } = await authClient.admin.listUsers({
+  query: { limit: 10, offset: 0 },
+});
+
+// Create user on client
+const { data: newUser, error } = await authClient.admin.createUser({
+  body: { email, password, name, role: 'user' },
+});
+```
+
+**NEVER query auth database directly under any circumstances.** Better Auth provides comprehensive APIs for all authentication and user management operations.
+
+## Authentication Backend Abstraction Standards
+
 **CRITICAL: NEVER expose authentication backend implementation details in the UI.**
 
 The UI must remain completely agnostic about which authentication system is being used (Better Auth, Auth0, custom, etc.). This ensures the frontend remains decoupled and can work with any authentication backend without code changes.

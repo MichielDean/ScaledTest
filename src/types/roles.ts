@@ -2,13 +2,12 @@
  * User Role Types
  *
  * Centralized role definitions used throughout the application.
- * These roles are used for both Better Auth RBAC and authorization checks.
+ * These roles align with Better Auth's built-in role system.
  */
 
 export enum UserRole {
-  READONLY = 'readonly',
-  MAINTAINER = 'maintainer',
-  OWNER = 'owner',
+  USER = 'user',
+  ADMIN = 'admin',
 }
 
 /**
@@ -25,9 +24,8 @@ export const ALL_ROLES = Object.values(UserRole);
  * Role hierarchy for permission checks
  */
 export const ROLE_HIERARCHY = {
-  [UserRole.READONLY]: 1,
-  [UserRole.MAINTAINER]: 2,
-  [UserRole.OWNER]: 3,
+  [UserRole.USER]: 1,
+  [UserRole.ADMIN]: 2,
 } as const;
 
 /**
@@ -42,12 +40,10 @@ export function hasRoleLevel(userRole: UserRole, requiredRole: UserRole): boolea
  */
 export function getRoleDisplayName(role: UserRole): string {
   switch (role) {
-    case UserRole.READONLY:
-      return 'Read Only';
-    case UserRole.MAINTAINER:
-      return 'Maintainer';
-    case UserRole.OWNER:
-      return 'Owner';
+    case UserRole.USER:
+      return 'User';
+    case UserRole.ADMIN:
+      return 'Admin';
     default:
       return 'Unknown';
   }

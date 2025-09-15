@@ -109,7 +109,7 @@ const AdminTeamsView: React.FC = () => {
     return <div>Loading...</div>;
   }
 
-  if (!hasRole(UserRole.MAINTAINER) && !hasRole(UserRole.OWNER)) {
+  if (!hasRole(UserRole.ADMIN)) {
     return (
       <div className="p-6">
         <Alert>

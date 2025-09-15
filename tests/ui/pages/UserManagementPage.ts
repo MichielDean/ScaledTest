@@ -1,6 +1,6 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
-import { testLogger } from '../../../src/logging/testLogger';
+import { testLogger } from '../../../src/logging/logger';
 
 /**
  * Page object for user management functionality

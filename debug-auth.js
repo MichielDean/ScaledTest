@@ -12,7 +12,7 @@ async function testAuth() {
       new URLSearchParams({
         grant_type: 'password',
         client_id: 'scaledtest-client',
-        username: 'maintainer@example.com',
+        username: 'maintainer@scaledtest.com',
         password: 'password',
       }),
       {

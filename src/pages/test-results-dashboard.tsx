@@ -15,8 +15,4 @@ const TestResultsDashboard: NextPage = () => {
   return null;
 };
 
-export default withAuth(TestResultsDashboard, [
-  UserRole.READONLY,
-  UserRole.MAINTAINER,
-  UserRole.OWNER,
-]);
+export default withAuth(TestResultsDashboard, [UserRole.USER, UserRole.ADMIN]);

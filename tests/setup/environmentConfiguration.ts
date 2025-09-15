@@ -40,11 +40,6 @@ export function setupTestEnvironmentVariables(): void {
   process.env.NEXT_PUBLIC_APP_BASE_URL =
     process.env.NEXT_PUBLIC_APP_BASE_URL || 'http://localhost:3000';
 
-  // OpenSearch Configuration
-  process.env.OPENSEARCH_HOST = process.env.OPENSEARCH_HOST || 'http://localhost:9200';
-  process.env.OPENSEARCH_USERNAME = process.env.OPENSEARCH_USERNAME || 'admin';
-  process.env.OPENSEARCH_PASSWORD = process.env.OPENSEARCH_PASSWORD || 'admin';
-
   // API Configuration
   process.env.API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3000';
   process.env.NEXT_PUBLIC_API_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';

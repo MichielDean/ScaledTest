@@ -27,7 +27,7 @@ export interface UserProfile extends BaseUser {
  */
 export interface UserWithRoles extends BaseUser {
   roles: string[];
-  isMaintainer: boolean;
+  isAdmin: boolean;
 }
 
 /**

@@ -1,6 +1,7 @@
 import { Page, Locator, expect } from '@playwright/test';
 import { BasePage } from './BasePage';
 import { TestUser } from '../models/TestUsers';
+import { testLogger } from '@/logging/logger';
 
 /**
  * Page object representing the login page
@@ -39,41 +40,76 @@ export class LoginPage extends BasePage {
     await this.signInButton.waitFor({ state: 'visible' });
     await expect(this.signInButton).toBeEnabled();
 
-    // Click the button and immediately wait for navigation or error
-    try {
-      // Start the click action
-      const clickPromise = this.signInButton.click({ timeout: 5000 });
+    // Click the button
+    await this.signInButton.click({ timeout: 5000 });
 
-      // Wait for either navigation away from login or error message
-      const navigationPromise = Promise.race([
+    // Wait for either navigation away from login or error message
+    try {
+      await Promise.race([
         this.page.waitForURL(url => !url.href.includes('/login'), { timeout: 15000 }),
         this.errorMessage.waitFor({ state: 'visible', timeout: 15000 }),
       ]);
-
-      // Execute click first, then wait for result
-      await clickPromise;
-      await navigationPromise;
     } catch (error) {
-      // If click failed, check if we're still on login page and try to handle the situation
+      // If both navigation and error wait failed, check current state
       const currentUrl = this.page.url();
       if (currentUrl.includes('/login')) {
-        // We're still on login page, check for error message or try again
-        const errorVisible = await this.errorMessage.isVisible().catch(() => false);
-        if (!errorVisible) {
-          // No error visible, maybe the form is still processing - wait a bit more
-          await this.page.waitForTimeout(3000);
-
-          // Check if we navigated during the wait
-          const newUrl = this.page.url();
-          if (newUrl.includes('/login')) {
-            // Still on login, something went wrong
-            throw new Error(
-              `Login failed: ${error instanceof Error ? error.message : String(error)}`
-            );
-          }
-        }
+        // Still on login, something went wrong
+        throw new Error(`Login failed: ${error instanceof Error ? error.message : String(error)}`);
       }
     }
+  }
+
+  /**
+   * Attempt login expecting it to fail with an error message
+   */
+  async loginExpectingError(email: string, password: string) {
+    // Fill in credentials
+    await this.emailInput.waitFor({ state: 'visible', timeout: 10000 });
+    await this.emailInput.fill(email);
+    await this.passwordInput.fill(password);
+
+    // Click submit button
+    await this.signInButton.waitFor({ state: 'visible' });
+    await expect(this.signInButton).toBeEnabled();
+
+    // Listen for console errors and logs
+    this.page.on('console', msg => {
+      if (msg.type() === 'error') {
+        testLogger.debug(`Browser console error: ${msg.text()}`);
+      }
+    });
+
+    // Clear any existing error first
+    await this.page.evaluate(() => {
+      const errorElement = document.getElementById('loginError');
+      if (errorElement) {
+        errorElement.style.display = 'none';
+      }
+    });
+
+    // Check if form exists and has proper attributes
+    const formInfo = await this.page.evaluate(() => {
+      const form = document.querySelector('form');
+      return {
+        exists: !!form,
+        method: form?.getAttribute('method') || 'none',
+        action: form?.getAttribute('action') || 'none',
+        hasSubmitHandler: form?.onsubmit !== null,
+      };
+    });
+    testLogger.info(`Form info: ${formInfo}`);
+
+    await this.signInButton.click({ timeout: 5000 });
+
+    // Wait a moment for the form submission to process
+    await this.page.waitForTimeout(3000);
+
+    // Check if we're still on the login page (form should have prevented navigation)
+    const currentUrl = this.page.url();
+    testLogger.info(`Current URL after form submission: ${currentUrl}`);
+
+    // Wait specifically for the error message to appear
+    await this.errorMessage.waitFor({ state: 'visible', timeout: 15000 });
   }
 
   /**

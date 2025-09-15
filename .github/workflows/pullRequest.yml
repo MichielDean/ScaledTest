@@ -31,7 +31,7 @@ jobs:
       TIMESCALE_DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/scaledtest
 
       # Test users
-      TEST_API_USERNAME: maintainer@example.com
+      TEST_API_USERNAME: maintainer@scaledtest.com
       TEST_API_PASSWORD: Maintainer123!
 
       # TimescaleDB configuration

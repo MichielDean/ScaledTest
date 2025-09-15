@@ -52,7 +52,7 @@ const AdminUsersView: React.FC = () => {
 
   // Debug authentication state
   logger.debug(
-    { isAuthenticated, authLoading, hasOwnerRole: hasRole(UserRole.OWNER) },
+    { isAuthenticated, authLoading, hasOwnerRole: hasRole(UserRole.ADMIN) },
     'AdminUsersView authentication state'
   );
 
@@ -165,7 +165,7 @@ const AdminUsersView: React.FC = () => {
     return <div>Loading...</div>;
   }
 
-  if (!hasRole(UserRole.OWNER)) {
+  if (!hasRole(UserRole.ADMIN)) {
     return (
       <div className="p-6">
         <Alert>

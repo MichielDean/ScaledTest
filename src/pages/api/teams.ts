@@ -87,7 +87,7 @@ interface UserWithRole {
   firstName: string;
   lastName: string;
   roles: string[];
-  isMaintainer: boolean;
+  isAdmin: boolean;
 }
 
 interface BetterAuthUser {
@@ -111,8 +111,8 @@ function processUsersForRole(
   );
 
   // Only show users that the current user has permission to see
-  if (currentUser.role === 'owner' || currentUser.role === 'admin') {
-    authLogger.info('User has owner/admin role, returning all users');
+  if (currentUser.role === 'admin') {
+    authLogger.info('User has admin role, returning all users');
 
     return users.map((user: BetterAuthUser) => ({
       id: user.id,
@@ -121,12 +121,11 @@ function processUsersForRole(
       firstName: user.name?.split(' ')[0] || '',
       lastName: user.name?.split(' ').slice(1).join(' ') || '',
       roles: user.role ? [user.role] : [],
-      isMaintainer: user.role === 'maintainer' || user.role === 'owner',
+      isAdmin: user.role === 'admin',
     }));
   }
 
-  // For maintainers, we would filter by team membership
-  // This requires additional implementation for team-based filtering
+  // For users without admin role, apply restricted access
   authLogger.info('User has limited role, applying restricted user list');
   return users.slice(0, limit).map((user: BetterAuthUser) => ({
     id: user.id,
@@ -135,7 +134,7 @@ function processUsersForRole(
     firstName: user.name?.split(' ')[0] || '',
     lastName: user.name?.split(' ').slice(1).join(' ') || '',
     roles: user.role ? [user.role] : [],
-    isMaintainer: user.role === 'maintainer' || user.role === 'owner',
+    isAdmin: user.role === 'admin',
   }));
 }
 
@@ -152,8 +151,8 @@ async function getAllUsersWithRoles(
   limit: number = 100,
   offset: number = 0
 ): Promise<UserWithRole[]> {
-  // Only allow users with 'admin', 'owner', or 'maintainer' role to view user lists
-  const allowedRoles = ['admin', 'owner', 'maintainer'];
+  // Only allow users with 'admin' role to view user lists
+  const allowedRoles = ['admin'];
 
   if (!currentUser || !currentUser.role || !allowedRoles.includes(currentUser.role)) {
     authLogger.warn(
@@ -253,12 +252,12 @@ async function getAllUsersWithRoles(
 /**
  * Unified Teams API
  *
- * GET /api/teams - Get all teams (requires maintainer+ role)
- * GET /api/teams?users=true - Get all users with their team assignments (requires maintainer+ role)
- * POST /api/teams - Create a new team OR assign a user to a team (requires maintainer+ role)
+ * GET /api/teams - Get all teams (requires admin role)
+ * GET /api/teams?users=true - Get all users with their team assignments (requires admin role)
+ * POST /api/teams - Create a new team OR assign a user to a team (requires admin role)
  *   - Team creation: { name: string, description?: string }
  *   - User assignment: { userId: string, teamId: string }
- * DELETE /api/teams - Remove a user from a team (requires maintainer+ role)
+ * DELETE /api/teams - Remove a user from a team (requires admin role)
  */
 export default async function handler(
   req: NextApiRequest,
@@ -292,14 +291,14 @@ export default async function handler(
       return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
-    // Check if user has admin role (maintainer or owner)
+    // Check if user has admin role
     const userWithRole = session.user as { role?: string };
     const userRole = userWithRole.role;
 
-    if (!userRole || !['maintainer', 'owner'].includes(userRole)) {
+    if (!userRole || userRole !== 'admin') {
       return res.status(403).json({
         success: false,
-        error: 'Insufficient permissions - maintainer or owner role required',
+        error: 'Insufficient permissions - admin role required',
       });
     }
 
@@ -356,11 +355,11 @@ async function handleGetTeams(
     // Determine permissions from the current user's role
     const userRole = currentUser?.role ?? '';
     const permissions = {
-      canCreateTeam: ['maintainer', 'owner'].includes(userRole),
-      canDeleteTeam: ['owner'].includes(userRole),
-      canAssignUsers: ['maintainer', 'owner'].includes(userRole),
-      canViewAllTeams: ['maintainer', 'owner'].includes(userRole),
-      assignableTeams: ['owner'].includes(userRole) ? teams.map(t => t.id) : [],
+      canCreateTeam: userRole === 'admin',
+      canDeleteTeam: userRole === 'admin',
+      canAssignUsers: userRole === 'admin',
+      canViewAllTeams: userRole === 'admin',
+      assignableTeams: userRole === 'admin' ? teams.map(t => t.id) : [],
     };
 
     reqLogger.info({ teamCount: teams.length }, 'Successfully retrieved teams list');
@@ -420,7 +419,7 @@ async function handleGetUsersWithTeams(
             lastName: user.lastName,
             roles: user.roles,
             teams: userTeams,
-            isMaintainer: user.isMaintainer,
+            isAdmin: user.isAdmin,
           };
         } catch (_error) {
           // If we can't get teams for a user, return them with empty teams
@@ -433,7 +432,7 @@ async function handleGetUsersWithTeams(
             lastName: user.lastName,
             roles: user.roles,
             teams: [],
-            isMaintainer: user.isMaintainer,
+            isAdmin: user.isAdmin,
           };
         }
       })

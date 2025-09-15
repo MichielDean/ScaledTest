@@ -21,9 +21,9 @@ jest.mock('../../src/lib/auth', () => ({
       getSession: jest.fn().mockResolvedValue({
         user: {
           id: 'user-123',
-          email: 'test@example.com',
+          email: 'test@scaledtest.com',
           name: 'Test User',
-          role: 'owner',
+          role: 'admin',
         },
         session: {
           id: 'session-123',

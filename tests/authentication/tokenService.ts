@@ -1,5 +1,5 @@
+import { testLogger } from '../../src/logging/logger';
 import { authClient } from '../../src/lib/auth-client';
-import { testLogger as logger } from '../../src/logging/testLogger';
 
 /**
  * Authentication token service for tests using Better Auth
@@ -26,23 +26,17 @@ export interface BetterAuthTokenResponse {
  * Test user credentials
  */
 export const TestUsers = {
-  READONLY: {
-    email: 'readonly@example.com',
-    password: 'ReadOnly123!',
-    name: 'Read Only',
-    role: 'readonly',
+  USER: {
+    email: 'user@scaledtest.com',
+    password: 'TestUser123!',
+    name: 'Test User',
+    role: 'user',
   },
-  MAINTAINER: {
-    email: 'maintainer@example.com',
-    password: 'Maintainer123!',
-    name: 'Maintainer User',
-    role: 'maintainer',
-  },
-  OWNER: {
-    email: 'owner@example.com',
-    password: 'Owner123!',
-    name: 'Owner User',
-    role: 'owner',
+  ADMIN: {
+    email: 'admin@scaledtest.com',
+    password: 'Admin123!',
+    name: 'Admin User',
+    role: 'admin',
   },
 };
 
@@ -60,7 +54,7 @@ export async function getAuthToken(
     });
 
     if (result.data) {
-      logger.info({ email }, 'Authentication successful for test user');
+      testLogger.info({ email }, 'Authentication successful for test user');
       return {
         success: true,
         user: result.data.user,
@@ -70,13 +64,13 @@ export async function getAuthToken(
         },
       };
     } else {
-      logger.error({ email, error: result.error }, 'Authentication failed for test user');
+      testLogger.error({ email, error: result.error }, 'Authentication failed for test user');
       return {
         success: false,
       };
     }
   } catch (error) {
-    logger.error({ email, error }, 'Authentication error for test user');
+    testLogger.error({ email, error }, 'Authentication error for test user');
     return {
       success: false,
     };
@@ -84,44 +78,34 @@ export async function getAuthToken(
 }
 
 /**
- * Get authentication token for readonly user
+ * Get authentication token for regular user
  */
-export async function getReadonlyToken(): Promise<BetterAuthTokenResponse> {
-  return getAuthToken(TestUsers.READONLY.email, TestUsers.READONLY.password);
+export async function getUserToken(): Promise<BetterAuthTokenResponse> {
+  return getAuthToken(TestUsers.USER.email, TestUsers.USER.password);
 }
 
 /**
- * Get authentication token for maintainer user
+ * Get authentication token for admin user
  */
-export async function getMaintainerToken(): Promise<BetterAuthTokenResponse> {
-  return getAuthToken(TestUsers.MAINTAINER.email, TestUsers.MAINTAINER.password);
-}
-
-/**
- * Get authentication token for owner user
- */
-export async function getOwnerToken(): Promise<BetterAuthTokenResponse> {
-  return getAuthToken(TestUsers.OWNER.email, TestUsers.OWNER.password);
+export async function getAdminToken(): Promise<BetterAuthTokenResponse> {
+  return getAuthToken(TestUsers.ADMIN.email, TestUsers.ADMIN.password);
 }
 
 /**
  * Get auth header for API requests
  */
 export async function getAuthHeader(
-  userType: 'readonly' | 'maintainer' | 'owner' = 'maintainer'
+  userType: 'user' | 'admin' = 'user'
 ): Promise<Record<string, string>> {
   let tokenResponse: BetterAuthTokenResponse;
 
   switch (userType) {
-    case 'readonly':
-      tokenResponse = await getReadonlyToken();
+    case 'user':
+      tokenResponse = await getUserToken();
       break;
-    case 'owner':
-      tokenResponse = await getOwnerToken();
-      break;
-    case 'maintainer':
+    case 'admin':
     default:
-      tokenResponse = await getMaintainerToken();
+      tokenResponse = await getAdminToken();
       break;
   }
 
