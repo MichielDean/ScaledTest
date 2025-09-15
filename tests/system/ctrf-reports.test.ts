@@ -531,21 +531,32 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should reject requests with missing required fields', async () => {
-      const incompleteReport = {
-        reportFormat: 'CTRF',
-        specVersion: '1.0.0',
-      };
+      // Case 1: Only reportFormat provided (missing specVersion and results)
+      const missingAll = { reportFormat: 'CTRF' };
+      const response1 = await api.post('/api/test-reports').send(missingAll).expect(400);
 
-      const response = await api
-        .post('/api/test-reports')
-
-        .send(incompleteReport)
-        .expect(400);
-
-      expect(response.body).toMatchObject({
+      expect(response1.body).toMatchObject({
         success: false,
         error: 'CTRF report validation failed',
+        details: expect.any(Array),
       });
+      // Should include errors for both specVersion and results
+      type ZodErrorDetail = { path?: (string | number)[] };
+      const errorFields1 = response1.body.details?.map((d: ZodErrorDetail) => d.path?.[0]);
+      expect(errorFields1).toEqual(expect.arrayContaining(['specVersion', 'results']));
+
+      // Case 2: reportFormat and specVersion provided (missing results)
+      const missingResults = { reportFormat: 'CTRF', specVersion: '1.0.0' };
+      const response2 = await api.post('/api/test-reports').send(missingResults).expect(400);
+
+      expect(response2.body).toMatchObject({
+        success: false,
+        error: 'CTRF report validation failed',
+        details: expect.any(Array),
+      });
+      // Should include error for missing results
+      const errorFields2 = response2.body.details?.map((d: ZodErrorDetail) => d.path?.[0]);
+      expect(errorFields2).toEqual(expect.arrayContaining(['results']));
     });
 
     it('should reject unsupported HTTP methods', async () => {
