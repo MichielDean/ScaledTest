@@ -679,7 +679,10 @@ describe('CTRF Reports API System Tests', () => {
 
       let storeResponse;
       try {
-        storeResponse = await api.post('/api/test-reports').send(originalReport).expect(201);
+        storeResponse = await api
+          .post('/api/test-reports')
+          .send(JSON.parse(JSON.stringify(originalReport)))
+          .expect(201);
       } catch (err) {
         // eslint-disable-next-line no-console
         if (typeof err === 'object' && err && 'response' in err && err.response) {
