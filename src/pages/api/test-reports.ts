@@ -146,6 +146,8 @@ async function handlePost(
   reqLogger: ReturnType<typeof getRequestLogger> // Use specific type for reqLogger
 ) {
   try {
+    // Debug: log the raw request body for CI diagnostics
+    reqLogger.info({ rawBody: req.body }, 'DEBUG: Raw request body received in handlePost');
     // Validate the request body using Zod schema
     const ctrfReport = CtrfReportSchema.parse(req.body);
 
