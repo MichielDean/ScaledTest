@@ -5,7 +5,7 @@ import {
   generateLargeCtrfReport,
 } from '../data/ctrfReportGenerator';
 import { createAuthenticatedAgent, TestUsers } from '../setup/betterAuthTestUtils';
-import { testLogger } from '../../src/logging/testLogger';
+import { testLogger } from '../../src/logging/logger';
 import { Status } from '../../src/schemas/ctrf/ctrf';
 import { StoredReport } from '../../src/types/database';
 import supertest from 'supertest';
@@ -18,7 +18,7 @@ describe('CTRF Reports API System Tests', () => {
   beforeAll(async () => {
     try {
       // Create authenticated agent for CTRF tests
-      api = await createAuthenticatedAgent(API_URL, TestUsers.OWNER);
+      api = await createAuthenticatedAgent(API_URL, TestUsers.ADMIN);
       testLogger.debug('Successfully created authenticated agent for CTRF tests');
     } catch (error) {
       testLogger.error({ error }, 'Failed to create authenticated agent in beforeAll:');
@@ -30,8 +30,8 @@ describe('CTRF Reports API System Tests', () => {
     it('should store a complete CTRF report successfully', async () => {
       // Re-authenticate just before the test to ensure fresh session
       const reAuthResponse = await api.post('/api/auth/sign-in/email').send({
-        email: TestUsers.OWNER.email,
-        password: TestUsers.OWNER.password,
+        email: TestUsers.ADMIN.email,
+        password: TestUsers.ADMIN.password,
       });
 
       testLogger.info(

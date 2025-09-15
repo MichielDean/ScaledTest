@@ -162,7 +162,7 @@ export function RegisterForm({
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="m@scaledtest.com"
                   value={email}
                   onChange={e => setEmail(e.target.value)}
                   required

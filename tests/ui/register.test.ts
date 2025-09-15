@@ -33,7 +33,7 @@ describe('Registration Tests', () => {
    */
   const generateUniqueEmail = (): string => {
     const timestamp = new Date().getTime();
-    return `test-user-${timestamp}@example.com`;
+    return `test-user-${timestamp}@scaledtest.com`;
   };
 
   describe('Registration and Auto-Login Flow', () => {
@@ -73,7 +73,7 @@ describe('Registration Tests', () => {
 
     it('should show error when registering with an existing email', async () => {
       // Generate a unique email for this test run to avoid conflicts with previous runs
-      const uniqueEmail = `existing-user-${Date.now()}-duplicate@example.com`;
+      const uniqueEmail = `existing-user-${Date.now()}-duplicate@scaledtest.com`;
 
       // Step 1: First, create a user with this email to ensure it exists
       // Start completely fresh - clear all authentication state

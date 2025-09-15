@@ -21,7 +21,7 @@ async function getAuthToken(): Promise<string> {
       process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || 'http://localhost:3000';
 
     // Get test user credentials from environment (for testing purposes)
-    const testUserEmail = process.env.TEST_API_USERNAME || 'maintainer@example.com';
+    const testUserEmail = process.env.TEST_API_USERNAME || 'maintainer@scaledtest.com';
     const testUserPassword = process.env.TEST_API_PASSWORD || 'Maintainer123!';
 
     const response = await fetch(`${apiBaseUrl}/api/auth/sign-in/email`, {

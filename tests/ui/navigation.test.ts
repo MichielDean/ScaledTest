@@ -25,10 +25,10 @@ describe('Navigation Tests', () => {
     await loginPage.logout();
   });
 
-  describe('Owner user navigation', () => {
+  describe('Admin user navigation', () => {
     beforeEach(async () => {
-      // Login as owner user for all tests in this group
-      await loginPage.loginWithUser(TestUsers.OWNER);
+      // Login as admin user for all tests in this group
+      await loginPage.loginWithUser(TestUsers.ADMIN);
       // Verify we're on the dashboard
       await dashboardPage.expectDashboardLoaded();
     });
@@ -80,19 +80,19 @@ describe('Navigation Tests', () => {
     });
   });
 
-  describe('Maintainer user navigation', () => {
+  describe('Regular user navigation', () => {
     beforeEach(async () => {
-      // Login as maintainer for all tests in this group
-      await loginPage.loginWithUser(TestUsers.MAINTAINER);
+      // Login as regular user for all tests in this group
+      await loginPage.loginWithUser(TestUsers.USER);
       // Verify we're on the dashboard
       await dashboardPage.expectDashboardLoaded();
     });
 
-    it('should show access denied when maintainer accesses users section', async () => {
+    it('should show access denied when user accesses admin sections', async () => {
       // Try to navigate directly to user management page
       await userManagementPage.goto();
 
-      // Verify we get an access denied message (maintainers can't manage users, only owners can)
+      // Verify we get an access denied message (regular users can't access admin functions)
       await userManagementPage.expectAccessDenied();
     });
   });

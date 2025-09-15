@@ -1,6 +1,6 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '../lib/auth';
-import { apiLogger as logger, logError, getRequestLogger } from '../logging/logger';
+import { dbLogger as logger, logError, getRequestLogger } from '../logging/logger';
 import { type RoleName } from '../lib/auth-shared';
 
 type Role = RoleName;
@@ -58,7 +58,7 @@ export async function authenticateRequest(
           id: session.user.id,
           email: session.user.email,
           name: session.user.name,
-          role: (session.user as { role?: Role }).role || 'readonly',
+          role: (session.user as { role?: Role }).role || 'user',
         };
       }
     } catch (sessionError) {
@@ -80,7 +80,7 @@ export async function authenticateRequest(
             id: tokenResult.user.id,
             email: tokenResult.user.email,
             name: tokenResult.user.name,
-            role: (tokenResult.user as { role?: Role }).role || 'readonly',
+            role: (tokenResult.user as { role?: Role }).role || 'user',
           };
         }
       } catch (tokenError) {
@@ -101,15 +101,12 @@ export async function authenticateRequest(
 function hasRole(user: { role?: Role }, requiredRole: Role): boolean {
   if (!user.role) return false;
 
-  // Role hierarchy: readonly < maintainer < owner
-  if (requiredRole === 'readonly') {
-    return true; // All authenticated users have at least readonly access
+  // Simple role checking - Better Auth handles complex permissions internally
+  if (requiredRole === 'user') {
+    return true; // All authenticated users have user access
   }
-  if (requiredRole === 'maintainer') {
-    return user.role === 'maintainer' || user.role === 'owner';
-  }
-  if (requiredRole === 'owner') {
-    return user.role === 'owner';
+  if (requiredRole === 'admin') {
+    return user.role === 'admin';
   }
 
   return false;

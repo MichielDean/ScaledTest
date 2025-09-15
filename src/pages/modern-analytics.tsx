@@ -15,4 +15,4 @@ const ModernAnalytics: NextPage = () => {
   return null;
 };
 
-export default withAuth(ModernAnalytics, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+export default withAuth(ModernAnalytics, [UserRole.USER, UserRole.ADMIN]);

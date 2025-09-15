@@ -3,33 +3,27 @@
  * Provides real authentication with test users - no bypass logic
  */
 
-import { testLogger } from '../../src/logging/testLogger';
+import { testLogger } from '../../src/logging/logger';
 
 export interface TestUser {
   email: string;
   password: string;
   name: string;
-  role: 'readonly' | 'maintainer' | 'owner';
+  role: 'user' | 'admin';
 }
 
 export const TestUsers: Record<string, TestUser> = {
-  READONLY: {
-    email: 'readonly@example.com',
-    password: 'ReadOnly123!',
-    name: 'Read Only',
-    role: 'readonly',
+  USER: {
+    email: 'user@scaledtest.com',
+    password: 'TestUser123!',
+    name: 'Test User',
+    role: 'user',
   },
-  MAINTAINER: {
-    email: 'maintainer@example.com',
-    password: 'Maintainer123!',
-    name: 'Maintainer User',
-    role: 'maintainer',
-  },
-  OWNER: {
-    email: 'owner@example.com',
-    password: 'Owner123!',
-    name: 'Owner User',
-    role: 'owner',
+  ADMIN: {
+    email: 'admin@scaledtest.com',
+    password: 'Admin123!',
+    name: 'Admin User',
+    role: 'admin',
   },
 };
 

@@ -28,10 +28,10 @@ describe('Role-based Access Tests', () => {
     // Cleanup - no final logout needed since each group handles its own
   });
 
-  describe('Read-only User Access', () => {
+  describe('Regular User Access', () => {
     beforeAll(async () => {
       // Login once for all tests in this group
-      await loginPage.loginWithUser(TestUsers.READONLY);
+      await loginPage.loginWithUser(TestUsers.USER);
       await dashboardPage.expectDashboardLoaded();
     });
 
@@ -43,10 +43,10 @@ describe('Role-based Access Tests', () => {
     it('should see correct role assignment', async () => {
       await profilePage.goto();
       await profilePage.expectProfileLoaded();
-      await profilePage.expectHasRole('Read-only');
+      await profilePage.expectHasRole('User');
     });
 
-    it('should not have content editing permissions', async () => {
+    it('should not have admin permissions', async () => {
       // Go back to dashboard for this test
       await dashboardPage.goto();
       await dashboardPage.expectNoAdminPermissions();
@@ -68,52 +68,10 @@ describe('Role-based Access Tests', () => {
     });
   });
 
-  describe('Maintainer User Access', () => {
+  describe('Admin User Access', () => {
     beforeAll(async () => {
       // Login once for all tests in this group
-      await loginPage.loginWithUser(TestUsers.MAINTAINER);
-      await dashboardPage.expectDashboardLoaded();
-    });
-
-    afterAll(async () => {
-      // Logout after this group to prepare for next group
-      await loginPage.logout();
-    });
-
-    it('should see correct role assignments', async () => {
-      await profilePage.goto();
-      await profilePage.expectProfileLoaded();
-      await profilePage.expectHasRole('Read-only');
-      await profilePage.expectHasRole('Maintainer');
-    });
-
-    it('should have content editing permissions', async () => {
-      await dashboardPage.goto();
-      // Maintainers don't have admin permissions (manage users/teams)
-      await dashboardPage.expectNoAdminPermissions();
-    });
-
-    it('should not see admin actions on dashboard', async () => {
-      await dashboardPage.goto();
-      await dashboardPage.expectAdminActionsNotVisible();
-    });
-
-    it('should have admin menu access for teams management', async () => {
-      await headerComponent.expectAdminAccess();
-    });
-
-    it('should be denied access to user management', async () => {
-      // Maintainers can access some admin functions but should be denied user management
-      await userManagementPage.goto();
-      // Should see access denied message instead of being redirected
-      await userManagementPage.expectAccessDenied();
-    });
-  });
-
-  describe('Owner User Access', () => {
-    beforeAll(async () => {
-      // Login once for all tests in this group
-      await loginPage.loginWithUser(TestUsers.OWNER);
+      await loginPage.loginWithUser(TestUsers.ADMIN);
       await dashboardPage.expectDashboardLoaded();
     });
 
@@ -122,17 +80,15 @@ describe('Role-based Access Tests', () => {
       await loginPage.logout();
     });
 
-    it('should see correct role assignments', async () => {
+    it('should see correct role assignment', async () => {
       await profilePage.goto();
       await profilePage.expectProfileLoaded();
-      await profilePage.expectHasRole('Read-only');
-      await profilePage.expectHasRole('Maintainer');
-      await profilePage.expectHasRole('Owner');
+      await profilePage.expectHasRole('Admin');
     });
 
-    it('should have content editing permissions', async () => {
+    it('should have full admin permissions', async () => {
       await dashboardPage.goto();
-      // Owners have full admin permissions (manage users/teams)
+      // Admins have full admin permissions (manage users/teams)
       await dashboardPage.expectAdminPermissions();
     });
 

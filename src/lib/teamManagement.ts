@@ -17,7 +17,6 @@ import { getRequiredEnvVar } from '../environment/env';
 
 // Singleton database pool instances
 let dbPool: Pool | null = null;
-let authDbPool: Pool | null = null; // kept for backward-compat type, but no longer used for auth lookups
 
 /**
  * Get or create the singleton database connection pool for the main application (scaledtest)
@@ -136,11 +135,11 @@ export async function verifyUserExists(userId: string): Promise<boolean> {
     }
   }
 
-  // Do NOT fall back to direct auth DB queries. If the admin API is not
+  // Do NOT fall back to direct auth database queries. If the admin API is not
   // available or did not confirm the user, treat the user as non-existent.
   dbLogger.debug(
     { userId },
-    'Auth admin API not available or user not found; not falling back to auth DB'
+    'Auth admin API not available or user not found; not falling back to direct database access'
   );
   return false;
 }
@@ -180,9 +179,9 @@ export function createDbPool(): Pool {
 // prevent accidental DB fallbacks.
 
 /**
- * Factory: create a new auth DB pool instance. Caller manages lifecycle.
+ * Factory: create a new auth database pool instance. Caller manages lifecycle.
  */
-// createAuthDbPool removed for the same reason as getAuthDbPool.
+// createAuthDbPool removed to prevent direct database access. Use Better Auth admin API instead.
 
 /**
  * Gracefully shutdown the database pools
@@ -194,11 +193,6 @@ export async function shutdownTeamManagementPool(): Promise<void> {
   if (dbPool) {
     promises.push(dbPool.end());
     dbPool = null;
-  }
-
-  if (authDbPool) {
-    promises.push(authDbPool.end());
-    authDbPool = null;
   }
 
   await Promise.all(promises);
@@ -224,7 +218,7 @@ export async function getUserTeams(userId: string): Promise<Team[]> {
   try {
     const exists = await verifyUserExists(userId);
     if (!exists) {
-      dbLogger.warn({ userId }, 'User does not exist according to auth provider or auth DB');
+      dbLogger.warn({ userId }, 'User does not exist according to auth provider');
       return [];
     }
 
@@ -289,9 +283,8 @@ export async function addUserToTeam(
   const pool = getDbPool();
 
   try {
-    // Verify user existence using Better Auth admin API when available and
-    // fall back to the auth DB. If verification fails, throw a clear error so
-    // callers can react appropriately.
+    // Verify user existence using Better Auth admin API.
+    // If verification fails, throw a clear error so callers can react appropriately.
     const exists = await verifyUserExists(userId);
     if (!exists) {
       dbLogger.warn({ userId }, 'User verification failed; refusing to assign to team');

@@ -1,6 +1,6 @@
 import type { NextPage } from 'next';
 import withAuth from '../auth/withBetterAuth';
-import { Roles } from '../lib/permissions';
+import { UserRole } from '../types/roles';
 import { SPANavigationProvider } from '../contexts/SPANavigationContext';
 import MainSPAContent from '../components/MainSPAContent';
 import DynamicHead from '../components/DynamicHead';
@@ -16,4 +16,4 @@ const Dashboard: NextPage = () => {
   );
 };
 
-export default withAuth(Dashboard, [Roles.readonly, Roles.maintainer, Roles.owner]);
+export default withAuth(Dashboard, [UserRole.USER, UserRole.ADMIN]);

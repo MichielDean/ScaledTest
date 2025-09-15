@@ -146,3 +146,24 @@ body {
     @apply bg-background text-foreground;
   }
 }
+
+/* Hide Next.js development overlays that interfere with testing */
+nextjs-portal {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* Also hide any development indicators */
+[data-nextjs-version-checker],
+[data-nextjs-copy-button],
+[data-nextjs-data-runtime-error-copy-stack] {
+  display: none !important;
+  pointer-events: none !important;
+  visibility: hidden !important;
+}
+
+/* Hide webpack compilation indicators */
+#__next-build-watcher {
+  display: none !important;
+}

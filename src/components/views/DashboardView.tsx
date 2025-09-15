@@ -18,7 +18,7 @@ const DashboardView: React.FC = () => {
       </div>
 
       {/* Admin Actions Section - Only for Owners */}
-      {hasRole(UserRole.OWNER) && (
+      {hasRole(UserRole.ADMIN) && (
         <Card id="admin-actions-section">
           <CardHeader>
             <CardTitle>Admin Actions</CardTitle>

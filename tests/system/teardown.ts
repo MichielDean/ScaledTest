@@ -41,18 +41,31 @@ async function forceCloseDatabases(): Promise<void> {
 }
 
 /**
- * Force shutdown Docker environment
+ * Force shutdown Docker environment with volume cleanup
  */
 async function forceKillDocker(): Promise<void> {
   const dockerComposePath = path.resolve(process.cwd(), 'docker/docker-compose.yml');
 
   try {
-    execSync(`docker compose -f "${dockerComposePath}" down --remove-orphans --timeout 5`, {
-      stdio: 'ignore',
-      timeout: 10000, // 10 second timeout
-    });
+    // Stop and remove containers, networks, and volumes
+    execSync(
+      `docker compose -f "${dockerComposePath}" down --remove-orphans --volumes --timeout 5`,
+      {
+        stdio: 'ignore',
+        timeout: 15000, // Increased timeout for volume cleanup
+      }
+    );
   } catch {
-    // Silent failure
+    // Silent failure - try alternative cleanup
+    try {
+      // Force remove any remaining volumes
+      execSync('docker volume prune --force', {
+        stdio: 'ignore',
+        timeout: 10000,
+      });
+    } catch {
+      // Silent failure
+    }
   }
 }
 
