@@ -602,9 +602,10 @@ describe('CTRF Reports API System Tests', () => {
 
     it('should handle concurrent report submissions', async () => {
       const reports = Array.from({ length: 5 }, () => generateCtrfReport());
-
-      const promises = reports.map(report => api.post('/api/test-reports').send(report));
-
+      // Deep clone each report before sending to avoid mutation/race issues
+      const promises = reports.map(report =>
+        api.post('/api/test-reports').send(JSON.parse(JSON.stringify(report)))
+      );
       const responses = await Promise.all(promises);
 
       responses.forEach(response => {
