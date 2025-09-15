@@ -90,7 +90,6 @@ describe('CTRF Reports API System Tests', () => {
       }
 
       const ctrfReport = generateCtrfReport();
-
       const response = await api.post('/api/test-reports').send(ctrfReport).expect(201);
 
       expect(response.body).toMatchObject({
@@ -112,12 +111,7 @@ describe('CTRF Reports API System Tests', () => {
 
     it('should store a minimal CTRF report', async () => {
       const minimalReport = generateMinimalCtrfReport();
-
-      const response = await api
-        .post('/api/test-reports')
-
-        .send(minimalReport)
-        .expect(201);
+      const response = await api.post('/api/test-reports').send(minimalReport).expect(201);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -138,12 +132,7 @@ describe('CTRF Reports API System Tests', () => {
       const reportWithoutMeta = generateCtrfReport();
       delete reportWithoutMeta.reportId;
       delete reportWithoutMeta.timestamp;
-
-      const response = await api
-        .post('/api/test-reports')
-
-        .send(reportWithoutMeta)
-        .expect(201);
+      const response = await api.post('/api/test-reports').send(reportWithoutMeta).expect(201);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -207,8 +196,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-
-        .send(multiStatusReport)
+        .send(JSON.parse(JSON.stringify(multiStatusReport)))
         .expect(201);
 
       expect(response.body.summary).toEqual({
@@ -306,8 +294,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const response = await api
         .post('/api/test-reports')
-
-        .send(richReport)
+        .send(JSON.parse(JSON.stringify(richReport)))
         .expect(201);
 
       expect(response.body).toMatchObject({
@@ -372,8 +359,7 @@ describe('CTRF Reports API System Tests', () => {
       for (const report of reports) {
         const response = await api
           .post('/api/test-reports')
-
-          .send(report)
+          .send(JSON.parse(JSON.stringify(report)))
           .expect(201);
         storedReportIds.push(response.body.id);
       }
@@ -461,8 +447,14 @@ describe('CTRF Reports API System Tests', () => {
       expect(report1.timestamp).not.toBe(report2.timestamp);
       expect(report1.results.tool.name).not.toBe(report2.results.tool.name);
 
-      await api.post('/api/test-reports').send(report1).expect(201);
-      await api.post('/api/test-reports').send(report2).expect(201);
+      await api
+        .post('/api/test-reports')
+        .send(JSON.parse(JSON.stringify(report1)))
+        .expect(201);
+      await api
+        .post('/api/test-reports')
+        .send(JSON.parse(JSON.stringify(report2)))
+        .expect(201);
 
       const page1Response = await api
         .get('/api/test-reports?page=1&size=1')
@@ -492,10 +484,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should combine multiple filters', async () => {
-      const response = await api
-        .get('/api/test-reports?tool=Jest&environment=CI')
-
-        .expect(200);
+      const response = await api.get('/api/test-reports?tool=Jest&environment=CI').expect(200);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -580,12 +569,10 @@ describe('CTRF Reports API System Tests', () => {
   describe('Performance and Scalability', () => {
     it('should handle large CTRF reports', async () => {
       const largeReport = generateLargeCtrfReport(50);
-
       const startTime = Date.now();
       const response = await api
         .post('/api/test-reports')
-
-        .send(largeReport)
+        .send(JSON.parse(JSON.stringify(largeReport)))
         .expect(201);
       const endTime = Date.now();
 
