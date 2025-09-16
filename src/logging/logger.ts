@@ -2,83 +2,78 @@
  * Logger utility using Pino for structured logging.
  * Supports context-based child loggers and object-based structured logging.
  */
-import pino from 'pino';
+import pino, { Logger } from 'pino';
 import { randomUUID } from 'crypto';
 
-/**
- * Create a base logger instance with standardized configuration
- * - Uses consistent log level across all environments
- * - Routes logs to files during tests to keep terminal clean
- * - Uses pretty-printing for readable output in non-test environments
- */
-const createLogger = () => {
-  const isTestEnvironment = process.env.NODE_ENV === 'test';
+let _testLogger: Logger | null = null;
 
-  if (isTestEnvironment) {
-    // During tests, write application logs to a file to keep terminal clean
-    return pino({
-      level: 'debug',
-      transport: {
-        target: 'pino/file',
-        options: {
-          destination: './logs/app.log',
-          mkdir: true,
+export const testLogger: Logger = (() => {
+  if (!_testLogger) {
+    // Check if we're in a browser environment
+    const isBrowser = typeof window !== 'undefined';
+
+    if (isBrowser) {
+      // Browser-safe pino configuration for UI tests
+      _testLogger = pino({
+        level: 'debug',
+        browser: {
+          asObject: true,
         },
-      },
-      timestamp: pino.stdTimeFunctions.isoTime,
-      base: { app: 'scaledtest' },
-    });
+        timestamp: pino.stdTimeFunctions.isoTime,
+        base: { app: 'scaledtest', source: 'test' },
+      });
+    } else {
+      // Node.js configuration with destination for unit/integration tests
+      _testLogger = pino(
+        {
+          level: 'debug',
+          transport: {
+            target: 'pino-pretty',
+            options: {
+              singleLine: true,
+              levelFirst: true,
+              ignore: 'pid,hostname',
+              translateTime: 'SYS:standard',
+              colorize: true,
+            },
+          },
+          timestamp: pino.stdTimeFunctions.isoTime,
+          base: { app: 'scaledtest', source: 'test' },
+        },
+        pino.destination({ dest: 1, sync: true, encoding: 'utf8' })
+      );
+    }
   }
+  return _testLogger;
+})();
 
-  // Non-test environments use pretty printing to console
-  return pino({
-    level: 'debug',
-    transport: {
-      target: 'pino-pretty',
-      options: {
-        colorize: true,
-      },
-    },
-    timestamp: pino.stdTimeFunctions.isoTime,
-    base: { app: 'scaledtest' },
-  });
-};
+const logger = pino({
+  level: 'debug',
+  timestamp: pino.stdTimeFunctions.isoTime,
+  base: { app: 'scaledtest' },
+  browser: typeof window !== 'undefined' ? { asObject: true } : undefined,
+});
 
-const logger = createLogger();
+export { logger };
+export default logger;
 
-// Pre-configured child loggers for different modules
 export const authLogger = logger.child({ module: 'auth' });
 export const apiLogger = logger.child({ module: 'api' });
 export const dbLogger = logger.child({ module: 'db' });
 export const uiLogger = logger.child({ module: 'ui' });
-export const testLogger = logger.child({ module: 'test' });
 
-/**
- * Generate a request ID for API request logging
- */
-export function getRequestLogger(req: { headers: Record<string, string | string[] | undefined> }) {
-  const requestId = req.headers['x-request-id'] || randomUUID();
-  return apiLogger.child({ requestId });
-}
-
-/**
- * Helper to log errors with proper context and serialization
- */
 export function logError(
-  baseLogger: pino.Logger,
+  baseLogger: Logger,
   message: string,
   error: Error | unknown,
   context: object = {}
 ) {
-  // Extract additional error properties if they exist
   const errorObj = error as Record<string, unknown>;
   const errorResponse = errorObj?.response as Record<string, unknown> | undefined;
-
   baseLogger.error(
     {
       err: error,
       ...context,
-      // Include these if available in the error object
       code: errorObj?.code,
       status: errorResponse?.status,
       statusText: errorResponse?.statusText,
@@ -87,25 +82,9 @@ export function logError(
   );
 }
 
-/**
- * Usage examples:
- *
- * // Basic logging with standard logger
- * logger.info('Simple log message');
- *
- * // Structured logging with context
- * logger.info({ userId: '123', action: 'login' }, 'User logged in');
- *
- * // Logging errors with helper
- * try {
- *   // some code that might fail
- * } catch (error) {
- *   logError(authLogger, 'Operation failed', error, { userId: '123' });
- * }
- *
- * // API request logging
- * const reqLogger = getRequestLogger(req);
- * reqLogger.info({ userId: req.user?.id }, 'API request received');
- */
-
-export default logger;
+export function getRequestLogger(req: {
+  headers: Record<string, string | string[] | undefined>;
+}): Logger {
+  const requestId = req.headers['x-request-id'] || randomUUID();
+  return apiLogger.child({ requestId });
+}

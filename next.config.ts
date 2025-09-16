@@ -9,6 +9,16 @@ const nextConfig: NextConfig = {
   eslint: {
     dirs: ['src', 'pages', 'tests'], // Include tests directory for linting
   },
+  // Configure development behavior
+  experimental: {
+    // Disable overlay in development to prevent test interference
+    appDocumentPreloading: false,
+  },
+  // Disable various development features that can interfere with testing
+  compiler: {
+    // Remove development-only code that might interfere with tests
+    removeConsole: process.env.NODE_ENV === 'production',
+  },
 };
 
 export default nextConfig;

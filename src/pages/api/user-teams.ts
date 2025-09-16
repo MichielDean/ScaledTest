@@ -58,4 +58,4 @@ const handleGet: BetterAuthMethodHandler<GetUserTeamsResponse | ErrorResponse> =
  * User Teams API for getting current user's team assignments
  * GET /api/user-teams - Get current user's teams (authenticated users only)
  */
-export default createBetterAuthApi({ GET: handleGet }, 'readonly');
+export default createBetterAuthApi({ GET: handleGet }, 'user');

@@ -1,7 +1,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
+import { authClient } from '@/lib/auth-client';
 import { apiLogger } from '@/logging/logger';
-import { BetterAuthUserManagementApi } from '@/types/auth';
 
 async function handler(req: NextApiRequest, res: NextApiResponse) {
   try {
@@ -14,13 +14,13 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
       return res.status(401).json({ error: 'Unauthorized' });
     }
 
-    // Check if user has owner role (required for role management)
+    // Check if user has admin role (required for role management)
     const userWithRole = session.user as { role?: string };
     const userRole = userWithRole.role;
 
-    if (userRole !== 'owner') {
+    if (userRole !== 'admin') {
       return res.status(403).json({
-        error: 'Insufficient permissions - owner role required for role management',
+        error: 'Insufficient permissions - admin role required for role management',
       });
     }
 
@@ -36,21 +36,6 @@ async function handler(req: NextApiRequest, res: NextApiResponse) {
     apiLogger.error({ error }, 'Error in user roles API authentication');
     return res.status(500).json({ error: 'Internal server error' });
   }
-}
-
-function isBetterAuthAdminApi(candidate: unknown): candidate is BetterAuthUserManagementApi {
-  const obj = candidate as Record<string, unknown> | undefined;
-  if (!obj || typeof obj.getUser !== 'function' || typeof obj.setRole !== 'function') {
-    return false;
-  }
-  // Optionally check arity (number of arguments)
-  if (
-    (obj.getUser as (...args: unknown[]) => unknown).length < 1 ||
-    (obj.setRole as (...args: unknown[]) => unknown).length < 1
-  ) {
-    return false;
-  }
-  return true;
 }
 
 async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
@@ -69,51 +54,39 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
     });
 
     // Validate role
-    const validRoles = ['readonly', 'maintainer', 'owner'];
+    const validRoles = ['admin', 'user'];
     if (!validRoles.includes(role)) {
       return res.status(400).json({
         error: 'Invalid role. Must be one of: ' + validRoles.join(', '),
       });
     }
 
-    // Prefer to use the Better Auth admin API if available
-    try {
-      const maybeAdmin = (auth as unknown as { api?: unknown }).api;
-      if (maybeAdmin && isBetterAuthAdminApi(maybeAdmin)) {
-        // Validate user exists
-        const targetUser = await maybeAdmin.getUser({ body: { userId } });
-        if (!targetUser) {
-          return res.status(404).json({ error: 'User not found' });
-        }
+    // Use Better Auth admin client to set the role
+    const { data, error } = await authClient.admin.setRole({
+      userId,
+      role,
+    });
 
-        await maybeAdmin.setRole({ body: { userId, role } });
-        apiLogger.info(
-          {
-            userId,
-            role,
-            assignedBy: session?.user?.id || 'unknown',
-          },
-          'Role assigned successfully via Better Auth API'
-        );
-
-        return res
-          .status(200)
-          .json({ success: true, message: 'Role assigned successfully', userId, role });
-      }
-    } catch (err) {
-      apiLogger.error({ err, userId, role }, 'Better Auth API role assignment failed');
-      // Fallthrough to fallback behavior with explanatory response
-      return res.status(502).json({ error: 'Failed to assign role via auth provider' });
+    if (error) {
+      apiLogger.error(
+        { error, userId, role },
+        'Better Auth admin API error during role assignment'
+      );
+      return res.status(500).json({ error: 'Failed to assign role via Better Auth' });
     }
 
-    // If Better Auth API not available, return informative 501 response
-    apiLogger.warn(
-      { userId, role },
-      'Role assignment endpoint not implemented for current auth API'
+    apiLogger.info(
+      {
+        userId,
+        role,
+        assignedBy: session?.user?.id || 'unknown',
+      },
+      'Role assigned successfully via Better Auth admin API'
     );
+
     return res
-      .status(501)
-      .json({ error: 'Role assignment is not implemented for the current auth provider' });
+      .status(200)
+      .json({ success: true, message: 'Role assigned successfully', userId, role, data });
   } catch (error) {
     apiLogger.error(
       {
@@ -123,13 +96,6 @@ async function handleAssignRole(req: NextApiRequest, res: NextApiResponse) {
       },
       'Error assigning role'
     );
-
-    // Check if this is a Better Auth error
-    if (error instanceof Error && error.message.includes('User not found')) {
-      return res.status(404).json({
-        error: 'User not found',
-      });
-    }
 
     return res.status(500).json({
       error: 'Failed to assign role',
@@ -168,7 +134,7 @@ async function handleGetUserRole(req: NextApiRequest, res: NextApiResponse) {
           return res.status(404).json({ error: 'User not found' });
         }
         const userWithRole = user as { role?: string; email?: string; name?: string };
-        const userRole = userWithRole.role || 'readonly';
+        const userRole = userWithRole.role || 'user';
 
         apiLogger.info(
           { userId, role: userRole },

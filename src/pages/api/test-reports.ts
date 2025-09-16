@@ -146,6 +146,8 @@ async function handlePost(
   reqLogger: ReturnType<typeof getRequestLogger> // Use specific type for reqLogger
 ) {
   try {
+    // Debug: log the raw request body for CI diagnostics
+    reqLogger.info({ rawBody: req.body }, 'DEBUG: Raw request body received in handlePost');
     // Validate the request body using Zod schema
     const ctrfReport = CtrfReportSchema.parse(req.body);
 
@@ -191,7 +193,15 @@ async function handlePost(
         uploadedAt: new Date().toISOString(),
       },
     };
-
+    // Log incoming request body, headers, and content-type
+    reqLogger.info(
+      {
+        headers: req.headers,
+        contentType: req.headers['content-type'],
+        body: req.body,
+      },
+      'Incoming POST to /api/test-reports'
+    );
     await storeInTimescale(reportWithMeta as TimescaleCtrfReport);
 
     reqLogger.info(

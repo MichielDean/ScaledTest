@@ -9,6 +9,7 @@ import fs from 'fs';
 import { testLogger } from '../src/logging/logger';
 
 // Define globals with TypeScript for Node.js environment
+// Note: Namespace is required for global type augmentation in Jest/Playwright setup
 declare global {
   // eslint-disable-next-line @typescript-eslint/no-namespace
   namespace NodeJS {
@@ -50,8 +51,11 @@ interface PlaywrightConfig {
   contextOptions: ContextOptions;
 }
 
+// Global config instance
+let globalConfig: PlaywrightConfig;
+
 // Load configuration
-function loadConfig(): PlaywrightConfig {
+async function loadConfig(): Promise<PlaywrightConfig> {
   const configPath = path.resolve(process.cwd(), 'jest-playwright.config.js');
 
   // Default configuration
@@ -67,22 +71,22 @@ function loadConfig(): PlaywrightConfig {
 
   if (fs.existsSync(configPath)) {
     try {
-      // We need to dynamically import the config file - import() can't be used with variable paths
-      // eslint-disable-next-line @typescript-eslint/no-require-imports
-      const userConfig = require(configPath);
+      // Use dynamic import for config file loading
+      const userConfig = await import(configPath);
+      const configData = userConfig.default || userConfig;
       // Create a merged config by manually applying properties to ensure type safety
       const mergedConfig = { ...defaultConfig };
 
-      if (userConfig.browsers) mergedConfig.browsers = userConfig.browsers;
-      if (userConfig.launchOptions)
+      if (configData.browsers) mergedConfig.browsers = configData.browsers;
+      if (configData.launchOptions)
         mergedConfig.launchOptions = {
           ...defaultConfig.launchOptions,
-          ...userConfig.launchOptions,
+          ...configData.launchOptions,
         };
-      if (userConfig.contextOptions)
+      if (configData.contextOptions)
         mergedConfig.contextOptions = {
           ...defaultConfig.contextOptions,
-          ...userConfig.contextOptions,
+          ...configData.contextOptions,
         };
 
       return mergedConfig;
@@ -96,17 +100,17 @@ function loadConfig(): PlaywrightConfig {
 
 // Global setup function to run before each test file
 const setupPlaywright = async (): Promise<void> => {
-  const config = loadConfig();
+  globalConfig = await loadConfig();
 
   // Launch browser
   (global as unknown as NodeJS.Global).browser = await chromium.launch({
-    ...config.launchOptions,
+    ...globalConfig.launchOptions,
   });
 
   (global as unknown as NodeJS.Global).context = await (
     global as unknown as NodeJS.Global
   ).browser.newContext({
-    ...config.contextOptions,
+    ...globalConfig.contextOptions,
   });
 
   (global as unknown as NodeJS.Global).page = await (
@@ -140,7 +144,7 @@ const setupPlaywright = async (): Promise<void> => {
         (global as unknown as NodeJS.Global).context = await (
           global as unknown as NodeJS.Global
         ).browser.newContext({
-          ...config.contextOptions,
+          ...globalConfig.contextOptions,
           ...newOptions,
         });
         (global as unknown as NodeJS.Global).page = await (
@@ -158,12 +162,12 @@ const setupPlaywright = async (): Promise<void> => {
           await (global as unknown as NodeJS.Global).browser.close().catch(() => {});
         }
         (global as unknown as NodeJS.Global).browser = await chromium.launch({
-          ...config.launchOptions,
+          ...globalConfig.launchOptions,
         });
         (global as unknown as NodeJS.Global).context = await (
           global as unknown as NodeJS.Global
         ).browser.newContext({
-          ...config.contextOptions,
+          ...globalConfig.contextOptions,
           ...newOptions,
         });
         (global as unknown as NodeJS.Global).page = await (

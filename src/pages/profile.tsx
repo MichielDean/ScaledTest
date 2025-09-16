@@ -15,4 +15,4 @@ const Profile: NextPage = () => {
   return null;
 };
 
-export default withAuth(Profile, [UserRole.READONLY, UserRole.MAINTAINER, UserRole.OWNER]);
+export default withAuth(Profile, [UserRole.USER, UserRole.ADMIN]);

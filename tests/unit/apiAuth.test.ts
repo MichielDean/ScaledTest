@@ -12,11 +12,10 @@ const withApiAuth = (handler: BetterAuthMethodHandler, roles: Role[]) => {
   );
 };
 
-// UserRole constants for backward compatibility
+// UserRole constants for Better Auth default roles
 const UserRole = {
-  READONLY: 'readonly' as Role,
-  MAINTAINER: 'maintainer' as Role,
-  OWNER: 'owner' as Role,
+  USER: 'user' as Role,
+  ADMIN: 'admin' as Role,
 };
 
 // Mock the Better Auth module
@@ -64,7 +63,7 @@ describe('API Authentication Middleware', () => {
   describe('Authentication Validation', () => {
     it('should return 401 when no authorization header is present', async () => {
       // Arrange
-      const protectedHandler = withApiAuth(mockHandler, [UserRole.READONLY]);
+      const protectedHandler = withApiAuth(mockHandler, [UserRole.USER]);
 
       // Act
       await protectedHandler(mockRequest as NextApiRequest, mockResponse as NextApiResponse);
@@ -89,7 +88,7 @@ describe('API Authentication Middleware', () => {
       // Mock session and bearer token to fail
       mockGetSession.mockResolvedValue({ data: null });
 
-      const protectedHandler = withApiAuth(mockHandler, [UserRole.READONLY]);
+      const protectedHandler = withApiAuth(mockHandler, [UserRole.USER]);
 
       // Act
       await protectedHandler(mockRequest as NextApiRequest, mockResponse as NextApiResponse);
@@ -113,17 +112,17 @@ describe('API Authentication Middleware', () => {
         authorization: 'Bearer valid-token',
       };
 
-      // Mock session to return user with readonly role
+      // Mock session to return user with user role
       mockGetSession.mockResolvedValue({
         user: {
           id: 'user-123',
-          email: 'user@example.com',
+          email: 'user@scaledtest.com',
           name: 'Test User',
-          role: UserRole.READONLY,
+          role: UserRole.USER,
         },
       });
 
-      const protectedHandler = withApiAuth(mockHandler, [UserRole.OWNER]);
+      const protectedHandler = withApiAuth(mockHandler, [UserRole.ADMIN]);
 
       // Act
       await protectedHandler(mockRequest as NextApiRequest, mockResponse as NextApiResponse);
@@ -133,7 +132,7 @@ describe('API Authentication Middleware', () => {
       expect(mockResponse.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: false,
-          error: 'Access denied. Required role: owner',
+          error: 'Access denied. Required role: admin',
         })
       );
       expect(mockHandler).not.toHaveBeenCalled();
@@ -145,17 +144,17 @@ describe('API Authentication Middleware', () => {
         authorization: 'Bearer valid-token',
       };
 
-      // Mock session to return user with maintainer role
+      // Mock session to return user with admin role
       mockGetSession.mockResolvedValue({
         user: {
           id: 'user-123',
-          email: 'maintainer@example.com',
-          name: 'Test Maintainer',
-          role: UserRole.MAINTAINER,
+          email: 'admin@scaledtest.com',
+          name: 'Test Admin',
+          role: UserRole.ADMIN,
         },
       });
 
-      const protectedHandler = withApiAuth(mockHandler, [UserRole.MAINTAINER]);
+      const protectedHandler = withApiAuth(mockHandler, [UserRole.ADMIN]);
 
       // Act
       await protectedHandler(mockRequest as NextApiRequest, mockResponse as NextApiResponse);

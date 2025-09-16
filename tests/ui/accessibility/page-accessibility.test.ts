@@ -45,6 +45,20 @@ describe('Page Accessibility Tests', () => {
 
     publicPages.forEach(({ name, pageObject }) => {
       test(`${name} page should be accessible`, async () => {
+        // Clear authentication state for public pages to prevent redirects
+        await playwright.page.context().clearCookies();
+
+        // Safely clear storage (handle cases where localStorage access is denied)
+        try {
+          await playwright.page.evaluate(() => {
+            localStorage.clear();
+            sessionStorage.clear();
+          });
+        } catch {
+          // localStorage access denied - this is acceptable for accessibility testing
+          testLogger.debug('localStorage access denied - continuing with accessibility test');
+        }
+
         const page = pageObject();
         await page.goto();
         await basePage.waitForPageLoad(1000);
@@ -90,7 +104,7 @@ describe('Page Accessibility Tests', () => {
       loginPage = new LoginPage(playwright.page);
       dashboardPage = new DashboardPage(playwright.page);
 
-      await loginPage.loginWithUser(TestUsers.READONLY);
+      await loginPage.loginWithUser(TestUsers.USER);
       await dashboardPage.expectDashboardLoaded();
     });
 
@@ -137,13 +151,13 @@ describe('Admin Authenticated Pages', () => {
   let userManagementPage: UserManagementPage;
   let dashboardPage: DashboardPage;
 
-  // Login as OWNER user for admin-only tests
+  // Login as ADMIN user for admin-only tests
   beforeAll(async () => {
     loginPage = new LoginPage(playwright.page);
     userManagementPage = new UserManagementPage(playwright.page);
     dashboardPage = new DashboardPage(playwright.page);
 
-    await loginPage.loginWithUser(TestUsers.OWNER);
+    await loginPage.loginWithUser(TestUsers.ADMIN);
     await dashboardPage.expectDashboardLoaded();
   });
 

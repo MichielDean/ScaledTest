@@ -1,29 +1,9 @@
 import { betterAuth } from 'better-auth';
 import { Pool } from 'pg';
 import { admin, twoFactor, username, bearer } from 'better-auth/plugins';
-import { createAccessControl } from 'better-auth/plugins/access';
-import { statement } from './auth-shared';
 import { getRequiredEnvVar } from '../environment/env';
 import { dbLogger as logger } from '../logging/logger';
 import { randomBytes } from 'crypto';
-
-// Create access controller
-const ac = createAccessControl(statement);
-
-// Define roles with their permissions
-export const roles = {
-  readonly: ac.newRole({
-    content: ['read'],
-  }),
-  maintainer: ac.newRole({
-    content: ['read', 'write'],
-  }),
-  owner: ac.newRole({
-    content: ['read', 'write'],
-    users: ['manage'],
-    admin: ['access'],
-  }),
-};
 
 // Better Auth instance
 let authInstance: ReturnType<typeof betterAuth> | null = null;
@@ -57,9 +37,7 @@ function getAuth(): ReturnType<typeof betterAuth> {
       }),
       emailAndPassword: {
         enabled: true,
-        requireEmailVerification: process.env.REQUIRE_EMAIL_VERIFICATION
-          ? process.env.REQUIRE_EMAIL_VERIFICATION === 'true'
-          : true, // Default to true for safety
+        requireEmailVerification: false, // Always disabled - never require email verification
       },
       socialProviders: {
         github: {
@@ -73,14 +51,13 @@ function getAuth(): ReturnType<typeof betterAuth> {
       },
       plugins: [
         admin({
-          ac,
-          roles,
-          defaultRole: 'readonly',
-          adminRoles: ['owner', 'maintainer'], // Include our custom admin roles
-        }), // Enables admin functionality with RBAC
+          defaultRole: 'user',
+          adminRoles: ['admin'], // Use Better Auth's default admin role
+        }), // Enables admin functionality with built-in RBAC
         bearer(), // Enables Bearer token authentication for API
         twoFactor(), // Optional: 2FA support
         username(), // Optional: Username support
+        // nextCookies(), // Temporarily removed due to module resolution issues
       ],
       session: {
         expiresIn: 60 * 60 * 24 * 7, // 7 days

@@ -169,7 +169,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   // Computed values
   const selectedTeams = userTeams.filter(team => selectedTeamIds.includes(team.id));
   const hasMultipleTeams = userTeams.length > 1;
-  const canManageTeams = hasRole('maintainer') || hasRole('owner');
+  const canManageTeams = hasRole('admin');
 
   // Effective team IDs for API filtering
   const effectiveTeamIds = selectedTeamIds.length > 0 ? selectedTeamIds : [];

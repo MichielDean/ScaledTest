@@ -15,4 +15,4 @@ const AdminDashboard: NextPage = () => {
   return null;
 };
 
-export default withAuth(AdminDashboard, [UserRole.MAINTAINER, UserRole.OWNER]);
+export default withAuth(AdminDashboard, [UserRole.ADMIN]);

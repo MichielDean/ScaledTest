@@ -1,7 +1,7 @@
 import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { fileURLToPath } from 'url';
-import logger from '../src/logging/logger';
+import { logger } from '../src/logging/logger';
 
 const execFileAsync = promisify(execFile);
 

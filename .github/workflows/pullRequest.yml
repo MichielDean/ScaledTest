@@ -31,7 +31,7 @@ jobs:
       TIMESCALE_DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/scaledtest
 
       # Test users
-      TEST_API_USERNAME: maintainer@example.com
+      TEST_API_USERNAME: maintainer@scaledtest.com
       TEST_API_PASSWORD: Maintainer123!
 
       # TimescaleDB configuration
@@ -52,11 +52,29 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
 
+      - name: Start Docker Compose services
+        run: docker-compose up -d
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in {1..30}; do
+            if docker exec $(docker ps -qf "name=postgres") pg_isready -U scaledtest -d auth; then
+              echo "Postgres is ready!"; break;
+            fi
+            echo "Waiting for Postgres... ($i)"; sleep 2;
+            if [ "$i" -eq 30 ]; then
+              echo "Postgres did not become ready in time."; exit 1;
+            fi
+          done
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: 'npm'
+
+      - name: Upgrade npm to latest
+        run: npm install -g npm@latest
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
@@ -68,5 +86,7 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+      - name: Run database migrations
+        run: npm run migrate
       - name: Run all tests
         run: npm run test
