@@ -52,6 +52,21 @@ jobs:
       - name: Set up Docker Compose
         uses: docker/setup-compose-action@v1
 
+      - name: Start Docker Compose services
+        run: docker-compose up -d
+
+      - name: Wait for Postgres to be ready
+        run: |
+          for i in {1..30}; do
+            if docker exec $(docker ps -qf "name=postgres") pg_isready -U scaledtest -d auth; then
+              echo "Postgres is ready!"; break;
+            fi
+            echo "Waiting for Postgres... ($i)"; sleep 2;
+            if [ "$i" -eq 30 ]; then
+              echo "Postgres did not become ready in time."; exit 1;
+            fi
+          done
+
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
