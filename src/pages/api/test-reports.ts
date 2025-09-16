@@ -193,7 +193,15 @@ async function handlePost(
         uploadedAt: new Date().toISOString(),
       },
     };
-
+    // Log incoming request body, headers, and content-type
+    reqLogger.info(
+      {
+        headers: req.headers,
+        contentType: req.headers['content-type'],
+        body: req.body,
+      },
+      'Incoming POST to /api/test-reports'
+    );
     await storeInTimescale(reportWithMeta as TimescaleCtrfReport);
 
     reqLogger.info(

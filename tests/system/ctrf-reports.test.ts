@@ -90,6 +90,8 @@ describe('CTRF Reports API System Tests', () => {
       }
 
       const ctrfReport = generateCtrfReport();
+      // Log outgoing request body and headers
+      testLogger.info({ report: ctrfReport }, 'Sending report');
       const response = await api.post('/api/test-reports').send(ctrfReport).expect(201);
 
       expect(response.body).toMatchObject({
