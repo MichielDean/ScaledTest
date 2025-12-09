@@ -46,6 +46,17 @@ KUBECTL_CMD=$(get_command kubectl)
 HELM_CMD=$(get_command helm)
 DOCKER_CMD=$(get_command docker)
 
+# Ensure kubectl uses the correct kubeconfig
+# In WSL, we need to use the Windows kubeconfig location
+if [[ -d "/mnt/c/Users" ]]; then
+    # Running in WSL, use Windows kubeconfig
+    WINDOWS_USER=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r' || whoami)
+    WINDOWS_KUBECONFIG="/mnt/c/Users/${WINDOWS_USER}/.kube/config"
+    if [[ -f "$WINDOWS_KUBECONFIG" ]]; then
+        export KUBECONFIG="$WINDOWS_KUBECONFIG"
+    fi
+fi
+
 # Configuration (can be overridden with environment variables)
 NAMESPACE="${NAMESPACE:-default}"
 RELEASE_NAME="${RELEASE_NAME:-scaledtest}"
@@ -125,11 +136,40 @@ check_prerequisites() {
         echo "  ✓ docker found"
     fi
     
+    if ! command_exists kind; then
+        missing+=("kind")
+    else
+        echo "  ✓ kind found"
+    fi
+    
     find_cli
     echo "  ✓ scaledtest CLI found: $SCALEDTEST_CMD"
     
+    # Check if Kind cluster exists and is running
+    if command_exists kind; then
+        local clusters=$(kind get clusters 2>/dev/null || echo "")
+        if [[ ! "$clusters" =~ "scaledtest" ]]; then
+            echo "  ⚠ Kind cluster 'scaledtest' not found"
+            echo "  Creating cluster..."
+            kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml || true
+        fi
+        
+        # Check if cluster containers are running
+        local running_containers=$($DOCKER_CMD ps -q --filter "label=io.x-k8s.kind.cluster=scaledtest" 2>/dev/null | wc -l)
+        if [ "$running_containers" -eq 0 ]; then
+            echo "  ⚠ Kind cluster containers not running, attempting to start..."
+            # Delete and recreate if stopped (Kind doesn't support stop/start well)
+            kind delete cluster --name scaledtest 2>/dev/null || true
+            kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml
+        fi
+    fi
+    
     if ! $KUBECTL_CMD cluster-info &> /dev/null; then
         echo "  ✗ Cannot connect to Kubernetes cluster"
+        echo "  Cluster status:"
+        $KUBECTL_CMD cluster-info 2>&1 || true
+        echo ""
+        echo "  Try running: kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml"
         exit 1
     fi
     echo "  ✓ Kubernetes cluster accessible"
