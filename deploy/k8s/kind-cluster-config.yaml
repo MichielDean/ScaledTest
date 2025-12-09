@@ -1,0 +1,63 @@
+# Kind Cluster Configuration for ScaledTest Development
+# =====================================================
+# This configuration creates a 10-node cluster with persistent port mappings
+# so NodePort services are accessible directly on localhost without port-forwarding.
+#
+# Usage:
+#   kind create cluster --config kind-cluster-config.yaml
+#
+# Or use the management scripts:
+#   ./cluster-create.ps1   # Create cluster and deploy ScaledTest
+#   ./cluster-delete.ps1   # Delete cluster
+#   ./cluster-start.ps1    # Start stopped cluster
+#   ./cluster-stop.ps1     # Stop cluster (preserves state)
+#
+# Access services at:
+#   - Frontend:      http://localhost:30173
+#   - Backend HTTP:  http://localhost:30080
+#   - Backend gRPC:  localhost:30090
+#   - MinIO API:     http://localhost:30900
+#   - MinIO Console: http://localhost:30901
+
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: scaledtest
+nodes:
+  # Control plane node with port mappings for external access
+  - role: control-plane
+    extraPortMappings:
+      # Frontend (nginx serving React app)
+      - containerPort: 30173
+        hostPort: 30173
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # Backend HTTP API
+      - containerPort: 30080
+        hostPort: 30080
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # Backend gRPC
+      - containerPort: 30090
+        hostPort: 30090
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # MinIO S3 API
+      - containerPort: 30900
+        hostPort: 30900
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # MinIO Console (Web UI)
+      - containerPort: 30901
+        hostPort: 30901
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+  # Worker nodes (9 workers for a total of 10 nodes)
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker
+  - role: worker

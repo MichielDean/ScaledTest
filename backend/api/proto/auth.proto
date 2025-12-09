@@ -1,0 +1,106 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Authentication service for user signup, login, and session management
+service AuthService {
+  // Signup creates a new user account
+  rpc Signup(SignupRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/signup"
+      body: "*"
+    };
+  }
+
+  // Login authenticates a user and returns a JWT token
+  rpc Login(LoginRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/login"
+      body: "*"
+    };
+  }
+
+  // Logout invalidates the current session
+  rpc Logout(LogoutRequest) returns (LogoutResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/logout"
+      body: "*"
+    };
+  }
+
+  // GetCurrentUser returns the currently authenticated user
+  rpc GetCurrentUser(GetCurrentUserRequest) returns (UserResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/auth/user"
+    };
+  }
+
+  // RefreshToken refreshes an expired JWT token
+  rpc RefreshToken(RefreshTokenRequest) returns (AuthResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/auth/refresh"
+      body: "*"
+    };
+  }
+}
+
+// SignupRequest contains user registration data
+message SignupRequest {
+  string email = 1;
+  string password = 2;
+  string name = 3;
+}
+
+// LoginRequest contains user credentials
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// AuthResponse contains authentication result with JWT token
+message AuthResponse {
+  string access_token = 1;
+  string token_type = 2;
+  int64 expires_in = 3;
+  UserInfo user = 4;
+}
+
+// UserInfo contains basic user information
+message UserInfo {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string role = 4;
+}
+
+// LogoutRequest is empty - session info comes from auth header
+message LogoutRequest {}
+
+// LogoutResponse confirms logout success
+message LogoutResponse {
+  string message = 1;
+}
+
+// GetCurrentUserRequest is empty - user ID comes from auth header
+message GetCurrentUserRequest {}
+
+// UserResponse contains full user details
+message UserResponse {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string role = 4;
+  bool email_verified = 5;
+  google.protobuf.Timestamp created_at = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// RefreshTokenRequest contains the current token to refresh
+message RefreshTokenRequest {
+  string refresh_token = 1;
+}

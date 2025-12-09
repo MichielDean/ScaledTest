@@ -1,0 +1,19 @@
+{{- if .Values.database.enabled }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-postgresql
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+spec:
+  type: {{ .Values.database.service.type | default "ClusterIP" }}
+  ports:
+    - name: postgresql
+      port: {{ .Values.database.service.port | default 5432 }}
+      targetPort: postgresql
+      protocol: TCP
+  selector:
+    {{- include "scaledtest.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}

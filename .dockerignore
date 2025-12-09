@@ -1,0 +1,61 @@
+# Dependencies (will be installed fresh in containers)
+node_modules
+**/node_modules
+frontend/node_modules
+
+# Build outputs
+.next
+dist
+build
+coverage
+
+# Git and IDE
+.git
+.vscode
+.github
+.idea
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# Logs
+*.log
+logs
+
+# Environment
+.env.local
+.env.*.local
+
+# Test artifacts
+playwright-report
+test-results
+ctrf-report.json
+
+# Backend - not needed for playwright runner
+backend/**
+!backend/.keep
+
+# Database migrations - not needed for runner
+database/**
+!database/.keep
+
+# Deploy - not needed for runner
+deploy/**
+!deploy/.keep
+
+# Scripts - not needed for runner
+scripts/**
+!scripts/.keep
+
+# Large binaries
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Temp files
+temp/
+tmp/
+*.tmp

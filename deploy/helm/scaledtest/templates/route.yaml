@@ -1,0 +1,78 @@
+{{- if .Values.route.enabled }}
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "scaledtest.fullname" . }}
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  port:
+    targetPort: http
+  to:
+    kind: Service
+    name: {{ include "scaledtest.fullname" . }}-frontend
+    weight: 100
+  tls:
+    termination: {{ .Values.route.termination | default "edge" }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.insecureEdgeTerminationPolicy | default "Redirect" }}
+  wildcardPolicy: None
+---
+# Backend API Route (for /api paths)
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-api
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.route.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  path: /api
+  port:
+    targetPort: http
+  to:
+    kind: Service
+    name: {{ include "scaledtest.fullname" . }}-backend
+    weight: 100
+  tls:
+    termination: {{ .Values.route.termination | default "edge" }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.insecureEdgeTerminationPolicy | default "Redirect" }}
+  wildcardPolicy: None
+---
+# Health endpoint route
+apiVersion: route.openshift.io/v1
+kind: Route
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-health
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: health
+spec:
+  {{- if .Values.route.host }}
+  host: {{ .Values.route.host }}
+  {{- end }}
+  path: /health
+  port:
+    targetPort: http
+  to:
+    kind: Service
+    name: {{ include "scaledtest.fullname" . }}-backend
+    weight: 100
+  tls:
+    termination: {{ .Values.route.termination | default "edge" }}
+    insecureEdgeTerminationPolicy: {{ .Values.route.insecureEdgeTerminationPolicy | default "Redirect" }}
+  wildcardPolicy: None
+{{- end }}

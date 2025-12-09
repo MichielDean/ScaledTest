@@ -1,0 +1,225 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// K8s Cluster service for managing Kubernetes cluster configurations
+service K8sClusterService {
+  // CreateCluster adds a new Kubernetes cluster configuration
+  rpc CreateCluster(CreateClusterRequest) returns (ClusterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/k8s/clusters"
+      body: "*"
+    };
+  }
+
+  // GetCluster retrieves a specific cluster configuration
+  rpc GetCluster(GetClusterRequest) returns (ClusterResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/k8s/clusters/{cluster_id}"
+    };
+  }
+
+  // ListClusters returns all clusters for a project
+  rpc ListClusters(ListClustersRequest) returns (ListClustersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/k8s/clusters"
+    };
+  }
+
+  // DeleteCluster removes a cluster configuration
+  rpc DeleteCluster(DeleteClusterRequest) returns (DeleteClusterResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/k8s/clusters/{cluster_id}"
+    };
+  }
+
+  // TestConnection tests connectivity to a cluster
+  rpc TestConnection(TestConnectionRequest) returns (TestConnectionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/k8s/clusters/{cluster_id}/test-connection"
+      body: "*"
+    };
+  }
+
+  // TestConnectionDirect tests connectivity with provided credentials (no saved cluster)
+  rpc TestConnectionDirect(TestConnectionDirectRequest) returns (TestConnectionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/k8s/clusters/test-connection"
+      body: "*"
+    };
+  }
+
+  // SetDefaultCluster sets a cluster as the default for a project
+  rpc SetDefaultCluster(SetDefaultClusterRequest) returns (ClusterResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/k8s/clusters/{cluster_id}/set-default"
+      body: "*"
+    };
+  }
+
+  // UpdateRunnerConfig updates the test runner configuration for a cluster
+  rpc UpdateRunnerConfig(UpdateRunnerConfigRequest) returns (ClusterResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/k8s/clusters/{cluster_id}/runner-config"
+      body: "*"
+    };
+  }
+
+  // UpdateSutConfig updates the System Under Test configuration for a cluster
+  rpc UpdateSutConfig(UpdateSutConfigRequest) returns (ClusterResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/k8s/clusters/{cluster_id}/sut-config"
+      body: "*"
+    };
+  }
+}
+
+// CreateClusterRequest contains all data needed to add a K8s cluster
+message CreateClusterRequest {
+  string name = 1;
+  optional string description = 2;
+  string api_server_url = 3;
+  string namespace = 4;
+  string auth_type = 5; // "token", "certificate", "kubeconfig"
+  optional string bearer_token = 6;
+  optional string client_certificate = 7;
+  optional string client_key = 8;
+  optional string ca_certificate = 9;
+  bool skip_tls_verify = 10;
+  optional string kubeconfig = 11;
+  bool is_default = 12;
+  string project_id = 13;
+  string environment = 14; // "dev", "staging", "prod", "custom"
+  optional SutConfig sut_config = 15;
+  optional RunnerConfig runner_config = 16;
+}
+
+// GetClusterRequest identifies a cluster to retrieve
+message GetClusterRequest {
+  string cluster_id = 1;
+}
+
+// ListClustersRequest specifies filtering and pagination for cluster list
+message ListClustersRequest {
+  string project_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+// DeleteClusterRequest identifies a cluster to delete
+message DeleteClusterRequest {
+  string cluster_id = 1;
+}
+
+// TestConnectionRequest identifies a cluster to test
+message TestConnectionRequest {
+  string cluster_id = 1;
+}
+
+// TestConnectionDirectRequest provides credentials to test without saving
+message TestConnectionDirectRequest {
+  string api_server_url = 1;
+  string auth_type = 2;
+  optional string bearer_token = 3;
+  optional string client_certificate = 4;
+  optional string client_key = 5;
+  optional string ca_certificate = 6;
+  bool skip_tls_verify = 7;
+  optional string kubeconfig = 8;
+}
+
+// SetDefaultClusterRequest identifies a cluster to set as default
+message SetDefaultClusterRequest {
+  string cluster_id = 1;
+}
+
+// UpdateRunnerConfigRequest updates runner settings for a cluster
+message UpdateRunnerConfigRequest {
+  string cluster_id = 1;
+  RunnerConfig runner_config = 2;
+}
+
+// UpdateSutConfigRequest updates SUT settings for a cluster
+message UpdateSutConfigRequest {
+  string cluster_id = 1;
+  SutConfig sut_config = 2;
+}
+
+// ClusterResponse contains full cluster details
+message ClusterResponse {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  string api_server_url = 4;
+  string namespace = 5;
+  string auth_type = 6;
+  bool skip_tls_verify = 7;
+  bool is_default = 8;
+  bool is_active = 9;
+  optional string project_id = 10;
+  string environment = 11;
+  string connection_status = 12;
+  optional string connection_error = 13;
+  optional google.protobuf.Timestamp last_connected_at = 14;
+  optional SutConfig sut_config = 15;
+  optional RunnerConfig runner_config = 16;
+  string created_by = 17;
+  google.protobuf.Timestamp created_at = 18;
+  google.protobuf.Timestamp updated_at = 19;
+}
+
+// ListClustersResponse contains paginated cluster list
+message ListClustersResponse {
+  repeated ClusterResponse clusters = 1;
+  int32 total_count = 2;
+}
+
+// DeleteClusterResponse confirms cluster deletion
+message DeleteClusterResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// TestConnectionResponse contains connection test results
+message TestConnectionResponse {
+  bool success = 1;
+  bool connected = 2;
+  string message = 3;
+  optional string error = 4;
+  optional string kubernetes_version = 5;
+  optional int32 node_count = 6;
+}
+
+// SutConfig contains System Under Test configuration
+message SutConfig {
+  string service_name = 1;
+  string namespace = 2;
+  int32 port = 3;
+  optional string protocol = 4; // "http" or "https", default: http
+}
+
+// RunnerConfig contains test runner configuration
+message RunnerConfig {
+  string platform_api_url = 1;
+  string default_base_url = 2;
+  string service_account_name = 3;
+  optional string artifacts_pvc_name = 4;
+  int32 default_timeout = 5;
+  int32 default_parallelism = 6;
+  optional ClusterResourceRequirements default_resources = 7;
+  map<string, string> node_selector = 8;
+  string image_pull_policy = 9;
+}
+
+// ClusterResourceRequirements defines CPU and memory settings for pods
+message ClusterResourceRequirements {
+  string cpu_request = 1;
+  string cpu_limit = 2;
+  string memory_request = 3;
+  string memory_limit = 4;
+}

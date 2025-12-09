@@ -41,17 +41,22 @@ next-env.d.ts
 
 # temporary/build artifacts
 temp/
+tmp/
 
 # CTRF test reports
 ctrf-report.json
 ctrf-report-*.json
 
+# Test results (keep directory but ignore contents)
+frontend/test-results/*
+!frontend/test-results/.gitkeep
+frontend/playwright-report/*
+!frontend/playwright-report/.gitkeep
+**/test-results/
+**/playwright-report/
+
 # Test log files
 logs/
-
-# PM2 process files and logs
-.pm2/
-ecosystem.config.js.bak
 
 # Playwright MCP artifacts
 .playwright-mcp/

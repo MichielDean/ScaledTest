@@ -1,0 +1,162 @@
+# arch-go Configuration
+# Enforces architectural constraints for ScaledTest backend
+# Run with: arch-go (from backend/ directory)
+# Documentation: https://github.com/arch-go/arch-go
+
+version: 1
+
+# Threshold for compliance - fail build if not met
+threshold:
+  compliance: 100  # All rules must pass
+  coverage: 60     # 60% of packages must be covered by rules
+
+# Dependency Rules - Enforce layered architecture (Clean Architecture)
+# Pattern: handlers → services → repository → models
+dependenciesRules:
+  # Handlers (Presentation Layer) - Should NOT depend on repository or database
+  - package: "**.handlers"
+    shouldNotDependsOn:
+      internal:
+        - "**.repository"
+        - "**.database"
+
+  # Services (Business Logic Layer) - Should NOT depend on handlers
+  - package: "**.services"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.middleware"
+
+  # Repository (Data Access Layer) - Should NOT depend on handlers or services
+  - package: "**.repository"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.services"
+        - "**.middleware"
+
+  # Models (Domain Layer) - Should have NO internal dependencies (pure domain)
+  - package: "**.models"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.services"
+        - "**.repository"
+        - "**.database"
+        - "**.middleware"
+        - "**.crypto"
+        - "**.k8s"
+
+  # Middleware - Should not depend on services or repository
+  - package: "**.middleware"
+    shouldNotDependsOn:
+      internal:
+        - "**.services"
+        - "**.repository"
+
+  # Crypto - Should be a standalone utility package
+  - package: "**.crypto"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.services"
+        - "**.repository"
+        - "**.middleware"
+        - "**.k8s"
+
+  # Database - Should be a standalone utility package
+  - package: "**.database"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.services"
+        - "**.repository"
+        - "**.middleware"
+        - "**.crypto"
+        - "**.k8s"
+
+  # K8s - Should not depend on handlers
+  - package: "**.k8s"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.middleware"
+
+  # Wire (DI) - Can depend on everything (it wires things together)
+  - package: "**.wire"
+    shouldNotDependsOn:
+      internal: []
+
+  # Mocks - Testing package, can depend on interfaces from any package
+  - package: "**.mocks"
+    shouldNotDependsOn:
+      internal:
+        - "**.handlers"
+        - "**.middleware"
+        - "**.crypto"
+
+# Function Rules - Enforce code quality and SRP
+functionsRules:
+  # Handlers should be thin - just HTTP/gRPC handling
+  - package: "**.handlers"
+    maxParameters: 6
+    maxReturnValues: 2
+    maxLines: 180
+    maxPublicFunctionPerFile: 25
+
+  # Services contain business logic - moderate size
+  - package: "**.services"
+    maxParameters: 10
+    maxReturnValues: 4
+    maxLines: 150
+    maxPublicFunctionPerFile: 15
+
+  # Repository methods should be focused - one query per method
+  - package: "**.repository"
+    maxParameters: 6
+    maxReturnValues: 3
+    maxLines: 100
+    maxPublicFunctionPerFile: 20
+
+  # Middleware should be simple
+  - package: "**.middleware"
+    maxParameters: 4
+    maxReturnValues: 2
+    maxLines: 120
+    maxPublicFunctionPerFile: 10
+
+  # K8s operations can be more complex
+  - package: "**.k8s"
+    maxParameters: 8
+    maxReturnValues: 3
+    maxLines: 180
+    maxPublicFunctionPerFile: 15
+
+# Content Rules - Enforce package responsibilities
+contentsRules:
+  # Models should only contain data structures (structs), no business logic
+  - package: "**.models"
+    shouldNotContainInterfaces: true
+
+# Naming Rules - Consistent naming conventions
+namingRules:
+  # Services implementing *Manager interfaces should end with "Service"
+  - package: "**.services"
+    interfaceImplementationNamingRule:
+      structsThatImplement:
+        internal: "*Manager"
+      shouldHaveSimpleNameEndingWith: "Service"
+
+  # Services implementing *Executor interfaces should end with "Service"
+  - package: "**.services"
+    interfaceImplementationNamingRule:
+      structsThatImplement:
+        internal: "*Executor"
+      shouldHaveSimpleNameEndingWith: "Service"
+
+  # Repository implementations should end with "Repository"
+  - package: "**.repository"
+    interfaceImplementationNamingRule:
+      structsThatImplement:
+        internal: "*Repository"
+      shouldHaveSimpleNameEndingWith: "Repository"

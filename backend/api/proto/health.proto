@@ -1,0 +1,83 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Health service for application health and readiness checks
+// Based on gRPC Health Checking Protocol with extensions
+service HealthService {
+  // Check performs a health check
+  rpc Check(HealthCheckRequest) returns (HealthCheckResponse) {
+    option (google.api.http) = {
+      get: "/health"
+    };
+  }
+
+  // Ready checks if the application is ready to serve traffic
+  rpc Ready(ReadyRequest) returns (ReadyResponse) {
+    option (google.api.http) = {
+      get: "/ready"
+    };
+  }
+
+  // Live checks if the application is alive (for K8s liveness probes)
+  rpc Live(LiveRequest) returns (LiveResponse) {
+    option (google.api.http) = {
+      get: "/live"
+    };
+  }
+
+  // Watch streams health status changes
+  rpc Watch(HealthCheckRequest) returns (stream HealthCheckResponse);
+}
+
+// HealthCheckRequest optionally specifies a service to check
+message HealthCheckRequest {
+  string service = 1; // Empty string means overall health
+}
+
+// HealthCheckResponse contains health status
+message HealthCheckResponse {
+  ServingStatus status = 1;
+  string environment = 2;
+  google.protobuf.Timestamp timestamp = 3;
+  map<string, ComponentHealth> components = 4;
+}
+
+// ServingStatus indicates the health state
+enum ServingStatus {
+  SERVING_STATUS_UNSPECIFIED = 0;
+  SERVING_STATUS_SERVING = 1;
+  SERVING_STATUS_NOT_SERVING = 2;
+  SERVING_STATUS_SERVICE_UNKNOWN = 3;
+}
+
+// ComponentHealth contains health info for a single component
+message ComponentHealth {
+  ServingStatus status = 1;
+  optional string message = 2;
+  optional int64 latency_ms = 3;
+}
+
+// ReadyRequest is empty
+message ReadyRequest {}
+
+// ReadyResponse indicates readiness status
+message ReadyResponse {
+  bool ready = 1;
+  string message = 2;
+  map<string, bool> checks = 3; // Individual readiness checks
+}
+
+// LiveRequest is empty
+message LiveRequest {}
+
+// LiveResponse indicates liveness status
+message LiveResponse {
+  bool alive = 1;
+  string message = 2;
+}

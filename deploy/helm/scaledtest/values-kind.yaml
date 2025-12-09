@@ -1,0 +1,169 @@
+# ScaledTest Helm Chart - Kind Cluster Development Values
+# ========================================================
+# Use with Kind clusters where images are loaded directly (no registry)
+#
+# Usage:
+#   1. Create cluster:     deploy/k8s/cluster-create.ps1 -SkipDeploy
+#   2. Build & load images: deploy/k8s/cluster-load-images.ps1
+#   3. Deploy:             helm install scaledtest ./deploy/helm/scaledtest -f ./deploy/helm/scaledtest/values-kind.yaml -n scaledtest --create-namespace
+
+# -- Number of backend replicas (1 for local dev)
+replicaCount: 1
+
+# =============================================================================
+# Backend Configuration - Kind
+# =============================================================================
+backend:
+  image:
+    # Image loaded directly into Kind - no registry prefix needed
+    repository: scaledtest-backend
+    pullPolicy: IfNotPresent
+    tag: dev
+
+  service:
+    type: NodePort
+    port: 8080
+    grpcPort: 9090
+    nodePort: 30080
+    grpcNodePort: 30090
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+  env:
+    LOG_LEVEL: debug
+    ENVIRONMENT: development
+
+# =============================================================================
+# Frontend Configuration - Kind
+# =============================================================================
+frontend:
+  image:
+    # Image loaded directly into Kind - no registry prefix needed
+    repository: scaledtest-frontend
+    pullPolicy: IfNotPresent
+    tag: dev
+
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30173
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 128Mi
+    requests:
+      cpu: 25m
+      memory: 32Mi
+
+# =============================================================================
+# Database Configuration - Development
+# =============================================================================
+database:
+  enabled: true
+
+  image:
+    repository: timescale/timescaledb-ha
+    tag: pg17
+    pullPolicy: IfNotPresent
+
+  auth:
+    username: scaledtest
+    password: ""
+    database: scaledtest
+
+  service:
+    type: ClusterIP
+    port: 5432
+
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  persistence:
+    size: 5Gi
+    storageClass: ""
+
+# =============================================================================
+# MinIO Configuration - Kind
+# =============================================================================
+minio:
+  enabled: true
+
+  image:
+    repository: minio/minio
+    tag: RELEASE.2024-11-07T00-52-20Z
+    pullPolicy: IfNotPresent
+
+  auth:
+    rootUser: scaledtest
+    rootPassword: ""
+
+  defaultBucket: artifacts
+
+  service:
+    type: NodePort
+    apiPort: 9000
+    consolePort: 9001
+    apiNodePort: 30900
+    consoleNodePort: 30901
+
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+
+# =============================================================================
+# Ingress - Disabled for Kind (use NodePort with extraPortMappings)
+# =============================================================================
+ingress:
+  enabled: false
+
+# =============================================================================
+# RBAC - Enable for test job execution
+# =============================================================================
+rbac:
+  create: true
+  serviceAccountName: scaledtest-job-runner
+
+# =============================================================================
+# Secrets - Development
+# =============================================================================
+secrets:
+  create: true
+  jwtSecret: ""
+  existingSecret: ""
+
+# =============================================================================
+# Service Account
+# =============================================================================
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""

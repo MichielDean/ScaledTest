@@ -1,0 +1,274 @@
+# ScaledTest Helm Chart Values
+# Override these values for your environment
+
+# -- Number of backend replicas
+replicaCount: 1
+
+# -- Image pull secrets for private registries
+imagePullSecrets: []
+
+# -- Override the chart name
+nameOverride: ""
+
+# -- Override the full name
+fullnameOverride: ""
+
+# =============================================================================
+# Backend Configuration
+# =============================================================================
+backend:
+  image:
+    repository: ghcr.io/your-org/scaledtest-backend
+    pullPolicy: IfNotPresent
+    tag: "" # Defaults to appVersion
+
+  # -- Backend service port
+  service:
+    type: ClusterIP
+    port: 8080
+    grpcPort: 9090
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 128Mi
+
+  # -- Environment variables
+  env:
+    LOG_LEVEL: info
+    ENVIRONMENT: production
+
+  # -- Extra environment variables from secrets
+  envFromSecrets: []
+  # - name: JWT_SECRET
+  #   secretName: scaledtest-secrets
+  #   secretKey: jwt-secret
+
+# =============================================================================
+# Frontend Configuration
+# =============================================================================
+frontend:
+  image:
+    repository: ghcr.io/your-org/scaledtest-frontend
+    pullPolicy: IfNotPresent
+    tag: "" # Defaults to appVersion
+
+  # -- Frontend service port
+  service:
+    type: ClusterIP
+    port: 80
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+# =============================================================================
+# Database Configuration (TimescaleDB/PostgreSQL)
+# =============================================================================
+database:
+  # -- Enable bundled TimescaleDB
+  enabled: true
+
+  image:
+    repository: timescale/timescaledb-ha
+    tag: pg17
+    pullPolicy: IfNotPresent
+
+  # -- Authentication configuration
+  auth:
+    username: scaledtest
+    # -- Password for the user (auto-generated if empty)
+    password: ""
+    database: scaledtest
+    # -- Use existing secret for password
+    existingSecret: ""
+
+  # -- Service configuration
+  service:
+    type: ClusterIP
+    port: 5432
+
+  # -- Security context
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 1000m
+      memory: 1Gi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # -- Persistence configuration
+  persistence:
+    size: 10Gi
+    storageClass: ""
+
+# =============================================================================
+# MinIO Configuration (S3-compatible artifact storage)
+# =============================================================================
+minio:
+  # -- Enable MinIO for artifact storage
+  enabled: true
+
+  image:
+    repository: minio/minio
+    tag: RELEASE.2024-11-07T00-52-20Z
+    pullPolicy: IfNotPresent
+
+  # -- Authentication
+  auth:
+    rootUser: scaledtest
+    # -- Root password (auto-generated if empty)
+    rootPassword: ""
+    # -- Use existing secret for credentials
+    existingSecret: ""
+
+  # -- Default bucket to create
+  defaultBucket: artifacts
+
+  # -- Service configuration
+  service:
+    type: ClusterIP
+    apiPort: 9000
+    consolePort: 9001
+    # -- NodePort for MinIO API (only used when type is NodePort)
+    apiNodePort: ""
+    # -- NodePort for MinIO Console (only used when type is NodePort)
+    consoleNodePort: ""
+
+  # -- Security context
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  # -- Resource limits and requests
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 100m
+      memory: 256Mi
+
+  # -- Persistence configuration
+  persistence:
+    enabled: true
+    size: 100Gi
+    storageClass: ""
+
+# =============================================================================
+# Ingress Configuration
+# =============================================================================
+ingress:
+  # -- Enable ingress
+  enabled: false
+
+  # -- Ingress class name
+  className: nginx
+
+  # -- Ingress annotations
+  annotations: {}
+    # kubernetes.io/tls-acme: "true"
+    # cert-manager.io/cluster-issuer: "letsencrypt-prod"
+
+  # -- Ingress host
+  host: scaledtest.example.com
+
+  # -- TLS configuration
+  tls:
+    enabled: false
+    secretName: scaledtest-tls
+
+# =============================================================================
+# OpenShift Route Configuration
+# Use this instead of Ingress on OpenShift clusters
+# =============================================================================
+route:
+  # -- Enable OpenShift Route (use instead of ingress on OpenShift)
+  enabled: false
+
+  # -- Route host (auto-generated if not set)
+  host: ""
+
+  # -- TLS termination type: edge, reencrypt, or passthrough
+  termination: edge
+
+  # -- Insecure edge termination policy: Allow, Redirect, or None
+  insecureEdgeTerminationPolicy: Redirect
+
+  # -- Annotations for the Route
+  annotations: {}
+
+# =============================================================================
+# RBAC for Test Job Runner
+# =============================================================================
+rbac:
+  # -- Create RBAC resources
+  create: true
+
+  # -- ServiceAccount name
+  serviceAccountName: scaledtest-job-runner
+
+# =============================================================================
+# Secrets
+# =============================================================================
+secrets:
+  # -- Create secrets from values (not recommended for production)
+  create: true
+
+  # -- JWT secret (min 32 characters, required)
+  jwtSecret: ""
+
+  # -- Use existing secret instead of creating one
+  existingSecret: ""
+
+# =============================================================================
+# Service Account
+# =============================================================================
+serviceAccount:
+  # -- Create service account
+  create: true
+  # -- Annotations to add to the service account
+  annotations: {}
+  # -- The name of the service account to use
+  name: ""
+
+# =============================================================================
+# Pod Configuration
+# =============================================================================
+podAnnotations: {}
+podSecurityContext: {}
+securityContext: {}
+nodeSelector: {}
+tolerations: []
+affinity: {}
+
+# =============================================================================
+# Health Checks
+# =============================================================================
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 30
+  periodSeconds: 10
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 5

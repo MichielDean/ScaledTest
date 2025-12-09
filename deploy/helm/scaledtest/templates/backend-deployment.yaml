@@ -1,0 +1,119 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-backend
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: backend
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "scaledtest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: backend
+  template:
+    metadata:
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      labels:
+        {{- include "scaledtest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: backend
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "scaledtest.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: backend
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
+          image: {{ include "scaledtest.backend.image" . }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ .Values.backend.service.port }}
+              protocol: TCP
+            - name: grpc
+              containerPort: {{ .Values.backend.service.grpcPort }}
+              protocol: TCP
+          env:
+            - name: SERVER_PORT
+              value: {{ .Values.backend.service.port | quote }}
+            - name: GRPC_PORT
+              value: {{ .Values.backend.service.grpcPort | quote }}
+            - name: LOG_LEVEL
+              value: {{ .Values.backend.env.LOG_LEVEL | quote }}
+            - name: ENVIRONMENT
+              value: {{ .Values.backend.env.ENVIRONMENT | quote }}
+            # Database configuration - individual vars for migrations, URL for app
+            - name: DB_HOST
+              value: {{ include "scaledtest.databaseHost" . | quote }}
+            - name: DB_PORT
+              value: {{ include "scaledtest.databasePort" . | quote }}
+            - name: DB_USER
+              value: {{ include "scaledtest.databaseUser" . | quote }}
+            - name: DB_NAME
+              value: {{ include "scaledtest.databaseName" . | quote }}
+            - name: DB_SSL_MODE
+              value: "disable"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.databaseSecretName" . }}
+                  key: {{ include "scaledtest.databaseSecretKey" . }}
+            - name: DATABASE_URL
+              value: {{ include "scaledtest.databaseUrl" . | quote }}
+            - name: JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.jwtSecretName" . }}
+                  key: jwt-secret
+            {{- if .Values.minio.enabled }}
+            # MinIO/S3 configuration for artifact storage
+            - name: S3_ENDPOINT
+              value: {{ include "scaledtest.fullname" . }}-minio:9000
+            - name: S3_BUCKET
+              value: {{ .Values.minio.defaultBucket | quote }}
+            - name: S3_USE_SSL
+              value: "false"
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.minioSecretName" . }}
+                  key: root-user
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.minioSecretName" . }}
+                  key: root-password
+            {{- end }}
+            {{- range .Values.backend.envFromSecrets }}
+            - name: {{ .name }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .secretName }}
+                  key: {{ .secretKey }}
+            {{- end }}
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}

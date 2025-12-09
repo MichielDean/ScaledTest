@@ -1,3 +1,0 @@
-#!/bin/sh
-# Run lint-staged for code formatting
-npx lint-staged

@@ -1,0 +1,557 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Test Job Service for Kubernetes-based test execution
+service TestJobService {
+  // Project Management
+  rpc CreateProject(CreateProjectRequest) returns (CreateProjectResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/projects"
+      body: "*"
+    };
+  }
+  rpc GetProject(GetProjectRequest) returns (ProjectResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/projects/{project_id}"
+    };
+  }
+  rpc ListProjects(ListProjectsRequest) returns (ListProjectsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/projects"
+    };
+  }
+  rpc UpdateProject(UpdateProjectRequest) returns (ProjectResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/projects/{project_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteProject(DeleteProjectRequest) returns (DeleteProjectResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/projects/{project_id}"
+    };
+  }
+
+  // Container Registry Management
+  rpc AddContainerRegistry(AddContainerRegistryRequest) returns (ContainerRegistryResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/container-registries"
+      body: "*"
+    };
+  }
+  rpc GetContainerRegistry(GetContainerRegistryRequest) returns (ContainerRegistryResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/container-registries/{registry_id}"
+    };
+  }
+  rpc TestRegistryConnection(TestRegistryConnectionRequest) returns (TestRegistryConnectionResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/container-registries/{registry_id}/test"
+      body: "*"
+    };
+  }
+  rpc ListContainerRegistries(ListContainerRegistriesRequest) returns (ListContainerRegistriesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/container-registries"
+    };
+  }
+  rpc UpdateContainerRegistry(UpdateContainerRegistryRequest) returns (ContainerRegistryResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/container-registries/{registry_id}"
+      body: "*"
+    };
+  }
+  rpc DeleteContainerRegistry(DeleteContainerRegistryRequest) returns (DeleteContainerRegistryResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/container-registries/{registry_id}"
+    };
+  }
+  rpc SyncRegistryImages(SyncRegistryImagesRequest) returns (SyncRegistryImagesResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/container-registries/{registry_id}/sync"
+      body: "*"
+    };
+  }
+
+  // Test Image Management
+  rpc AddTestImage(AddTestImageRequest) returns (TestImageResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-images"
+      body: "*"
+    };
+  }
+  rpc DiscoverTests(DiscoverTestsRequest) returns (DiscoverTestsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-images/{test_image_id}/discover"
+      body: "*"
+    };
+  }
+  rpc GetTestImage(GetTestImageRequest) returns (TestImageResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-images/{test_image_id}"
+    };
+  }
+  rpc ListTestImages(ListTestImagesRequest) returns (ListTestImagesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-images"
+    };
+  }
+  rpc DeleteTestImage(DeleteTestImageRequest) returns (DeleteTestImageResponse) {
+    option (google.api.http) = {
+      delete: "/api/v1/test-images/{test_image_id}"
+    };
+  }
+
+  // Test Job Execution
+  rpc TriggerTestJobs(TriggerTestJobsRequest) returns (TriggerTestJobsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-jobs/trigger"
+      body: "*"
+    };
+  }
+  rpc GetTestJob(GetTestJobRequest) returns (TestJobResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-jobs/{job_id}"
+    };
+  }
+  rpc ListTestJobs(ListTestJobsRequest) returns (ListTestJobsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-jobs"
+    };
+  }
+  rpc CancelTestJob(CancelTestJobRequest) returns (CancelTestJobResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-jobs/{job_id}/cancel"
+      body: "*"
+    };
+  }
+
+  // Artifact Management (read-only for now - upload implemented via separate service)
+  rpc GetArtifact(GetArtifactRequest) returns (ArtifactResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/artifacts/{artifact_id}"
+    };
+  }
+  rpc GetArtifactDownloadUrl(GetArtifactDownloadUrlRequest) returns (GetArtifactDownloadUrlResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/artifacts/{artifact_id}/download-url"
+    };
+  }
+  rpc ListArtifactsByTestRun(ListArtifactsByTestRunRequest) returns (ListArtifactsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-runs/{test_run_id}/artifacts"
+    };
+  }
+}
+
+// Project Messages
+message CreateProjectRequest {
+  string name = 1;
+  optional string description = 2;
+  optional string organization_id = 3;
+  map<string, string> settings = 4;
+}
+
+message CreateProjectResponse {
+  string project_id = 1;
+  string message = 2;
+}
+
+message GetProjectRequest {
+  string project_id = 1;
+}
+
+message ProjectResponse {
+  string id = 1;
+  string name = 2;
+  optional string description = 3;
+  string created_by = 4;
+  optional string organization_id = 5;
+  map<string, string> settings = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListProjectsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+}
+
+message ListProjectsResponse {
+  repeated ProjectResponse projects = 1;
+  int32 total_count = 2;
+}
+
+message UpdateProjectRequest {
+  string project_id = 1;
+  optional string name = 2;
+  optional string description = 3;
+  map<string, string> settings = 4;
+}
+
+message DeleteProjectRequest {
+  string project_id = 1;
+}
+
+message DeleteProjectResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Container Registry Messages
+message AddContainerRegistryRequest {
+  string project_id = 1;
+  string name = 2;
+  string registry_url = 3;
+  string registry_type = 4; // dockerhub, github, gcr, acr, nexus, artifactory, generic
+  optional string username = 5;
+  optional string credentials = 6; // password or token (will be encrypted)
+  string auth_type = 7; // basic, token, oauth
+}
+
+message ContainerRegistryResponse {
+  string id = 1;
+  string project_id = 2;
+  string name = 3;
+  string registry_url = 4;
+  string registry_type = 5;
+  optional string username = 6;
+  string auth_type = 7;
+  optional google.protobuf.Timestamp last_tested_at = 8;
+  optional string test_status = 9;
+  optional string test_error = 10;
+  google.protobuf.Timestamp created_at = 11;
+  google.protobuf.Timestamp updated_at = 12;
+}
+
+message TestRegistryConnectionRequest {
+  string registry_id = 1;
+}
+
+message TestRegistryConnectionResponse {
+  bool success = 1;
+  string message = 2;
+  google.protobuf.Timestamp tested_at = 3;
+}
+
+message ListContainerRegistriesRequest {
+  string project_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+}
+
+message ListContainerRegistriesResponse {
+  repeated ContainerRegistryResponse registries = 1;
+  int32 total_count = 2;
+}
+
+message UpdateContainerRegistryRequest {
+  string registry_id = 1;
+  optional string name = 2;
+  optional string username = 3;
+  optional string credentials = 4;
+}
+
+message DeleteContainerRegistryRequest {
+  string registry_id = 1;
+}
+
+message DeleteContainerRegistryResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Test Image Messages
+message AddTestImageRequest {
+  string project_id = 1;
+  string registry_id = 2;
+  string image_path = 3;
+  string image_tag = 4;
+  bool auto_discover = 5; // Trigger test discovery immediately
+}
+
+message TestImageResponse {
+  string id = 1;
+  string project_id = 2;
+  string registry_id = 3;
+  string image_path = 4;
+  string image_tag = 5;
+  optional string image_digest = 6;
+  string discovery_status = 7; // pending, discovering, discovered, failed
+  optional string discovery_error = 8;
+  optional string framework = 9;
+  optional string framework_version = 10;
+  int32 total_test_count = 11;
+  repeated DiscoveredTest discovered_tests = 12;
+  optional google.protobuf.Timestamp last_discovered_at = 13;
+  google.protobuf.Timestamp created_at = 14;
+  google.protobuf.Timestamp updated_at = 15;
+}
+
+message DiscoveredTest {
+  string id = 1;
+  string name = 2;
+  optional string suite = 3;
+  string file = 4;
+  repeated string tags = 5;
+}
+
+message DiscoverTestsRequest {
+  string test_image_id = 1;
+}
+
+message DiscoverTestsResponse {
+  bool success = 1;
+  string message = 2;
+  int32 test_count = 3;
+  repeated DiscoveredTest tests = 4;
+}
+
+message GetTestImageRequest {
+  string test_image_id = 1;
+}
+
+message ListTestImagesRequest {
+  string project_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  optional string framework = 4;
+  optional string discovery_status = 5;
+}
+
+message ListTestImagesResponse {
+  repeated TestImageResponse images = 1;
+  int32 total_count = 2;
+}
+
+message DeleteTestImageRequest {
+  string test_image_id = 1;
+}
+
+message DeleteTestImageResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+// Test Job Messages
+message TriggerTestJobsRequest {
+  string project_id = 1;
+  string test_image_id = 2;
+  repeated string test_ids = 3; // Selected test IDs to execute
+  map<string, string> environment = 4; // Additional env vars
+  optional ResourceRequirements resources = 5;
+  optional int32 timeout_seconds = 6;
+  optional int32 parallelism = 7; // Number of tests to run in parallel
+}
+
+message ResourceRequirements {
+  optional string cpu_request = 1; // e.g., "100m"
+  optional string cpu_limit = 2;
+  optional string memory_request = 3; // e.g., "256Mi"
+  optional string memory_limit = 4;
+}
+
+message TriggerTestJobsResponse {
+  bool success = 1;
+  string message = 2;
+  string k8s_job_name = 3;
+  repeated string job_ids = 4; // Individual test job UUIDs
+  int32 total_tests = 5;
+  string test_run_id = 6; // UUID for grouping test results
+}
+
+message GetTestJobRequest {
+  string job_id = 1;
+}
+
+message TestJobResponse {
+  string id = 1;
+  string project_id = 2;
+  string test_image_id = 3;
+  optional string test_run_id = 4;
+  string k8s_job_name = 5;
+  string k8s_namespace = 6;
+  string test_id = 7;
+  int32 job_index = 8;
+  string status = 9; // pending, running, succeeded, failed, cancelled
+  optional int32 exit_code = 10;
+  optional string pod_name = 11;
+  optional string artifact_volume_path = 12;
+  map<string, string> config = 13;
+  optional google.protobuf.Timestamp started_at = 14;
+  optional google.protobuf.Timestamp completed_at = 15;
+  optional int64 duration_ms = 16;
+  google.protobuf.Timestamp created_at = 17;
+}
+
+message ListTestJobsRequest {
+  string project_id = 1;
+  int32 page = 2;
+  int32 page_size = 3;
+  optional string status = 4;
+  optional string test_image_id = 5;
+  optional string k8s_job_name = 6;
+}
+
+message ListTestJobsResponse {
+  repeated TestJobResponse jobs = 1;
+  int32 total_count = 2;
+  JobStatsSummary stats = 3;
+}
+
+message JobStatsSummary {
+  int32 pending = 1;
+  int32 running = 2;
+  int32 succeeded = 3;
+  int32 failed = 4;
+  int32 cancelled = 5;
+}
+
+message CancelTestJobRequest {
+  string job_id = 1;
+}
+
+message CancelTestJobResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message StreamJobLogsRequest {
+  string job_id = 1;
+  optional int32 tail_lines = 2;
+  bool follow = 3;
+}
+
+message JobLogChunk {
+  string job_id = 1;
+  string log_line = 2;
+  google.protobuf.Timestamp timestamp = 3;
+}
+
+message StreamJobStatusRequest {
+  string project_id = 1;
+  optional string k8s_job_name = 2; // Filter by specific job batch
+}
+
+message TestJobStatusUpdate {
+  string job_id = 1;
+  string test_id = 2;
+  string previous_status = 3;
+  string current_status = 4;
+  optional int32 exit_code = 5;
+  optional string error_message = 6;
+  google.protobuf.Timestamp updated_at = 7;
+}
+
+// Artifact Messages
+message ListArtifactsRequest {
+  string job_id = 1;
+  optional string artifact_type = 2; // screenshot, video, log, trace, report
+}
+
+message ListArtifactsResponse {
+  repeated ArtifactInfo artifacts = 1;
+  int32 total_count = 2;
+  int64 total_size_bytes = 3;
+}
+
+message ArtifactInfo {
+  string id = 1;
+  string job_id = 2;
+  string artifact_type = 3;
+  string file_path = 4;
+  optional string content_type = 5;
+  int64 size_bytes = 6;
+  google.protobuf.Timestamp created_at = 7;
+}
+
+message GetArtifactDownloadUrlRequest {
+  string artifact_id = 1;
+  optional int32 expires_in_seconds = 2; // Default: 3600 (1 hour)
+}
+
+message GetArtifactDownloadUrlResponse {
+  string download_url = 1;
+  google.protobuf.Timestamp expires_at = 2;
+}
+
+// New messages for added RPCs
+
+message GetContainerRegistryRequest {
+  string registry_id = 1;
+}
+
+message SyncRegistryImagesRequest {
+  string registry_id = 1;
+}
+
+message SyncRegistryImagesResponse {
+  bool success = 1;
+  string message = 2;
+  int32 images_found = 3;
+  int32 images_synced = 4;
+}
+
+message GetJobStatusRequest {
+  string k8s_job_name = 1;
+}
+
+message GetJobStatusResponse {
+  string k8s_job_name = 1;
+  JobStatsSummary stats = 2;
+  repeated TestJobResponse jobs = 3;
+}
+
+// Artifact streaming messages (64KB chunk size recommended)
+message UploadArtifactRequest {
+  oneof data {
+    ArtifactMetadata metadata = 1;  // First message contains metadata
+    bytes chunk = 2;                 // Subsequent messages contain file chunks
+  }
+}
+
+message ArtifactMetadata {
+  string test_run_id = 1;
+  string test_job_id = 2;
+  string artifact_type = 3;  // screenshot, video, log, trace, report, other
+  string filename = 4;
+  string content_type = 5;
+  int64 size_bytes = 6;
+}
+
+message UploadArtifactResponse {
+  string artifact_id = 1;
+  bool success = 2;
+  string message = 3;
+  int64 bytes_received = 4;
+}
+
+message GetArtifactRequest {
+  string artifact_id = 1;
+}
+
+message ArtifactResponse {
+  string id = 1;
+  string test_run_id = 2;
+  string test_job_id = 3;
+  string artifact_type = 4;
+  string filename = 5;
+  string content_type = 6;
+  int64 size_bytes = 7;
+  string storage_path = 8;
+  google.protobuf.Timestamp created_at = 9;
+}
+
+message ListArtifactsByTestRunRequest {
+  string test_run_id = 1;
+  optional string artifact_type = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+

@@ -1,8 +1,5 @@
 name: Pull Request Validation
 
-# The following permissions are required for this workflow:
-# - `contents: read` is needed to fetch repository contents for the build and test steps.
-# - `pull-requests: write` is needed to update pull request statuses and post comments.
 permissions:
   contents: read
   pull-requests: write
@@ -15,78 +12,322 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
   cancel-in-progress: true
 
+env:
+  GO_VERSION: "1.24"
+  NODE_VERSION: "20"
+
 jobs:
-  build-and-test:
+  # Job 1: Lint - Quick syntax/style checks
+  lint:
+    name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 5
-    env:
-      # Required Better Auth configuration
-      BETTER_AUTH_SECRET: test-secret-key-for-ci-environment-32-chars
-      BETTER_AUTH_URL: http://localhost:3000
-      NEXT_PUBLIC_BASE_URL: http://localhost:3000
-      NEXT_PUBLIC_APP_BASE_URL: http://localhost:3000
-
-      # Database configuration
-      DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/auth
-      TIMESCALE_DATABASE_URL: postgresql://scaledtest:password@127.0.0.1:5432/scaledtest
-
-      # Test users
-      TEST_API_USERNAME: maintainer@scaledtest.com
-      TEST_API_PASSWORD: Maintainer123!
-
-      # TimescaleDB configuration
-      TIMESCALEDB_HOST: localhost
-      TIMESCALEDB_PORT: 5432
-      TIMESCALEDB_DATABASE: scaledtest
-      TIMESCALEDB_USERNAME: scaledtest
-      TIMESCALEDB_PASSWORD: password
-
-      # Test environment configuration
-      NODE_ENV: test
     steps:
       - uses: actions/checkout@v4
-
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-
-      - name: Set up Docker Compose
-        uses: docker/setup-compose-action@v1
-
-      - name: Start Docker Compose services
-        run: docker-compose up -d
-
-      - name: Wait for Postgres to be ready
-        run: |
-          for i in {1..30}; do
-            if docker exec $(docker ps -qf "name=postgres") pg_isready -U scaledtest -d auth; then
-              echo "Postgres is ready!"; break;
-            fi
-            echo "Waiting for Postgres... ($i)"; sleep 2;
-            if [ "$i" -eq 30 ]; then
-              echo "Postgres did not become ready in time."; exit 1;
-            fi
-          done
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: 20
-          cache: 'npm'
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
 
-      - name: Upgrade npm to latest
-        run: npm install -g npm@latest
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Run ESLint
+        run: npm run lint
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Run Go vet
+        working-directory: backend
+        run: go vet ./...
+
+      - name: Run staticcheck
+        uses: dominikh/staticcheck-action@v1
+        with:
+          version: "latest"
+          install-go: false
+          working-directory: backend
+
+  # Job 2: Backend Unit Tests - Fast, no external dependencies
+  backend-unit:
+    name: Backend Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Download dependencies
+        working-directory: backend
+        run: go mod download
+
+      - name: Run unit tests
+        working-directory: backend
+        run: make test-unit
+
+      - name: Run architecture tests
+        working-directory: backend
+        run: make arch-test
+
+  # Job 3: Code Generation Verification - Ensure generated code is committed
+  code-generation:
+    name: Verify Generated Code
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache-dependency-path: backend/go.sum
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Install frontend dependencies (for tygo output)
+        working-directory: frontend
+        run: npm ci --ignore-scripts
+
+      - name: Install Go tools
+        run: |
+          go install github.com/google/wire/cmd/wire@latest
+          go install github.com/gzuidhof/tygo@latest
+          go install github.com/vektra/mockery/v2@latest
+
+      - name: Run code generation (without proto)
+        working-directory: backend
+        run: make generate-ci
+
+      - name: Verify no uncommitted changes
+        run: |
+          if [ -n "$(git status --porcelain)" ]; then
+            echo "::error::Generated code is out of date. Please run 'cd backend && make generate' and commit the changes."
+            git status --porcelain
+            git diff --stat
+            exit 1
+          fi
+          echo "✓ Generated code is up-to-date"
+
+  # Job 4: E2E Tests - Full integration with Kubernetes (Kind)
+  e2e-tests:
+    name: E2E Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      # Backend configuration
+      JWT_SECRET: ci-test-jwt-secret-with-at-least-32-characters-for-security
+
+      # Frontend configuration
+      VITE_API_URL: http://localhost:8080
+
+      # Test configuration
+      SKIP_SERVER_STARTUP: "true"
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: "npm"
+
+      - name: Get Playwright version
+        id: playwright-version
+        working-directory: frontend
+        run: |
+          PLAYWRIGHT_VERSION=$(npm ls @playwright/test --json 2>/dev/null | jq -r '.dependencies["@playwright/test"].version // empty')
+          if [ -z "$PLAYWRIGHT_VERSION" ]; then
+            PLAYWRIGHT_VERSION=$(grep -o '"@playwright/test": "[^"]*"' package.json | grep -o '[0-9.]*')
+          fi
+          echo "version=$PLAYWRIGHT_VERSION" >> $GITHUB_OUTPUT
+          echo "Playwright version: $PLAYWRIGHT_VERSION"
 
       - name: Cache Playwright browsers
         uses: actions/cache@v4
+        id: playwright-cache
         with:
           path: ~/.cache/ms-playwright
-          key: ${{ runner.os }}-playwright-${{ hashFiles('package-lock.json') }}
-          restore-keys: |
-            ${{ runner.os }}-playwright-
+          key: playwright-${{ runner.os }}-${{ steps.playwright-version.outputs.version }}
 
-      - name: Install dependencies
+      - name: Install root dependencies
+        run: npm ci --ignore-scripts
+
+      - name: Install frontend dependencies
+        working-directory: frontend
         run: npm ci
-      - name: Run database migrations
-        run: npm run migrate
-      - name: Run all tests
-        run: npm run test
+
+      - name: Install Playwright browsers
+        if: steps.playwright-cache.outputs.cache-hit != 'true'
+        working-directory: frontend
+        run: npx playwright install chromium --with-deps
+
+      - name: Install Playwright browser dependencies
+        if: steps.playwright-cache.outputs.cache-hit == 'true'
+        run: npx playwright install-deps chromium
+
+      - name: Create Kind cluster
+        uses: helm/kind-action@v1
+        with:
+          cluster_name: scaledtest-ci
+
+      - name: Setup Helm dependencies
+        run: |
+          cd deploy/helm/scaledtest
+          helm dependency update
+          echo "✓ Helm dependencies downloaded"
+
+      - name: Build Docker images
+        run: |
+          docker build -t scaledtest-backend:ci ./backend
+          docker build -t scaledtest-frontend:ci ./frontend
+          kind load docker-image scaledtest-backend:ci scaledtest-frontend:ci --name scaledtest-ci
+
+      - name: Install Helm chart
+        run: |
+          # Create CI-specific values
+          cat > ci-values.yaml << EOF
+          backend:
+            image:
+              repository: scaledtest-backend
+              tag: ci
+              pullPolicy: Never
+            env:
+              JWT_SECRET: ${{ env.JWT_SECRET }}
+
+          frontend:
+            image:
+              repository: scaledtest-frontend
+              tag: ci
+              pullPolicy: Never
+
+          postgresql:
+            enabled: true
+            image:
+              repository: timescale/timescaledb
+              tag: "2.17.2-pg16"
+            auth:
+              username: scaledtest
+              database: scaledtest
+            primary:
+              persistence:
+                size: 1Gi
+
+          service:
+            backend:
+              type: NodePort
+              nodePort: 30080
+            frontend:
+              type: NodePort
+              nodePort: 30173
+          EOF
+
+          helm install scaledtest ./deploy/helm/scaledtest \
+            -f ./deploy/helm/scaledtest/values-dev.yaml \
+            -f ci-values.yaml \
+            --set postgresql.primary.initdb.scriptsConfigMap=scaledtest-postgres-initdb \
+            --wait --timeout 10m
+
+      - name: Wait for services to be ready
+        run: |
+          echo "Waiting for PostgreSQL..."
+          kubectl wait --for=condition=Ready pod -l app.kubernetes.io/name=postgresql,app.kubernetes.io/instance=scaledtest --timeout=300s
+          echo "✓ PostgreSQL ready"
+
+          echo "Waiting for migrations..."
+          kubectl wait --for=condition=Complete job -l app.kubernetes.io/component=migrations --timeout=120s || echo "Migrations still running or already completed"
+          echo "✓ Migrations completed"
+
+          echo "Waiting for backend..."
+          kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=backend,app.kubernetes.io/instance=scaledtest --timeout=120s
+          echo "✓ Backend ready"
+
+          echo "Waiting for frontend..."
+          kubectl wait --for=condition=Ready pod -l app.kubernetes.io/component=frontend,app.kubernetes.io/instance=scaledtest --timeout=120s
+          echo "✓ Frontend ready"
+
+      - name: Setup port forwarding
+        run: |
+          kubectl port-forward svc/scaledtest-backend 8080:8080 &
+          kubectl port-forward svc/scaledtest-frontend 5173:80 &
+          sleep 5
+
+      - name: Verify services are running
+        run: |
+          echo "Checking backend health..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:8080/health; then
+              echo "✓ Backend is healthy"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Backend health check failed"
+              kubectl logs -l app.kubernetes.io/component=backend
+              exit 1
+            fi
+            sleep 2
+          done
+
+          echo "Checking frontend..."
+          for i in {1..30}; do
+            if curl -sf http://localhost:5173; then
+              echo "✓ Frontend is healthy"
+              break
+            fi
+            if [ $i -eq 30 ]; then
+              echo "Frontend health check failed"
+              kubectl logs -l app.kubernetes.io/component=frontend
+              exit 1
+            fi
+            sleep 2
+          done
+          echo "✓ All services are healthy"
+
+      - name: Run Playwright E2E tests
+        working-directory: frontend
+        run: npx playwright test --workers=4
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: playwright-report
+          path: frontend/test-results/
+          retention-days: 7
+
+      - name: Collect logs on failure
+        if: failure()
+        run: |
+          echo "=== Pod Status ==="
+          kubectl get pods -o wide
+          echo ""
+          echo "=== Backend Logs ==="
+          kubectl logs -l app.kubernetes.io/component=backend --tail=100
+          echo ""
+          echo "=== Frontend Logs ==="
+          kubectl logs -l app.kubernetes.io/component=frontend --tail=100
+          echo ""
+          echo "=== PostgreSQL Pod Status ==="
+          kubectl get pods -l app.kubernetes.io/name=postgresql -o yaml
+          echo ""
+          echo "=== PostgreSQL Logs ==="
+          kubectl logs -l app.kubernetes.io/name=postgresql,app.kubernetes.io/instance=scaledtest --tail=50
+          echo ""
+          echo "=== Migration Job Logs ==="
+          kubectl logs -l app.kubernetes.io/component=migrations --tail=50
+

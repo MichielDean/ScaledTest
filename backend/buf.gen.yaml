@@ -1,0 +1,32 @@
+# buf.gen.yaml - Code generation configuration for ScaledTest
+# Uses Connect-RPC for unified gRPC/gRPC-Web/Connect protocol support
+version: v2
+managed:
+  enabled: true
+  disable:
+    - file_option: go_package
+      # Don't override go_package - use the one defined in proto files
+plugins:
+  # Go protobuf structs
+  - remote: buf.build/protocolbuffers/go
+    out: api/proto
+    opt:
+      - paths=source_relative
+  
+  # Connect-Go service handlers (replaces grpc-go, supports gRPC + gRPC-Web + Connect protocols)
+  - remote: buf.build/connectrpc/go
+    out: api/proto
+    opt:
+      - paths=source_relative
+  
+  # Connect-ES for TypeScript (frontend) - gRPC-Web client
+  - remote: buf.build/connectrpc/es
+    out: ../frontend/src/gen
+    opt:
+      - target=ts
+  
+  # Protobuf-ES base types for TypeScript
+  - remote: buf.build/bufbuild/es
+    out: ../frontend/src/gen
+    opt:
+      - target=ts
