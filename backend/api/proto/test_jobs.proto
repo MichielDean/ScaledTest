@@ -304,6 +304,7 @@ message DiscoveredTest {
 
 message DiscoverTestsRequest {
   string test_image_id = 1;
+  optional bool force_refresh = 2; // Force fresh discovery even if cached results exist
 }
 
 message DiscoverTestsResponse {

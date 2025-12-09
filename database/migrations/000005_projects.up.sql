@@ -28,6 +28,7 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON public.projects TO scaledtest;
 
 COMMENT ON COLUMN public.projects.default_test_environment IS 'Default environment to use when running tests. Users can override per test run.';
 COMMENT ON COLUMN public.projects.setup_completed IS 'Whether the project setup wizard has been completed (has cluster, registry, and at least one image)';
+COMMENT ON COLUMN public.projects.settings IS 'JSONB settings including artifactRetentionDays (default: 30) for automatic artifact cleanup';
 
 -- Add foreign key constraints to tables created in 03-app-tables.sql
 -- These are added here because projects table must exist first

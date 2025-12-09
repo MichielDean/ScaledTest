@@ -239,7 +239,8 @@ type TestExecutor interface {
 // TestDiscoverer defines the interface for discovering tests from container images.
 type TestDiscoverer interface {
 	// DiscoverTests discovers tests from a container image
-	DiscoverTests(ctx context.Context, imageID string) error
+	// forceRefresh bypasses cached results and performs fresh discovery
+	DiscoverTests(ctx context.Context, imageID string, forceRefresh bool) error
 }
 
 // Compile-time interface implementation checks

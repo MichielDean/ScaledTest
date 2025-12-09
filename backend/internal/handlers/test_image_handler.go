@@ -235,7 +235,7 @@ func (h *TestImageHandler) DiscoverTests(c *fiber.Ctx) error {
 	// Start discovery in background
 	go func() {
 		bgCtx := context.Background()
-		if err := h.discoverySvc.DiscoverTests(bgCtx, imageID); err != nil {
+		if err := h.discoverySvc.DiscoverTests(bgCtx, imageID, req.Force); err != nil {
 			h.logger.Error("Test discovery failed",
 				zap.Error(err),
 				zap.String("image_id", imageID),

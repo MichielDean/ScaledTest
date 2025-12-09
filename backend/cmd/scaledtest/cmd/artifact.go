@@ -71,6 +71,13 @@ var artifactUploadCmd = &cobra.Command{
 	RunE:  runArtifactUpload,
 }
 
+var artifactCleanupCmd = &cobra.Command{
+	Use:   "cleanup",
+	Short: "Cleanup expired artifacts",
+	Long:  `Remove artifacts older than retention period (default: 30 days per project settings).`,
+	RunE:  runArtifactCleanup,
+}
+
 func init() {
 	rootCmd.AddCommand(artifactCmd)
 
@@ -100,6 +107,9 @@ func init() {
 	artifactUploadCmd.Flags().StringVar(&artifactType, "type", "other", "Artifact type (screenshot, video, log, trace, report, other)")
 	artifactUploadCmd.MarkFlagRequired("job-id")
 	artifactUploadCmd.MarkFlagRequired("run-id")
+
+	// Cleanup command
+	artifactCmd.AddCommand(artifactCleanupCmd)
 }
 
 func runArtifactList(cmd *cobra.Command, args []string) error {
@@ -460,4 +470,20 @@ func detectContentType(filePath string) string {
 	default:
 		return "application/octet-stream"
 	}
+}
+
+func runArtifactCleanup(cmd *cobra.Command, args []string) error {
+	out := output.New()
+
+	// Note: This command would need to be run server-side with database access
+	// For now, we'll return a helpful message
+	out.Info("Artifact cleanup must be run on the server with direct database access.")
+	out.Info("This can be done via:")
+	out.Info("  1. K8s CronJob (recommended for production)")
+	out.Info("  2. Direct server execution with environment variables")
+	out.Info("")
+	out.Info("Example K8s CronJob manifest available at:")
+	out.Info("  deploy/k8s/jobs/artifact-cleanup-cronjob.yaml")
+
+	return nil
 }

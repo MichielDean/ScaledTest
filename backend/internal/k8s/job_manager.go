@@ -38,19 +38,21 @@ type JobManager struct {
 
 // JobConfig contains configuration for creating a test execution Job
 type JobConfig struct {
-	Name                 string
-	Image                string
-	TestIDs              []string
-	ImagePullSecretName  string
-	PVCName              string
-	Environment          map[string]string
-	Resources            ResourceRequirements
-	TimeoutSeconds       int32
-	Parallelism          int32
-	ServiceAccountName   string
-	PlatformAPIURL       string
-	JobAuthToken         string
-	TestRunID            string // UUID for test run identification
+	Name                    string
+	Image                   string
+	TestIDs                 []string
+	JobIDs                  []string   // Database IDs for each test job (maps 1:1 with TestIDs by index)
+	ImagePullSecretName     string
+	PVCName                 string
+	Environment             map[string]string
+	Resources               ResourceRequirements
+	TimeoutSeconds          int32
+	Parallelism             int32
+	ServiceAccountName      string
+	PlatformAPIURL          string
+	JobAuthToken            string
+	TestRunID               string // UUID for test run identification
+	TTLSecondsAfterFinished *int32 // Automatic cleanup after job finishes (default: 3600 = 1 hour)
 }
 
 // ResourceRequirements specifies CPU and memory requests/limits
@@ -263,14 +265,17 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 		},
 	})
 
-	// Build command that uses index to select test
+	// Build command that uses index to select test and job ID
 	// The entrypoint.sh script handles test execution when DISCOVERY_MODE is not set
-	// It expects TEST_ID to be set as an environment variable
+	// It expects TEST_ID and TEST_JOB_ID to be set as environment variables
+	testIDsJSON := jm.serializeTestIDs(config.TestIDs)
+	jobIDsJSON := jm.serializeTestIDs(config.JobIDs) // Reuse same serialization function
+	
 	command := []string{
 		"/bin/sh",
 		"-c",
-		fmt.Sprintf(`export TEST_ID=$(echo '%s' | jq -r ".[${JOB_COMPLETION_INDEX}]"); /scripts/entrypoint.sh`, 
-			jm.serializeTestIDs(config.TestIDs)),
+		fmt.Sprintf(`export TEST_ID=$(echo '%s' | jq -r ".[${JOB_COMPLETION_INDEX}]"); export TEST_JOB_ID=$(echo '%s' | jq -r ".[${JOB_COMPLETION_INDEX}]"); /scripts/entrypoint.sh`, 
+			testIDsJSON, jobIDsJSON),
 	}
 
 	// Define resource requirements
@@ -297,6 +302,12 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 		activeDeadlineSeconds = 3600 // Default 1 hour
 	}
 
+	// Set TTL for automatic cleanup (default: 1 hour after completion)
+	ttlSecondsAfterFinished := int32(3600)
+	if config.TTLSecondsAfterFinished != nil {
+		ttlSecondsAfterFinished = *config.TTLSecondsAfterFinished
+	}
+
 	job := &batchv1.Job{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      config.Name,
@@ -308,11 +319,12 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 			},
 		},
 		Spec: batchv1.JobSpec{
-			Parallelism:           &parallelism,
-			Completions:           &testCount,
-			BackoffLimit:          &backoffLimit,
-			CompletionMode:        &completionMode,
-			ActiveDeadlineSeconds: &activeDeadlineSeconds,
+			Parallelism:             &parallelism,
+			Completions:             &testCount,
+			BackoffLimit:            &backoffLimit,
+			CompletionMode:          &completionMode,
+			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{

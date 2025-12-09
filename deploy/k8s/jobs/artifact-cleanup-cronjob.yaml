@@ -1,0 +1,74 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: artifact-cleanup
+  namespace: default
+  labels:
+    app: scaledtest
+    component: artifact-cleanup
+spec:
+  # Run daily at 2 AM
+  schedule: "0 2 * * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      template:
+        metadata:
+          labels:
+            app: scaledtest
+            component: artifact-cleanup
+        spec:
+          restartPolicy: OnFailure
+          serviceAccountName: scaledtest-job-runner
+          containers:
+          - name: cleanup
+            image: localhost:5001/scaledtest-backend:dev
+            imagePullPolicy: Always
+            command:
+            - /app/server
+            - artifact-cleanup
+            env:
+            - name: DB_HOST
+              value: scaledtest-postgresql
+            - name: DB_PORT
+              value: "5432"
+            - name: DB_USER
+              value: scaledtest
+            - name: DB_NAME
+              value: scaledtest
+            - name: DB_SSL_MODE
+              value: disable
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: scaledtest-postgresql
+                  key: password
+            - name: S3_ENDPOINT
+              value: scaledtest-minio:9000
+            - name: S3_BUCKET
+              value: artifacts
+            - name: S3_USE_SSL
+              value: "false"
+            - name: S3_ACCESS_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: scaledtest-minio
+                  key: root-user
+            - name: S3_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: scaledtest-minio
+                  key: root-password
+            - name: LOG_LEVEL
+              value: info
+            - name: ENVIRONMENT
+              value: production
+            resources:
+              requests:
+                cpu: 100m
+                memory: 128Mi
+              limits:
+                cpu: 500m
+                memory: 512Mi

@@ -3,7 +3,6 @@ package handlers
 import (
 	"context"
 	"errors"
-	"io"
 	"time"
 
 	"connectrpc.com/connect"
@@ -419,7 +418,13 @@ func (h *TestJobServiceHandler) DiscoverTests(
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("test_image_id is required"))
 	}
 
-	if err := h.config.TestDiscoveryService.DiscoverTests(ctx, req.Msg.TestImageId); err != nil {
+	// Default to false if not provided (proto might not be regenerated yet)
+	forceRefresh := false
+	if req.Msg.ForceRefresh != nil {
+		forceRefresh = *req.Msg.ForceRefresh
+	}
+
+	if err := h.config.TestDiscoveryService.DiscoverTests(ctx, req.Msg.TestImageId, forceRefresh); err != nil {
 		return nil, mapGrpcErrorToConnect(err)
 	}
 
@@ -696,16 +701,37 @@ func (h *TestJobServiceHandler) GetArtifact(
 		return nil, connect.NewError(connect.CodeNotFound, errors.New("artifact not found"))
 	}
 
+	// Get test job to retrieve test_run_id
+	testJob, err := h.config.TestExecutionService.GetTestJob(ctx, artifact.TestJobID)
+	if err != nil {
+		h.logger.Warn("Failed to get test job for artifact", zap.String("test_job_id", artifact.TestJobID), zap.Error(err))
+	}
+
+	testRunID := ""
+	if testJob != nil && testJob.TestRunID != nil {
+		testRunID = *testJob.TestRunID
+	}
+
+	contentType := ""
+	if artifact.ContentType != nil {
+		contentType = *artifact.ContentType
+	}
+
+	sizeBytes := int64(0)
+	if artifact.SizeBytes != nil {
+		sizeBytes = *artifact.SizeBytes
+	}
+
 	return connect.NewResponse(&pb.ArtifactResponse{
 		Id:           artifact.ID,
-		TestRunId:    artifact.TestRunID,
+		TestRunId:    testRunID,
 		TestJobId:    artifact.TestJobID,
-		Filename:     artifact.Filename,
-		ContentType:  artifact.ContentType,
-		SizeBytes:    artifact.SizeBytes,
+		Filename:     artifact.FilePath,
+		ContentType:  contentType,
+		SizeBytes:    sizeBytes,
 		ArtifactType: string(artifact.ArtifactType),
 		StoragePath:  artifact.AbsolutePath,
-		UploadedAt:   timestamppb.New(artifact.UploadedAt),
+		CreatedAt:    timestamppb.New(artifact.CreatedAt),
 	}), nil
 }
 
@@ -723,8 +749,8 @@ func (h *TestJobServiceHandler) GetArtifactDownloadUrl(
 	}
 
 	expiry := 15 * time.Minute
-	if req.Msg.ExpirySeconds > 0 {
-		expiry = time.Duration(req.Msg.ExpirySeconds) * time.Second
+	if req.Msg.ExpiresInSeconds != nil && *req.Msg.ExpiresInSeconds > 0 {
+		expiry = time.Duration(*req.Msg.ExpiresInSeconds) * time.Second
 	}
 
 	url, err := h.config.ArtifactService.GetArtifactDownloadURL(ctx, req.Msg.ArtifactId, expiry)
@@ -758,23 +784,33 @@ func (h *TestJobServiceHandler) ListArtifactsByTestRun(
 		return nil, connect.NewError(connect.CodeInternal, errors.New("failed to list artifacts"))
 	}
 
-	pbArtifacts := make([]*pb.ArtifactResponse, len(artifacts))
+	pbArtifacts := make([]*pb.ArtifactInfo, len(artifacts))
 	for i, a := range artifacts {
-		pbArtifacts[i] = &pb.ArtifactResponse{
+		contentType := ""
+		if a.ContentType != nil {
+			contentType = *a.ContentType
+		}
+
+		sizeBytes := int64(0)
+		if a.SizeBytes != nil {
+			sizeBytes = *a.SizeBytes
+		}
+
+		pbArtifacts[i] = &pb.ArtifactInfo{
 			Id:           a.ID,
-			TestRunId:    a.TestRunID,
-			TestJobId:    a.TestJobID,
-			Filename:     a.Filename,
-			ContentType:  a.ContentType,
-			SizeBytes:    a.SizeBytes,
+			JobId:        a.TestJobID,
+			FilePath:     a.FilePath,
+			ContentType:  &contentType,
+			SizeBytes:    sizeBytes,
 			ArtifactType: string(a.ArtifactType),
-			StoragePath:  a.AbsolutePath,
-			UploadedAt:   timestamppb.New(a.UploadedAt),
+			CreatedAt:    timestamppb.New(a.CreatedAt),
 		}
 	}
 
 	return connect.NewResponse(&pb.ListArtifactsResponse{
-		Artifacts: pbArtifacts,
+		Artifacts:   pbArtifacts,
+		TotalCount:  int32(len(artifacts)),
+		TotalSizeBytes: 0, // TODO: Calculate if needed
 	}), nil
 }
 
