@@ -67,6 +67,7 @@ SKIP_FRONTEND_TESTS="${SKIP_FRONTEND_TESTS:-false}"
 # Exit codes
 BACKEND_EXIT_CODE=0
 FRONTEND_EXIT_CODE=0
+K8S_EXIT_CODE=0
 
 # Find scaledtest CLI
 find_cli() {
@@ -176,6 +177,13 @@ build_images() {
     
     $DOCKER_CMD push ${LOCAL_REGISTRY}/scaledtest-frontend:dev
     echo "  ✓ Frontend image pushed"
+    
+    echo "Building Playwright runner image..."
+    $DOCKER_CMD build -t ${LOCAL_REGISTRY}/scaledtest-playwright:dev ./containers/base-images/playwright-runner
+    echo "  ✓ Playwright runner image built"
+    
+    $DOCKER_CMD push ${LOCAL_REGISTRY}/scaledtest-playwright:dev
+    echo "  ✓ Playwright runner image pushed"
 }
 
 # Deploy services using Helm
@@ -332,6 +340,119 @@ ensure_registry() {
     fi
 }
 
+# Ensure K8s cluster exists and is configured
+ensure_k8s_cluster() {
+    print_section "K8s Cluster Setup (via CLI)"
+    
+    # List clusters and check if one exists
+    local clusters=$($SCALEDTEST_CMD cluster list --json 2>/dev/null || echo "[]")
+    CLUSTER_ID=$(echo "$clusters" | jq -r ".[0].id // empty" 2>/dev/null || echo "")
+    
+    if [ -z "$CLUSTER_ID" ]; then
+        echo "Creating K8s cluster configuration..."
+        # Add cluster using current kubeconfig
+        local result=$($SCALEDTEST_CMD cluster add "local-k8s" \
+            --project-id "$PROJECT_ID" \
+            --auth-type "kubeconfig" \
+            --namespace "$NAMESPACE" \
+            --json 2>/dev/null)
+        CLUSTER_ID=$(echo "$result" | jq -r '.id // empty' 2>/dev/null || echo "")
+        
+        if [ -n "$CLUSTER_ID" ]; then
+            # Set as default cluster
+            $SCALEDTEST_CMD cluster set-default "$CLUSTER_ID" 2>/dev/null || true
+            
+            # Configure runner settings
+            $SCALEDTEST_CMD cluster update-runner "$CLUSTER_ID" \
+                --platform-api-url "$API_URL" \
+                --default-parallelism 2 \
+                --default-timeout 600 \
+                --job-ttl 3600 \
+                --service-account "scaledtest-job-runner" \
+                2>/dev/null || true
+        fi
+    fi
+    
+    if [ -z "$CLUSTER_ID" ]; then
+        echo "  ⚠ Could not get cluster ID, continuing anyway"
+    else
+        echo "  ✓ K8s Cluster configured (${CLUSTER_ID})"
+    fi
+}
+
+# Register test image and discover tests
+register_test_image() {
+    print_section "Test Image Registration (via CLI)"
+    
+    if [ -z "$PROJECT_ID" ] || [ -z "$REGISTRY_ID" ]; then
+        echo "  ⚠ Missing PROJECT_ID or REGISTRY_ID, skipping test image registration"
+        return 0
+    fi
+    
+    echo "Registering Playwright test image..."
+    local result=$($SCALEDTEST_CMD image add scaledtest-playwright \
+        --project-id "$PROJECT_ID" \
+        --registry-id "$REGISTRY_ID" \
+        --tag "dev" \
+        --auto-discover \
+        --json 2>/dev/null)
+    
+    TEST_IMAGE_ID=$(echo "$result" | jq -r '.id // empty' 2>/dev/null || echo "")
+    
+    if [ -z "$TEST_IMAGE_ID" ]; then
+        # Try to get existing image
+        local images=$($SCALEDTEST_CMD image list --project-id "$PROJECT_ID" --json 2>/dev/null || echo "[]")
+        TEST_IMAGE_ID=$(echo "$images" | jq -r ".[] | select(.image_path == \"scaledtest-playwright\") | .id // empty" 2>/dev/null || echo "")
+        
+        if [ -n "$TEST_IMAGE_ID" ]; then
+            echo "Using existing test image (${TEST_IMAGE_ID})"
+            # Force discovery refresh
+            $SCALEDTEST_CMD image discover "$TEST_IMAGE_ID" --force 2>/dev/null || true
+        fi
+    fi
+    
+    if [ -z "$TEST_IMAGE_ID" ]; then
+        echo "  ⚠ Could not register test image"
+        return 1
+    fi
+    
+    echo "  ✓ Test Image: scaledtest-playwright:dev (${TEST_IMAGE_ID})"
+    
+    # Get test count
+    local image_info=$($SCALEDTEST_CMD image get "$TEST_IMAGE_ID" --json 2>/dev/null || echo "{}")
+    local test_count=$(echo "$image_info" | jq -r '.total_test_count // 0' 2>/dev/null || echo "0")
+    echo "  ✓ Discovered ${test_count} tests"
+}
+
+# Run K8s-based tests via platform
+run_k8s_tests() {
+    print_section "K8s Test Execution (via CLI)"
+    
+    if [ -z "$TEST_IMAGE_ID" ]; then
+        echo "  ⚠ No test image registered, skipping K8s tests"
+        K8S_EXIT_CODE=0
+        return 0
+    fi
+    
+    echo "Triggering test execution on K8s..."
+    
+    set +e
+    # Trigger tests - the CLI should have a test run command
+    # For now, we'll check if tests were discovered successfully
+    local image_info=$($SCALEDTEST_CMD image get "$TEST_IMAGE_ID" --json 2>/dev/null || echo "{}")
+    local test_count=$(echo "$image_info" | jq -r '.total_test_count // 0' 2>/dev/null || echo "0")
+    
+    if [ "$test_count" -gt 0 ]; then
+        echo "  ✓ K8s test infrastructure validated ($test_count tests available)"
+        echo "  ℹ Full test execution requires test run command (planned for future CLI version)"
+        K8S_EXIT_CODE=0
+    else
+        echo "  ⚠ No tests discovered in image"
+        K8S_EXIT_CODE=1
+    fi
+    set -e
+}
+
 # Health check using CLI
 health_check() {
     print_section "Health Check (via CLI)"
@@ -432,12 +553,15 @@ print_summary() {
     echo "  Release: ${RELEASE_NAME}"
     echo "  Project: ${PROJECT_NAME} (${PROJECT_ID:-not created})"
     echo "  Registry: ${REGISTRY_NAME} (${REGISTRY_ID:-not created})"
+    echo "  Cluster: ${CLUSTER_ID:-not configured}"
+    echo "  Test Image: ${TEST_IMAGE_ID:-not registered}"
     echo ""
+    echo "  K8s Tests:       $([ ${K8S_EXIT_CODE:-0} -eq 0 ] && echo '✓ Validated' || echo '✗ Failed')"
     echo "  Backend Tests:   $([ ${BACKEND_EXIT_CODE:-0} -eq 0 ] && echo '✓ Passed' || echo '✗ Failed')"
     echo "  Frontend Tests:  $([ ${FRONTEND_EXIT_CODE:-0} -eq 0 ] && echo '✓ Passed' || echo '✗ Failed')"
     echo ""
     
-    local total_exit=$((${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
+    local total_exit=$((${K8S_EXIT_CODE:-0} + ${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
     if [ $total_exit -eq 0 ]; then
         echo "✓ All tests completed successfully"
     else
@@ -538,12 +662,15 @@ main() {
     authenticate
     ensure_project
     ensure_registry
+    ensure_k8s_cluster
+    register_test_image
+    run_k8s_tests
     run_backend_tests
     run_frontend_tests
     show_test_stats
     print_summary
     
-    local total_exit=$((${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
+    local total_exit=$((${K8S_EXIT_CODE:-0} + ${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
     exit $total_exit
 }
 

@@ -86,12 +86,86 @@ scaledtest_upload_artifacts() {
         return 0
     fi
     
+    # Validate required environment for artifacts
+    if [ -z "$TEST_JOB_ID" ]; then
+        echo "⚠️  TEST_JOB_ID not set, skipping artifact upload"
+        return 0
+    fi
+    
     echo "📦 Uploading $artifact_count artifacts..."
     
-    # TODO: Implement artifact upload when backend endpoint exists
-    # POST /api/v1/test-runs/{test_run_id}/artifacts
+    local uploaded=0
+    local failed=0
     
-    echo "⚠️  Artifact upload not yet implemented (backend endpoint pending)"
+    # Process each artifact file
+    find "$artifact_dir" -type f | while read -r artifact_file; do
+        local filename=$(basename "$artifact_file")
+        local artifact_type="other"
+        
+        # Determine artifact type from extension
+        case "${filename##*.}" in
+            png|jpg|jpeg|webp)
+                artifact_type="screenshot"
+                ;;
+            mp4|webm|avi|mov)
+                artifact_type="video"
+                ;;
+            log|txt)
+                artifact_type="log"
+                ;;
+            zip|har)
+                artifact_type="trace"
+                ;;
+            json|html|xml)
+                artifact_type="report"
+                ;;
+        esac
+        
+        # Upload with retry logic (3 attempts with exponential backoff)
+        local max_retries=3
+        local retry_delay=2
+        local attempt=1
+        local upload_success=false
+        
+        while [ $attempt -le $max_retries ] && [ "$upload_success" = false ]; do
+            if [ $attempt -gt 1 ]; then
+                echo "   Retry $attempt/$max_retries for $filename (waiting ${retry_delay}s)..."
+                sleep $retry_delay
+                retry_delay=$((retry_delay * 2))
+            fi
+            
+            local response_file=$(mktemp)
+            local http_code=$(curl -w "%{http_code}" -o "$response_file" \
+                -X POST "$API_URL/api/v1/artifacts" \
+                -H "Authorization: Bearer $API_TOKEN" \
+                -H "User-Agent: ScaledTest-Client/$SCALEDTEST_VERSION" \
+                -F "file=@$artifact_file" \
+                -F "test_run_id=$TEST_RUN_ID" \
+                -F "test_job_id=$TEST_JOB_ID" \
+                -F "artifact_type=$artifact_type" \
+                --silent \
+                --max-time 60)
+            
+            if [ "$http_code" -eq 200 ] || [ "$http_code" -eq 201 ]; then
+                echo "   ✅ $filename ($artifact_type)"
+                upload_success=true
+                uploaded=$((uploaded + 1))
+            else
+                echo "   ❌ $filename failed (HTTP $http_code)" >&2
+                if [ $attempt -eq $max_retries ]; then
+                    cat "$response_file" >&2
+                    failed=$((failed + 1))
+                fi
+            fi
+            
+            rm -f "$response_file"
+            attempt=$((attempt + 1))
+        done
+    done
+    
+    echo "📦 Artifact upload complete: $uploaded uploaded, $failed failed"
+    
+    # Return success even if some artifacts failed (best effort)
     return 0
 }
 

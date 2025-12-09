@@ -71,6 +71,9 @@ type RunnerConfig struct {
 	// DefaultParallelism is the max number of concurrent test pods
 	DefaultParallelism int32 `json:"default_parallelism"`
 
+	// JobTTLSeconds is the time to keep completed jobs before automatic cleanup (default: 3600 = 1 hour)
+	JobTTLSeconds *int32 `json:"job_ttl_seconds,omitempty"`
+
 	// DefaultResources contains default resource requests and limits
 	DefaultResources ResourceRequirements `json:"default_resources"`
 

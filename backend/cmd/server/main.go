@@ -129,7 +129,7 @@ func main() {
 		TestImageService:     deps.TestImageService,
 		TestExecutionService: deps.TestExecutionService,
 		TestDiscoveryService: deps.TestDiscoveryService,
-		ArtifactService:      nil, // TODO: Wire up ArtifactService when storage is configured
+		ArtifactService:      deps.ArtifactService,
 	}, logger.Log)
 	testJobPath, testJobHTTPHandler := protoconnect.NewTestJobServiceHandler(testJobHandler, handlerOpts...)
 	mux.Handle(testJobPath, testJobHTTPHandler)

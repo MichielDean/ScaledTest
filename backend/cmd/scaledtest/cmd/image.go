@@ -61,11 +61,12 @@ var imageDeleteCmd = &cobra.Command{
 }
 
 var (
-	imageProjectID  string
-	imageRegistryID string
-	imageTag        string
+	imageProjectID    string
+	imageRegistryID   string
+	imageTag          string
 	imageAutoDiscover bool
-	imageForce      bool
+	imageForceRefresh bool
+	imageForce        bool
 )
 
 func init() {
@@ -87,6 +88,9 @@ func init() {
 	// List command flags
 	imageListCmd.Flags().StringVar(&imageProjectID, "project-id", "", "Project ID (required)")
 	imageListCmd.MarkFlagRequired("project-id")
+
+	// Discover command flags
+	imageDiscoverCmd.Flags().BoolVar(&imageForceRefresh, "force", false, "Force refresh even if cached results exist")
 
 	// Delete command flags
 	imageDeleteCmd.Flags().BoolVar(&imageForce, "force", false, "Skip confirmation prompt")
@@ -299,7 +303,8 @@ func runImageDiscover(cmd *cobra.Command, args []string) error {
 	spinner.Start()
 
 	resp, err := c.TestJobService.DiscoverTests(ctx, &proto.DiscoverTestsRequest{
-		TestImageId: imageID,
+		TestImageId:  imageID,
+		ForceRefresh: &imageForceRefresh,
 	})
 
 	if err != nil {

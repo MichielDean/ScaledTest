@@ -12,12 +12,14 @@ package wire
 
 import (
 	"context"
+	"os"
 
 	"github.com/MichielDean/ScaledTest/backend/internal/crypto"
 	"github.com/MichielDean/ScaledTest/backend/internal/database"
 	"github.com/MichielDean/ScaledTest/backend/internal/handlers"
 	"github.com/MichielDean/ScaledTest/backend/internal/repository"
 	"github.com/MichielDean/ScaledTest/backend/internal/services"
+	"github.com/MichielDean/ScaledTest/backend/internal/storage"
 	"github.com/google/wire"
 	"github.com/jackc/pgx/v5/pgxpool"
 	"go.uber.org/zap"
@@ -50,6 +52,7 @@ type AppDependencies struct {
 	ClusterService        services.ClusterManager
 	TestExecutionService  services.TestExecutor
 	TestDiscoveryService  services.TestDiscoverer
+	ArtifactService       *services.ArtifactService
 
 	// Handlers
 	UserHandler           *handlers.UserHandler
@@ -102,6 +105,36 @@ func ProvideTestDiscoveryService(db *pgxpool.Pool, logger *zap.Logger, registryS
 	return services.NewTestDiscoveryService(db, logger, registrySvc)
 }
 
+// ProvideS3StorageConfig creates S3Storage configuration from environment variables.
+func ProvideS3StorageConfig() storage.Config {
+	return storage.Config{
+		Endpoint:  getEnv("S3_ENDPOINT", "localhost:9000"),
+		Bucket:    getEnv("S3_BUCKET", "artifacts"),
+		AccessKey: getEnv("S3_ACCESS_KEY", "scaledtest"),
+		SecretKey: getEnv("S3_SECRET_KEY", "scaledtest123"),
+		UseSSL:    getEnv("S3_USE_SSL", "false") == "true",
+		Region:    getEnv("S3_REGION", "us-east-1"),
+	}
+}
+
+// ProvideS3Storage creates the S3Storage instance.
+func ProvideS3Storage(config storage.Config, logger *zap.Logger) (*storage.S3Storage, error) {
+	return storage.NewS3Storage(config, logger)
+}
+
+// ProvideArtifactService creates the artifact service.
+func ProvideArtifactService(s3Storage *storage.S3Storage, artifactRepo repository.ArtifactRepository, logger *zap.Logger) *services.ArtifactService {
+	return services.NewArtifactService(s3Storage, artifactRepo, logger)
+}
+
+// getEnv retrieves an environment variable or returns a default value.
+func getEnv(key, defaultValue string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return defaultValue
+}
+
 // DatabaseSet provides database-related dependencies.
 var DatabaseSet = wire.NewSet(
 	ProvideDatabase,
@@ -115,11 +148,13 @@ var RepositorySet = wire.NewSet(
 	repository.NewPostgresProjectRepository,
 	repository.NewPostgresClusterRepository,
 	repository.NewPostgresAuthRepository,
+	repository.NewPostgresArtifactRepository,
 	// Bind concrete implementations to interfaces
 	wire.Bind(new(repository.UserRepository), new(*repository.PostgresUserRepository)),
 	wire.Bind(new(repository.ProjectRepository), new(*repository.PostgresProjectRepository)),
 	wire.Bind(new(repository.ClusterRepository), new(*repository.PostgresClusterRepository)),
 	wire.Bind(new(repository.AuthRepository), new(*repository.PostgresAuthRepository)),
+	wire.Bind(new(repository.ArtifactRepository), new(*repository.PostgresArtifactRepository)),
 )
 
 // CryptoSet provides cryptography-related dependencies.
@@ -184,6 +219,14 @@ var K8sProviderSet = wire.NewSet(
 	wire.Bind(new(services.TestExecutor), new(*services.TestExecutionService)),
 )
 
+// StorageProviderSet provides artifact storage dependencies.
+// Includes: S3Storage, ArtifactService
+var StorageProviderSet = wire.NewSet(
+	ProvideS3StorageConfig,
+	ProvideS3Storage,
+	ProvideArtifactService,
+)
+
 // AllProviderSets combines all provider sets for full application initialization.
 var AllProviderSets = wire.NewSet(
 	DatabaseSet,
@@ -194,6 +237,7 @@ var AllProviderSets = wire.NewSet(
 	ProjectProviderSet,
 	TestProviderSet,
 	K8sProviderSet,
+	StorageProviderSet,
 )
 
 // InitializeApp creates and wires all application dependencies.

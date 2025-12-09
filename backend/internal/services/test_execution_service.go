@@ -139,12 +139,16 @@ func (s *TestExecutionService) TriggerTestJobs(ctx context.Context, projectID, t
 	// Build environment variables
 	mergedEnv := s.buildJobEnvironment(cluster.RunnerConfig, environment, baseUrlOverride)
 
-	// Create K8s job
+	// Store job records in database BEFORE creating K8s job to get job IDs
 	testRunID := uuid.New().String()
+	jobIDs := s.storeJobRecords(ctx, testIDs, projectID, testImageID, testRunID, k8sJobName, jobManager.GetNamespace(), environment, userID)
+
+	// Create K8s job with job IDs mapped to test IDs by index
 	jobConfig := s.buildJobConfig(&jobConfigParams{
 		k8sJobName:          k8sJobName,
 		imageRef:            imageRef,
 		testIDs:             testIDs,
+		jobIDs:              jobIDs,
 		imagePullSecretName: imagePullSecretName,
 		runnerConfig:        cluster.RunnerConfig,
 		environment:         mergedEnv,
@@ -159,9 +163,6 @@ func (s *TestExecutionService) TriggerTestJobs(ctx context.Context, projectID, t
 	if err != nil {
 		return "", "", nil, fmt.Errorf("failed to create K8s job: %w", err)
 	}
-
-	// Store job records in database
-	jobIDs := s.storeJobRecords(ctx, testIDs, projectID, testImageID, testRunID, k8sJobName, jobManager.GetNamespace(), environment, userID)
 
 	s.logger.Info("Test jobs triggered",
 		zap.String("k8s_job_name", k8sJobName),
@@ -274,20 +275,31 @@ func (s *TestExecutionService) buildJobConfig(params *jobConfigParams) k8s.JobCo
 		serviceAccountName = "scaledtest-job-runner"
 	}
 
+	// Get TTL from runner config (default: 3600 seconds = 1 hour)
+	var ttlSeconds *int32
+	if params.runnerConfig.JobTTLSeconds != nil {
+		ttlSeconds = params.runnerConfig.JobTTLSeconds
+	} else {
+		defaultTTL := int32(3600)
+		ttlSeconds = &defaultTTL
+	}
+
 	return k8s.JobConfig{
-		Name:                params.k8sJobName,
-		Image:               params.imageRef,
-		TestIDs:             params.testIDs,
-		ImagePullSecretName: params.imagePullSecretName,
-		PVCName:             pvcName,
-		Environment:         params.environment,
-		Resources:           params.resources,
-		TimeoutSeconds:      params.timeoutSeconds,
-		Parallelism:         params.parallelism,
-		ServiceAccountName:  serviceAccountName,
-		PlatformAPIURL:      params.runnerConfig.PlatformAPIURL,
-		JobAuthToken:        params.jobAuthToken,
-		TestRunID:           params.testRunID,
+		Name:                    params.k8sJobName,
+		Image:                   params.imageRef,
+		TestIDs:                 params.testIDs,
+		JobIDs:                  params.jobIDs,
+		ImagePullSecretName:     params.imagePullSecretName,
+		PVCName:                 pvcName,
+		Environment:             params.environment,
+		Resources:               params.resources,
+		TimeoutSeconds:          params.timeoutSeconds,
+		Parallelism:             params.parallelism,
+		ServiceAccountName:      serviceAccountName,
+		PlatformAPIURL:          params.runnerConfig.PlatformAPIURL,
+		JobAuthToken:            params.jobAuthToken,
+		TestRunID:               params.testRunID,
+		TTLSecondsAfterFinished: ttlSeconds,
 	}
 }
 
@@ -296,6 +308,7 @@ type jobConfigParams struct {
 	k8sJobName          string
 	imageRef            string
 	testIDs             []string
+	jobIDs              []string // Database IDs for each test job
 	imagePullSecretName string
 	runnerConfig        *models.RunnerConfig
 	environment         map[string]string
