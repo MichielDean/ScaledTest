@@ -45,6 +45,7 @@ get_command() {
 KUBECTL_CMD=$(get_command kubectl)
 HELM_CMD=$(get_command helm)
 DOCKER_CMD=$(get_command docker)
+KIND_CMD=$(get_command kind)
 
 # Ensure kubectl uses the correct kubeconfig
 # In WSL, we need to use the Windows kubeconfig location
@@ -147,11 +148,12 @@ check_prerequisites() {
     
     # Check if Kind cluster exists and is running
     if command_exists kind; then
-        local clusters=$(kind get clusters 2>/dev/null || echo "")
+        local clusters=$($KIND_CMD get clusters 2>/dev/null || echo "")
         if [[ ! "$clusters" =~ "scaledtest" ]]; then
             echo "  ⚠ Kind cluster 'scaledtest' not found"
             echo "  Creating cluster..."
-            kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml || true
+            $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml || true
+            sleep 5
         fi
         
         # Check if cluster containers are running
@@ -159,8 +161,9 @@ check_prerequisites() {
         if [ "$running_containers" -eq 0 ]; then
             echo "  ⚠ Kind cluster containers not running, attempting to start..."
             # Delete and recreate if stopped (Kind doesn't support stop/start well)
-            kind delete cluster --name scaledtest 2>/dev/null || true
-            kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml
+            $KIND_CMD delete cluster --name scaledtest 2>/dev/null || true
+            $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml
+            sleep 5
         fi
     fi
     
@@ -169,7 +172,7 @@ check_prerequisites() {
         echo "  Cluster status:"
         $KUBECTL_CMD cluster-info 2>&1 || true
         echo ""
-        echo "  Try running: kind create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml"
+        echo "  Try running: $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml"
         exit 1
     fi
     echo "  ✓ Kubernetes cluster accessible"
