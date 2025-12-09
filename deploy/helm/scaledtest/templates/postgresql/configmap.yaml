@@ -1,0 +1,37 @@
+{{- if .Values.database.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-postgresql-initdb
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+data:
+  00-extensions.sql: |
+    -- Enable required extensions for ScaledTest
+    -- This runs on first database initialization only
+    
+    -- TimescaleDB for time-series test results data
+    CREATE EXTENSION IF NOT EXISTS timescaledb;
+    
+    -- UUID generation functions
+    CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+    
+    -- Cryptographic functions for password hashing
+    CREATE EXTENSION IF NOT EXISTS pgcrypto;
+    
+    -- Trigram-based text search for test name searching
+    CREATE EXTENSION IF NOT EXISTS pg_trgm;
+    
+    -- Better index performance
+    CREATE EXTENSION IF NOT EXISTS btree_gin;
+    
+    -- Log extension versions for debugging
+    DO $$
+    DECLARE
+      ext_version TEXT;
+    BEGIN
+      SELECT extversion INTO ext_version FROM pg_extension WHERE extname = 'timescaledb';
+      RAISE NOTICE 'TimescaleDB version: %', ext_version;
+    END $$;
+{{- end }}

@@ -1,0 +1,94 @@
+{{- if .Values.minio.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "scaledtest.fullname" . }}-minio
+  labels:
+    {{- include "scaledtest.labels" . | nindent 4 }}
+    app.kubernetes.io/component: minio
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "scaledtest.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: minio
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "scaledtest.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: minio
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        fsGroup: {{ .Values.minio.securityContext.fsGroup | default 1000 }}
+      containers:
+        - name: minio
+          image: "{{ .Values.minio.image.repository }}:{{ .Values.minio.image.tag }}"
+          imagePullPolicy: {{ .Values.minio.image.pullPolicy }}
+          command:
+            - /bin/sh
+            - -c
+            - |
+              mkdir -p /data/{{ .Values.minio.defaultBucket }} && \
+              minio server /data --console-address ":{{ .Values.minio.service.consolePort | default 9001 }}"
+          ports:
+            - name: api
+              containerPort: {{ .Values.minio.service.apiPort | default 9000 }}
+              protocol: TCP
+            - name: console
+              containerPort: {{ .Values.minio.service.consolePort | default 9001 }}
+              protocol: TCP
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.fullname" . }}-minio
+                  key: root-user
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ include "scaledtest.fullname" . }}-minio
+                  key: root-password
+          securityContext:
+            runAsUser: {{ .Values.minio.securityContext.runAsUser | default 1000 }}
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+          livenessProbe:
+            httpGet:
+              path: /minio/health/live
+              port: api
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          readinessProbe:
+            httpGet:
+              path: /minio/health/ready
+              port: api
+            initialDelaySeconds: 10
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.minio.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /data
+      volumes:
+        - name: data
+          {{- if .Values.minio.persistence.enabled }}
+          persistentVolumeClaim:
+            claimName: {{ include "scaledtest.fullname" . }}-minio
+          {{- else }}
+          emptyDir: {}
+          {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

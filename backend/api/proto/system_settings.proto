@@ -1,0 +1,158 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// System Settings service for managing application-wide configuration
+service SystemSettingsService {
+  // GetSettings retrieves all system settings (admin only)
+  rpc GetSettings(GetSettingsRequest) returns (SettingsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/system/settings"
+    };
+  }
+
+  // UpdateSettings updates system settings (admin only)
+  rpc UpdateSettings(UpdateSettingsRequest) returns (SettingsResponse) {
+    option (google.api.http) = {
+      patch: "/api/v1/system/settings"
+      body: "*"
+    };
+  }
+
+  // GetPublicConfig retrieves public configuration (no auth required)
+  rpc GetPublicConfig(GetPublicConfigRequest) returns (PublicConfigResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/config"
+    };
+  }
+}
+
+// GetSettingsRequest is empty - requires admin auth
+message GetSettingsRequest {}
+
+// UpdateSettingsRequest contains settings to update
+message UpdateSettingsRequest {
+  optional AuthSettingsUpdate auth = 1;
+  optional CORSSettingsUpdate cors = 2;
+  optional HTTPSettingsUpdate http = 3;
+  optional LoggingSettingsUpdate logging = 4;
+  optional GeneralSettingsUpdate general = 5;
+  optional RetentionSettingsUpdate retention = 6;
+}
+
+// GetPublicConfigRequest is empty - no auth required
+message GetPublicConfigRequest {}
+
+// SettingsResponse contains all system settings
+message SettingsResponse {
+  AuthSettings auth = 1;
+  CORSSettings cors = 2;
+  HTTPSettings http = 3;
+  LoggingSettings logging = 4;
+  GeneralSettings general = 5;
+  RetentionSettings retention = 6;
+  int32 version = 7;
+}
+
+// PublicConfigResponse contains public application configuration (non-sensitive)
+message PublicConfigResponse {
+  string app_name = 1;
+  string api_version = 2;
+  int32 config_cache_seconds = 3;
+  int32 version = 4;
+}
+
+// AuthSettings contains authentication-related configuration
+message AuthSettings {
+  int32 token_expiry_hours = 1;
+  int32 job_token_expiry_hours = 2;
+  repeated string admin_emails = 3;
+  bool first_user_is_admin = 4;
+}
+
+// AuthSettingsUpdate is a partial update for auth settings
+message AuthSettingsUpdate {
+  optional int32 token_expiry_hours = 1;
+  optional int32 job_token_expiry_hours = 2;
+  repeated string admin_emails = 3;
+  optional bool first_user_is_admin = 4;
+}
+
+// CORSSettings contains CORS configuration
+message CORSSettings {
+  string allowed_origins = 1;
+  string allowed_methods = 2;
+  string allowed_headers = 3;
+  int32 max_age_seconds = 4;
+}
+
+// CORSSettingsUpdate is a partial update for CORS settings
+message CORSSettingsUpdate {
+  optional string allowed_origins = 1;
+  optional string allowed_methods = 2;
+  optional string allowed_headers = 3;
+  optional int32 max_age_seconds = 4;
+}
+
+// HTTPSettings contains HTTP server configuration
+message HTTPSettings {
+  int32 read_timeout_seconds = 1;
+  int32 write_timeout_seconds = 2;
+  int32 idle_timeout_seconds = 3;
+}
+
+// HTTPSettingsUpdate is a partial update for HTTP settings
+message HTTPSettingsUpdate {
+  optional int32 read_timeout_seconds = 1;
+  optional int32 write_timeout_seconds = 2;
+  optional int32 idle_timeout_seconds = 3;
+}
+
+// LoggingSettings contains logging configuration
+message LoggingSettings {
+  string level = 1;
+  string format = 2;
+}
+
+// LoggingSettingsUpdate is a partial update for logging settings
+message LoggingSettingsUpdate {
+  optional string level = 1;
+  optional string format = 2;
+}
+
+// GeneralSettings contains general application settings
+message GeneralSettings {
+  string app_name = 1;
+  string api_version = 2;
+  int32 config_cache_seconds = 3;
+}
+
+// GeneralSettingsUpdate is a partial update for general settings
+message GeneralSettingsUpdate {
+  optional string app_name = 1;
+  optional string api_version = 2;
+  optional int32 config_cache_seconds = 3;
+}
+
+// RetentionSettings contains data retention configuration
+message RetentionSettings {
+  int32 artifact_retention_days = 1;
+  int32 test_result_retention_days = 2;
+  int32 log_retention_days = 3;
+  bool cleanup_enabled = 4;
+  int32 cleanup_hour_utc = 5;
+}
+
+// RetentionSettingsUpdate is a partial update for retention settings
+message RetentionSettingsUpdate {
+  optional int32 artifact_retention_days = 1;
+  optional int32 test_result_retention_days = 2;
+  optional int32 log_retention_days = 3;
+  optional bool cleanup_enabled = 4;
+  optional int32 cleanup_hour_utc = 5;
+}

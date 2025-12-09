@@ -1,0 +1,20 @@
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: scaledtest-artifacts
+  namespace: scaledtest
+  labels:
+    app: scaledtest
+    component: storage
+spec:
+  accessModes:
+    - ReadWriteMany # Required for parallel test pods to write artifacts
+  resources:
+    requests:
+      storage: 100Gi
+  # Uncomment and set your storage class name
+  # Must support ReadWriteMany (e.g., NFS, CephFS, AWS EFS, Azure Files)
+  # storageClassName: nfs-client
+  # storageClassName: cephfs
+  # storageClassName: efs-sc
+  # storageClassName: azurefile

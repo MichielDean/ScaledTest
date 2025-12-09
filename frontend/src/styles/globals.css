@@ -1,0 +1,112 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 36 39% 95%;
+    --foreground: 30 60% 9%;
+
+    --card: 36 39% 98%;
+    --card-foreground: 30 60% 9%;
+
+    --popover: 36 39% 98%;
+    --popover-foreground: 30 60% 9%;
+
+    --primary: 32 69% 33%;
+    --primary-foreground: 0 0% 100%;
+
+    --secondary: 30 60% 9%;
+    --secondary-foreground: 36 39% 98%;
+
+    --muted: 36 20% 92%;
+    --muted-foreground: 30 30% 35%;
+
+    --accent: 32 69% 72%;
+    --accent-foreground: 30 60% 9%;
+
+    --destructive: 0 84% 32%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 20% 82%;
+    --input: 30 20% 82%;
+    --ring: 32 69% 51%;
+
+    --radius: 0.5rem;
+
+    --sidebar-background: 0 0% 98%;
+
+    --sidebar-foreground: 240 5.3% 26.1%;
+
+    --sidebar-primary: 240 5.9% 10%;
+
+    --sidebar-primary-foreground: 0 0% 98%;
+
+    --sidebar-accent: 240 4.8% 95.9%;
+
+    --sidebar-accent-foreground: 240 5.9% 10%;
+
+    --sidebar-border: 220 13% 91%;
+
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+
+  .dark {
+    --background: 30 60% 9%;
+    --foreground: 36 39% 95%;
+
+    --card: 30 50% 12%;
+    --card-foreground: 36 39% 95%;
+
+    --popover: 30 50% 12%;
+    --popover-foreground: 36 39% 95%;
+
+    --primary: 32 69% 60%;
+    --primary-foreground: 30 60% 9%;
+
+    --secondary: 36 39% 95%;
+    --secondary-foreground: 30 60% 9%;
+
+    --muted: 30 30% 18%;
+    --muted-foreground: 36 20% 65%;
+
+    --accent: 32 50% 29%;
+    --accent-foreground: 36 39% 95%;
+
+    --destructive: 0 62% 45%;
+    --destructive-foreground: 0 0% 98%;
+
+    --border: 30 30% 18%;
+    --input: 30 30% 18%;
+    --ring: 32 69% 51%;
+    --sidebar-background: 240 5.9% 10%;
+    --sidebar-foreground: 240 4.8% 95.9%;
+    --sidebar-primary: 224.3 76.3% 48%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 240 3.7% 15.9%;
+    --sidebar-accent-foreground: 240 4.8% 95.9%;
+    --sidebar-border: 240 3.7% 15.9%;
+    --sidebar-ring: 217.2 91.2% 59.8%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+/* Override Sonner rich colors for error toasts to meet WCAG AA contrast */
+[data-sonner-toast][data-type="error"][data-rich-colors="true"] {
+  background: hsl(0 84% 95%) !important;
+  border-color: hsl(0 84% 32%) !important;
+  color: hsl(0 84% 25%) !important;
+}
+
+[data-sonner-toast][data-type="error"][data-rich-colors="true"] [data-title],
+[data-sonner-toast][data-type="error"][data-rich-colors="true"] [data-description] {
+  color: hsl(0 84% 25%) !important;
+}

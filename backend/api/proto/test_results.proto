@@ -1,0 +1,151 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// Test Results service for managing test execution data
+service TestResultService {
+  // Upload test results
+  rpc UploadTestResults(UploadTestResultsRequest) returns (UploadTestResultsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-results"
+      body: "*"
+    };
+  }
+
+  // Upsert test results by run ID (create or update)
+  rpc UpsertTestResultsByRunID(UpsertTestResultsByRunIDRequest) returns (UploadTestResultsResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/test-results/upsert"
+      body: "*"
+    };
+  }
+
+  // Get test results by ID
+  rpc GetTestResults(GetTestResultsRequest) returns (TestResultsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-results/{result_id}"
+    };
+  }
+
+  // List test results
+  rpc ListTestResults(ListTestResultsRequest) returns (ListTestResultsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-results"
+    };
+  }
+
+  // Get test statistics
+  rpc GetTestStatistics(GetTestStatisticsRequest) returns (TestStatisticsResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/test-statistics"
+    };
+  }
+
+  // Stream test results (real-time updates)
+  rpc StreamTestResults(StreamTestResultsRequest) returns (stream TestResultsResponse);
+}
+
+message UploadTestResultsRequest {
+  string branch = 1;
+  string commit_sha = 2;
+  TestSummary summary = 3;
+  repeated TestCase tests = 4;
+  map<string, string> environment = 5;
+}
+
+message TestSummary {
+  int32 total = 1;
+  int32 passed = 2;
+  int32 failed = 3;
+  int32 skipped = 4;
+  int32 pending = 5;
+  int64 duration_ms = 6;
+}
+
+message TestCase {
+  string name = 1;
+  string suite = 2;
+  string status = 3;
+  int64 duration_ms = 4;
+  optional string error_message = 5;
+  optional string stack_trace = 6;
+  repeated string tags = 7;
+  google.protobuf.Timestamp started_at = 8;
+}
+
+message UploadTestResultsResponse {
+  string result_id = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message GetTestResultsRequest {
+  string result_id = 1;
+}
+
+message TestResultsResponse {
+  string id = 1;
+  string uploaded_by = 2;
+  string branch = 3;
+  string commit_sha = 4;
+  TestSummary summary = 5;
+  repeated TestCase tests = 6;
+  map<string, string> environment = 7;
+  google.protobuf.Timestamp created_at = 8;
+}
+
+message ListTestResultsRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string branch = 3;
+  optional google.protobuf.Timestamp start_date = 4;
+  optional google.protobuf.Timestamp end_date = 5;
+}
+
+message ListTestResultsResponse {
+  repeated TestResultsResponse results = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message GetTestStatisticsRequest {
+  optional string branch = 1;
+  optional int32 days = 2;
+}
+
+message TestStatisticsResponse {
+  int32 total_runs = 1;
+  int32 total_tests = 2;
+  double pass_rate = 3;
+  int64 avg_duration_ms = 4;
+  repeated DailyStats daily_stats = 5;
+  repeated string flaky_tests = 6;
+}
+
+message DailyStats {
+  string date = 1;
+  int32 runs = 2;
+  int32 passed = 3;
+  int32 failed = 4;
+  int64 avg_duration_ms = 5;
+}
+
+message StreamTestResultsRequest {
+  // No filters needed, stream all results for authenticated user
+}
+
+// Upsert request - uses test_run_id as the key for create or update
+message UpsertTestResultsByRunIDRequest {
+  string test_run_id = 1;  // Key for upsert operation
+  string branch = 2;
+  string commit_sha = 3;
+  TestSummary summary = 4;
+  repeated TestCase tests = 5;
+  map<string, string> environment = 6;
+}

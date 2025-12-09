@@ -1,0 +1,65 @@
+# =============================================================================
+# OpenShift-Specific Values
+# =============================================================================
+# Use this values file when deploying to OpenShift 4.14+
+#
+# Install with:
+#   helm install scaledtest ./deploy/helm/scaledtest \
+#     -f ./deploy/helm/scaledtest/values-openshift.yaml \
+#     -n scaledtest --create-namespace
+# =============================================================================
+
+# Use OpenShift Route instead of Kubernetes Ingress
+ingress:
+  enabled: false
+
+route:
+  enabled: true
+  host: ""
+  termination: edge
+  insecureEdgeTerminationPolicy: Redirect
+
+# =============================================================================
+# Database Configuration - OpenShift
+# =============================================================================
+database:
+  enabled: true
+
+  # OpenShift uses arbitrary UIDs (restricted-v2 SCC)
+  # Set to null to allow OpenShift to assign UIDs from namespace range
+  securityContext:
+    fsGroup: null
+    runAsUser: null
+
+  persistence:
+    storageClass: ""
+
+# =============================================================================
+# MinIO Configuration - OpenShift
+# =============================================================================
+minio:
+  enabled: true
+
+  securityContext:
+    fsGroup: null
+    runAsUser: null
+
+  persistence:
+    enabled: true
+    storageClass: ""
+
+# =============================================================================
+# Backend Security Context - OpenShift
+# =============================================================================
+podSecurityContext:
+  fsGroup: null
+
+securityContext:
+  runAsUser: null
+  runAsNonRoot: true
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  seccompProfile:
+    type: RuntimeDefault

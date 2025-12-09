@@ -1,0 +1,174 @@
+# ScaledTest Helm Chart - Development Values
+# Use with: helm install scaledtest ./deploy/helm/scaledtest -f ./deploy/helm/scaledtest/values-dev.yaml
+
+# -- Number of backend replicas (1 for local dev)
+replicaCount: 1
+
+# =============================================================================
+# Backend Configuration - Development
+# =============================================================================
+backend:
+  image:
+    repository: localhost:5001/scaledtest-backend
+    pullPolicy: Always
+    tag: dev
+
+  service:
+    type: NodePort
+    port: 8080
+    grpcPort: 9090
+    nodePort: 30080
+    grpcNodePort: 30090
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 64Mi
+
+  env:
+    LOG_LEVEL: debug
+    ENVIRONMENT: development
+
+# =============================================================================
+# Frontend Configuration - Development
+# =============================================================================
+frontend:
+  image:
+    repository: localhost:5001/scaledtest-frontend
+    pullPolicy: Always
+    tag: dev
+
+  service:
+    type: NodePort
+    port: 80
+    nodePort: 30173
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 128Mi
+    requests:
+      cpu: 25m
+      memory: 32Mi
+
+# =============================================================================
+# Database Configuration - Development
+# =============================================================================
+database:
+  enabled: true
+
+  image:
+    repository: timescale/timescaledb-ha
+    tag: pg17
+    pullPolicy: IfNotPresent
+
+  auth:
+    username: scaledtest
+    password: ""
+    database: scaledtest
+
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  resources:
+    limits:
+      cpu: 500m
+      memory: 512Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  persistence:
+    size: 5Gi
+    storageClass: ""
+
+# =============================================================================
+# MinIO Configuration - Development
+# =============================================================================
+minio:
+  enabled: true
+
+  image:
+    repository: minio/minio
+    tag: RELEASE.2024-11-07T00-52-20Z
+    pullPolicy: IfNotPresent
+
+  auth:
+    rootUser: scaledtest
+    rootPassword: ""
+
+  defaultBucket: artifacts
+
+  service:
+    type: NodePort
+    apiPort: 9000
+    consolePort: 9001
+    apiNodePort: 30900
+    consoleNodePort: 30901
+
+  securityContext:
+    fsGroup: 1000
+    runAsUser: 1000
+
+  resources:
+    limits:
+      cpu: 250m
+      memory: 256Mi
+    requests:
+      cpu: 50m
+      memory: 128Mi
+
+  persistence:
+    enabled: true
+    size: 10Gi
+    storageClass: ""
+
+# =============================================================================
+# Ingress - Disabled for local development (use NodePort)
+# =============================================================================
+ingress:
+  enabled: false
+
+# =============================================================================
+# RBAC - Enable for test job execution
+# =============================================================================
+rbac:
+  create: true
+  serviceAccountName: scaledtest-job-runner
+
+# =============================================================================
+# Secrets - Development
+# =============================================================================
+secrets:
+  create: true
+  jwtSecret: ""
+  existingSecret: ""
+
+# =============================================================================
+# Service Account
+# =============================================================================
+serviceAccount:
+  create: true
+  annotations: {}
+  name: ""
+
+# =============================================================================
+# Health Checks - Faster for development
+# =============================================================================
+livenessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 10
+  periodSeconds: 5
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: http
+  initialDelaySeconds: 5
+  periodSeconds: 3

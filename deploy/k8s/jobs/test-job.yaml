@@ -1,0 +1,92 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: __JOB_NAME__
+  namespace: __NAMESPACE__
+  labels:
+    app: scaledtest
+    job-type: test-execution
+spec:
+  completionMode: Indexed
+  completions: __COMPLETIONS__
+  parallelism: __PARALLELISM__
+  backoffLimit: 0
+  activeDeadlineSeconds: 3600
+  ttlSecondsAfterFinished: 3600  # Clean up job 1 hour after completion
+  template:
+    metadata:
+      labels:
+        app: scaledtest
+        job-name: __JOB_NAME__
+    spec:
+      serviceAccountName: scaledtest-job-runner
+      restartPolicy: Never
+      containers:
+        - name: test-runner
+          image: __RUNNER_IMAGE__
+          imagePullPolicy: IfNotPresent
+          command:
+            - /bin/bash
+            - -c
+            - |
+              set -e
+              echo "=== Test Runner Starting ==="
+              echo "JOB_COMPLETION_INDEX=$JOB_COMPLETION_INDEX"
+              echo "API_URL=$API_URL"
+              echo "BASE_URL=$BASE_URL"
+              
+              # Parse JSON array - test IDs are passed as JSON array
+              TEST_IDS='__TEST_IDS_JSON__'
+              
+              # Remove outer brackets and quotes, split by comma
+              TEST_IDS_CLEAN=$(echo "$TEST_IDS" | sed 's/^\[//; s/\]$//; s/"//g')
+              
+              # Convert to array
+              IFS=',' read -ra TEST_ARRAY <<< "$TEST_IDS_CLEAN"
+              
+              echo "Total tests in array: ${#TEST_ARRAY[@]}"
+              
+              # Get test ID at our index
+              export TEST_ID="${TEST_ARRAY[$JOB_COMPLETION_INDEX]}"
+
+              if [ -z "$TEST_ID" ]; then
+                echo "ERROR: Could not find test for index $JOB_COMPLETION_INDEX"
+                echo "Available indices: 0 to $((${#TEST_ARRAY[@]} - 1))"
+                exit 1
+              fi
+              
+              echo "Running test $JOB_COMPLETION_INDEX: $TEST_ID"
+              exec /scripts/run-test.sh
+          env:
+            - name: TEST_RUN_ID
+              value: "__TEST_RUN_ID__"
+            - name: BASE_URL
+              value: "__BASE_URL__"
+            - name: API_URL
+              value: "__API_URL__"
+            - name: API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: scaledtest-api-token
+                  key: token
+            - name: TEST_RESULTS_DIR
+              value: "/test-results"
+            - name: ARTIFACTS_DIR
+              value: "/artifacts"
+            - name: ARTIFACT_PATH
+              value: "/artifacts"
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "256Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          volumeMounts:
+            - name: artifacts
+              mountPath: /artifacts
+              subPath: __JOB_UUID__
+      volumes:
+        - name: artifacts
+          persistentVolumeClaim:
+            claimName: scaledtest-artifacts

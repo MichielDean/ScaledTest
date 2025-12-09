@@ -1,0 +1,19 @@
+apiVersion: v2
+name: scaledtest
+description: A Helm chart for ScaledTest - Kubernetes-native test execution platform
+type: application
+version: 0.3.0
+appVersion: "1.0.0"
+keywords:
+  - testing
+  - kubernetes
+  - test-automation
+  - playwright
+  - jest
+  - timescaledb
+  - postgresql
+home: https://github.com/your-org/scaledtest
+sources:
+  - https://github.com/your-org/scaledtest
+maintainers:
+  - name: ScaledTest Team

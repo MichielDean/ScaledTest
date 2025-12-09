@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+package api.v1;
+
+option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
+
+import "google/api/annotations.proto";
+import "google/protobuf/timestamp.proto";
+
+// User service for managing user profiles and preferences
+service UserService {
+  // Get user profile by ID
+  rpc GetUserProfile(GetUserProfileRequest) returns (UserProfileResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users/{user_id}"
+    };
+  }
+
+  // Update user profile
+  rpc UpdateUserProfile(UpdateUserProfileRequest) returns (UserProfileResponse) {
+    option (google.api.http) = {
+      put: "/api/v1/users/{user_id}"
+      body: "*"
+    };
+  }
+
+  // List users (admin only)
+  rpc ListUsers(ListUsersRequest) returns (ListUsersResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/users"
+    };
+  }
+}
+
+message GetUserProfileRequest {
+  string user_id = 1;
+}
+
+message UpdateUserProfileRequest {
+  string user_id = 1;
+  optional string name = 2;
+  optional string avatar_url = 3;
+  map<string, string> preferences = 4;
+}
+
+message UserProfileResponse {
+  string id = 1;
+  string email = 2;
+  string name = 3;
+  string avatar_url = 4;
+  string role = 5;
+  map<string, string> preferences = 6;
+  google.protobuf.Timestamp created_at = 7;
+  google.protobuf.Timestamp updated_at = 8;
+}
+
+message ListUsersRequest {
+  int32 page = 1;
+  int32 page_size = 2;
+  optional string search = 3;
+  optional string role_filter = 4;
+}
+
+message ListUsersResponse {
+  repeated UserProfileResponse users = 1;
+  int32 total_count = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}

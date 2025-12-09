@@ -1,0 +1,24 @@
+with-expecter: true
+mockname: "Mock{{.InterfaceName}}"
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+outpkg: mocks
+dir: "internal/mocks"
+packages:
+  github.com/MichielDean/ScaledTest/backend/internal/repository:
+    interfaces:
+      UserRepository:
+      ProjectRepository:
+      ClusterRepository:
+  github.com/MichielDean/ScaledTest/backend/internal/services:
+    interfaces:
+      UserManager:
+      ProjectManager:
+      SettingsManager:
+      ClusterManager:
+      TestResultManager:
+      TestImageManager:
+      RegistryManager:
+      TestExecutor:
+  github.com/MichielDean/ScaledTest/backend/internal/database:
+    interfaces:
+      Executor:
