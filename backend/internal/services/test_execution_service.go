@@ -17,19 +17,21 @@ import (
 
 // TestExecutionService handles test job execution
 type TestExecutionService struct {
-	db          *pgxpool.Pool
-	logger      *zap.Logger
-	imageSvc    *TestImageService
-	registrySvc *ContainerRegistryService
-	clusterSvc  *K8sClusterService
-	jwtSecret   string
+	db           *pgxpool.Pool
+	logger       *zap.Logger
+	imageSvc     *TestImageService
+	registrySvc  *ContainerRegistryService
+	clusterSvc   *K8sClusterService
+	discoverySvc *TestDiscoveryService
+	jwtSecret    string
 }
 
 // TestJob represents a test execution job
 type TestJob struct {
 	ID                 string
 	ProjectID          string
-	TestImageID        string
+	TestImageID        *string
+	DirectImageRef     *string
 	TestRunID          *string
 	K8sJobName         string
 	K8sNamespace       string
@@ -56,14 +58,15 @@ type JobStats struct {
 }
 
 // NewTestExecutionService creates a new test execution service
-func NewTestExecutionService(db *pgxpool.Pool, logger *zap.Logger, imageSvc *TestImageService, registrySvc *ContainerRegistryService, clusterSvc *K8sClusterService, jwtSecret string) *TestExecutionService {
+func NewTestExecutionService(db *pgxpool.Pool, logger *zap.Logger, imageSvc *TestImageService, registrySvc *ContainerRegistryService, clusterSvc *K8sClusterService, discoverySvc *TestDiscoveryService, jwtSecret string) *TestExecutionService {
 	return &TestExecutionService{
-		db:          db,
-		logger:      logger,
-		imageSvc:    imageSvc,
-		registrySvc: registrySvc,
-		clusterSvc:  clusterSvc,
-		jwtSecret:   jwtSecret,
+		db:           db,
+		logger:       logger,
+		imageSvc:     imageSvc,
+		registrySvc:  registrySvc,
+		clusterSvc:   clusterSvc,
+		discoverySvc: discoverySvc,
+		jwtSecret:    jwtSecret,
 	}
 }
 
@@ -141,7 +144,7 @@ func (s *TestExecutionService) TriggerTestJobs(ctx context.Context, projectID, t
 
 	// Store job records in database BEFORE creating K8s job to get job IDs
 	testRunID := uuid.New().String()
-	jobIDs := s.storeJobRecords(ctx, testIDs, projectID, testImageID, testRunID, k8sJobName, jobManager.GetNamespace(), environment, userID)
+	jobIDs := s.storeJobRecords(ctx, testIDs, projectID, testImageID, "", testRunID, k8sJobName, jobManager.GetNamespace(), environment, userID)
 
 	// Create K8s job with job IDs mapped to test IDs by index
 	jobConfig := s.buildJobConfig(&jobConfigParams{
@@ -173,6 +176,93 @@ func (s *TestExecutionService) TriggerTestJobs(ctx context.Context, projectID, t
 	return k8sJobName, testRunID, jobIDs, nil
 }
 
+// TriggerTestJobsDirect triggers test execution using a direct image reference
+// This bypasses the registry/image registration system for simpler workflows
+// Returns (k8sJobName, testRunID, jobIDs, error)
+func (s *TestExecutionService) TriggerTestJobsDirect(ctx context.Context, projectID, imageRef, userID string, testIDs []string, baseUrlOverride string, environment map[string]string, resources *k8s.ResourceRequirements, timeoutSeconds, parallelism int32) (string, string, []string, error) {
+	// Get JobManager and cluster config for this project
+	jobManager, cluster, err := s.getJobManagerForProject(ctx, projectID)
+	if err != nil {
+		s.logger.Error("Failed to get JobManager for project", zap.Error(err), zap.String("project_id", projectID))
+		return "", "", nil, err
+	}
+
+	// Validate runner config exists
+	if cluster.RunnerConfig == nil {
+		return "", "", nil, fmt.Errorf("cluster %s has no runner configuration - please configure platform API URL and other settings", cluster.Name)
+	}
+
+	// If no test IDs provided, run discovery to find all tests
+	if len(testIDs) == 0 {
+		s.logger.Info("No test IDs provided, running discovery to find all tests", zap.String("image", imageRef))
+		
+		discoveryJobName := fmt.Sprintf("test-discovery-%s", uuid.New().String()[:8])
+		discoveredIDs, err := jobManager.RunDiscoveryJob(ctx, k8s.DiscoveryConfig{
+			Name:               discoveryJobName,
+			Image:              imageRef,
+			ServiceAccountName: cluster.RunnerConfig.ServiceAccountName,
+			TimeoutSeconds:     120, // 2 minute timeout for discovery
+		})
+		if err != nil {
+			return "", "", nil, fmt.Errorf("failed to discover tests from image: %w", err)
+		}
+		
+		s.logger.Info("Test discovery completed", 
+			zap.String("image", imageRef), 
+			zap.Int("test_count", len(discoveredIDs)))
+		
+		testIDs = discoveredIDs
+	}
+
+	// Generate K8s job name and auth token
+	k8sJobName := fmt.Sprintf("test-execution-%s", uuid.New().String()[:8])
+	jobAuthToken, err := s.generateJobAuthToken(projectID, "", k8sJobName)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to generate job auth token: %w", err)
+	}
+
+	// Apply defaults from cluster config
+	resources, timeoutSeconds, parallelism = s.applyJobDefaults(cluster.RunnerConfig, resources, timeoutSeconds, parallelism, len(testIDs))
+
+	// Build environment variables
+	mergedEnv := s.buildJobEnvironment(cluster.RunnerConfig, environment, baseUrlOverride)
+
+	// Store job records in database BEFORE creating K8s job to get job IDs
+	testRunID := uuid.New().String()
+	// For direct image runs, pass the image ref instead of testImageID
+	jobIDs := s.storeJobRecords(ctx, testIDs, projectID, "", imageRef, testRunID, k8sJobName, jobManager.GetNamespace(), environment, userID)
+
+	// Create K8s job - no image pull secret for direct image references
+	// (assumes image is accessible without auth, e.g., local registry or pre-pulled)
+	jobConfig := s.buildJobConfig(&jobConfigParams{
+		k8sJobName:          k8sJobName,
+		imageRef:            imageRef,
+		testIDs:             testIDs,
+		jobIDs:              jobIDs,
+		imagePullSecretName: "", // No pull secret for direct images
+		runnerConfig:        cluster.RunnerConfig,
+		environment:         mergedEnv,
+		resources:           *resources,
+		timeoutSeconds:      timeoutSeconds,
+		parallelism:         parallelism,
+		jobAuthToken:        jobAuthToken,
+		testRunID:           testRunID,
+	})
+
+	_, err = jobManager.CreateIndexedJob(ctx, jobConfig)
+	if err != nil {
+		return "", "", nil, fmt.Errorf("failed to create K8s job: %w", err)
+	}
+
+	s.logger.Info("Test jobs triggered (direct image)",
+		zap.String("k8s_job_name", k8sJobName),
+		zap.String("test_run_id", testRunID),
+		zap.String("image", imageRef),
+		zap.Int("test_count", len(testIDs)),
+		zap.Int32("parallelism", parallelism))
+
+	return k8sJobName, testRunID, jobIDs, nil
+}
 // prepareImageDetails gets image and registry information, creates pull secret if needed
 func (s *TestExecutionService) prepareImageDetails(ctx context.Context, jobManager *k8s.JobManager, testImageID string) (string, string, error) {
 	testImage, err := s.imageSvc.GetTestImage(ctx, testImageID)
@@ -320,11 +410,24 @@ type jobConfigParams struct {
 }
 
 // storeJobRecords stores job records in the database
-func (s *TestExecutionService) storeJobRecords(ctx context.Context, testIDs []string, projectID, testImageID, testRunID, k8sJobName, k8sNamespace string, environment map[string]string, userID string) []string {
+// testImageID can be empty for direct image references, in which case directImageRef should be provided
+func (s *TestExecutionService) storeJobRecords(ctx context.Context, testIDs []string, projectID, testImageID, directImageRef, testRunID, k8sJobName, k8sNamespace string, environment map[string]string, userID string) []string {
 	now := time.Now()
 	jobIDs := make([]string, len(testIDs))
 	configBytes, _ := json.Marshal(environment)
 	configJSON := string(configBytes)
+
+	// Convert empty testImageID to nil for database
+	var testImageIDPtr *string
+	if testImageID != "" {
+		testImageIDPtr = &testImageID
+	}
+
+	// Convert empty directImageRef to nil for database
+	var directImageRefPtr *string
+	if directImageRef != "" {
+		directImageRefPtr = &directImageRef
+	}
 
 	for i, testID := range testIDs {
 		jobID := uuid.New().String()
@@ -332,12 +435,12 @@ func (s *TestExecutionService) storeJobRecords(ctx context.Context, testIDs []st
 
 		query := `
 			INSERT INTO public.test_jobs
-			(id, project_id, test_image_id, test_run_id, k8s_job_name, k8s_namespace, test_id, job_index, status, config, created_by, created_at)
-			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10::jsonb, $11, $12)
+			(id, project_id, test_image_id, direct_image_ref, test_run_id, k8s_job_name, k8s_namespace, test_id, job_index, status, config, created_by, created_at)
+			VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11::jsonb, $12, $13)
 		`
 
 		_, err := s.db.Exec(ctx, query,
-			jobID, projectID, testImageID, testRunID, k8sJobName, k8sNamespace, testID, i, "pending", configJSON, userID, now,
+			jobID, projectID, testImageIDPtr, directImageRefPtr, testRunID, k8sJobName, k8sNamespace, testID, i, "pending", configJSON, userID, now,
 		)
 
 		if err != nil {
@@ -456,7 +559,7 @@ func (s *TestExecutionService) ListTestJobs(ctx context.Context, projectID strin
 
 	// Get jobs
 	query := fmt.Sprintf(`
-		SELECT id, project_id, test_image_id, k8s_job_name, k8s_namespace,
+		SELECT id, project_id, test_image_id, direct_image_ref, k8s_job_name, k8s_namespace,
 		       test_id, job_index, status, exit_code, pod_name,
 		       started_at, completed_at, duration_ms, created_at
 		FROM public.test_jobs
@@ -481,6 +584,7 @@ func (s *TestExecutionService) ListTestJobs(ctx context.Context, projectID strin
 			&job.ID,
 			&job.ProjectID,
 			&job.TestImageID,
+			&job.DirectImageRef,
 			&job.K8sJobName,
 			&job.K8sNamespace,
 			&job.TestID,

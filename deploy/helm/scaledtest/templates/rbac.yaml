@@ -52,7 +52,12 @@ roleRef:
   kind: Role
   name: {{ include "scaledtest.fullname" . }}-job-manager
 subjects:
+  # Job runner service account (for test runner pods)
   - kind: ServiceAccount
     name: {{ .Values.rbac.serviceAccountName }}
+    namespace: {{ .Release.Namespace }}
+  # Backend service account (for creating jobs)
+  - kind: ServiceAccount
+    name: {{ include "scaledtest.serviceAccountName" . }}
     namespace: {{ .Release.Namespace }}
 {{- end }}

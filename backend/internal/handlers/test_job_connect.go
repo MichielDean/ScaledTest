@@ -534,8 +534,14 @@ func (h *TestJobServiceHandler) TriggerTestJobs(
 		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
 	}
 
-	if req.Msg.ProjectId == "" || req.Msg.TestImageId == "" {
-		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("project_id and test_image_id are required"))
+	// Validate: must provide either test_image_id OR image (direct reference)
+	hasImageID := req.Msg.TestImageId != nil && *req.Msg.TestImageId != ""
+	hasDirectImage := req.Msg.Image != nil && *req.Msg.Image != ""
+	if req.Msg.ProjectId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("project_id is required"))
+	}
+	if !hasImageID && !hasDirectImage {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("either test_image_id or image must be provided"))
 	}
 
 	var resources *k8s.ResourceRequirements
@@ -552,27 +558,51 @@ func (h *TestJobServiceHandler) TriggerTestJobs(
 	timeout := req.Msg.GetTimeoutSeconds()
 	parallelism := req.Msg.GetParallelism()
 
-	k8sJobName, testRunID, jobIDs, err := h.config.TestExecutionService.TriggerTestJobs(
-		ctx,
-		req.Msg.ProjectId,
-		req.Msg.TestImageId,
-		userID,
-		req.Msg.TestIds,
-		"", // baseUrlOverride - not in proto
-		req.Msg.Environment,
-		resources,
-		timeout,
-		parallelism,
-	)
+	var k8sJobName, testRunID string
+	var jobIDs []string
+	var err error
+
+	if hasDirectImage {
+		// Use direct image reference - simpler path without registry lookup
+		k8sJobName, testRunID, jobIDs, err = h.config.TestExecutionService.TriggerTestJobsDirect(
+			ctx,
+			req.Msg.ProjectId,
+			*req.Msg.Image,
+			userID,
+			req.Msg.TestIds,
+			"", // baseUrlOverride - not in proto
+			req.Msg.Environment,
+			resources,
+			timeout,
+			parallelism,
+		)
+	} else {
+		// Use registered test image (original path)
+		k8sJobName, testRunID, jobIDs, err = h.config.TestExecutionService.TriggerTestJobs(
+			ctx,
+			req.Msg.ProjectId,
+			*req.Msg.TestImageId,
+			userID,
+			req.Msg.TestIds,
+			"", // baseUrlOverride - not in proto
+			req.Msg.Environment,
+			resources,
+			timeout,
+			parallelism,
+		)
+	}
 	if err != nil {
 		h.logger.Error("Failed to trigger test jobs", zap.Error(err))
 		return nil, connect.NewError(connect.CodeInternal, errors.New("failed to trigger test jobs"))
 	}
 
 	return connect.NewResponse(&pb.TriggerTestJobsResponse{
+		Success:    true,
+		Message:    "Test jobs triggered successfully",
 		K8SJobName: k8sJobName,
 		TestRunId:  testRunID,
 		JobIds:     jobIDs,
+		TotalTests: int32(len(req.Msg.TestIds)),
 	}), nil
 }
 
@@ -926,10 +956,15 @@ func testImageToProto(img *services.TestImage) *pb.TestImageResponse {
 
 // testJobToProto converts a services.TestJob to a TestJobResponse proto.
 func testJobToProto(j *services.TestJob) *pb.TestJobResponse {
+	var testImageID string
+	if j.TestImageID != nil {
+		testImageID = *j.TestImageID
+	}
+
 	resp := &pb.TestJobResponse{
 		Id:           j.ID,
 		ProjectId:    j.ProjectID,
-		TestImageId:  j.TestImageID,
+		TestImageId:  testImageID,
 		K8SJobName:   j.K8sJobName,
 		K8SNamespace: j.K8sNamespace,
 		TestId:       j.TestID,

@@ -18,12 +18,63 @@ fi
 
 if [ -z "$TEST_ID" ]; then
   echo "ERROR: TEST_ID not set"
+  echo ""
+  echo "This usually means test discovery failed or returned no tests."
+  echo "Troubleshooting steps:"
+  echo "  1. Check discovery job logs: kubectl logs job/<discovery-job-name> -n <namespace>"
+  echo "  2. Run discovery locally: docker run -e DISCOVERY_MODE=true <test-image>"
+  echo "  3. Verify tests exist in the tests/ui directory"
   exit 1
 fi
 
+# Fail fast if TEST_ID is "all" - this indicates a configuration error
+# ScaledTest is designed to run exactly one test per pod for proper parallelization
+if [ "$TEST_ID" = "all" ]; then
+  echo "ERROR: TEST_ID='all' is not supported"
+  echo ""
+  echo "ScaledTest runs one test per pod for proper parallelization."
+  echo "If you see this error, test discovery likely failed."
+  echo ""
+  echo "Troubleshooting steps:"
+  echo "  1. Check discovery job logs for errors"
+  echo "  2. Ensure your test image outputs CTRF JSON between markers:"
+  echo "     === CTRF JSON START ==="
+  echo "     <json content>"
+  echo "     === CTRF JSON END ==="
+  echo "  3. Run discovery locally to debug: docker run -e DISCOVERY_MODE=true <your-image>"
+  exit 1
+fi
+
+echo "=== Test Execution Environment ==="
 echo "Job Index: $JOB_COMPLETION_INDEX"
 echo "Test ID: $TEST_ID"
 echo "Base URL: ${BASE_URL:-http://localhost:5173}"
+echo "API URL: ${API_URL:-not set}"
+echo "Test Run ID: ${TEST_RUN_ID:-not set}"
+
+# Connectivity preflight check
+echo ""
+echo "=== Connectivity Check ==="
+EFFECTIVE_BASE_URL="${BASE_URL:-http://localhost:5173}"
+echo "Checking connectivity to: $EFFECTIVE_BASE_URL"
+
+# Try to reach the base URL (frontend)
+if curl -sf --connect-timeout 5 --max-time 10 "$EFFECTIVE_BASE_URL" > /dev/null 2>&1; then
+  echo "✓ Frontend is reachable at $EFFECTIVE_BASE_URL"
+else
+  echo "⚠ WARNING: Cannot reach frontend at $EFFECTIVE_BASE_URL"
+  echo "  DNS lookup:"
+  # Extract hostname from URL
+  FRONTEND_HOST=$(echo "$EFFECTIVE_BASE_URL" | sed -e 's|^[^/]*//||' -e 's|[:/].*||')
+  nslookup "$FRONTEND_HOST" 2>&1 | head -10 || echo "  (nslookup not available)"
+  echo ""
+  echo "  This may cause tests to fail. Common issues:"
+  echo "    - Frontend service not deployed"
+  echo "    - Wrong BASE_URL configured in cluster runner settings"
+  echo "    - DNS resolution issues in the cluster"
+  echo ""
+  echo "  Continuing anyway - Playwright will report connection errors..."
+fi
 
 # Set output paths
 TEST_RESULTS_DIR="${TEST_RESULTS_DIR:-/test-results}"
@@ -32,6 +83,9 @@ CTRF_OUTPUT="${TEST_RESULTS_DIR}/ctrf-report.json"
 
 # Create output directories
 mkdir -p "$TEST_RESULTS_DIR" "$ARTIFACTS_DIR"
+
+echo ""
+echo "=== Running Test ==="
 
 # Parse test ID to get file and test name
 # Format: tests_ui_login_test_ts_Login_should_display_login_form

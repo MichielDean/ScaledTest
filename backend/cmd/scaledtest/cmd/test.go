@@ -29,10 +29,15 @@ var testRunCmd = &cobra.Command{
 	Short: "Run tests",
 	Long: `Trigger test execution for a test image.
 
+You can specify the image in two ways:
+  1. Using a registered test image: --image-id <uuid>
+  2. Using a direct image reference: --image <registry/image:tag>
+
 Example:
   scaledtest test run --project-id <id> --image-id <id>
+  scaledtest test run --project-id <id> --image localhost:5001/my-tests:dev
   scaledtest test run --project-id <id> --image-id <id> --parallelism 4
-  scaledtest test run --project-id <id> --image-id <id> --wait`,
+  scaledtest test run --project-id <id> --image my-tests:latest --wait`,
 	RunE: runTestRun,
 }
 
@@ -145,6 +150,7 @@ var testResultsStreamCmd = &cobra.Command{
 var (
 	testProjectID   string
 	testImageID     string
+	testImage       string // Direct image reference (alternative to image-id)
 	testParallelism int32
 	testTimeout     int32
 	testWait        bool
@@ -180,12 +186,13 @@ func init() {
 
 	// Run command flags
 	testRunCmd.Flags().StringVar(&testProjectID, "project-id", "", "Project ID (required)")
-	testRunCmd.Flags().StringVar(&testImageID, "image-id", "", "Test image ID (required)")
+	testRunCmd.Flags().StringVar(&testImageID, "image-id", "", "Test image ID (registered image)")
+	testRunCmd.Flags().StringVar(&testImage, "image", "", "Direct image reference (e.g., localhost:5001/my-tests:dev)")
 	testRunCmd.Flags().Int32Var(&testParallelism, "parallelism", 0, "Number of parallel test pods")
 	testRunCmd.Flags().Int32Var(&testTimeout, "timeout", 0, "Timeout in seconds")
 	testRunCmd.Flags().BoolVar(&testWait, "wait", false, "Wait for tests to complete")
 	testRunCmd.MarkFlagRequired("project-id")
-	testRunCmd.MarkFlagRequired("image-id")
+	// Note: either image-id or image is required, validated in runTestRun
 
 	// Status command flags
 	testStatusCmd.Flags().StringVar(&testProjectID, "project-id", "", "Project ID (required)")
@@ -219,6 +226,14 @@ func init() {
 func runTestRun(cmd *cobra.Command, args []string) error {
 	out := output.New()
 
+	// Validate: must provide either image-id or image
+	if testImageID == "" && testImage == "" {
+		return fmt.Errorf("either --image-id or --image must be provided")
+	}
+	if testImageID != "" && testImage != "" {
+		return fmt.Errorf("cannot use both --image-id and --image; choose one")
+	}
+
 	c, err := client.New()
 	if err != nil {
 		return err
@@ -229,8 +244,14 @@ func runTestRun(cmd *cobra.Command, args []string) error {
 	defer cancel()
 
 	req := &proto.TriggerTestJobsRequest{
-		ProjectId:   testProjectID,
-		TestImageId: testImageID,
+		ProjectId: testProjectID,
+	}
+	// Set either test_image_id or direct image reference
+	if testImageID != "" {
+		req.TestImageId = &testImageID
+	}
+	if testImage != "" {
+		req.Image = &testImage
 	}
 	if testParallelism > 0 {
 		req.Parallelism = &testParallelism
@@ -259,6 +280,9 @@ func runTestRun(cmd *cobra.Command, args []string) error {
 			"total_tests":  resp.TotalTests,
 			"test_run_id":  resp.TestRunId,
 		})
+		if !resp.Success {
+			return fmt.Errorf("failed to trigger tests: %s", resp.Message)
+		}
 	} else {
 		if resp.Success {
 			out.Success("Tests triggered successfully")
@@ -267,7 +291,7 @@ func runTestRun(cmd *cobra.Command, args []string) error {
 			out.Detail("Test Run ID", resp.TestRunId)
 		} else {
 			out.Error("Failed to trigger tests: %s", resp.Message)
-			return nil
+			return fmt.Errorf("failed to trigger tests: %s", resp.Message)
 		}
 	}
 
@@ -347,6 +371,9 @@ func waitForTestCompletion(c *client.Client, projectID, jobName string, out *out
 			"failed":    statusCounts["failed"],
 			"cancelled": statusCounts["cancelled"],
 		})
+		if statusCounts["failed"] > 0 {
+			return fmt.Errorf("%d tests failed", statusCounts["failed"])
+		}
 	} else {
 		out.Info("")
 		if statusCounts["failed"] > 0 {
@@ -355,6 +382,7 @@ func waitForTestCompletion(c *client.Client, projectID, jobName string, out *out
 				color.GreenString("%d", statusCounts["succeeded"]),
 				red("%d", statusCounts["failed"]),
 			)
+			return fmt.Errorf("%d tests failed", statusCounts["failed"])
 		} else {
 			out.Success("All %d tests passed", statusCounts["succeeded"])
 		}

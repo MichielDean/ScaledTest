@@ -57,6 +57,7 @@ frontend/playwright-report/*
 
 # Test log files
 logs/
+*.log
 
 # Playwright MCP artifacts
 .playwright-mcp/

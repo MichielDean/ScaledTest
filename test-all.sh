@@ -1,76 +1,102 @@
 #!/bin/bash
-# ScaledTest - Complete Test Runner using CLI
-# This script uses the scaledtest CLI for all API operations
+# ScaledTest - Test Runner Script
+# ================================
+# This script runs ScaledTest's tests by deploying to Kubernetes and using
+# the platform itself to execute frontend tests (dogfooding).
+#
+# Flow:
+#   1. Build and push Docker images to local registry
+#   2. Deploy ScaledTest to Kind cluster via Helm
+#   3. Run Go backend tests locally
+#   4. Use CLI to trigger frontend Playwright tests in K8s
 #
 # Prerequisites:
-#   1. Docker Desktop with Kubernetes enabled
-#   2. Helm 3.x installed with dependencies downloaded
-#   3. kubectl configured for your cluster
-#   4. scaledtest CLI built (make build-cli in backend/)
+#   - Docker Desktop running
+#   - kind CLI installed
+#   - helm CLI installed
+#   - kubectl CLI installed
+#
+# NodePort services are exposed directly via Kind extraPortMappings:
+#   - Backend HTTP:  http://localhost:30080
+#   - Backend gRPC:  localhost:30090
+#   - Frontend:      http://localhost:30173
+#   - MinIO API:     http://localhost:30900
+#   - MinIO Console: http://localhost:30901
 
 set -e
 
-# Ignore SIGPIPE - WSL/Windows terminal interop can cause premature script termination
-trap '' SIGPIPE 2>/dev/null || true
-
-# WSL/Windows interop: Add common Windows tool paths to PATH when running in WSL
-if [[ -d "/mnt/c/Users" ]]; then
-    WINGET_LINKS="/mnt/c/Users/$(whoami)/AppData/Local/Microsoft/WinGet/Links"
-    if [[ -d "$WINGET_LINKS" ]]; then
-        export PATH="$PATH:$WINGET_LINKS"
+# WSL PATH setup - Windows tools are accessible via /mnt/c/
+if [[ "$OSTYPE" == "linux-gnu" && -d "/mnt/c/Users" ]]; then
+    # Extract Windows username from current working directory
+    # PWD is like /mnt/c/Users/username/...
+    CURRENT_PATH="$PWD"
+    if [[ "$CURRENT_PATH" == /mnt/c/Users/* ]]; then
+        # Remove prefix "/mnt/c/Users/"
+        REMAINDER="${CURRENT_PATH#/mnt/c/Users/}"
+        # Get first path component (username)
+        WIN_USER="${REMAINDER%%/*}"
+        WINGET_PATH="/mnt/c/Users/$WIN_USER/AppData/Local/Microsoft/WinGet/Links"
+        if [[ -d "$WINGET_PATH" ]]; then
+            export PATH="$PATH:$WINGET_PATH"
+        fi
     fi
-    for user_dir in /mnt/c/Users/*/AppData/Local/Microsoft/WinGet/Links; do
-        if [[ -d "$user_dir" && ":$PATH:" != *":$user_dir:"* ]]; then
-            export PATH="$PATH:$user_dir"
+fi
+
+# Git Bash PATH setup
+if [[ "$OSTYPE" == "msys" || "$OSTYPE" == "cygwin" ]]; then
+    WIN_USER=$(basename "$HOME")
+    WINGET_PATHS=(
+        "/c/Users/$WIN_USER/AppData/Local/Microsoft/WinGet/Links"
+        "/c/ProgramData/chocolatey/bin"
+    )
+    for p in "${WINGET_PATHS[@]}"; do
+        if [[ -d "$p" ]]; then
+            export PATH="$PATH:$p"
         fi
     done
 fi
 
-# WSL/Windows interop: Create wrapper functions
-command_exists() {
-    command -v "$1" &> /dev/null || command -v "$1.exe" &> /dev/null
-}
-
-get_command() {
-    if command -v "$1" &> /dev/null; then
-        echo "$1"
-    elif command -v "$1.exe" &> /dev/null; then
-        echo "$1.exe"
+# Cross-platform command wrappers for Windows .exe compatibility
+# These ensure the script works in WSL, Git Bash, and native Linux
+# WSL needs special handling: prefer .exe versions to connect to Windows clusters
+find_cmd() {
+    local cmd="$1"
+    # In WSL working with Windows clusters, prefer .exe versions
+    if [[ "$OSTYPE" == "linux-gnu" && -d "/mnt/c/Users" ]]; then
+        if command -v "${cmd}.exe" &>/dev/null; then
+            echo "${cmd}.exe"
+            return
+        fi
+    fi
+    # Default: prefer non-.exe, fall back to .exe
+    if command -v "$cmd" &>/dev/null; then
+        echo "$cmd"
+    elif command -v "${cmd}.exe" &>/dev/null; then
+        echo "${cmd}.exe"
     else
-        echo "$1"
+        echo "$cmd" # Fall back to original (will fail with useful error)
     fi
 }
 
-# Set command aliases
-KUBECTL_CMD=$(get_command kubectl)
-HELM_CMD=$(get_command helm)
-DOCKER_CMD=$(get_command docker)
-KIND_CMD=$(get_command kind)
+# Set up command aliases
+KIND_CMD=$(find_cmd kind)
+HELM_CMD=$(find_cmd helm)
+KUBECTL_CMD=$(find_cmd kubectl)
 
-# Ensure kubectl uses the correct kubeconfig
-# In WSL, we need to use the Windows kubeconfig location
-if [[ -d "/mnt/c/Users" ]]; then
-    # Running in WSL, use Windows kubeconfig
-    WINDOWS_USER=$(cmd.exe /c "echo %USERNAME%" 2>/dev/null | tr -d '\r' || whoami)
-    WINDOWS_KUBECONFIG="/mnt/c/Users/${WINDOWS_USER}/.kube/config"
-    if [[ -f "$WINDOWS_KUBECONFIG" ]]; then
-        export KUBECONFIG="$WINDOWS_KUBECONFIG"
-    fi
-fi
-
-# Configuration (can be overridden with environment variables)
-NAMESPACE="${NAMESPACE:-default}"
+# Configuration
+NAMESPACE="${NAMESPACE:-scaledtest}"
 RELEASE_NAME="${RELEASE_NAME:-scaledtest}"
-API_URL="${SCALEDTEST_API_URL:-http://localhost:8080}"
-GRPC_URL="${SCALEDTEST_GRPC_URL:-localhost:9090}"
+LOCAL_REGISTRY="${LOCAL_REGISTRY:-localhost:5001}"
 ADMIN_EMAIL="${ADMIN_EMAIL:-admin@scaledtest.com}"
 ADMIN_PASSWORD="${ADMIN_PASSWORD:-Admin123!}"
 PROJECT_NAME="${PROJECT_NAME:-ScaledTest}"
-REGISTRY_URL="${REGISTRY_URL:-localhost:5001}"
-REGISTRY_NAME="${REGISTRY_NAME:-local-registry}"
-LOCAL_REGISTRY="${LOCAL_REGISTRY:-localhost:5001}"
 
-# Test configuration
+# API URLs (NodePort - no port-forward needed)
+# Backend uses Connect-RPC which serves HTTP and gRPC on the same port
+export SCALEDTEST_API_URL="${SCALEDTEST_API_URL:-http://localhost:30080}"
+export SCALEDTEST_GRPC_URL="${SCALEDTEST_GRPC_URL:-localhost:30080}"
+
+# Skip flags
 SKIP_BUILD="${SKIP_BUILD:-false}"
 SKIP_DEPLOY="${SKIP_DEPLOY:-false}"
 SKIP_BACKEND_TESTS="${SKIP_BACKEND_TESTS:-false}"
@@ -79,540 +105,518 @@ SKIP_FRONTEND_TESTS="${SKIP_FRONTEND_TESTS:-false}"
 # Exit codes
 BACKEND_EXIT_CODE=0
 FRONTEND_EXIT_CODE=0
-K8S_EXIT_CODE=0
 
-# Find scaledtest CLI
-find_cli() {
-    if command -v scaledtest &> /dev/null; then
-        SCALEDTEST_CMD="scaledtest"
-    elif [[ -f "./backend/bin/scaledtest" ]]; then
-        SCALEDTEST_CMD="./backend/bin/scaledtest"
-    elif [[ -f "./backend/bin/scaledtest.exe" ]]; then
-        SCALEDTEST_CMD="./backend/bin/scaledtest.exe"
-    else
-        echo "Error: scaledtest CLI not found"
-        echo "Build it with: cd backend && make build-cli"
-        exit 1
-    fi
-    export SCALEDTEST_GRPC_URL="$GRPC_URL"
-    export SCALEDTEST_API_URL="$API_URL"
-}
+# Colors for output
+RED='\033[0;31m'
+GREEN='\033[0;32m'
+YELLOW='\033[1;33m'
+BLUE='\033[0;34m'
+NC='\033[0m' # No Color
 
-# Print functions
+# ============================================================================
+# Helper Functions
+# ============================================================================
+
 print_header() {
     echo ""
-    echo "═══════════════════════════════════════════════════════════"
-    echo "     ScaledTest - Kubernetes/Helm Test Execution           "
-    echo "═══════════════════════════════════════════════════════════"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}     ScaledTest - Kubernetes Test Runner                    ${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
     echo ""
 }
 
 print_section() {
     echo ""
-    echo "▶ $1"
+    echo -e "${YELLOW}▶ $1${NC}"
     echo "───────────────────────────────────────────────────────────"
 }
 
-# Check prerequisites
+print_success() {
+    echo -e "  ${GREEN}✓${NC} $1"
+}
+
+print_error() {
+    echo -e "  ${RED}✗${NC} $1"
+}
+
+print_warning() {
+    echo -e "  ${YELLOW}⚠${NC} $1"
+}
+
+# Find scaledtest CLI
+find_cli() {
+    # Prefer .exe on Windows/WSL for better compatibility
+    if [[ -f "./backend/bin/scaledtest.exe" ]]; then
+        CLI_BIN="./backend/bin/scaledtest.exe"
+    elif [[ -f "./backend/bin/scaledtest" ]]; then
+        CLI_BIN="./backend/bin/scaledtest"
+    elif command -v scaledtest &> /dev/null; then
+        CLI_BIN="scaledtest"
+    else
+        echo "Building scaledtest CLI..."
+        (cd backend && go build -o bin/scaledtest ./cmd/scaledtest)
+        CLI_BIN="./backend/bin/scaledtest"
+    fi
+    
+    # Create CLI wrapper function that includes connection flags
+    # This ensures the gRPC URL is always passed, regardless of environment variable propagation
+    CLI="$CLI_BIN --grpc-url=${SCALEDTEST_GRPC_URL}"
+    print_success "CLI: $CLI_BIN"
+}
+
+# ============================================================================
+# Prerequisites Check
+# ============================================================================
+
+# Check for command, supporting Windows .exe extensions
+check_cmd() {
+    local cmd="$1"
+    command -v "$cmd" &> /dev/null || command -v "${cmd}.exe" &> /dev/null
+}
+
 check_prerequisites() {
     print_section "Checking Prerequisites"
     
     local missing=()
     
-    if ! command_exists kubectl; then
-        missing+=("kubectl")
-    else
-        echo "  ✓ kubectl found"
-    fi
+    check_cmd docker && print_success "docker" || missing+=("docker")
+    check_cmd kind && print_success "kind" || missing+=("kind")
+    check_cmd kubectl && print_success "kubectl" || missing+=("kubectl")
+    check_cmd helm && print_success "helm" || missing+=("helm")
     
-    if ! command_exists helm; then
-        missing+=("helm")
-    else
-        echo "  ✓ helm found"
-    fi
-    
-    if ! command_exists docker; then
-        missing+=("docker")
-    else
-        echo "  ✓ docker found"
-    fi
-    
-    if ! command_exists kind; then
-        missing+=("kind")
-    else
-        echo "  ✓ kind found"
+    if [ ${#missing[@]} -ne 0 ]; then
+        print_error "Missing required tools: ${missing[*]}"
+        exit 1
     fi
     
     find_cli
-    echo "  ✓ scaledtest CLI found: $SCALEDTEST_CMD"
-    
-    # Check if Kind cluster exists and is running
-    if command_exists kind; then
-        local clusters=$($KIND_CMD get clusters 2>/dev/null || echo "")
-        if [[ ! "$clusters" =~ "scaledtest" ]]; then
-            echo "  ⚠ Kind cluster 'scaledtest' not found"
-            echo "  Creating cluster..."
-            $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml || true
-            sleep 5
-        fi
-        
-        # Check if cluster containers are running
-        local running_containers=$($DOCKER_CMD ps -q --filter "label=io.x-k8s.kind.cluster=scaledtest" 2>/dev/null | wc -l)
-        if [ "$running_containers" -eq 0 ]; then
-            echo "  ⚠ Kind cluster containers not running, attempting to start..."
-            # Delete and recreate if stopped (Kind doesn't support stop/start well)
-            $KIND_CMD delete cluster --name scaledtest 2>/dev/null || true
-            $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml
-            sleep 5
-        fi
-    fi
-    
-    if ! $KUBECTL_CMD cluster-info &> /dev/null; then
-        echo "  ✗ Cannot connect to Kubernetes cluster"
-        echo "  Cluster status:"
-        $KUBECTL_CMD cluster-info 2>&1 || true
-        echo ""
-        echo "  Try running: $KIND_CMD create cluster --name scaledtest --config ./deploy/k8s/kind-cluster-config.yaml"
-        exit 1
-    fi
-    echo "  ✓ Kubernetes cluster accessible"
-    
-    if [[ ! -d "./deploy/helm/scaledtest/charts" ]]; then
-        echo "  ⚠ Helm dependencies not downloaded, running helm dep update..."
-        (cd deploy/helm/scaledtest && $HELM_CMD dependency update)
-    fi
-    echo "  ✓ Helm dependencies available"
-    
-    if [ ${#missing[@]} -ne 0 ]; then
-        echo ""
-        echo "Missing required tools: ${missing[*]}"
-        exit 1
-    fi
 }
 
-# Build Docker images
+# ============================================================================
+# Infrastructure Setup
+# ============================================================================
+
+ensure_kind_cluster() {
+    print_section "Ensuring Kind Cluster"
+    
+    if ! $KIND_CMD get clusters 2>/dev/null | grep -q "^scaledtest$"; then
+        echo "Creating Kind cluster..."
+        $KIND_CMD create cluster --config ./deploy/k8s/kind-cluster-config.yaml
+        # Connect registry to kind network
+        docker network connect kind scaledtest-registry 2>/dev/null || true
+    fi
+    print_success "Kind cluster 'scaledtest' exists"
+    
+    # Set kubectl context
+    $KUBECTL_CMD config use-context kind-scaledtest &>/dev/null || true
+    
+    # Verify connection
+    if ! $KUBECTL_CMD cluster-info &>/dev/null; then
+        print_error "Cannot connect to cluster"
+        exit 1
+    fi
+    print_success "kubectl connected"
+}
+
+ensure_registry() {
+    print_section "Ensuring Local Registry"
+    
+    if ! docker ps --filter "name=scaledtest-registry" --format "{{.Names}}" | grep -q "scaledtest-registry"; then
+        echo "Starting local registry..."
+        docker run -d --restart=always -p 5001:5000 --network kind --name scaledtest-registry registry:2 || true
+        sleep 2
+    fi
+    print_success "Registry running at ${LOCAL_REGISTRY}"
+}
+
+# ============================================================================
+# Build Images
+# ============================================================================
+
 build_images() {
     if [[ "$SKIP_BUILD" == "true" ]]; then
-        echo "  Skipping build (SKIP_BUILD=true)"
+        print_warning "Skipping build (SKIP_BUILD=true)"
         return 0
     fi
     
     print_section "Building Docker Images"
     
-    # Ensure local registry is running
-    if ! $DOCKER_CMD ps --filter "name=scaledtest-registry" --format "{{.Names}}" | grep -q "scaledtest-registry"; then
-        echo "Starting local registry on port 5001..."
-        $DOCKER_CMD run -d --restart=always -p 5001:5000 --name scaledtest-registry registry:2 || true
-        sleep 2
-    fi
-    echo "  ✓ Local registry running at ${LOCAL_REGISTRY}"
+    echo "Building backend..."
+    docker build -t ${LOCAL_REGISTRY}/scaledtest-backend:dev ./backend -f ./backend/Dockerfile
+    docker push ${LOCAL_REGISTRY}/scaledtest-backend:dev
+    print_success "Backend image pushed"
     
-    echo "Building backend image..."
-    $DOCKER_CMD build -t ${LOCAL_REGISTRY}/scaledtest-backend:dev ./backend -f ./backend/Dockerfile
-    echo "  ✓ Backend image built"
+    echo "Building frontend..."
+    docker build -t ${LOCAL_REGISTRY}/scaledtest-frontend:dev ./frontend -f ./frontend/Dockerfile
+    docker push ${LOCAL_REGISTRY}/scaledtest-frontend:dev
+    print_success "Frontend image pushed"
     
-    $DOCKER_CMD push ${LOCAL_REGISTRY}/scaledtest-backend:dev
-    echo "  ✓ Backend image pushed"
-    
-    echo "Building frontend image..."
-    $DOCKER_CMD build -t ${LOCAL_REGISTRY}/scaledtest-frontend:dev ./frontend -f ./frontend/Dockerfile
-    echo "  ✓ Frontend image built"
-    
-    $DOCKER_CMD push ${LOCAL_REGISTRY}/scaledtest-frontend:dev
-    echo "  ✓ Frontend image pushed"
-    
-    echo "Building Playwright runner image..."
-    $DOCKER_CMD build -t ${LOCAL_REGISTRY}/scaledtest-playwright:dev ./containers/base-images/playwright-runner
-    echo "  ✓ Playwright runner image built"
-    
-    $DOCKER_CMD push ${LOCAL_REGISTRY}/scaledtest-playwright:dev
-    echo "  ✓ Playwright runner image pushed"
+    echo "Building Playwright test runner..."
+    docker build -t ${LOCAL_REGISTRY}/scaledtest-playwright:dev . -f ./containers/base-images/playwright-runner/Dockerfile
+    docker push ${LOCAL_REGISTRY}/scaledtest-playwright:dev
+    print_success "Playwright runner image pushed"
 }
 
-# Deploy services using Helm
+# ============================================================================
+# Deploy Services
+# ============================================================================
+
 deploy_services() {
     if [[ "$SKIP_DEPLOY" == "true" ]]; then
-        echo "  Skipping deploy (SKIP_DEPLOY=true)"
+        print_warning "Skipping deploy (SKIP_DEPLOY=true)"
         return 0
     fi
     
     print_section "Deploying Services with Helm"
     
-    local helm_args=(
-        -n "$NAMESPACE"
-        -f ./deploy/helm/scaledtest/values-dev.yaml
-        --set postgresql.primary.initdb.scriptsConfigMap=${RELEASE_NAME}-postgres-initdb
-        --timeout 5m
-        --wait
-    )
+    # Ensure namespace exists
+    $KUBECTL_CMD create namespace "$NAMESPACE" 2>/dev/null || true
     
-    if $HELM_CMD status "$RELEASE_NAME" -n "$NAMESPACE" &> /dev/null; then
-        echo "Upgrading existing release..."
-        $HELM_CMD upgrade "$RELEASE_NAME" ./deploy/helm/scaledtest "${helm_args[@]}"
-    else
-        echo "Installing new release..."
-        $HELM_CMD install "$RELEASE_NAME" ./deploy/helm/scaledtest "${helm_args[@]}" --create-namespace
+    # Update helm dependencies only if missing
+    if [[ ! -d "./deploy/helm/scaledtest/charts" ]]; then
+        echo "Updating Helm dependencies..."
+        (cd deploy/helm/scaledtest && $HELM_CMD dependency update)
     fi
     
-    echo "  ✓ Helm deployment complete"
+    # Deploy or upgrade - don't use --wait here, we'll wait after rollout restart
+    if $HELM_CMD status "$RELEASE_NAME" -n "$NAMESPACE" &>/dev/null; then
+        echo "Upgrading release (this is fast, pods restart separately)..."
+        $HELM_CMD upgrade "$RELEASE_NAME" ./deploy/helm/scaledtest \
+            -n "$NAMESPACE" \
+            -f ./deploy/helm/scaledtest/values-dev.yaml \
+            --timeout 2m
+        
+        # Force restart to pick up new images from registry
+        # imagePullPolicy: Always in dev means new images are pulled
+        echo "Restarting deployments to pick up new images..."
+        $KUBECTL_CMD rollout restart deployment -n "$NAMESPACE" scaledtest-backend scaledtest-frontend 2>/dev/null || true
+    else
+        echo "Installing new release..."
+        $HELM_CMD install "$RELEASE_NAME" ./deploy/helm/scaledtest \
+            -n "$NAMESPACE" \
+            -f ./deploy/helm/scaledtest/values-dev.yaml \
+            --wait --timeout 3m
+    fi
+    
+    print_success "Helm deployment initiated"
 }
 
-# Wait for services to be ready
 wait_for_services() {
     print_section "Waiting for Services"
     
-    echo "Waiting for backend pods..."
-    $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/component=backend -n "$NAMESPACE" --timeout=300s || true
+    # Wait for backend rollout specifically (most important)
+    echo "Waiting for backend rollout..."
+    $KUBECTL_CMD rollout status deployment/scaledtest-backend -n "$NAMESPACE" --timeout=90s || {
+        print_error "Backend rollout failed"
+        $KUBECTL_CMD describe deployment/scaledtest-backend -n "$NAMESPACE" | tail -20
+        exit 1
+    }
     
-    echo "Waiting for frontend pods..."
-    $KUBECTL_CMD wait --for=condition=ready pod -l app.kubernetes.io/component=frontend -n "$NAMESPACE" --timeout=300s || true
+    echo "Waiting for frontend rollout..."
+    $KUBECTL_CMD rollout status deployment/scaledtest-frontend -n "$NAMESPACE" --timeout=60s || true
     
-    echo "  ✓ Services ready"
-}
-
-# Setup port forwards
-setup_port_forwards() {
-    print_section "Setting up Port Forwards"
-    
-    # Kill any existing port forwards
-    pkill -f "kubectl port-forward.*${RELEASE_NAME}" 2>/dev/null || true
-    
-    $KUBECTL_CMD port-forward -n "$NAMESPACE" svc/${RELEASE_NAME}-backend 8080:8080 &
-    BACKEND_PF_PID=$!
-    
-    $KUBECTL_CMD port-forward -n "$NAMESPACE" svc/${RELEASE_NAME}-backend 9090:9090 &
-    GRPC_PF_PID=$!
-    
-    $KUBECTL_CMD port-forward -n "$NAMESPACE" svc/${RELEASE_NAME}-frontend 3000:80 &
-    FRONTEND_PF_PID=$!
-    
-    sleep 3
-    echo "  ✓ Port forwards established"
-    echo "    - Backend HTTP: localhost:8080"
-    echo "    - Backend gRPC: localhost:9090"
-    echo "    - Frontend: localhost:3000"
-}
-
-# Cleanup port forwards on exit
-cleanup() {
-    print_section "Cleanup"
-    
-    echo "Stopping port forwards..."
-    [ -n "${BACKEND_PF_PID:-}" ] && kill $BACKEND_PF_PID 2>/dev/null || true
-    [ -n "${FRONTEND_PF_PID:-}" ] && kill $FRONTEND_PF_PID 2>/dev/null || true
-    [ -n "${GRPC_PF_PID:-}" ] && kill $GRPC_PF_PID 2>/dev/null || true
-    pkill -f "kubectl port-forward.*${RELEASE_NAME}" 2>/dev/null || true
-    
-    echo "✓ Cleanup complete"
-}
-
-trap cleanup EXIT
-
-# Authenticate using CLI
-authenticate() {
-    print_section "Authentication (via CLI)"
-    
-    # Check if already authenticated
-    if $SCALEDTEST_CMD auth status &> /dev/null; then
-        echo "  ✓ Already authenticated"
-        return 0
-    fi
-    
-    # Try to login first
-    echo "Attempting login..."
-    if $SCALEDTEST_CMD auth login --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" 2>/dev/null; then
-        echo "  ✓ Logged in as ${ADMIN_EMAIL}"
-        return 0
-    fi
-    
-    # If login failed, try to register
-    echo "Login failed, attempting signup..."
-    if $SCALEDTEST_CMD auth signup --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" --name "Admin User" 2>/dev/null; then
-        echo "  ✓ Registered and logged in as ${ADMIN_EMAIL}"
-        return 0
-    fi
-    
-    echo "  ✗ Authentication failed"
-    exit 1
-}
-
-# Ensure project exists using CLI
-ensure_project() {
-    print_section "Project Setup (via CLI)"
-    
-    # List projects and check if ours exists
-    local projects=$($SCALEDTEST_CMD project list --json 2>/dev/null || echo "[]")
-    PROJECT_ID=$(echo "$projects" | jq -r ".[] | select(.name == \"${PROJECT_NAME}\") | .id // empty" 2>/dev/null || echo "")
-    
-    if [ -z "$PROJECT_ID" ]; then
-        echo "Creating project: ${PROJECT_NAME}"
-        local result=$($SCALEDTEST_CMD project create --name "$PROJECT_NAME" --description "ScaledTest self-testing project" --json 2>/dev/null)
-        PROJECT_ID=$(echo "$result" | jq -r '.project_id // .id // empty' 2>/dev/null || echo "")
-    fi
-    
-    if [ -z "$PROJECT_ID" ]; then
-        echo "  ⚠ Could not get project ID, continuing anyway"
-    else
-        echo "  ✓ Project: ${PROJECT_NAME} (${PROJECT_ID})"
-    fi
-}
-
-# Ensure registry exists using CLI
-ensure_registry() {
-    print_section "Registry Setup (via CLI)"
-    
-    # List registries and check if ours exists
-    local registries=$($SCALEDTEST_CMD registry list --json 2>/dev/null || echo "[]")
-    REGISTRY_ID=$(echo "$registries" | jq -r ".[] | select(.name == \"${REGISTRY_NAME}\") | .id // empty" 2>/dev/null || echo "")
-    
-    if [ -z "$REGISTRY_ID" ]; then
-        echo "Creating registry: ${REGISTRY_NAME}"
-        local result=$($SCALEDTEST_CMD registry add \
-            --name "$REGISTRY_NAME" \
-            --url "$REGISTRY_URL" \
-            --type "generic" \
-            --auth-type "none" \
-            --json 2>/dev/null)
-        REGISTRY_ID=$(echo "$result" | jq -r '.registry_id // .id // empty' 2>/dev/null || echo "")
-    fi
-    
-    if [ -z "$REGISTRY_ID" ]; then
-        echo "  ⚠ Could not get registry ID, continuing anyway"
-    else
-        echo "  ✓ Registry: ${REGISTRY_NAME} (${REGISTRY_ID})"
-    fi
-}
-
-# Ensure K8s cluster exists and is configured
-ensure_k8s_cluster() {
-    print_section "K8s Cluster Setup (via CLI)"
-    
-    # List clusters and check if one exists
-    local clusters=$($SCALEDTEST_CMD cluster list --json 2>/dev/null || echo "[]")
-    CLUSTER_ID=$(echo "$clusters" | jq -r ".[0].id // empty" 2>/dev/null || echo "")
-    
-    if [ -z "$CLUSTER_ID" ]; then
-        echo "Creating K8s cluster configuration..."
-        # Add cluster using current kubeconfig
-        local result=$($SCALEDTEST_CMD cluster add "local-k8s" \
-            --project-id "$PROJECT_ID" \
-            --auth-type "kubeconfig" \
-            --namespace "$NAMESPACE" \
-            --json 2>/dev/null)
-        CLUSTER_ID=$(echo "$result" | jq -r '.id // empty' 2>/dev/null || echo "")
-        
-        if [ -n "$CLUSTER_ID" ]; then
-            # Set as default cluster
-            $SCALEDTEST_CMD cluster set-default "$CLUSTER_ID" 2>/dev/null || true
-            
-            # Configure runner settings
-            $SCALEDTEST_CMD cluster update-runner "$CLUSTER_ID" \
-                --platform-api-url "$API_URL" \
-                --default-parallelism 2 \
-                --default-timeout 600 \
-                --job-ttl 3600 \
-                --service-account "scaledtest-job-runner" \
-                2>/dev/null || true
-        fi
-    fi
-    
-    if [ -z "$CLUSTER_ID" ]; then
-        echo "  ⚠ Could not get cluster ID, continuing anyway"
-    else
-        echo "  ✓ K8s Cluster configured (${CLUSTER_ID})"
-    fi
-}
-
-# Register test image and discover tests
-register_test_image() {
-    print_section "Test Image Registration (via CLI)"
-    
-    if [ -z "$PROJECT_ID" ] || [ -z "$REGISTRY_ID" ]; then
-        echo "  ⚠ Missing PROJECT_ID or REGISTRY_ID, skipping test image registration"
-        return 0
-    fi
-    
-    echo "Registering Playwright test image..."
-    local result=$($SCALEDTEST_CMD image add scaledtest-playwright \
-        --project-id "$PROJECT_ID" \
-        --registry-id "$REGISTRY_ID" \
-        --tag "dev" \
-        --auto-discover \
-        --json 2>/dev/null)
-    
-    TEST_IMAGE_ID=$(echo "$result" | jq -r '.id // empty' 2>/dev/null || echo "")
-    
-    if [ -z "$TEST_IMAGE_ID" ]; then
-        # Try to get existing image
-        local images=$($SCALEDTEST_CMD image list --project-id "$PROJECT_ID" --json 2>/dev/null || echo "[]")
-        TEST_IMAGE_ID=$(echo "$images" | jq -r ".[] | select(.image_path == \"scaledtest-playwright\") | .id // empty" 2>/dev/null || echo "")
-        
-        if [ -n "$TEST_IMAGE_ID" ]; then
-            echo "Using existing test image (${TEST_IMAGE_ID})"
-            # Force discovery refresh
-            $SCALEDTEST_CMD image discover "$TEST_IMAGE_ID" --force 2>/dev/null || true
-        fi
-    fi
-    
-    if [ -z "$TEST_IMAGE_ID" ]; then
-        echo "  ⚠ Could not register test image"
-        return 1
-    fi
-    
-    echo "  ✓ Test Image: scaledtest-playwright:dev (${TEST_IMAGE_ID})"
-    
-    # Get test count
-    local image_info=$($SCALEDTEST_CMD image get "$TEST_IMAGE_ID" --json 2>/dev/null || echo "{}")
-    local test_count=$(echo "$image_info" | jq -r '.total_test_count // 0' 2>/dev/null || echo "0")
-    echo "  ✓ Discovered ${test_count} tests"
-}
-
-# Run K8s-based tests via platform
-run_k8s_tests() {
-    print_section "K8s Test Execution (via CLI)"
-    
-    if [ -z "$TEST_IMAGE_ID" ]; then
-        echo "  ⚠ No test image registered, skipping K8s tests"
-        K8S_EXIT_CODE=0
-        return 0
-    fi
-    
-    echo "Triggering test execution on K8s..."
-    
-    set +e
-    # Trigger tests - the CLI should have a test run command
-    # For now, we'll check if tests were discovered successfully
-    local image_info=$($SCALEDTEST_CMD image get "$TEST_IMAGE_ID" --json 2>/dev/null || echo "{}")
-    local test_count=$(echo "$image_info" | jq -r '.total_test_count // 0' 2>/dev/null || echo "0")
-    
-    if [ "$test_count" -gt 0 ]; then
-        echo "  ✓ K8s test infrastructure validated ($test_count tests available)"
-        echo "  ℹ Full test execution requires test run command (planned for future CLI version)"
-        K8S_EXIT_CODE=0
-    else
-        echo "  ⚠ No tests discovered in image"
-        K8S_EXIT_CODE=1
-    fi
-    set -e
-}
-
-# Health check using CLI
-health_check() {
-    print_section "Health Check (via CLI)"
-    
+    # Wait for backend health endpoint
     echo "Checking backend health..."
-    if $SCALEDTEST_CMD health check 2>/dev/null; then
-        echo "  ✓ Backend healthy"
+    local retries=20
+    while [ $retries -gt 0 ]; do
+        if curl -s http://localhost:30080/health 2>/dev/null | grep -q "healthy"; then
+            print_success "Backend healthy"
+            break
+        fi
+        echo -n "."
+        sleep 1
+        retries=$((retries - 1))
+    done
+    echo ""
+    
+    if [ $retries -eq 0 ]; then
+        print_error "Backend health check failed"
+        $KUBECTL_CMD logs -n "$NAMESPACE" -l app.kubernetes.io/component=backend --tail=30
+        exit 1
+    fi
+    
+    print_success "All services ready"
+}
+
+# ============================================================================
+# Platform Setup (via CLI)
+# ============================================================================
+
+setup_platform() {
+    print_section "Setting up Platform (via CLI)"
+    
+    # Login or register and capture token
+    echo "Authenticating..."
+    local login_output
+    if login_output=$($CLI auth login --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" -o json 2>&1); then
+        # Extract token from JSON output for subsequent commands
+        # The keyring doesn't work well across WSL/Windows boundary
+        export SCALEDTEST_TOKEN=$(echo "$login_output" | jq -r '.token // empty' 2>/dev/null)
     else
-        echo "  ⚠ Health check failed, but continuing"
+        echo "Creating admin user..."
+        $CLI auth signup --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" --name "Admin User" 2>/dev/null || true
+        if login_output=$($CLI auth login --email "$ADMIN_EMAIL" --password "$ADMIN_PASSWORD" -o json 2>&1); then
+            export SCALEDTEST_TOKEN=$(echo "$login_output" | jq -r '.token // empty' 2>/dev/null)
+        else
+            print_error "Failed to authenticate"
+            exit 1
+        fi
+    fi
+    
+    # Verify we have a token
+    if [ -z "$SCALEDTEST_TOKEN" ]; then
+        print_error "Failed to get authentication token"
+        echo "Login output: $login_output"
+        exit 1
+    fi
+    print_success "Authenticated as $ADMIN_EMAIL"
+    
+    # Get or create project
+    echo "Setting up project: $PROJECT_NAME"
+    local project_json
+    project_json=$($CLI project list -o json 2>/dev/null) || project_json="{}"
+    
+    # Handle both array and object responses (API returns {projects: [...]} or [...])
+    # Try to extract from .projects first, then fall back to direct array
+    PROJECT_ID=$(echo "$project_json" | jq -r "(.projects // .)[] | select(.name == \"$PROJECT_NAME\") | .id // empty" 2>/dev/null | head -1)
+    
+    if [ -z "$PROJECT_ID" ]; then
+        echo "Creating project..."
+        local create_output
+        if create_output=$($CLI project create "$PROJECT_NAME" --description "ScaledTest self-testing" -o json 2>&1); then
+            PROJECT_ID=$(echo "$create_output" | jq -r '.id // .project_id // empty' 2>/dev/null || echo "")
+        else
+            # Project might already exist with different casing, re-check
+            project_json=$($CLI project list -o json 2>/dev/null) || project_json="{}"
+            PROJECT_ID=$(echo "$project_json" | jq -r "(.projects // .)[] | select(.name == \"$PROJECT_NAME\") | .id // empty" 2>/dev/null | head -1)
+        fi
+    fi
+    
+    if [ -z "$PROJECT_ID" ]; then
+        print_error "Could not get or create project"
+        echo "Debug: project list output: $project_json"
+        exit 1
+    fi
+    print_success "Project: $PROJECT_NAME ($PROJECT_ID)"
+    
+    # Configure Kind cluster for the project
+    echo "Configuring K8s cluster..."
+    local clusters
+    clusters=$($CLI cluster list --project-id "$PROJECT_ID" -o json 2>/dev/null) || clusters="{}"
+    
+    # Handle both array and object responses (API returns {clusters: [...]} or [...])
+    CLUSTER_ID=$(echo "$clusters" | jq -r "(.clusters // .)[] | select(.name == \"kind-scaledtest\") | .id // empty" 2>/dev/null | head -1)
+    
+    if [ -z "$CLUSTER_ID" ]; then
+        echo "Adding Kind cluster to project..."
+        # Use in-cluster auth - the backend runs inside Kind and can use its service account
+        local cluster_output
+        if cluster_output=$($CLI cluster add kind-scaledtest \
+            --project-id "$PROJECT_ID" \
+            --namespace "$NAMESPACE" \
+            --auth-type in-cluster \
+            --default \
+            -o json 2>&1); then
+            CLUSTER_ID=$(echo "$cluster_output" | jq -r '.id // empty' 2>/dev/null || echo "")
+        else
+            # Cluster might already exist, re-check
+            clusters=$($CLI cluster list --project-id "$PROJECT_ID" -o json 2>/dev/null) || clusters="{}"
+            CLUSTER_ID=$(echo "$clusters" | jq -r "(.clusters // .)[] | select(.name == \"kind-scaledtest\") | .id // empty" 2>/dev/null | head -1)
+        fi
+    fi
+    
+    if [ -z "$CLUSTER_ID" ]; then
+        print_warning "Could not configure cluster - will try test run anyway"
+    else
+        print_success "K8s cluster: kind-scaledtest ($CLUSTER_ID)"
+        
+        # Configure the runner settings
+        echo "Configuring runner settings..."
+        # Platform API URL should be accessible from within the cluster
+        # Use the K8s service DNS name for in-cluster communication
+        if $CLI cluster update-runner "$CLUSTER_ID" \
+            --platform-api-url "http://scaledtest-backend.${NAMESPACE}.svc.cluster.local:8080" \
+            --default-base-url "http://scaledtest-frontend.${NAMESPACE}.svc.cluster.local:80" \
+            --default-timeout 600 \
+            --default-parallelism 2 \
+            --image-pull-policy "IfNotPresent" \
+            2>/dev/null; then
+            print_success "Runner settings configured"
+        else
+            print_warning "Could not configure runner settings (may already be set)"
+        fi
     fi
 }
 
-# Run backend tests
+# ============================================================================
+# Backend Tests (Local)
+# ============================================================================
+
 run_backend_tests() {
     if [[ "$SKIP_BACKEND_TESTS" == "true" ]]; then
-        echo "  Skipping backend tests (SKIP_BACKEND_TESTS=true)"
+        print_warning "Skipping backend tests (SKIP_BACKEND_TESTS=true)"
         return 0
     fi
     
-    print_section "Backend Tests"
+    print_section "Running Backend Tests (Local)"
     
-    local GO_CMD="go"
-    if ! command -v go &> /dev/null; then
-        if [ -f "/c/Program Files/Go/bin/go.exe" ]; then
-            GO_CMD="/c/Program Files/Go/bin/go"
-        elif [ -f "/c/Go/bin/go.exe" ]; then
-            GO_CMD="/c/Go/bin/go"
-        else
-            echo "⚠ Go not found, skipping backend tests"
-            return 0
-        fi
+    if ! command -v go &>/dev/null; then
+        print_warning "Go not found, skipping backend tests"
+        return 0
     fi
     
-    echo "Running Go tests..."
     pushd backend > /dev/null
-    
     set +e
-    "$GO_CMD" test ./... -v
+    go test ./... -v -short
     BACKEND_EXIT_CODE=$?
     set -e
-    
     popd > /dev/null
     
     if [ $BACKEND_EXIT_CODE -eq 0 ]; then
-        echo "  ✓ Backend tests passed"
+        print_success "Backend tests passed"
     else
-        echo "  ✗ Backend tests failed"
+        print_error "Backend tests failed"
     fi
 }
 
-# Run frontend tests
+# ============================================================================
+# Frontend Tests (via K8s - dogfooding)
+# ============================================================================
+
 run_frontend_tests() {
     if [[ "$SKIP_FRONTEND_TESTS" == "true" ]]; then
-        echo "  Skipping frontend tests (SKIP_FRONTEND_TESTS=true)"
+        print_warning "Skipping frontend tests (SKIP_FRONTEND_TESTS=true)"
         return 0
     fi
     
-    print_section "Frontend Tests"
+    print_section "Running Frontend Tests (via K8s)"
     
-    if ! command -v npm &> /dev/null; then
-        echo "⚠ npm not found, skipping frontend tests"
-        return 0
+    # Verify we have a project ID
+    if [ -z "$PROJECT_ID" ]; then
+        print_error "No project ID - cannot run tests"
+        FRONTEND_EXIT_CODE=1
+        return 1
     fi
     
-    echo "Running frontend tests..."
-    pushd frontend > /dev/null
+    # Use direct image reference - no registry setup needed
+    # The image should be accessible to the Kind cluster via:
+    # 1. Local registry (localhost:5001)
+    # 2. Pre-loaded with `kind load docker-image`
+    local test_image="${LOCAL_REGISTRY}/scaledtest-playwright:dev"
     
+    echo "Running tests with image: $test_image"
+    echo "Project ID: $PROJECT_ID"
+    
+    # Trigger test run in K8s using direct image reference (no --wait, streaming not implemented)
     set +e
-    npm test
-    FRONTEND_EXIT_CODE=$?
+    local test_output
+    test_output=$($CLI test run \
+        --project-id "$PROJECT_ID" \
+        --image "$test_image" \
+        --parallelism 3 \
+        --timeout 600 \
+        -o json 2>&1)
+    local trigger_exit=$?
     set -e
     
-    popd > /dev/null
-    
-    if [ $FRONTEND_EXIT_CODE -eq 0 ]; then
-        echo "  ✓ Frontend tests passed"
-    else
-        echo "  ✗ Frontend tests failed"
+    if [ $trigger_exit -ne 0 ]; then
+        print_error "Failed to trigger tests"
+        echo "$test_output"
+        FRONTEND_EXIT_CODE=1
+        return 1
     fi
-}
-
-# Test stats using CLI
-show_test_stats() {
-    print_section "Test Statistics (via CLI)"
     
-    echo "Fetching test statistics..."
-    $SCALEDTEST_CMD test stats --days 7 2>/dev/null || echo "  (no statistics available)"
+    local job_name=$(echo "$test_output" | jq -r '.k8s_job_name // empty')
+    if [ -z "$job_name" ]; then
+        print_error "No job name in response"
+        echo "$test_output"
+        FRONTEND_EXIT_CODE=1
+        return 1
+    fi
+    
+    print_success "Tests triggered successfully"
+    echo "  Job Name: $job_name"
+    
+    # Poll for test completion (streaming not implemented yet)
+    echo "Waiting for test completion..."
+    local max_wait=600  # 10 minutes
+    local elapsed=0
+    local poll_interval=10
+    
+    while [ $elapsed -lt $max_wait ]; do
+        local status_output
+        status_output=$($CLI test status "$job_name" --project-id "$PROJECT_ID" -o json 2>/dev/null) || true
+        
+        local pending=$(echo "$status_output" | jq -r '.stats.pending // 0')
+        local running=$(echo "$status_output" | jq -r '.stats.running // 0')
+        local succeeded=$(echo "$status_output" | jq -r '.stats.succeeded // 0')
+        local failed=$(echo "$status_output" | jq -r '.stats.failed // 0')
+        
+        echo "  Status: pending=$pending, running=$running, succeeded=$succeeded, failed=$failed"
+        
+        # All tests done?
+        if [ "$pending" = "0" ] && [ "$running" = "0" ] && [ $((succeeded + failed)) -gt 0 ]; then
+            if [ "$failed" = "0" ]; then
+                FRONTEND_EXIT_CODE=0
+                print_success "All $succeeded tests passed"
+            else
+                FRONTEND_EXIT_CODE=1
+                print_error "$failed tests failed, $succeeded passed"
+            fi
+            return $FRONTEND_EXIT_CODE
+        fi
+        
+        sleep $poll_interval
+        elapsed=$((elapsed + poll_interval))
+    done
+    
+    print_error "Test execution timed out after ${max_wait}s"
+    FRONTEND_EXIT_CODE=1
 }
 
-# Print summary
+# ============================================================================
+# Summary
+# ============================================================================
+
 print_summary() {
     echo ""
-    echo "═══════════════════════════════════════════════════════════"
-    echo "                      Summary                              "
-    echo "═══════════════════════════════════════════════════════════"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
+    echo -e "${BLUE}                        Summary                             ${NC}"
+    echo -e "${BLUE}═══════════════════════════════════════════════════════════${NC}"
     echo ""
     echo "  Namespace: ${NAMESPACE}"
-    echo "  Release: ${RELEASE_NAME}"
-    echo "  Project: ${PROJECT_NAME} (${PROJECT_ID:-not created})"
-    echo "  Registry: ${REGISTRY_NAME} (${REGISTRY_ID:-not created})"
-    echo "  Cluster: ${CLUSTER_ID:-not configured}"
-    echo "  Test Image: ${TEST_IMAGE_ID:-not registered}"
-    echo ""
-    echo "  K8s Tests:       $([ ${K8S_EXIT_CODE:-0} -eq 0 ] && echo '✓ Validated' || echo '✗ Failed')"
-    echo "  Backend Tests:   $([ ${BACKEND_EXIT_CODE:-0} -eq 0 ] && echo '✓ Passed' || echo '✗ Failed')"
-    echo "  Frontend Tests:  $([ ${FRONTEND_EXIT_CODE:-0} -eq 0 ] && echo '✓ Passed' || echo '✗ Failed')"
+    echo "  Release:   ${RELEASE_NAME}"
+    echo "  API URL:   ${SCALEDTEST_API_URL}"
     echo ""
     
-    local total_exit=$((${K8S_EXIT_CODE:-0} + ${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
-    if [ $total_exit -eq 0 ]; then
-        echo "✓ All tests completed successfully"
+    if [ $BACKEND_EXIT_CODE -eq 0 ]; then
+        echo -e "  Backend Tests:  ${GREEN}✓ Passed${NC}"
     else
-        echo "✗ Some tests failed"
+        echo -e "  Backend Tests:  ${RED}✗ Failed${NC}"
     fi
+    
+    if [ $FRONTEND_EXIT_CODE -eq 0 ]; then
+        echo -e "  Frontend Tests: ${GREEN}✓ Passed${NC}"
+    else
+        echo -e "  Frontend Tests: ${RED}✗ Failed${NC}"
+    fi
+    
+    echo ""
+    
+    local total_exit=$((BACKEND_EXIT_CODE + FRONTEND_EXIT_CODE))
+    if [ $total_exit -eq 0 ]; then
+        echo -e "${GREEN}✓ All tests completed successfully${NC}"
+    else
+        echo -e "${RED}✗ Some tests failed${NC}"
+    fi
+    
+    return $total_exit
 }
 
-# Show help
+# ============================================================================
+# Help
+# ============================================================================
+
 show_help() {
     cat << EOF
 ScaledTest Test Runner
@@ -623,38 +627,36 @@ Options:
     --help              Show this help message
     --skip-build        Skip building Docker images
     --skip-deploy       Skip Helm deployment
-    --skip-backend      Skip backend tests
-    --skip-frontend     Skip frontend tests
-    --namespace NAME    Kubernetes namespace (default: default)
-    --release NAME      Helm release name (default: scaledtest)
+    --skip-backend      Skip backend (Go) tests
+    --skip-frontend     Skip frontend (Playwright) tests
 
 Environment Variables:
-    NAMESPACE           Kubernetes namespace
-    RELEASE_NAME        Helm release name
+    NAMESPACE           Kubernetes namespace (default: scaledtest)
+    RELEASE_NAME        Helm release name (default: scaledtest)
+    LOCAL_REGISTRY      Local registry URL (default: localhost:5001)
     ADMIN_EMAIL         Admin user email
     ADMIN_PASSWORD      Admin user password
-    PROJECT_NAME        Project name to create/use
-    REGISTRY_URL        Container registry URL
-    REGISTRY_NAME       Container registry name
-    LOCAL_REGISTRY      Local registry for images
     SKIP_BUILD          Set to 'true' to skip build
     SKIP_DEPLOY         Set to 'true' to skip deploy
     SKIP_BACKEND_TESTS  Set to 'true' to skip backend tests
     SKIP_FRONTEND_TESTS Set to 'true' to skip frontend tests
 
-Example:
+Examples:
     # Run everything
     $0
 
     # Skip build and deploy (use existing deployment)
     $0 --skip-build --skip-deploy
 
-    # Run only backend tests
-    SKIP_FRONTEND_TESTS=true $0 --skip-build --skip-deploy
+    # Run only frontend tests
+    SKIP_BACKEND_TESTS=true $0 --skip-build --skip-deploy
 EOF
 }
 
-# Parse arguments
+# ============================================================================
+# Argument Parsing
+# ============================================================================
+
 while [[ $# -gt 0 ]]; do
     case $1 in
         --help)
@@ -677,14 +679,6 @@ while [[ $# -gt 0 ]]; do
             SKIP_FRONTEND_TESTS=true
             shift
             ;;
-        --namespace)
-            NAMESPACE="$2"
-            shift 2
-            ;;
-        --release)
-            RELEASE_NAME="$2"
-            shift 2
-            ;;
         *)
             echo "Unknown option: $1"
             show_help
@@ -693,28 +687,24 @@ while [[ $# -gt 0 ]]; do
     esac
 done
 
-# Main execution
+# ============================================================================
+# Main
+# ============================================================================
+
 main() {
     print_header
     check_prerequisites
+    ensure_registry
+    ensure_kind_cluster
     build_images
     deploy_services
     wait_for_services
-    setup_port_forwards
-    health_check
-    authenticate
-    ensure_project
-    ensure_registry
-    ensure_k8s_cluster
-    register_test_image
-    run_k8s_tests
+    setup_platform
     run_backend_tests
     run_frontend_tests
-    show_test_stats
     print_summary
     
-    local total_exit=$((${K8S_EXIT_CODE:-0} + ${BACKEND_EXIT_CODE:-0} + ${FRONTEND_EXIT_CODE:-0}))
-    exit $total_exit
+    exit $((BACKEND_EXIT_CODE + FRONTEND_EXIT_CODE))
 }
 
 main "$@"

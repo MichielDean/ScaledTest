@@ -216,9 +216,14 @@ type RegistryManager interface {
 
 // TestExecutor defines the interface for test job execution operations.
 type TestExecutor interface {
-	// TriggerTestJobs triggers test execution for selected tests
+	// TriggerTestJobs triggers test execution for selected tests using a registered test image
 	// Returns (k8sJobName, testRunID, jobIDs, error)
 	TriggerTestJobs(ctx context.Context, projectID, testImageID, userID string, testIDs []string, baseUrlOverride string, environment map[string]string, resources *k8s.ResourceRequirements, timeoutSeconds, parallelism int32) (string, string, []string, error)
+
+	// TriggerTestJobsDirect triggers test execution using a direct image reference
+	// This bypasses the registry/image registration system for simpler workflows
+	// Returns (k8sJobName, testRunID, jobIDs, error)
+	TriggerTestJobsDirect(ctx context.Context, projectID, imageRef, userID string, testIDs []string, baseUrlOverride string, environment map[string]string, resources *k8s.ResourceRequirements, timeoutSeconds, parallelism int32) (string, string, []string, error)
 
 	// GetTestJob retrieves a test job by ID
 	GetTestJob(ctx context.Context, jobID string) (*TestJob, error)

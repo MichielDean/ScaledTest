@@ -7,6 +7,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 // Check if we should skip server startup (servers already running)
 const skipServerStartup = process.env.SKIP_SERVER_STARTUP === "true";
 
+// Base URL can be configured via environment variable for different environments:
+// - Local dev: http://localhost:5173 (vite dev server)
+// - K8s NodePort: http://localhost:30173
+const baseURL = process.env.PLAYWRIGHT_BASE_URL || "http://localhost:5173";
+
 export default defineConfig({
   testDir: "./tests/ui",
   outputDir: "test-results/playwright",
@@ -27,7 +32,7 @@ export default defineConfig({
   ],
   globalSetup: path.resolve(__dirname, "./tests/global-setup.ts"),
   use: {
-    baseURL: "http://localhost:5173",
+    baseURL,
     trace: "on-first-retry",
     screenshot: "only-on-failure",
     video: "retain-on-failure",

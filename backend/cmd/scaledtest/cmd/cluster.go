@@ -164,7 +164,7 @@ func init() {
 	clusterAddCmd.Flags().StringVar(&clusterProjectID, "project-id", "", "Project ID (required)")
 	clusterAddCmd.Flags().StringVar(&clusterAPIServer, "api-server", "", "Kubernetes API server URL")
 	clusterAddCmd.Flags().StringVar(&clusterNamespace, "namespace", "default", "Kubernetes namespace")
-	clusterAddCmd.Flags().StringVar(&clusterAuthType, "auth-type", "token", "Auth type: token, certificate, kubeconfig")
+	clusterAddCmd.Flags().StringVar(&clusterAuthType, "auth-type", "token", "Auth type: token, certificate, kubeconfig, in-cluster")
 	clusterAddCmd.Flags().StringVar(&clusterBearerToken, "token", "", "Bearer token for authentication")
 	clusterAddCmd.Flags().StringVar(&clusterKubeconfig, "kubeconfig", "", "Path to kubeconfig file")
 	clusterAddCmd.Flags().BoolVar(&clusterSkipTLS, "skip-tls-verify", false, "Skip TLS certificate verification")
