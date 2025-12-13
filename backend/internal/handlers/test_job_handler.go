@@ -450,6 +450,16 @@ func (h *TestJobHandler) TriggerTestJobs(ctx context.Context, req *pb.TriggerTes
 		}, nil
 	}
 
+	// Validate: must provide either test_image_id OR image (direct reference)
+	hasImageID := req.TestImageId != nil && *req.TestImageId != ""
+	hasDirectImage := req.Image != nil && *req.Image != ""
+	if !hasImageID && !hasDirectImage {
+		return &pb.TriggerTestJobsResponse{
+			Success: false,
+			Message: "Either test_image_id or image must be provided",
+		}, nil
+	}
+
 	// Convert resources
 	var resources *k8s.ResourceRequirements
 	if req.Resources != nil {
@@ -470,18 +480,39 @@ func (h *TestJobHandler) TriggerTestJobs(ctx context.Context, req *pb.TriggerTes
 		baseUrlOverride = url
 	}
 
-	k8sJobName, testRunID, jobIDs, err := h.executionSvc.TriggerTestJobs(
-		ctx,
-		req.ProjectId,
-		req.TestImageId,
-		userID,
-		req.TestIds,
-		baseUrlOverride,
-		req.Environment,
-		resources,
-		timeout,
-		parallelism,
-	)
+	var k8sJobName, testRunID string
+	var jobIDs []string
+	var err error
+
+	if hasDirectImage {
+		// Use direct image reference - simpler path without registry lookup
+		k8sJobName, testRunID, jobIDs, err = h.executionSvc.TriggerTestJobsDirect(
+			ctx,
+			req.ProjectId,
+			*req.Image,
+			userID,
+			req.TestIds,
+			baseUrlOverride,
+			req.Environment,
+			resources,
+			timeout,
+			parallelism,
+		)
+	} else {
+		// Use registered test image (original path)
+		k8sJobName, testRunID, jobIDs, err = h.executionSvc.TriggerTestJobs(
+			ctx,
+			req.ProjectId,
+			*req.TestImageId,
+			userID,
+			req.TestIds,
+			baseUrlOverride,
+			req.Environment,
+			resources,
+			timeout,
+			parallelism,
+		)
+	}
 
 	if err != nil {
 		return &pb.TriggerTestJobsResponse{
@@ -905,10 +936,15 @@ func getStringArrayFromMap(m map[string]interface{}, key string) []string {
 }
 
 func (h *TestJobHandler) buildTestJobResponse(job *services.TestJob) *pb.TestJobResponse {
+	var testImageID string
+	if job.TestImageID != nil {
+		testImageID = *job.TestImageID
+	}
+
 	return &pb.TestJobResponse{
 		Id:                 job.ID,
 		ProjectId:          job.ProjectID,
-		TestImageId:        job.TestImageID,
+		TestImageId:        testImageID,
 		TestRunId:          ptrToOptional(job.TestRunID),
 		K8SJobName:         job.K8sJobName,
 		K8SNamespace:       job.K8sNamespace,

@@ -6,6 +6,7 @@ import (
 
 	"connectrpc.com/connect"
 	pb "github.com/MichielDean/ScaledTest/backend/api/proto"
+	"github.com/MichielDean/ScaledTest/backend/internal/middleware"
 	"github.com/MichielDean/ScaledTest/backend/internal/models"
 	"github.com/MichielDean/ScaledTest/backend/internal/services"
 	"go.uber.org/zap"
@@ -31,6 +32,12 @@ func (h *K8sClusterServiceHandler) CreateCluster(
 	ctx context.Context,
 	req *connect.Request[pb.CreateClusterRequest],
 ) (*connect.Response[pb.ClusterResponse], error) {
+	// Extract user ID from context
+	userID, ok := ctx.Value(middleware.UserIDKey).(string)
+	if !ok || userID == "" {
+		return nil, connect.NewError(connect.CodeUnauthenticated, errors.New("authentication required"))
+	}
+
 	if req.Msg.Name == "" {
 		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("cluster name is required"))
 	}
@@ -47,8 +54,10 @@ func (h *K8sClusterServiceHandler) CreateCluster(
 		AuthType:      models.K8sAuthType(req.Msg.AuthType),
 		SkipTLSVerify: req.Msg.SkipTlsVerify,
 		IsDefault:     req.Msg.IsDefault,
+		IsActive:      true, // New clusters are active by default
 		ProjectID:     &projectID,
 		Environment:   models.Environment(req.Msg.Environment),
+		CreatedBy:     userID,
 	}
 
 	if req.Msg.Description != nil {

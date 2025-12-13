@@ -22,6 +22,11 @@
 kind: Cluster
 apiVersion: kind.x-k8s.io/v1alpha4
 name: scaledtest
+# Configure containerd to use the local registry
+containerdConfigPatches:
+  - |-
+    [plugins."io.containerd.grpc.v1.cri".registry.mirrors."localhost:5001"]
+      endpoint = ["http://scaledtest-registry:5000"]
 nodes:
   # Control plane node with port mappings for external access
   - role: control-plane

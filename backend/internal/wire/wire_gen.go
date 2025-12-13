@@ -48,12 +48,12 @@ func InitializeApp(ctx context.Context, dbConfig *database.Config, appConfig *Ap
 	}
 	containerRegistryService := services.NewContainerRegistryService(pool, logger, encryptionService)
 	k8sClusterService := services.NewK8sClusterService(pool, logger, encryptionService)
-	testExecutionService := services.NewTestExecutionService(pool, logger, testImageService, containerRegistryService, k8sClusterService, string2)
 	testDiscoveryService, err := ProvideTestDiscoveryService(pool, logger, containerRegistryService)
 	if err != nil {
 		cleanup()
 		return nil, nil, err
 	}
+	testExecutionService := services.NewTestExecutionService(pool, logger, testImageService, containerRegistryService, k8sClusterService, testDiscoveryService, string2)
 	config := ProvideS3StorageConfig()
 	s3Storage, err := ProvideS3Storage(config, logger)
 	if err != nil {

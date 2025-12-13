@@ -2,10 +2,12 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 
 	"connectrpc.com/connect"
 	pb "github.com/MichielDean/ScaledTest/backend/api/proto"
+	"github.com/MichielDean/ScaledTest/backend/internal/models"
 	"github.com/MichielDean/ScaledTest/backend/internal/services"
 	"go.uber.org/zap"
 )
@@ -38,28 +40,81 @@ func (h *TestResultServiceHandler) UploadTestResults(
 }
 
 // UpsertTestResultsByRunID upserts test results by run ID.
+// This endpoint is designed for K8s job pods to upload CTRF results.
+// It uses UpsertCtrfReportByRunID which properly handles test_jobs table updates.
 func (h *TestResultServiceHandler) UpsertTestResultsByRunID(
 	ctx context.Context,
 	req *connect.Request[pb.UpsertTestResultsByRunIDRequest],
 ) (*connect.Response[pb.UploadTestResultsResponse], error) {
-	// UpsertTestResultsByRunIDRequest has different fields than UploadTestResultsRequest
-	// The service should handle this appropriately - for now pass the upsert request directly
-	// as the service likely needs to be aware of the TestRunId for upsert semantics
-	
-	// Convert to upload request using matching fields
-	uploadReq := &pb.UploadTestResultsRequest{
-		Branch:      req.Msg.Branch,
-		CommitSha:   req.Msg.CommitSha,
-		Summary:     req.Msg.Summary,
-		Tests:       req.Msg.Tests,
-		Environment: req.Msg.Environment,
+	// Validate required fields
+	if req.Msg.TestRunId == "" {
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("test_run_id is required"))
 	}
-	resp, err := h.testResultService.UploadTestResults(ctx, uploadReq)
+
+	// CTRF data is required for this endpoint
+	if req.Msg.CtrfData == "" {
+		h.logger.Error("No CTRF data provided",
+			zap.String("test_run_id", req.Msg.TestRunId),
+		)
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("ctrf_data is required"))
+	}
+
+	h.logger.Info("Parsing CTRF data from test runner",
+		zap.String("test_run_id", req.Msg.TestRunId),
+		zap.Int32("job_completion_index", req.Msg.JobCompletionIndex),
+		zap.Int("ctrf_data_length", len(req.Msg.CtrfData)),
+	)
+
+	// Parse CTRF JSON into the proper model
+	var ctrfReport models.CtrfSchemaJson
+	if err := json.Unmarshal([]byte(req.Msg.CtrfData), &ctrfReport); err != nil {
+		h.logger.Error("Failed to parse CTRF JSON",
+			zap.String("test_run_id", req.Msg.TestRunId),
+			zap.Error(err),
+		)
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid CTRF data format"))
+	}
+
+	// Validate CTRF format
+	if ctrfReport.ReportFormat != models.CtrfSchemaJsonReportFormatCTRF {
+		h.logger.Error("Invalid CTRF report format",
+			zap.String("test_run_id", req.Msg.TestRunId),
+			zap.String("format", string(ctrfReport.ReportFormat)),
+		)
+		return nil, connect.NewError(connect.CodeInvalidArgument, errors.New("invalid reportFormat, must be 'CTRF'"))
+	}
+
+	// Get user ID from context (for job tokens, this will be "job-{job-name}")
+	userID, _ := ctx.Value(models.UserIDKey).(string)
+
+	// Call the proper service method that handles CTRF reports and test_jobs table
+	result, err := h.testResultService.UpsertCtrfReportByRunID(
+		ctx,
+		&ctrfReport,
+		req.Msg.TestRunId,
+		int(req.Msg.JobCompletionIndex),
+		userID,
+	)
 	if err != nil {
-		h.logger.Error("Failed to upsert test results", zap.Error(err))
-		return nil, mapGrpcErrorToConnect(err)
+		h.logger.Error("Failed to upsert CTRF report",
+			zap.String("test_run_id", req.Msg.TestRunId),
+			zap.Error(err),
+		)
+		return nil, connect.NewError(connect.CodeInternal, errors.New("failed to upload test results"))
 	}
-	return connect.NewResponse(resp), nil
+
+	h.logger.Info("CTRF report upserted successfully",
+		zap.String("report_id", result.ID),
+		zap.String("test_run_id", result.TestRunID),
+		zap.Int("job_completion_index", result.JobCompletionIndex),
+		zap.String("job_status", result.JobStatus),
+	)
+
+	return connect.NewResponse(&pb.UploadTestResultsResponse{
+		ResultId: result.ID,
+		Success:  true,
+		Message:  result.Message,
+	}), nil
 }
 
 // GetTestResults retrieves test results by ID.

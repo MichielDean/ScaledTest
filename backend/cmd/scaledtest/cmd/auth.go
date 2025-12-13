@@ -212,6 +212,7 @@ func runLogin(cmd *cobra.Command, args []string) error {
 	if IsJSONOutput() {
 		output := map[string]interface{}{
 			"success":    true,
+			"token":      resp.AccessToken,
 			"email":      resp.User.Email,
 			"name":       resp.User.Name,
 			"role":       resp.User.Role,

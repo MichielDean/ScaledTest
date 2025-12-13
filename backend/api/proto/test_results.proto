@@ -141,6 +141,7 @@ message StreamTestResultsRequest {
 }
 
 // Upsert request - uses test_run_id as the key for create or update
+// Supports either structured data (summary/tests) OR raw CTRF JSON
 message UpsertTestResultsByRunIDRequest {
   string test_run_id = 1;  // Key for upsert operation
   string branch = 2;
@@ -148,4 +149,9 @@ message UpsertTestResultsByRunIDRequest {
   TestSummary summary = 4;
   repeated TestCase tests = 5;
   map<string, string> environment = 6;
+  // Raw CTRF JSON data - if provided, will be parsed and summary/tests extracted
+  // This allows test runners to send CTRF directly without conversion
+  string ctrf_data = 7;
+  // Job completion index from K8s indexed job (0-based)
+  int32 job_completion_index = 8;
 }

@@ -155,7 +155,7 @@ type ListTestJobsResponse struct {
 type TestJobResponse struct {
 	ID          string  `json:"id"`
 	ProjectID   string  `json:"project_id"`
-	TestImageID string  `json:"test_image_id"`
+	TestImageID *string `json:"test_image_id,omitempty"`
 	TestRunID   *string `json:"test_run_id,omitempty"`
 	K8sJobName  string  `json:"k8s_job_name"`
 	TestID      string  `json:"test_id"`

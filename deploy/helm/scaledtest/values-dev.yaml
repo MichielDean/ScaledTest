@@ -4,6 +4,9 @@
 # -- Number of backend replicas (1 for local dev)
 replicaCount: 1
 
+# -- Fast termination for local dev (default is 30s)
+terminationGracePeriodSeconds: 3
+
 # =============================================================================
 # Backend Configuration - Development
 # =============================================================================
@@ -67,7 +70,7 @@ database:
 
   auth:
     username: scaledtest
-    password: ""
+    password: "devpassword123"  # Static password for local dev - prevents regeneration on helm upgrade
     database: scaledtest
 
   securityContext:
@@ -99,7 +102,7 @@ minio:
 
   auth:
     rootUser: scaledtest
-    rootPassword: ""
+    rootPassword: "devpassword123"  # Static password for local dev
 
   defaultBucket: artifacts
 

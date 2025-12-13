@@ -343,12 +343,13 @@ message DeleteTestImageResponse {
 // Test Job Messages
 message TriggerTestJobsRequest {
   string project_id = 1;
-  string test_image_id = 2;
+  optional string test_image_id = 2; // UUID of registered test image (use this OR image)
   repeated string test_ids = 3; // Selected test IDs to execute
   map<string, string> environment = 4; // Additional env vars
   optional ResourceRequirements resources = 5;
   optional int32 timeout_seconds = 6;
   optional int32 parallelism = 7; // Number of tests to run in parallel
+  optional string image = 8; // Direct image reference (e.g., "localhost:5001/my-tests:v1") - alternative to test_image_id
 }
 
 message ResourceRequirements {

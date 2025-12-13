@@ -45,14 +45,26 @@ scaledtest_upload_results() {
     echo "📤 Uploading results to ScaledTest..."
     echo "   API: $API_URL"
     echo "   Run ID: $TEST_RUN_ID"
+    echo "   Job Index: ${JOB_COMPLETION_INDEX:-0}"
+    
+    # Wrap CTRF data in the expected Connect-RPC request format
+    # ctrf_data is sent as a JSON string (the CTRF report serialized)
+    # job_completion_index identifies which pod in the indexed job sent results
+    local ctrf_content=$(cat "$ctrf_file")
+    local job_index=${JOB_COMPLETION_INDEX:-0}
+    local request_json=$(jq -n \
+        --arg test_run_id "$TEST_RUN_ID" \
+        --arg ctrf_data "$ctrf_content" \
+        --argjson job_completion_index "$job_index" \
+        '{testRunId: $test_run_id, ctrfData: $ctrf_data, jobCompletionIndex: $job_completion_index}')
     
     local response_file=$(mktemp)
     local http_code=$(curl -w "%{http_code}" -o "$response_file" \
-        -X POST "$API_URL/api/v1/test-results/upsert?test_run_id=$TEST_RUN_ID" \
+        -X POST "$API_URL/api.v1.TestResultService/UpsertTestResultsByRunID" \
         -H "Authorization: Bearer $API_TOKEN" \
         -H "Content-Type: application/json" \
         -H "User-Agent: ScaledTest-Client/$SCALEDTEST_VERSION" \
-        -d @"$ctrf_file" \
+        -d "$request_json" \
         --silent \
         --max-time 30)
     

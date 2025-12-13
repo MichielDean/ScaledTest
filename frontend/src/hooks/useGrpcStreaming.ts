@@ -9,10 +9,12 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { createClient } from "@connectrpc/connect";
 import { createGrpcWebTransport } from "@connectrpc/connect-web";
 import { HealthService, type HealthCheckResponse, ServingStatus } from "../gen/health_pb";
-import { TestJobService, type TestJobStatusUpdate, type JobLogChunk } from "../gen/test_jobs_pb";
+// Note: TestJobStatusUpdate and JobLogChunk are defined in test_jobs_pb but the streaming
+// RPC methods (StreamJobStatus, StreamJobLogs) are not yet implemented in the proto service.
+// These hooks are prepared for future streaming functionality.
+import type { TestJobStatusUpdate, JobLogChunk } from "../gen/test_jobs_pb";
 import { create } from "@bufbuild/protobuf";
 import { HealthCheckRequestSchema } from "../gen/health_pb";
-import { StreamJobStatusRequestSchema, StreamJobLogsRequestSchema } from "../gen/test_jobs_pb";
 
 // Base URL for the API - uses Vite proxy in development
 const API_BASE_URL = import.meta.env.VITE_API_URL ?? "";
@@ -143,161 +145,57 @@ export function useHealthWatch(
   return { data, state, error, reconnect, disconnect };
 }
 
-/**
- * Hook for streaming test job status updates
+// NOTE: The following streaming hooks are prepared for future functionality.
+// The streaming RPC methods (StreamJobStatus, StreamJobLogs) need to be added
+// to the TestJobService proto definition before these hooks can be used.
+
+/*
+ * Hook for streaming test job status updates - DISABLED UNTIL RPC METHODS ARE ADDED
  *
  * @param projectId - The project ID to watch jobs for
  * @param k8sJobName - Optional specific job name to watch
  * @param enabled - Whether streaming should be enabled
  * @returns Streaming result with job status updates
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function useJobStatusStream(
-  projectId: string,
-  k8sJobName?: string,
-  enabled: boolean = true
+  _projectId: string,
+  _k8sJobName?: string,
+  _enabled: boolean = true
 ): StreamingResult<TestJobStatusUpdate> {
-  const [data, setData] = useState<TestJobStatusUpdate | null>(null);
-  const [state, setState] = useState<StreamingState>("disconnected");
-  const [error, setError] = useState<Error | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const connect = useCallback(async () => {
-    if (!enabled || !projectId) return;
-
-    // Abort any existing connection
-    abortControllerRef.current?.abort();
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    setState("connecting");
-    setError(null);
-
-    try {
-      const transport = createStreamingTransport();
-      const client = createClient(TestJobService, transport);
-      const request = create(StreamJobStatusRequestSchema, { projectId, k8sJobName });
-
-      setState("connected");
-
-      for await (const response of client.streamJobStatus(request, { signal: abortController.signal })) {
-        if (abortController.signal.aborted) break;
-        setData(response);
-      }
-
-      // Stream ended normally
-      if (!abortController.signal.aborted) {
-        setState("disconnected");
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setState("disconnected");
-      } else {
-        setError(err instanceof Error ? err : new Error(String(err)));
-        setState("error");
-      }
-    }
-  }, [projectId, k8sJobName, enabled]);
-
-  const disconnect = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setState("disconnected");
-  }, []);
-
-  const reconnect = useCallback(() => {
-    disconnect();
-    connect();
-  }, [connect, disconnect]);
-
-  useEffect(() => {
-    if (enabled && projectId) {
-      connect();
-    }
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, [connect, enabled, projectId]);
-
-  return { data, state, error, reconnect, disconnect };
+  // Return disabled state - streaming RPCs not yet implemented in proto
+  return {
+    data: null,
+    state: "disconnected" as StreamingState,
+    error: new Error("Streaming RPC methods not yet implemented in proto service"),
+    reconnect: () => {},
+    disconnect: () => {},
+  };
 }
 
-/**
- * Hook for streaming test job logs
+/*
+ * Hook for streaming test job logs - DISABLED UNTIL RPC METHODS ARE ADDED
  *
  * @param jobId - The ID of the job to get logs for
  * @param follow - Whether to follow (tail) the logs
  * @param enabled - Whether streaming should be enabled
  * @returns Streaming result with log chunks (accumulates all chunks)
  */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
 export function useJobLogsStream(
-  jobId: string,
-  follow: boolean = true,
-  enabled: boolean = true
+  _jobId: string,
+  _follow: boolean = true,
+  _enabled: boolean = true
 ): StreamingResult<JobLogChunk[]> & { logs: JobLogChunk[] } {
-  const [logs, setLogs] = useState<JobLogChunk[]>([]);
-  const [state, setState] = useState<StreamingState>("disconnected");
-  const [error, setError] = useState<Error | null>(null);
-  const abortControllerRef = useRef<AbortController | null>(null);
-
-  const connect = useCallback(async () => {
-    if (!enabled || !jobId) return;
-
-    // Abort any existing connection
-    abortControllerRef.current?.abort();
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    setState("connecting");
-    setError(null);
-    setLogs([]);
-
-    try {
-      const transport = createStreamingTransport();
-      const client = createClient(TestJobService, transport);
-      const request = create(StreamJobLogsRequestSchema, { jobId, follow });
-
-      setState("connected");
-
-      for await (const chunk of client.streamJobLogs(request, { signal: abortController.signal })) {
-        if (abortController.signal.aborted) break;
-        setLogs((prev) => [...prev, chunk]);
-      }
-
-      // Stream ended normally
-      if (!abortController.signal.aborted) {
-        setState("disconnected");
-      }
-    } catch (err) {
-      if (err instanceof Error && err.name === "AbortError") {
-        setState("disconnected");
-      } else {
-        setError(err instanceof Error ? err : new Error(String(err)));
-        setState("error");
-      }
-    }
-  }, [jobId, follow, enabled]);
-
-  const disconnect = useCallback(() => {
-    abortControllerRef.current?.abort();
-    abortControllerRef.current = null;
-    setState("disconnected");
-  }, []);
-
-  const reconnect = useCallback(() => {
-    disconnect();
-    connect();
-  }, [connect, disconnect]);
-
-  useEffect(() => {
-    if (enabled && jobId) {
-      connect();
-    }
-    return () => {
-      abortControllerRef.current?.abort();
-    };
-  }, [connect, enabled, jobId]);
-
-  return { data: logs, logs, state, error, reconnect, disconnect };
+  // Return disabled state - streaming RPCs not yet implemented in proto
+  return {
+    data: [],
+    logs: [],
+    state: "disconnected" as StreamingState,
+    error: new Error("Streaming RPC methods not yet implemented in proto service"),
+    reconnect: () => {},
+    disconnect: () => {},
+  };
 }
 
 /**

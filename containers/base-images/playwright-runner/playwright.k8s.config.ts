@@ -3,10 +3,12 @@ import { defineConfig, devices } from "@playwright/test";
 export default defineConfig({
   testDir: "./tests/ui",
   outputDir: process.env.TEST_RESULTS_DIR || "test-results/playwright",
-  fullyParallel: false, // Run one test at a time in K8s mode
+  fullyParallel: true, // Allow parallel test execution
   forbidOnly: true,
   retries: 0, // No retries in K8s - each job runs once
-  workers: 1, // Single worker per container
+  // Use PARALLELISM env var or default to 1 for individual test runs
+  // For "all" tests, this controls how many tests run in parallel
+  workers: parseInt(process.env.PARALLELISM || "1", 10),
   // Global setup runs before tests - idempotent (checks if users exist first)
   // In K8s indexed jobs, each pod runs this but race conditions are handled
   // by the DB (duplicate email returns error, which is caught and ignored)

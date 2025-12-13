@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"time"
@@ -120,6 +121,13 @@ func NewJobManagerFromCredentials(creds ClusterCredentials) (*JobManager, error)
 	}
 
 	switch creds.AuthType {
+	case "in-cluster":
+		// Use in-cluster config (for when backend runs inside the target cluster)
+		config, err = rest.InClusterConfig()
+		if err != nil {
+			return nil, fmt.Errorf("failed to get in-cluster config: %w", err)
+		}
+
 	case "kubeconfig":
 		// Parse the kubeconfig YAML directly
 		if creds.Kubeconfig == "" {
@@ -245,9 +253,13 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 			Name:  "TEST_RUN_ID",
 			Value: config.TestRunID, // Use UUID for test run identification
 		},
+		{
+			Name:  "PARALLELISM",
+			Value: fmt.Sprintf("%d", config.Parallelism), // Playwright worker count for "all" tests
+		},
 	}
 
-	// Add custom environment variables
+	// Add custom environment variables (includes BASE_URL from cluster config)
 	for key, value := range config.Environment {
 		envVars = append(envVars, corev1.EnvVar{
 			Name:  key,
@@ -255,19 +267,14 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 		})
 	}
 
-	// Add JOB_COMPLETION_INDEX to identify which test to run
-	envVars = append(envVars, corev1.EnvVar{
-		Name: "JOB_COMPLETION_INDEX",
-		ValueFrom: &corev1.EnvVarSource{
-			FieldRef: &corev1.ObjectFieldSelector{
-				FieldPath: "metadata.annotations['batch.kubernetes.io/job-completion-index']",
-			},
-		},
-	})
+	// Note: JOB_COMPLETION_INDEX is automatically provided by Kubernetes for indexed jobs
+	// as an environment variable. No need to manually inject it via FieldRef.
+	// See: https://kubernetes.io/docs/concepts/workloads/controllers/job/#completion-mode
 
 	// Build command that uses index to select test and job ID
 	// The entrypoint.sh script handles test execution when DISCOVERY_MODE is not set
 	// It expects TEST_ID and TEST_JOB_ID to be set as environment variables
+	// JOB_COMPLETION_INDEX is automatically provided by K8s for indexed jobs
 	testIDsJSON := jm.serializeTestIDs(config.TestIDs)
 	jobIDsJSON := jm.serializeTestIDs(config.JobIDs) // Reuse same serialization function
 	
@@ -370,9 +377,23 @@ func (jm *JobManager) CreateIndexedJob(ctx context.Context, config JobConfig) (*
 	return createdJob, nil
 }
 
-// GetJobStatus retrieves the current status of a Job
+// GetJob returns a Job by name
+func (jm *JobManager) GetJob(ctx context.Context, jobName string) (*batchv1.Job, error) {
+	return jm.clientset.BatchV1().Jobs(jm.namespace).Get(ctx, jobName, metav1.GetOptions{})
+}
+
+// DeleteJob deletes a Job by name
+func (jm *JobManager) DeleteJob(ctx context.Context, jobName string) error {
+	propagationPolicy := metav1.DeletePropagationBackground
+	deleteOptions := metav1.DeleteOptions{
+		PropagationPolicy: &propagationPolicy,
+	}
+	return jm.clientset.BatchV1().Jobs(jm.namespace).Delete(ctx, jobName, deleteOptions)
+}
+
+// GetJobStatus returns the current status of a Job
 func (jm *JobManager) GetJobStatus(ctx context.Context, jobName string) (*JobStatus, error) {
-	job, err := jm.clientset.BatchV1().Jobs(jm.namespace).Get(ctx, jobName, metav1.GetOptions{})
+	job, err := jm.GetJob(ctx, jobName)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get Job status: %w", err)
 	}
@@ -452,8 +473,10 @@ func (jm *JobManager) DeleteImagePullSecret(ctx context.Context, secretName stri
 
 // GetPodLogs retrieves logs from a specific pod
 func (jm *JobManager) GetPodLogs(ctx context.Context, podName string, tailLines int64) (string, error) {
-	podLogOpts := corev1.PodLogOptions{
-		TailLines: &tailLines,
+	podLogOpts := corev1.PodLogOptions{}
+	// Only set TailLines if greater than 0, otherwise get all logs
+	if tailLines > 0 {
+		podLogOpts.TailLines = &tailLines
 	}
 
 	req := jm.clientset.CoreV1().Pods(jm.namespace).GetLogs(podName, &podLogOpts)
@@ -498,6 +521,241 @@ func (jm *JobManager) ListPodsForJob(ctx context.Context, jobName string) ([]cor
 	}
 
 	return podList.Items, nil
+}
+
+// DiscoveryConfig contains configuration for creating a test discovery Job
+type DiscoveryConfig struct {
+	Name                string
+	Image               string
+	ImagePullSecretName string
+	ServiceAccountName  string
+	TimeoutSeconds      int32
+}
+
+// RunDiscoveryJob creates a K8s Job to discover tests from an image and returns the discovered test IDs
+// This is used for direct image references where we can't run Docker locally
+func (jm *JobManager) RunDiscoveryJob(ctx context.Context, config DiscoveryConfig) ([]string, error) {
+	// Create environment variables for discovery mode
+	envVars := []corev1.EnvVar{
+		{
+			Name:  "DISCOVERY_MODE",
+			Value: "true",
+		},
+		{
+			Name:  "NODE_ENV",
+			Value: "test",
+		},
+	}
+
+	// Set timeout (default 2 minutes for discovery)
+	activeDeadlineSeconds := int64(config.TimeoutSeconds)
+	if activeDeadlineSeconds == 0 {
+		activeDeadlineSeconds = 120
+	}
+
+	backoffLimit := int32(0)
+	ttlSecondsAfterFinished := int32(300) // Clean up after 5 minutes
+
+	// Build image pull secrets if provided
+	var imagePullSecrets []corev1.LocalObjectReference
+	if config.ImagePullSecretName != "" {
+		imagePullSecrets = append(imagePullSecrets, corev1.LocalObjectReference{
+			Name: config.ImagePullSecretName,
+		})
+	}
+
+	job := &batchv1.Job{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      config.Name,
+			Namespace: jm.namespace,
+			Labels: map[string]string{
+				"app":        "scaledtest",
+				"job-type":   "test-discovery",
+				"managed-by": "scaledtest-platform",
+			},
+		},
+		Spec: batchv1.JobSpec{
+			BackoffLimit:            &backoffLimit,
+			ActiveDeadlineSeconds:   &activeDeadlineSeconds,
+			TTLSecondsAfterFinished: &ttlSecondsAfterFinished,
+			Template: corev1.PodTemplateSpec{
+				ObjectMeta: metav1.ObjectMeta{
+					Labels: map[string]string{
+						"app":      "scaledtest",
+						"job-name": config.Name,
+					},
+				},
+				Spec: corev1.PodSpec{
+					ServiceAccountName: config.ServiceAccountName,
+					RestartPolicy:      corev1.RestartPolicyNever,
+					ImagePullSecrets:   imagePullSecrets,
+					Containers: []corev1.Container{
+						{
+							Name:            "test-discovery",
+							Image:           config.Image,
+							ImagePullPolicy: corev1.PullAlways,
+							Env:             envVars,
+							Resources: corev1.ResourceRequirements{
+								Requests: corev1.ResourceList{
+									corev1.ResourceCPU:    parseQuantity("100m"),
+									corev1.ResourceMemory: parseQuantity("256Mi"),
+								},
+								Limits: corev1.ResourceList{
+									corev1.ResourceCPU:    parseQuantity("500m"),
+									corev1.ResourceMemory: parseQuantity("512Mi"),
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	// Create the job
+	_, err := jm.clientset.BatchV1().Jobs(jm.namespace).Create(ctx, job, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create discovery job '%s' in namespace '%s': %w", config.Name, jm.namespace, err)
+	}
+
+	// Wait for job to complete
+	testIDs, err := jm.waitForDiscoveryJobAndParseResults(ctx, config.Name, time.Duration(activeDeadlineSeconds)*time.Second)
+	if err != nil {
+		// Clean up the job on error
+		_ = jm.DeleteJob(ctx, config.Name)
+		return nil, err
+	}
+	if err != nil {
+		// Clean up the job on error
+		_ = jm.DeleteJob(ctx, config.Name)
+		return nil, err
+	}
+
+	return testIDs, nil
+}
+
+// waitForDiscoveryJobAndParseResults waits for the discovery job to complete and parses the test IDs from logs
+func (jm *JobManager) waitForDiscoveryJobAndParseResults(ctx context.Context, jobName string, timeout time.Duration) ([]string, error) {
+	// Use a background context with timeout instead of inheriting the request context
+	// This prevents discovery from being canceled when the gRPC request times out
+	bgCtx, cancel := context.WithTimeout(context.Background(), timeout)
+	defer cancel()
+
+	deadline := time.Now().Add(timeout)
+
+	for time.Now().Before(deadline) {
+		job, err := jm.GetJob(bgCtx, jobName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get discovery job '%s' status in namespace '%s': %w. Debug: kubectl describe job %s -n %s",
+				jobName, jm.namespace, err, jobName, jm.namespace)
+		}
+
+		// Check if job completed
+		if job.Status.Succeeded > 0 {
+			// Job completed successfully, get logs and parse test IDs
+			return jm.parseDiscoveryLogsForTestIDs(bgCtx, jobName)
+		}
+
+		if job.Status.Failed > 0 {
+			// Try to get error from logs
+			logs, _ := jm.getDiscoveryJobLogs(bgCtx, jobName)
+			return nil, fmt.Errorf("discovery job '%s' failed in namespace '%s'.\n\nLogs:\n%s\n\nTroubleshooting:\n  kubectl logs job/%s -n %s\n  kubectl describe job/%s -n %s",
+				jobName, jm.namespace, logs, jobName, jm.namespace, jobName, jm.namespace)
+		}
+
+		// Wait a bit before checking again
+		select {
+		case <-bgCtx.Done():
+			return nil, bgCtx.Err()
+		case <-time.After(2 * time.Second):
+		}
+	}
+
+	return nil, fmt.Errorf("discovery job '%s' timed out after %v in namespace '%s'.\n\nTroubleshooting:\n  kubectl get pods -l job-name=%s -n %s\n  kubectl logs job/%s -n %s\n  kubectl describe job/%s -n %s",
+		jobName, timeout, jm.namespace, jobName, jm.namespace, jobName, jm.namespace, jobName, jm.namespace)
+}
+
+// parseDiscoveryLogsForTestIDs extracts test IDs from discovery job logs
+// Looks for CTRF JSON between markers: === CTRF JSON START === and === CTRF JSON END ===
+func (jm *JobManager) parseDiscoveryLogsForTestIDs(ctx context.Context, jobName string) ([]string, error) {
+	logs, err := jm.getDiscoveryJobLogs(ctx, jobName)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get discovery logs for job '%s' in namespace '%s': %w.\nDebug: kubectl logs job/%s -n %s",
+			jobName, jm.namespace, err, jobName, jm.namespace)
+	}
+
+	// Find CTRF JSON between markers
+	startMarker := "=== CTRF JSON START ==="
+	endMarker := "=== CTRF JSON END ==="
+
+	startIdx := bytes.Index([]byte(logs), []byte(startMarker))
+	if startIdx == -1 {
+		// Truncate logs for error message if too long
+		logPreview := logs
+		if len(logPreview) > 1000 {
+			logPreview = logPreview[:1000] + "... (truncated)"
+		}
+		return nil, fmt.Errorf("CTRF JSON start marker '%s' not found in discovery output for job '%s'.\n\nYour test runner must output discovery results between markers:\n  %s\n  <json content>\n  %s\n\nActual output (first 1000 chars):\n%s",
+			startMarker, jobName, startMarker, endMarker, logPreview)
+	}
+
+	endIdx := bytes.Index([]byte(logs[startIdx:]), []byte(endMarker))
+	if endIdx == -1 {
+		return nil, fmt.Errorf("CTRF JSON end marker '%s' not found in discovery output for job '%s'. Start marker was found but end marker is missing. Check your test runner's discover-tests.sh script",
+			endMarker, jobName)
+	}
+
+	// Extract JSON between markers
+	jsonStart := startIdx + len(startMarker)
+	jsonEnd := startIdx + endIdx
+	jsonBytes := []byte(logs[jsonStart:jsonEnd])
+
+	// Parse CTRF discovery JSON
+	var ctrf struct {
+		Tests []struct {
+			ID string `json:"id"`
+		} `json:"tests"`
+	}
+
+	if err := json.Unmarshal(bytes.TrimSpace(jsonBytes), &ctrf); err != nil {
+		// Truncate JSON for error message if too long
+		jsonPreview := string(jsonBytes)
+		if len(jsonPreview) > 500 {
+			jsonPreview = jsonPreview[:500] + "... (truncated)"
+		}
+		return nil, fmt.Errorf("failed to parse CTRF JSON for job '%s': %w\n\nJSON content:\n%s",
+			jobName, err, jsonPreview)
+	}
+
+	// Extract test IDs
+	testIDs := make([]string, 0, len(ctrf.Tests))
+	for _, test := range ctrf.Tests {
+		if test.ID != "" {
+			testIDs = append(testIDs, test.ID)
+		}
+	}
+
+	if len(testIDs) == 0 {
+		return nil, fmt.Errorf("no test IDs found in discovery output for job '%s'.\n\nThe CTRF JSON was parsed but contained no tests. Ensure:\n  1. Tests exist in your test directory (e.g., tests/ui/)\n  2. Tests are properly configured for Playwright\n  3. The discover-tests.sh script correctly outputs test IDs\n\nRun discovery locally to debug: docker run -e DISCOVERY_MODE=true <your-image>",
+			jobName)
+	}
+
+	return testIDs, nil
+}
+
+// getDiscoveryJobLogs retrieves logs from the discovery job pod
+func (jm *JobManager) getDiscoveryJobLogs(ctx context.Context, jobName string) (string, error) {
+	pods, err := jm.ListPodsForJob(ctx, jobName)
+	if err != nil {
+		return "", err
+	}
+
+	if len(pods) == 0 {
+		return "", fmt.Errorf("no pods found for job %s", jobName)
+	}
+
+	// Get logs from the first (and only) pod
+	return jm.GetPodLogs(ctx, pods[0].Name, 0)
 }
 
 // Helper functions
