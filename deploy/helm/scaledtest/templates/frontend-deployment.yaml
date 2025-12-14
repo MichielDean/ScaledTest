@@ -41,8 +41,9 @@ spec:
               containerPort: 80
               protocol: TCP
           env:
-            - name: VITE_API_URL
-              value: "http://{{ include "scaledtest.fullname" . }}-backend:{{ .Values.backend.service.port }}"
+            # BACKEND_HOST is used by nginx envsubst to configure proxy_pass
+            # Note: VITE_API_URL is NOT set here because Vite env vars are build-time only
+            # The frontend uses nginx to proxy API requests to the backend
             - name: BACKEND_HOST
               value: "{{ include "scaledtest.fullname" . }}-backend"
           livenessProbe:

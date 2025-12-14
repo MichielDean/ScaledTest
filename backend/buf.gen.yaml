@@ -6,6 +6,13 @@ managed:
   disable:
     - file_option: go_package
       # Don't override go_package - use the one defined in proto files
+inputs:
+  # Generate from our proto files
+  - directory: api/proto
+  # Also generate the google.api.annotations dependency
+  - module: buf.build/googleapis/googleapis
+    types:
+      - google.api.http
 plugins:
   # Go protobuf structs
   - remote: buf.build/protocolbuffers/go

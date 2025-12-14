@@ -76,6 +76,9 @@ spec:
                 secretKeyRef:
                   name: {{ include "scaledtest.jwtSecretName" . }}
                   key: jwt-secret
+            # CORS configuration - derived from ingress or explicit value
+            - name: CORS_ALLOWED_ORIGINS
+              value: {{ include "scaledtest.corsOrigin" . | quote }}
             {{- if .Values.minio.enabled }}
             # MinIO/S3 configuration for artifact storage
             - name: S3_ENDPOINT

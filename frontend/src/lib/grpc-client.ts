@@ -84,8 +84,9 @@ export function isAuthenticated(): boolean {
 function createAuthenticatedTransport(): Transport {
   return createGrpcWebTransport({
     baseUrl: API_BASE_URL,
-    // Use binary protobuf for better performance
-    useBinaryFormat: true,
+    // Use JSON format for better compatibility with proxies/ingress
+    // Binary format has issues with nginx ingress content handling
+    useBinaryFormat: false,
     // Add auth header interceptor
     interceptors: [
       (next) => async (req) => {
@@ -105,7 +106,7 @@ function createAuthenticatedTransport(): Transport {
 function createPublicTransport(): Transport {
   return createGrpcWebTransport({
     baseUrl: API_BASE_URL,
-    useBinaryFormat: true,
+    useBinaryFormat: false,
   });
 }
 

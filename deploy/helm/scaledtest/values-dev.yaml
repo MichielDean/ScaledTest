@@ -131,10 +131,26 @@ minio:
     storageClass: ""
 
 # =============================================================================
-# Ingress - Disabled for local development (use NodePort)
+# Ingress - Enabled with empty host for localhost access
+# Empty host = catches all requests to ingress controller (no DNS/hosts file needed)
+# Access at http://localhost when using Kind with port 80 mapping
+# NodePort services remain available as fallback on ports 30173, 30080, etc.
 # =============================================================================
 ingress:
-  enabled: false
+  enabled: true
+  className: nginx
+  # Empty host catches all requests - works with localhost, 127.0.0.1, any IP
+  host: ""
+  annotations:
+    # Enable regex path matching for Connect-RPC protocol paths
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    # Timeout settings for gRPC-Web/Connect streaming
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "3600"
+    nginx.ingress.kubernetes.io/proxy-body-size: "50m"
+  tls:
+    enabled: false
+    secretName: ""
 
 # =============================================================================
 # RBAC - Enable for test job execution
