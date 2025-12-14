@@ -1,12 +1,18 @@
 # ScaledTest Project - GitHub Copilot Instructions
 
-Guidelines for working with ScaledTest, a full-stack application with Go backend and React frontend.
+Cross-cutting guidelines for the ScaledTest repository. For product vision, see `00-product.instructions.md`. For language-specific rules, see path-specific instruction files.
 
 ---
 
-## Purpose & Scope
+## Related Instruction Files
 
-These instructions apply to the entire ScaledTest repository. For language-specific rules, refer to path-specific instruction files in `.github/instructions/`.
+- `00-product.instructions.md` — Product vision, domain glossary, core principles (ALWAYS loaded)
+- `00-tools.instructions.md` — Research order, Context7 usage (ALWAYS loaded)
+- `auth.instructions.md` — Authentication patterns (loaded for auth files)
+- `generated.instructions.md` — Generated file rules (loaded for generated files)
+- `go*.instructions.md` — Go-specific patterns
+- `react.instructions.md`, `typescript.instructions.md` — Frontend patterns
+- `testing.instructions.md` — Test patterns
 
 ---
 
@@ -14,7 +20,7 @@ These instructions apply to the entire ScaledTest repository. For language-speci
 
 **ScaledTest is a 3-tier application:**
 
-- **Backend**: Go 1.24+ (Fiber v2.52, gRPC v1.73, JWT auth)
+- **Backend**: Go 1.24+ (Fiber v2.52, Connect-RPC, JWT auth)
 - **Frontend**: React 18+ (Vite, Tailwind CSS, React Router)
 - **Database**: PostgreSQL 16 with TimescaleDB 2.14.2
 
@@ -22,97 +28,9 @@ These instructions apply to the entire ScaledTest repository. For language-speci
 
 - `backend/` - Complete Go application with own dependencies
 - `frontend/` - Complete React application with own test infrastructure
-- `docker/` - Container orchestration and database initialization
+- `containers/` - Test runner images implementing the Runner Contract
 
 Each module is self-contained and can be developed independently.
-
----
-
-## gRPC-First API Design
-
-**CRITICAL: All new backend API endpoints MUST be defined as Protocol Buffers first.**
-
-ScaledTest uses a **gRPC-first architecture** with grpc-gateway for REST compatibility:
-
-- **Define services in `.proto` files** in `backend/api/proto/`
-- **Generate Go code** using `buf generate` to `backend/api/proto/`
-- **REST endpoints are auto-generated** via grpc-gateway HTTP annotations
-- **CLI and frontend clients** use generated gRPC/connect-web clients
-
-**Proto File Structure:**
-
-```protobuf
-syntax = "proto3";
-package api.v1;
-option go_package = "github.com/MichielDean/ScaledTest/backend/api/proto;proto";
-
-import "google/api/annotations.proto";
-
-service ExampleService {
-  rpc GetExample(GetExampleRequest) returns (ExampleResponse) {
-    option (google.api.http) = {
-      get: "/api/v1/examples/{id}"
-    };
-  }
-  
-  rpc CreateExample(CreateExampleRequest) returns (ExampleResponse) {
-    option (google.api.http) = {
-      post: "/api/v1/examples"
-      body: "*"
-    };
-  }
-}
-```
-
-**Code Generation:**
-
-```bash
-cd backend
-buf generate  # Generates Go + gRPC-gateway code to api/proto/
-```
-
-**Handler Implementation Pattern:**
-
-```go
-// internal/handlers/example_grpc.go
-type ExampleServiceServer struct {
-    pb.UnimplementedExampleServiceServer
-    service services.ExampleManager
-    logger  *zap.Logger
-}
-
-func (s *ExampleServiceServer) GetExample(ctx context.Context, req *pb.GetExampleRequest) (*pb.ExampleResponse, error) {
-    result, err := s.service.Get(ctx, req.Id)
-    if err != nil {
-        return nil, status.Error(codes.Internal, "failed to get example")
-    }
-    return modelToProto(result), nil
-}
-```
-
-**NEVER:**
-- Create new REST endpoints directly in Fiber/handlers without proto definitions
-- Define API types in Go structs instead of proto messages
-- Manually implement REST routes that could be grpc-gateway generated
-
-**Test Result Format: CTRF (Common Test Report Format)**
-
-- CTRF is the ONLY format for test results: https://ctrf.io
-- Backend: Use `go-jsonschema` to generate types from official schema
-- Database: Store in normalized tables (`ctrf_reports`, `ctrf_tests`, etc.)
-- NEVER store test results as JSONB - always deserialize into proper tables
-- See `.github/instructions/go.instructions.md` for type generation details
-
----
-
-## Context7 Usage
-
-**ALWAYS use Context7 before implementing features:**
-
-- Check Context7 for Fiber, gRPC, pgx patterns (Go)
-- Check Context7 for React, Vite, Router patterns (frontend)
-- Verify current package versions via Context7
-- Prefer standard solutions over custom implementations
 
 ---
 
@@ -120,16 +38,16 @@ func (s *ExampleServiceServer) GetExample(ctx context.Context, req *pb.GetExampl
 
 **CRITICAL: Never hardcode secrets in source code.**
 
-- Use `.env` files in `docker/` directory (git-ignored)
+- Use `.env` files (git-ignored) for local development
 - Document required variables in `.env.example` (committed)
-- Production: Use orchestrator secrets (Kubernetes, Docker Swarm, cloud providers)
-- NEVER commit secrets or deploy with `.env` files in production
+- Production: Use Kubernetes secrets or cloud provider secrets
+- NEVER commit secrets or tokens
 
 **Required Environment Variables:**
 
-- `JWT_SECRET` (min 32 chars), `DATABASE_URL` - **SECRETS**
+- `JWT_SECRET` (min 32 chars), `DATABASE_URL` — **SECRETS**
 - `DB_HOST`, `DB_PORT`, `DB_USER`, `DB_PASSWORD`, `DB_NAME`
-- `SERVER_PORT`, `GRPC_PORT`, `ENVIRONMENT`, `LOG_LEVEL`
+- `SERVER_PORT`, `ENVIRONMENT`, `LOG_LEVEL`
 - `VITE_API_URL` (frontend)
 
 ---
@@ -198,29 +116,12 @@ func (s *ExampleServiceServer) GetExample(ctx context.Context, req *pb.GetExampl
 
 ---
 
-## Authentication Standards
-
-**Backend agnostic UI:**
-
-- NEVER expose authentication backend details in UI
-- Use generic language: "Sign in" not provider-specific terms
-- Translate backend errors to user-friendly messages
-- No "realm", "client", "admin console" references in UI
-
-**Implementation:**
-
-- Backend: JWT with 7-day expiration, bcrypt hashing
-- Frontend: `useAuth()` hook, `withAuth` HOC
-- Middleware: `AuthMiddleware(jwtSecret, logger)`
-
----
-
 ## Testing Requirements
 
 **ALL TESTS MUST PASS** before completing any task.
 
 - Frontend: `cd frontend && npm test` (Playwright E2E tests)
-- Backend: `cd backend && go test ./...` (when implemented)
+- Backend: `cd backend && go test ./...`
 - NEVER re-run failing tests without making changes
 - Fix issues before retrying tests
 
@@ -340,58 +241,3 @@ These steps help to preserve reproducibility and surface errors instead of hidin
 - Focus on practical, actionable information
 - NEVER create summary or status documents
 
----
-
-## Code Examples
-
-**Component Structure:**
-
-```typescript
-// Proper React component with TypeScript
-import React from 'react';
-
-interface ButtonProps {
-  onClick?: () => void;
-  variant?: 'primary' | 'secondary';
-  children: React.ReactNode;
-}
-
-const Button: React.FC<ButtonProps> = ({
-  onClick,
-  variant = 'primary',
-  children
-}) => {
-  const baseClasses = 'px-4 py-2 rounded-lg font-medium transition-colors';
-  const variantClasses = variant === 'primary'
-    ? 'bg-blue-600 hover:bg-blue-700 text-white'
-    : 'bg-gray-200 hover:bg-gray-300 text-gray-800';
-
-  return (
-    <button
-      id="action-button"
-      onClick={onClick}
-      className={`${baseClasses} ${variantClasses}`}
-    >
-      {children}
-    </button>
-  );
-};
-
-export default Button;
-```
-
-**Error Handling:**
-
-```go
-// Proper Go error handling with logging
-func handler(c *fiber.Ctx) error {
-    data, err := fetchData()
-    if err != nil {
-        logger.Error("Failed to fetch data", zap.Error(err))
-        return c.Status(fiber.StatusInternalServerError).JSON(fiber.Map{
-            "error": "Failed to fetch data",
-        })
-    }
-    return c.JSON(data)
-}
-```

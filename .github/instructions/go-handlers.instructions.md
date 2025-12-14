@@ -8,9 +8,49 @@ Guidelines for HTTP and gRPC handlers in ScaledTest. Handlers depend on service 
 
 ---
 
-## Handler Pattern
+## gRPC/Connect Handler Pattern
 
-**Return a closure that captures dependencies:**
+**Preferred pattern for new handlers — implement the generated Connect interface:**
+
+```go
+// internal/handlers/example_connect.go
+type ExampleServiceHandler struct {
+    service services.ExampleManager
+    logger  *zap.Logger
+}
+
+func NewExampleServiceHandler(svc services.ExampleManager, logger *zap.Logger) *ExampleServiceHandler {
+    return &ExampleServiceHandler{service: svc, logger: logger}
+}
+
+func (h *ExampleServiceHandler) GetExample(
+    ctx context.Context,
+    req *connect.Request[pb.GetExampleRequest],
+) (*connect.Response[pb.GetExampleResponse], error) {
+    result, err := h.service.Get(ctx, req.Msg.Id)
+    if err != nil {
+        h.logger.Error("Failed to get example", zap.Error(err), zap.String("id", req.Msg.Id))
+        return nil, connect.NewError(connect.CodeInternal, errors.New("failed to get example"))
+    }
+    
+    return connect.NewResponse(&pb.GetExampleResponse{
+        Example: modelToProto(result),
+    }), nil
+}
+```
+
+**Connect error codes:**
+- `connect.CodeInvalidArgument` — bad input (400)
+- `connect.CodeNotFound` — resource not found (404)
+- `connect.CodeUnauthenticated` — missing/invalid auth (401)
+- `connect.CodePermissionDenied` — insufficient permissions (403)
+- `connect.CodeInternal` — unexpected errors (500)
+
+---
+
+## Fiber HTTP Handler Pattern
+
+**For legacy REST endpoints or non-gRPC routes — return a closure that captures dependencies:**
 ```go
 func CreateUserHandler(svc services.UserManager, logger *zap.Logger) fiber.Handler {
     return func(c *fiber.Ctx) error {
