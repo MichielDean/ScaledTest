@@ -8,6 +8,55 @@ Guidelines for gRPC service definitions in ScaledTest.
 
 ---
 
+## gRPC-First API Design
+
+**CRITICAL: All new backend API endpoints MUST be defined as Protocol Buffers first.**
+
+ScaledTest uses a **gRPC-first architecture** with grpc-gateway for REST compatibility:
+
+1. **Define services in `.proto` files** in `backend/api/proto/`
+2. **Generate Go code** using `buf generate`
+3. **REST endpoints are auto-generated** via grpc-gateway HTTP annotations
+4. **CLI and frontend clients** use generated gRPC/Connect-web clients
+
+**NEVER:**
+- Create new REST endpoints directly in Fiber without proto definitions
+- Define API types in Go structs instead of proto messages
+- Manually implement REST routes that could be grpc-gateway generated
+
+---
+
+## HTTP Annotations for REST
+
+Add `google.api.http` annotations for REST endpoint generation:
+
+```protobuf
+import "google/api/annotations.proto";
+
+service ExampleService {
+  rpc GetExample(GetExampleRequest) returns (ExampleResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/examples/{id}"
+    };
+  }
+  
+  rpc CreateExample(CreateExampleRequest) returns (ExampleResponse) {
+    option (google.api.http) = {
+      post: "/api/v1/examples"
+      body: "*"
+    };
+  }
+  
+  rpc ListExamples(ListExamplesRequest) returns (ListExamplesResponse) {
+    option (google.api.http) = {
+      get: "/api/v1/examples"
+    };
+  }
+}
+```
+
+---
+
 ## Syntax and Package
 
 ```protobuf
@@ -103,11 +152,26 @@ message User {
 **Never edit generated files manually.** Run generation after proto changes:
 
 ```powershell
-# Windows
-.\backend\scripts\generate-proto.ps1
-
-# Linux/macOS
-./backend/scripts/generate-proto.sh
+# Windows (preferred)
+cd backend
+buf generate
 ```
 
-Generated files: `*.pb.go`, `*_grpc.pb.go`
+```bash
+# Linux/macOS
+cd backend && buf generate
+```
+
+Generated files: `*.pb.go`, `*_grpc.pb.go`, `*.pb.gw.go`, `*connect*.go`
+
+---
+
+## CTRF Test Results
+
+Test results MUST use CTRF (Common Test Report Format). Generate Go types from the official schema:
+
+```bash
+go-jsonschema -p ctrf schema/ctrf.json -o internal/models/ctrf_types.go
+```
+
+**NEVER** store test results as raw JSONB — always deserialize into normalized database tables (`ctrf_reports`, `ctrf_tests`, etc.).
