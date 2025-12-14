@@ -153,3 +153,27 @@ MinIO secret name
 {{- printf "%s-minio" (include "scaledtest.fullname" .) }}
 {{- end }}
 {{- end }}
+
+{{/*
+CORS allowed origins
+Priority:
+1. Explicit CORS_ALLOWED_ORIGINS value if set
+2. Derive from ingress host when ingress enabled (with http/https based on TLS)
+3. Default to localhost URLs for NodePort access
+*/}}
+{{- define "scaledtest.corsOrigin" -}}
+{{- if .Values.backend.env.CORS_ALLOWED_ORIGINS }}
+{{- .Values.backend.env.CORS_ALLOWED_ORIGINS }}
+{{- else if .Values.ingress.enabled }}
+{{- $scheme := ternary "https" "http" .Values.ingress.tls.enabled }}
+{{- if .Values.ingress.host }}
+{{- printf "%s://%s" $scheme .Values.ingress.host }}
+{{- else }}
+{{- /* Empty host means localhost access via ingress on port 80/443 */ -}}
+{{- printf "%s://localhost" $scheme }}
+{{- end }}
+{{- else }}
+{{- /* NodePort fallback - include common development ports */ -}}
+http://localhost:30173,http://localhost:30080,http://localhost:5173,http://localhost:3000
+{{- end }}
+{{- end }}

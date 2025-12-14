@@ -96,12 +96,6 @@ PROJECT_NAME="${PROJECT_NAME:-ScaledTest}"
 export SCALEDTEST_API_URL="${SCALEDTEST_API_URL:-http://localhost:30080}"
 export SCALEDTEST_GRPC_URL="${SCALEDTEST_GRPC_URL:-localhost:30080}"
 
-# Skip flags
-SKIP_BUILD="${SKIP_BUILD:-false}"
-SKIP_DEPLOY="${SKIP_DEPLOY:-false}"
-SKIP_BACKEND_TESTS="${SKIP_BACKEND_TESTS:-false}"
-SKIP_FRONTEND_TESTS="${SKIP_FRONTEND_TESTS:-false}"
-
 # Exit codes
 BACKEND_EXIT_CODE=0
 FRONTEND_EXIT_CODE=0
@@ -229,16 +223,35 @@ ensure_registry() {
     print_success "Registry running at ${LOCAL_REGISTRY}"
 }
 
+ensure_ingress_controller() {
+    print_section "Ensuring Ingress Controller"
+    
+    # Check if ingress-nginx is already installed
+    if $KUBECTL_CMD get namespace ingress-nginx &>/dev/null && \
+       $KUBECTL_CMD get deployment -n ingress-nginx ingress-nginx-controller &>/dev/null; then
+        print_success "Ingress controller already installed"
+    else
+        echo "Installing nginx-ingress controller for Kind..."
+        $KUBECTL_CMD apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/controller-v1.12.0/deploy/static/provider/kind/deploy.yaml
+        
+        echo "Waiting for ingress controller to be ready..."
+        $KUBECTL_CMD wait --namespace ingress-nginx \
+            --for=condition=ready pod \
+            --selector=app.kubernetes.io/component=controller \
+            --timeout=120s || {
+            print_error "Ingress controller failed to start"
+            $KUBECTL_CMD get pods -n ingress-nginx
+            exit 1
+        }
+        print_success "Ingress controller ready"
+    fi
+}
+
 # ============================================================================
 # Build Images
 # ============================================================================
 
 build_images() {
-    if [[ "$SKIP_BUILD" == "true" ]]; then
-        print_warning "Skipping build (SKIP_BUILD=true)"
-        return 0
-    fi
-    
     print_section "Building Docker Images"
     
     echo "Building backend..."
@@ -261,12 +274,7 @@ build_images() {
 # Deploy Services
 # ============================================================================
 
-deploy_services() {
-    if [[ "$SKIP_DEPLOY" == "true" ]]; then
-        print_warning "Skipping deploy (SKIP_DEPLOY=true)"
-        return 0
-    fi
-    
+deploy_services() {   
     print_section "Deploying Services with Helm"
     
     # Ensure namespace exists
@@ -315,12 +323,27 @@ wait_for_services() {
     echo "Waiting for frontend rollout..."
     $KUBECTL_CMD rollout status deployment/scaledtest-frontend -n "$NAMESPACE" --timeout=60s || true
     
-    # Wait for backend health endpoint
+    # Wait for ingress to be ready
+    echo "Waiting for ingress..."
+    $KUBECTL_CMD wait --namespace "$NAMESPACE" \
+        --for=jsonpath='{.status.loadBalancer.ingress}' ingress/scaledtest \
+        --timeout=60s 2>/dev/null || true
+    
+    # Check backend health via ingress (primary) then NodePort (fallback)
     echo "Checking backend health..."
-    local retries=20
+    local retries=30
+    local health_url=""
     while [ $retries -gt 0 ]; do
+        # Try ingress first (http://localhost/health)
+        if curl -s http://localhost/health 2>/dev/null | grep -q "healthy"; then
+            health_url="http://localhost"
+            print_success "Backend healthy via ingress"
+            break
+        fi
+        # Fallback to NodePort
         if curl -s http://localhost:30080/health 2>/dev/null | grep -q "healthy"; then
-            print_success "Backend healthy"
+            health_url="http://localhost:30080"
+            print_success "Backend healthy via NodePort"
             break
         fi
         echo -n "."
@@ -331,9 +354,23 @@ wait_for_services() {
     
     if [ $retries -eq 0 ]; then
         print_error "Backend health check failed"
+        echo "Checking ingress status:"
+        $KUBECTL_CMD get ingress -n "$NAMESPACE" -o wide
+        echo "Checking backend logs:"
         $KUBECTL_CMD logs -n "$NAMESPACE" -l app.kubernetes.io/component=backend --tail=30
         exit 1
     fi
+    
+    # CLI always uses NodePort because Connect/gRPC protocol requires special ingress config
+    # Frontend (which uses JSON over HTTP) works fine via ingress
+    # For CLI commands, always use NodePort for reliability
+    export SCALEDTEST_API_URL="http://localhost:30080"
+    export SCALEDTEST_GRPC_URL="localhost:30080"
+    
+    if [ "$health_url" = "http://localhost" ]; then
+        print_success "Ingress healthy at http://localhost (frontend access)"
+    fi
+    print_success "CLI using NodePort at http://localhost:30080"
     
     print_success "All services ready"
 }
@@ -452,12 +489,7 @@ setup_platform() {
 # Backend Tests (Local)
 # ============================================================================
 
-run_backend_tests() {
-    if [[ "$SKIP_BACKEND_TESTS" == "true" ]]; then
-        print_warning "Skipping backend tests (SKIP_BACKEND_TESTS=true)"
-        return 0
-    fi
-    
+run_backend_tests() {  
     print_section "Running Backend Tests (Local)"
     
     if ! command -v go &>/dev/null; then
@@ -483,12 +515,7 @@ run_backend_tests() {
 # Frontend Tests (via K8s - dogfooding)
 # ============================================================================
 
-run_frontend_tests() {
-    if [[ "$SKIP_FRONTEND_TESTS" == "true" ]]; then
-        print_warning "Skipping frontend tests (SKIP_FRONTEND_TESTS=true)"
-        return 0
-    fi
-    
+run_frontend_tests() {   
     print_section "Running Frontend Tests (via K8s)"
     
     # Verify we have a project ID
@@ -614,80 +641,6 @@ print_summary() {
 }
 
 # ============================================================================
-# Help
-# ============================================================================
-
-show_help() {
-    cat << EOF
-ScaledTest Test Runner
-
-Usage: $0 [options]
-
-Options:
-    --help              Show this help message
-    --skip-build        Skip building Docker images
-    --skip-deploy       Skip Helm deployment
-    --skip-backend      Skip backend (Go) tests
-    --skip-frontend     Skip frontend (Playwright) tests
-
-Environment Variables:
-    NAMESPACE           Kubernetes namespace (default: scaledtest)
-    RELEASE_NAME        Helm release name (default: scaledtest)
-    LOCAL_REGISTRY      Local registry URL (default: localhost:5001)
-    ADMIN_EMAIL         Admin user email
-    ADMIN_PASSWORD      Admin user password
-    SKIP_BUILD          Set to 'true' to skip build
-    SKIP_DEPLOY         Set to 'true' to skip deploy
-    SKIP_BACKEND_TESTS  Set to 'true' to skip backend tests
-    SKIP_FRONTEND_TESTS Set to 'true' to skip frontend tests
-
-Examples:
-    # Run everything
-    $0
-
-    # Skip build and deploy (use existing deployment)
-    $0 --skip-build --skip-deploy
-
-    # Run only frontend tests
-    SKIP_BACKEND_TESTS=true $0 --skip-build --skip-deploy
-EOF
-}
-
-# ============================================================================
-# Argument Parsing
-# ============================================================================
-
-while [[ $# -gt 0 ]]; do
-    case $1 in
-        --help)
-            show_help
-            exit 0
-            ;;
-        --skip-build)
-            SKIP_BUILD=true
-            shift
-            ;;
-        --skip-deploy)
-            SKIP_DEPLOY=true
-            shift
-            ;;
-        --skip-backend)
-            SKIP_BACKEND_TESTS=true
-            shift
-            ;;
-        --skip-frontend)
-            SKIP_FRONTEND_TESTS=true
-            shift
-            ;;
-        *)
-            echo "Unknown option: $1"
-            show_help
-            exit 1
-            ;;
-    esac
-done
-
-# ============================================================================
 # Main
 # ============================================================================
 
@@ -696,6 +649,7 @@ main() {
     check_prerequisites
     ensure_registry
     ensure_kind_cluster
+    ensure_ingress_controller
     build_images
     deploy_services
     wait_for_services

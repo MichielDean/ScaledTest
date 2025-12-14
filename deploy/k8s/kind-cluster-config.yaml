@@ -13,6 +13,10 @@
 #   ./cluster-stop.ps1     # Stop cluster (preserves state)
 #
 # Access services at:
+#   Primary (via Ingress):
+#   - Application:    http://localhost (requires nginx-ingress controller)
+#
+#   Fallback (via NodePort):
 #   - Frontend:      http://localhost:30173
 #   - Backend HTTP:  http://localhost:30080
 #   - Backend gRPC:  localhost:30090
@@ -30,18 +34,34 @@ containerdConfigPatches:
 nodes:
   # Control plane node with port mappings for external access
   - role: control-plane
+    kubeadmConfigPatches:
+      - |
+        kind: InitConfiguration
+        nodeRegistration:
+          kubeletExtraArgs:
+            node-labels: "ingress-ready=true"
     extraPortMappings:
-      # Frontend (nginx serving React app)
+      # Ingress HTTP (primary access method)
+      - containerPort: 80
+        hostPort: 80
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # Ingress HTTPS (for TLS if needed)
+      - containerPort: 443
+        hostPort: 443
+        listenAddress: "127.0.0.1"
+        protocol: TCP
+      # Frontend (nginx serving React app) - NodePort fallback
       - containerPort: 30173
         hostPort: 30173
         listenAddress: "127.0.0.1"
         protocol: TCP
-      # Backend HTTP API
+      # Backend HTTP API - NodePort fallback
       - containerPort: 30080
         hostPort: 30080
         listenAddress: "127.0.0.1"
         protocol: TCP
-      # Backend gRPC
+      # Backend gRPC - NodePort fallback
       - containerPort: 30090
         hostPort: 30090
         listenAddress: "127.0.0.1"

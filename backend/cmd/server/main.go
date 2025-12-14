@@ -147,6 +147,13 @@ func main() {
 		w.Write([]byte(`{"status":"healthy"}`))
 	})
 
+	// Add ping endpoint for debugging frontend-backend connectivity
+	mux.HandleFunc("/api/ping", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusOK)
+		w.Write([]byte(`{"status":"ok","service":"scaledtest-backend","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
+	})
+
 	logger.Info("Connect-RPC services registered successfully",
 		zap.String("auth_path", authPath),
 		zap.String("k8s_path", k8sPath),

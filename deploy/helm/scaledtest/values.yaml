@@ -41,6 +41,10 @@ backend:
   env:
     LOG_LEVEL: info
     ENVIRONMENT: production
+    # CORS_ALLOWED_ORIGINS: When empty, derived from ingress.host (if enabled) or NodePort defaults
+    # Set explicitly for LoadBalancer or custom domain setups
+    # Example: "https://app.example.com,https://admin.example.com"
+    CORS_ALLOWED_ORIGINS: ""
 
   # -- Extra environment variables from secrets
   envFromSecrets: []
