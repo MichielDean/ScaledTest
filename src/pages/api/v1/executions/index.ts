@@ -40,8 +40,8 @@ export default createBetterAuthApi({
       dateTo,
     } = req.query as Record<string, string>;
 
-    const page = parseInt(pageStr ?? '1', 10) || 1;
-    const size = Math.min(parseInt(sizeStr ?? '20', 10) || 20, 100);
+    const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
+    const size = Math.min(Math.max(1, parseInt(sizeStr ?? '20', 10) || 20), 100);
 
     try {
       const { executions, total } = await listExecutions({

@@ -70,19 +70,16 @@ describe('DashboardView', () => {
   it('renders skeleton cards while loading', async () => {
     setupAuth('owner');
 
-    // Never resolves during this test
+    // Never resolves during this test — component stays in loading state
     fetchSpy.mockImplementation(() => new Promise(() => {}));
 
     render(<DashboardView />);
 
-    // Should show skeleton (loading state)
-    // Skeletons typically render as animate-pulse elements
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const _skeletons = document.querySelectorAll(
+    // Skeleton elements should be present while data is loading
+    const skeletons = document.querySelectorAll(
       '[data-testid="skeleton"], .animate-pulse, [class*="skeleton"]'
     );
-    // At minimum the component should render without crashing
-    expect(document.body).toBeTruthy();
+    expect(skeletons.length).toBeGreaterThan(0);
   });
 
   it('renders stat values after fetch resolves', async () => {

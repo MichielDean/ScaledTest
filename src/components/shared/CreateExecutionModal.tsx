@@ -29,33 +29,26 @@ import {
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/hooks/useAuth';
 
+// Form schema — all string fields as entered. Parallelism is validated as a string
+// that must parse to an integer in [1,50]; we convert manually on submit.
+// This avoids the react-hook-form + Zod transform type complexity.
 const createExecutionSchema = z.object({
   dockerImage: z
     .string()
     .min(1, 'Docker image is required')
     .regex(/^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$/, 'Invalid docker image name'),
   testCommand: z.string().min(1, 'Test command is required').max(1000),
-  // Keep as string to avoid coerce issues; we convert on submit
   parallelism: z
     .string()
-    .transform(v => parseInt(v, 10))
-    .pipe(z.number().int().min(1, 'Min 1').max(50, 'Max 50')),
+    .min(1)
+    .refine(v => {
+      const n = parseInt(v, 10);
+      return Number.isInteger(n) && n >= 1 && n <= 50;
+    }, 'Parallelism must be an integer between 1 and 50'),
   teamId: z.string().optional(),
 });
 
-type FormData = {
-  dockerImage: string;
-  testCommand: string;
-  parallelism: string;
-  teamId?: string;
-};
-
-type SubmitData = {
-  dockerImage: string;
-  testCommand: string;
-  parallelism: number;
-  teamId?: string;
-};
+type FormInput = z.infer<typeof createExecutionSchema>;
 
 interface Team {
   id: string;
@@ -78,9 +71,9 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
   const [submitError, setSubmitError] = useState<string | null>(null);
   const [teams, setTeams] = useState<Team[]>([]);
 
-  const form = useForm<FormData>({
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    resolver: zodResolver(createExecutionSchema) as any,
+  // zodResolver is typed against the schema's input type — use FormInput for useForm
+  const form = useForm<FormInput>({
+    resolver: zodResolver(createExecutionSchema),
     defaultValues: {
       dockerImage: '',
       testCommand: '',
@@ -97,33 +90,41 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.ok) {
-          const json = (await res.json()) as { teams?: Team[] };
-          setTeams(json.teams ?? []);
+          // /api/v1/teams re-exports from /api/teams which returns { data: Team[] }
+          const json = (await res.json()) as {
+            success?: boolean;
+            data?: Team[];
+            teams?: Team[]; // fallback for any legacy shape
+          };
+          if (json.success === false) {
+            setTeams([]);
+            return;
+          }
+          setTeams(Array.isArray(json.data) ? json.data : (json.teams ?? []));
         }
       } catch {
-        // teams are optional — ignore
+        // teams are optional — ignore failures silently
       }
     };
     void load();
   }, [open, token]);
 
-  const onSubmit = async (raw: FormData) => {
+  const onSubmit = async (data: FormInput) => {
     setSubmitting(true);
     setSubmitError(null);
     try {
-      const data: SubmitData = {
-        ...raw,
-        parallelism: parseInt(raw.parallelism, 10),
-        teamId: raw.teamId || undefined,
-      };
-
       const res = await fetch('/api/v1/executions', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify(data),
+        body: JSON.stringify({
+          dockerImage: data.dockerImage,
+          testCommand: data.testCommand,
+          parallelism: parseInt(data.parallelism, 10),
+          teamId: data.teamId || undefined,
+        }),
       });
       if (!res.ok) {
         const json = (await res.json()) as { error?: string };
@@ -152,9 +153,9 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
               name="dockerImage"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Docker Image</FormLabel>
+                  <FormLabel htmlFor="execution-docker-image">Docker Image</FormLabel>
                   <FormControl>
-                    <Input placeholder="node:20-alpine" {...field} />
+                    <Input id="execution-docker-image" placeholder="node:20-alpine" {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -166,9 +167,14 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
               name="testCommand"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Test Command</FormLabel>
+                  <FormLabel htmlFor="execution-test-command">Test Command</FormLabel>
                   <FormControl>
-                    <Textarea placeholder="npm test" rows={3} {...field} />
+                    <Textarea
+                      id="execution-test-command"
+                      placeholder="npm test"
+                      rows={3}
+                      {...field}
+                    />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -180,9 +186,9 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
               name="parallelism"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Parallelism (1–50)</FormLabel>
+                  <FormLabel htmlFor="execution-parallelism">Parallelism (1–50)</FormLabel>
                   <FormControl>
-                    <Input type="number" min={1} max={50} {...field} />
+                    <Input id="execution-parallelism" type="number" min={1} max={50} {...field} />
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -195,10 +201,10 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
                 name="teamId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Team (optional)</FormLabel>
+                    <FormLabel htmlFor="execution-team">Team (optional)</FormLabel>
                     <Select onValueChange={field.onChange} value={field.value ?? ''}>
                       <FormControl>
-                        <SelectTrigger>
+                        <SelectTrigger id="execution-team">
                           <SelectValue placeholder="No team" />
                         </SelectTrigger>
                       </FormControl>
@@ -219,10 +225,16 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
             {submitError && <p className="text-sm text-destructive">{submitError}</p>}
 
             <DialogFooter>
-              <Button type="button" variant="outline" onClick={onClose} disabled={submitting}>
+              <Button
+                id="execution-cancel-button"
+                type="button"
+                variant="outline"
+                onClick={onClose}
+                disabled={submitting}
+              >
                 Cancel
               </Button>
-              <Button type="submit" disabled={submitting}>
+              <Button id="execution-submit-button" type="submit" disabled={submitting}>
                 {submitting ? 'Submitting…' : 'Run Tests'}
               </Button>
             </DialogFooter>

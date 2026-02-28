@@ -131,8 +131,11 @@ export async function listExecutions(
     client = await pool.connect();
 
     const { page = 1, size = 20, status, teamId, requestedBy, dateFrom, dateTo } = filters;
-    const offset = (page - 1) * Math.min(size, 100);
-    const limit = Math.min(size, 100);
+    // Sanitize page/size defensively — callers outside the API layer may pass unclamped values
+    const normalizedPage = page > 0 ? page : 1;
+    const normalizedSize = size > 0 ? size : 20;
+    const limit = Math.min(normalizedSize, 100);
+    const offset = (normalizedPage - 1) * limit;
 
     const conditions: string[] = [];
     const values: unknown[] = [];

@@ -122,10 +122,23 @@ const ExecutionsView: React.FC = () => {
   const handleCancel = async () => {
     if (!cancelTarget) return;
     try {
-      await fetch(`/api/v1/executions/${cancelTarget.id}`, {
+      const res = await fetch(`/api/v1/executions/${cancelTarget.id}`, {
         method: 'DELETE',
         headers: token ? { Authorization: `Bearer ${token}` } : {},
       });
+
+      if (!res.ok) {
+        let errorMessage = `Cancel failed (${res.status})`;
+        try {
+          const body = (await res.json()) as { error?: string; message?: string };
+          errorMessage = body.error ?? body.message ?? errorMessage;
+        } catch {
+          // ignore JSON parse failure — use the default message
+        }
+        setError(errorMessage);
+        return;
+      }
+
       setCancelTarget(null);
       void fetchExecutions(page);
     } catch (err) {
@@ -150,7 +163,7 @@ const ExecutionsView: React.FC = () => {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold">Test Executions</h1>
         {isMaintainer && (
-          <Button onClick={() => setShowCreateModal(true)}>
+          <Button id="run-tests-button" onClick={() => setShowCreateModal(true)}>
             <Play className="mr-2 h-4 w-4" />
             Run Tests
           </Button>
@@ -186,7 +199,11 @@ const ExecutionsView: React.FC = () => {
             <div className="py-12 text-center">
               <p className="mb-4 text-muted-foreground">No executions yet</p>
               {isMaintainer && (
-                <Button variant="outline" onClick={() => setShowCreateModal(true)}>
+                <Button
+                  id="run-first-test-button"
+                  variant="outline"
+                  onClick={() => setShowCreateModal(true)}
+                >
                   Run your first test
                 </Button>
               )}
@@ -305,6 +322,7 @@ const ExecutionsView: React.FC = () => {
           onClose={() => setShowCreateModal(false)}
           onSuccess={() => {
             setShowCreateModal(false);
+            setPage(1);
             void fetchExecutions(1);
           }}
         />

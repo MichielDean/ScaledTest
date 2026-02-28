@@ -20,8 +20,7 @@ const DashboardView: React.FC = () => {
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const [_statsError, setStatsError] = useState<string | null>(null);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -95,6 +94,12 @@ const DashboardView: React.FC = () => {
             </div>
           </CardContent>
         </Card>
+      )}
+
+      {statsError && (
+        <p className="text-sm text-destructive" role="alert">
+          {statsError}
+        </p>
       )}
 
       <div className="grid auto-rows-min gap-4 md:grid-cols-3">

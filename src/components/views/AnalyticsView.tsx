@@ -110,7 +110,7 @@ const AnalyticsView: React.FC = () => {
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold">Analytics</h1>
         <Select value={dateRange} onValueChange={v => setDateRange(v as DateRange)}>
-          <SelectTrigger className="w-40">
+          <SelectTrigger id="analytics-date-range" className="w-40">
             <SelectValue placeholder="Last 30 days" />
           </SelectTrigger>
           <SelectContent>
@@ -120,6 +120,7 @@ const AnalyticsView: React.FC = () => {
           </SelectContent>
         </Select>
         <Input
+          id="analytics-tool-filter"
           className="w-48"
           placeholder="Filter by tool…"
           value={tool}

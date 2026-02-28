@@ -1,5 +1,9 @@
 exports.shorthands = undefined;
 
+// CREATE INDEX CONCURRENTLY cannot run inside a transaction.
+// node-pg-migrate wraps migrations in transactions by default — opt out here.
+exports.noTransaction = true;
+
 exports.up = pgm => {
   pgm.sql(`
     CREATE INDEX CONCURRENTLY IF NOT EXISTS idx_test_reports_test_data_gin

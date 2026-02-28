@@ -1,4 +1,3 @@
-/* eslint-disable no-console */
 import { execSync } from 'child_process';
 import axios from 'axios';
 
@@ -13,7 +12,7 @@ const WORKER_TIMEOUT_MS = parseInt(process.env.WORKER_TIMEOUT_MS ?? '3600000', 1
 const WORKER_MAX_BUFFER_BYTES = 50 * 1024 * 1024; // 50MB — hard cap on stdout/stderr capture
 
 if (!TEST_COMMAND) {
-  console.error('TEST_COMMAND env var is required');
+  process.stderr.write('TEST_COMMAND env var is required\n');
   process.exit(1);
 }
 
@@ -67,7 +66,7 @@ const report = {
   },
 };
 
-// POST to ScaledTest API
+// POST to ScaledTest API — best-effort, don't fail the pod on submission error
 try {
   await axios.post(`${API_URL}/reports`, report, {
     headers: {
@@ -76,10 +75,9 @@ try {
     },
     params: EXECUTION_ID ? { executionId: EXECUTION_ID } : undefined,
   });
-  console.log('Test results submitted successfully');
+  process.stdout.write('Test results submitted successfully\n');
 } catch (err) {
-  console.error('Failed to submit results:', err);
-  // Don't fail the pod — results are best-effort
+  process.stderr.write(`Failed to submit results: ${String(err)}\n`);
 }
 
 process.exit(exitCode);

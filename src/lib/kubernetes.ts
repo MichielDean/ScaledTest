@@ -87,22 +87,26 @@ async function kubernetesRequest(
     Accept: 'application/json',
   };
 
-  // Always verify TLS. If a CA cert is available, pass it to the agent so
-  // self-signed cluster certs are accepted without disabling verification.
+  // Always verify TLS. Pass the cluster CA cert to the agent so self-signed
+  // cluster certs are accepted without disabling verification.
+  // We use the Node.js https.Agent via the global fetch's `dispatcher`-compatible
+  // `agent` option (Node 18+ built-in fetch accepts https.Agent on this property).
   // Certificate validation is NEVER disabled — rejectUnauthorized stays true.
   const agent = new https.Agent({
     rejectUnauthorized: true,
     ...(config.caCert ? { ca: config.caCert } : {}),
   });
 
-  const fetchOptions: Parameters<typeof fetch>[1] & { agent: https.Agent } = {
+  const response = await fetch(url, {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    agent,
-  };
+    // Node 18+ built-in fetch (undici-backed) accepts https.Agent here.
+    // This is intentionally not in the TypeScript DOM RequestInit type;
+    // the cast is safe and well-documented Node.js behaviour.
+    ...({ agent } as object),
+  });
 
-  const response = await fetch(url, fetchOptions);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Kubernetes API ${method} ${path} failed: ${response.status} ${text}`);
