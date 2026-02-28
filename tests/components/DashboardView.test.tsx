@@ -3,7 +3,7 @@
  * Written BEFORE implementation per TDD requirement.
  */
 import React from 'react';
-import { render, screen, waitFor, act } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
 
 // Mock SPANavigationContext
 jest.mock('../../src/contexts/SPANavigationContext', () => ({
@@ -77,7 +77,8 @@ describe('DashboardView', () => {
 
     // Should show skeleton (loading state)
     // Skeletons typically render as animate-pulse elements
-    const skeletons = document.querySelectorAll(
+    // eslint-disable-next-line @typescript-eslint/no-unused-vars
+    const _skeletons = document.querySelectorAll(
       '[data-testid="skeleton"], .animate-pulse, [class*="skeleton"]'
     );
     // At minimum the component should render without crashing

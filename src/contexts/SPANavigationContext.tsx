@@ -10,7 +10,8 @@ export type SPAView =
   | 'simple-test-dashboard'
   | 'profile'
   | 'admin-users'
-  | 'admin-teams';
+  | 'admin-teams'
+  | 'executions';
 
 interface SPANavigationContextType {
   currentView: SPAView;
@@ -49,6 +50,7 @@ export const SPANavigationProvider: React.FC<SPANavigationProviderProps> = ({
         'profile',
         'admin-users',
         'admin-teams',
+        'executions',
       ];
 
       if (validViews.includes(viewFromUrl)) {

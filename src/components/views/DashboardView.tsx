@@ -20,7 +20,8 @@ const DashboardView: React.FC = () => {
 
   const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-  const [statsError, setStatsError] = useState<string | null>(null);
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;

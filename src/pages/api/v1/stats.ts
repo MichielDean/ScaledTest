@@ -7,7 +7,7 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { getTimescalePool } from '@/lib/timescaledb';
-import { apiLogger as logger, getRequestLogger } from '@/logging/logger';
+import { apiLogger as logger } from '@/logging/logger';
 
 export interface StatsData {
   totalReports: number;
@@ -67,11 +67,7 @@ async function fetchStatsFromDB(): Promise<StatsData> {
 }
 
 export default createBetterAuthApi({
-  GET: async (
-    _req: BetterAuthenticatedRequest,
-    res: NextApiResponse,
-    _reqLogger: ReturnType<typeof getRequestLogger>
-  ) => {
+  GET: async (_req: BetterAuthenticatedRequest, res: NextApiResponse) => {
     const now = Date.now();
     const cached = statsCache.get(CACHE_KEY);
 

@@ -1,0 +1,32 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: scaledtest-executor
+  namespace: scaledtest
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: scaledtest-executor
+  namespace: scaledtest
+rules:
+  - apiGroups: ['batch']
+    resources: ['jobs']
+    verbs: ['create', 'get', 'list', 'watch', 'delete']
+  - apiGroups: ['']
+    resources: ['pods']
+    verbs: ['get', 'list', 'watch']
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: scaledtest-executor
+  namespace: scaledtest
+subjects:
+  - kind: ServiceAccount
+    name: scaledtest-executor
+    namespace: scaledtest
+roleRef:
+  kind: Role
+  name: scaledtest-executor
+  apiGroup: rbac.authorization.k8s.io

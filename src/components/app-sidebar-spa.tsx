@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BarChart3, Building2, FileText, Home, Settings, TestTube } from 'lucide-react';
+import { BarChart3, Building2, FileText, Home, Play, Settings, TestTube } from 'lucide-react';
 
 import { NavMain } from '@/components/nav-main-spa';
 import { NavProjects } from '@/components/nav-projects';
@@ -28,6 +28,13 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
       icon: Home,
       isActive: currentView === 'dashboard',
       id: 'headerDashboard',
+    },
+    {
+      title: 'Executions',
+      onClick: () => navigateTo('executions'),
+      icon: Play,
+      isActive: currentView === 'executions',
+      id: 'headerExecutions',
     },
     {
       title: 'Analytics',
