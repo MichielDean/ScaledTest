@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: scaledtest-app
+  namespace: scaledtest
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: scaledtest
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scaledtest
+    spec:
+      serviceAccountName: scaledtest-executor
+      containers:
+        - name: scaledtest
+          image: scaledtest:latest
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: production
+          envFrom:
+            - secretRef:
+                name: scaledtest-env
+          resources:
+            requests:
+              cpu: '250m'
+              memory: '256Mi'
+            limits:
+              cpu: '1000m'
+              memory: '1Gi'
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: scaledtest-service
+  namespace: scaledtest
+spec:
+  selector:
+    app.kubernetes.io/name: scaledtest
+  ports:
+    - port: 80
+      targetPort: 3000
+  type: ClusterIP
