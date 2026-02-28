@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import { useAuth } from '../../hooks/useAuth';
-import { UserRole } from '../../types/roles';
+import { UserRole } from '../../lib/roles';
 import axios from 'axios';
 import { uiLogger as logger, logError } from '../../logging/logger';
 import { TeamWithMemberCount, TeamPermissions } from '../../types/team';

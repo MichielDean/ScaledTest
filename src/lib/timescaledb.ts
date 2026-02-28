@@ -402,13 +402,10 @@ export const searchCtrfReports = async (
         paramIndex++;
       }
 
-      // Status filter requires JSON parsing of test_data
+      // Status filter uses GIN-compatible containment operator
       if (status) {
-        conditions.push(`EXISTS (
-        SELECT 1 FROM jsonb_array_elements(test_data->'tests') AS test 
-        WHERE test->>'status' = $${paramIndex}
-      )`);
-        values.push(status);
+        conditions.push(`test_data @> $${paramIndex}::jsonb`);
+        values.push(JSON.stringify({ tests: [{ status }] }));
         paramIndex++;
       }
 

@@ -15,6 +15,7 @@
     "test": "npx tsx scripts/build-and-test.ts",
     "test:unit": "npx tsx scripts/build-and-test.ts --selectProjects Unit",
     "test:components": "npx tsx scripts/build-and-test.ts --selectProjects Components",
+    "test:ci": "npx tsx scripts/build-and-test.ts --selectProjects Unit Components",
     "test:integration": "npx tsx scripts/build-and-test.ts --selectProjects Integration",
     "test:system": "npx tsx scripts/build-and-test.ts --selectProjects System",
     "send-test-results": "npx tsx scripts/send-test-results.ts",
