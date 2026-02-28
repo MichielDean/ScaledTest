@@ -3,51 +3,73 @@ import https from 'https';
 import { dbLogger as logger, logError } from '../logging/logger';
 import { TestExecution, updateExecutionStatus, listExecutions } from './executions';
 
-// Kubernetes client config — reads from in-cluster service account or KUBECONFIG
+// Kubernetes client config — reads from in-cluster service account or env vars
 export interface KubernetesConfig {
   apiServer: string;
   token: string;
   namespace: string;
-  skipTlsVerify?: boolean;
+  // CA certificate for TLS verification. Always verify — never skip.
+  // In-cluster: auto-loaded from the service account mount.
+  // Out-of-cluster: set KUBERNETES_CA_CERT_PATH to a PEM file, or
+  //   KUBERNETES_CA_CERT to a base64-encoded PEM string.
+  caCert?: string;
 }
 
-// Memoized — config reads from the service account token file on disk; no need to re-read
-// on every request. Null means Kubernetes is not configured (local dev without a cluster).
+// Memoized — config reads files from disk; no reason to re-read on every request.
+// Null means Kubernetes is not configured (local dev without a cluster).
 let _cachedKubernetesConfig: KubernetesConfig | null | undefined = undefined;
 
 function getKubernetesConfig(): KubernetesConfig | null {
   if (_cachedKubernetesConfig !== undefined) return _cachedKubernetesConfig;
 
-  // In-cluster: service account token is mounted at well-known path
+  // In-cluster: service account files are mounted at well-known paths
   try {
     const token = readFileSync(
       '/var/run/secrets/kubernetes.io/serviceaccount/token',
       'utf8'
     ).trim();
+    const caCert = readFileSync('/var/run/secrets/kubernetes.io/serviceaccount/ca.crt', 'utf8');
     const apiServer = `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`;
     _cachedKubernetesConfig = {
       apiServer,
       token,
+      caCert,
       namespace: process.env.SCALEDTEST_NAMESPACE ?? 'scaledtest',
     };
+    return _cachedKubernetesConfig;
   } catch {
-    // Not in-cluster — check env vars for out-of-cluster dev setup
-    if (process.env.KUBERNETES_API_SERVER && process.env.KUBERNETES_TOKEN) {
-      _cachedKubernetesConfig = {
-        apiServer: process.env.KUBERNETES_API_SERVER,
-        token: process.env.KUBERNETES_TOKEN,
-        namespace: process.env.SCALEDTEST_NAMESPACE ?? 'scaledtest',
-        skipTlsVerify: process.env.KUBERNETES_SKIP_TLS === 'true',
-      };
-    } else {
-      _cachedKubernetesConfig = null;
-    }
+    // Not in-cluster — check env vars for out-of-cluster setup
   }
 
-  return _cachedKubernetesConfig;
+  if (process.env.KUBERNETES_API_SERVER && process.env.KUBERNETES_TOKEN) {
+    let caCert: string | undefined;
+
+    if (process.env.KUBERNETES_CA_CERT_PATH) {
+      // Path to a PEM file (e.g. from kubeconfig)
+      try {
+        caCert = readFileSync(process.env.KUBERNETES_CA_CERT_PATH, 'utf8');
+      } catch (err) {
+        logError(logger, 'Failed to read KUBERNETES_CA_CERT_PATH', err);
+      }
+    } else if (process.env.KUBERNETES_CA_CERT) {
+      // Base64-encoded PEM passed directly as an env var
+      caCert = Buffer.from(process.env.KUBERNETES_CA_CERT, 'base64').toString('utf8');
+    }
+
+    _cachedKubernetesConfig = {
+      apiServer: process.env.KUBERNETES_API_SERVER,
+      token: process.env.KUBERNETES_TOKEN,
+      caCert,
+      namespace: process.env.SCALEDTEST_NAMESPACE ?? 'scaledtest',
+    };
+    return _cachedKubernetesConfig;
+  }
+
+  _cachedKubernetesConfig = null;
+  return null;
 }
 
-// Exported for testing only — allows resetting the memoized config between test runs
+// Exported for testing only — resets the memoized config between test runs
 export function _resetKubernetesConfigCache(): void {
   _cachedKubernetesConfig = undefined;
 }
@@ -65,20 +87,20 @@ async function kubernetesRequest(
     Accept: 'application/json',
   };
 
-  // When skipTlsVerify is requested (dev clusters with self-signed certs), scope the
-  // rejectUnauthorized:false to THIS request only via an https.Agent.
-  // NEVER set process.env.NODE_TLS_REJECT_UNAUTHORIZED — that disables TLS verification
-  // globally for the entire process, affecting all outbound connections permanently.
-  const fetchOptions: Parameters<typeof fetch>[1] & { agent?: https.Agent } = {
+  // Always verify TLS. If a CA cert is available, pass it to the agent so
+  // self-signed cluster certs are accepted without disabling verification.
+  // Certificate validation is NEVER disabled — rejectUnauthorized stays true.
+  const agent = new https.Agent({
+    rejectUnauthorized: true,
+    ...(config.caCert ? { ca: config.caCert } : {}),
+  });
+
+  const fetchOptions: Parameters<typeof fetch>[1] & { agent: https.Agent } = {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
+    agent,
   };
-
-  if (config.skipTlsVerify) {
-    // Only used in dev environments. In production skipTlsVerify must never be true.
-    fetchOptions.agent = new https.Agent({ rejectUnauthorized: false });
-  }
 
   const response = await fetch(url, fetchOptions);
   if (!response.ok) {
