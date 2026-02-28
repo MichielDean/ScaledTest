@@ -10,7 +10,12 @@ import { getErrorAnalysis } from '@/lib/analytics';
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
     const { days: daysStr, limit: limitStr } = req.query as Record<string, string>;
-    const days = parseInt(daysStr ?? '30', 10) || 30;
+    const days = parseInt(daysStr ?? '30', 10);
+    if (!Number.isInteger(days) || days < 1 || days > 365) {
+      return res
+        .status(400)
+        .json({ success: false, error: 'days must be an integer between 1 and 365' });
+    }
     const limit = Math.min(parseInt(limitStr ?? '20', 10) || 20, 100);
 
     try {

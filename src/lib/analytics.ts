@@ -33,6 +33,18 @@ export interface DurationBucket {
   avgDuration: number;
 }
 
+/**
+ * Validates and clamps the `days` parameter. All analytics functions accept `days` from
+ * user-supplied query params; we validate here AND at the call site (API handlers) for
+ * defense in depth. Never interpolate user input into SQL — use parameterized queries.
+ */
+function validateDays(days: number | undefined): number {
+  const d = Math.floor(days ?? 30);
+  if (!Number.isFinite(d) || d < 1) return 1;
+  if (d > 365) return 365;
+  return d;
+}
+
 export async function getTestTrends(filters: {
   days?: number;
   tool?: string;
@@ -40,15 +52,18 @@ export async function getTestTrends(filters: {
   teamIds?: string[];
   uploadedBy?: string;
 }): Promise<TrendPoint[]> {
-  const { days = 30, tool, environment } = filters;
+  const days = validateDays(filters.days);
+  const { tool, environment } = filters;
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    const conditions: string[] = [`timestamp >= NOW() - INTERVAL '${days} days'`];
-    const values: unknown[] = [];
-    let p = 1;
+    // Use parameterized interval — NEVER string-interpolate user-supplied values into SQL.
+    // $1 is the days count; cast to integer in SQL for the interval multiplication.
+    const conditions: string[] = [`timestamp >= NOW() - ($1 * INTERVAL '1 day')`];
+    const values: unknown[] = [days];
+    let p = 2;
 
     if (tool) {
       conditions.push(`tool_name = $${p++}`);
@@ -107,12 +122,18 @@ export async function getFlakyTests(filters: {
   minRuns?: number;
   tool?: string;
 }): Promise<FlakyTestResult[]> {
-  const { days = 30, minRuns = 3 } = filters;
+  const days = validateDays(filters.days);
+  const minRuns = Math.max(1, Math.floor(filters.minRuns ?? 3));
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
 
+    // NOTE: jsonb_array_elements does not benefit from the GIN index — it does a full
+    // JSONB expansion of every row in the time window. This is an acceptable trade-off
+    // for the flaky-test analytics query (infrequently run, smaller window, no hot path).
+    // TODO: migrate test data to a normalized `test_results` table to make this indexable.
+    // The timestamp range filter ($1) does benefit from the timestamp hypertable index.
     const result = await client.query(
       `WITH test_runs AS (
         SELECT
@@ -122,7 +143,7 @@ export async function getFlakyTests(filters: {
           (t->>'duration')::numeric AS duration
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - INTERVAL '${days} days'
+        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
           AND t->>'name' IS NOT NULL
       ),
       grouped AS (
@@ -135,13 +156,13 @@ export async function getFlakyTests(filters: {
           AVG(duration) AS avg_duration
         FROM test_runs
         GROUP BY test_name, suite
-        HAVING COUNT(*) >= $1
+        HAVING COUNT(*) >= $2
       )
       SELECT * FROM grouped
       WHERE passed > 0 AND failed > 0
       ORDER BY (failed::float / total_runs) DESC
       LIMIT 50`,
-      [minRuns]
+      [days, minRuns]
     );
 
     return result.rows.map(row => {
@@ -177,7 +198,8 @@ export async function getErrorAnalysis(filters: {
   days?: number;
   limit?: number;
 }): Promise<ErrorAnalysisResult[]> {
-  const { days = 30, limit = 20 } = filters;
+  const days = validateDays(filters.days);
+  const limit = Math.min(Math.max(1, Math.floor(filters.limit ?? 20)), 100);
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
@@ -190,7 +212,7 @@ export async function getErrorAnalysis(filters: {
           t->>'name' AS test_name
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - INTERVAL '${days} days'
+        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
           AND t->>'status' = 'failed'
           AND t->>'message' IS NOT NULL
       )
@@ -201,8 +223,8 @@ export async function getErrorAnalysis(filters: {
       FROM failures
       GROUP BY error_message
       ORDER BY count DESC
-      LIMIT $1`,
-      [limit]
+      LIMIT $2`,
+      [days, limit]
     );
 
     return result.rows.map(row => {
@@ -225,7 +247,7 @@ export async function getDurationDistribution(filters: {
   days?: number;
   tool?: string;
 }): Promise<DurationBucket[]> {
-  const { days = 30 } = filters;
+  const days = validateDays(filters.days);
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
@@ -236,7 +258,7 @@ export async function getDurationDistribution(filters: {
         SELECT (t->>'duration')::numeric AS duration
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - INTERVAL '${days} days'
+        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
           AND t->>'duration' IS NOT NULL
       )
       SELECT
@@ -251,7 +273,8 @@ export async function getDurationDistribution(filters: {
         ROUND(AVG(duration))::integer AS avg_duration
       FROM test_durations
       GROUP BY range
-      ORDER BY MIN(duration)`
+      ORDER BY MIN(duration)`,
+      [days]
     );
 
     // Ensure all buckets are always present even if DB has no data for some

@@ -7,6 +7,11 @@ const API_TOKEN = process.env.SCALEDTEST_API_TOKEN ?? '';
 const TEST_COMMAND = process.env.TEST_COMMAND ?? '';
 const EXECUTION_ID = process.env.EXECUTION_ID ?? '';
 
+// Configurable timeout — defaults to 1 hour. Set WORKER_TIMEOUT_MS env var to override.
+// Without a timeout, a runaway test process hangs the pod forever consuming K8s resources.
+const WORKER_TIMEOUT_MS = parseInt(process.env.WORKER_TIMEOUT_MS ?? '3600000', 10);
+const WORKER_MAX_BUFFER_BYTES = 50 * 1024 * 1024; // 50MB — hard cap on stdout/stderr capture
+
 if (!TEST_COMMAND) {
   console.error('TEST_COMMAND env var is required');
   process.exit(1);
@@ -18,7 +23,12 @@ let stdout = '';
 let stderr = '';
 
 try {
-  stdout = execSync(TEST_COMMAND, { encoding: 'utf8', stdio: 'pipe' });
+  stdout = execSync(TEST_COMMAND, {
+    encoding: 'utf8',
+    stdio: 'pipe',
+    timeout: WORKER_TIMEOUT_MS,
+    maxBuffer: WORKER_MAX_BUFFER_BYTES,
+  });
 } catch (err: unknown) {
   exitCode = (err as { status?: number }).status ?? 1;
   stderr = (err as { stderr?: string }).stderr ?? String(err);

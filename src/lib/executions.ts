@@ -253,10 +253,39 @@ export async function updateExecutionStatus(
 }
 
 export async function cancelExecution(id: string): Promise<TestExecution | null> {
-  const execution = await getExecution(id);
-  if (!execution) return null;
-  if (execution.status !== 'queued') {
-    throw new Error(`Cannot cancel execution in status: ${execution.status}`);
+  let client: PoolClient | null = null;
+  try {
+    const pool = getTimescalePool();
+    client = await pool.connect();
+
+    // Atomic compare-and-swap: only cancel if currently 'queued'.
+    // A separate read+check would have a TOCTOU race — two concurrent cancellations
+    // could both pass the check. Single UPDATE with WHERE status='queued' is atomic.
+    const result = await client.query(
+      `UPDATE test_executions
+       SET status = 'cancelled', updated_at = now()
+       WHERE id = $1 AND status = 'queued'
+       RETURNING *`,
+      [id]
+    );
+
+    if (result.rowCount === 0) {
+      // Either id doesn't exist, or execution is not in queued state.
+      // Distinguish the two to give callers a useful error.
+      const existing = await client.query('SELECT status FROM test_executions WHERE id = $1', [id]);
+      if (existing.rowCount === 0) return null;
+      throw new Error(
+        `Cannot cancel execution in status: ${(existing.rows[0] as { status: string }).status}`
+      );
+    }
+
+    return rowToExecution(result.rows[0] as Record<string, unknown>);
+  } catch (error) {
+    // Re-throw business logic errors as-is; wrap DB errors
+    if (error instanceof Error && error.message.startsWith('Cannot cancel')) throw error;
+    logError(logger, 'Failed to cancel execution', error, { id });
+    throw error;
+  } finally {
+    client?.release();
   }
-  return updateExecutionStatus(id, 'cancelled');
 }

@@ -174,3 +174,45 @@ describe('getDurationDistribution', () => {
     expect(slow.count).toBe(0);
   });
 });
+
+// ─── validateDays security tests ───────────────────────────────────────────
+// validateDays is not exported — we test it indirectly by verifying the
+// parameterized $1 in the query is always a safe integer, never a raw string.
+
+describe('SQL injection prevention — days parameter', () => {
+  it('clamps days to 365 when given an absurdly large number', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getTestTrends({ days: 99999 });
+
+    const call = client.query.mock.calls[0] as [string, unknown[]];
+    const daysParam = call[1][0] as number;
+    expect(daysParam).toBe(365);
+    expect(typeof daysParam).toBe('number');
+  });
+
+  it('clamps days to 1 when given 0 or negative', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getTestTrends({ days: -5 });
+
+    const call = client.query.mock.calls[0] as [string, unknown[]];
+    const daysParam = call[1][0] as number;
+    expect(daysParam).toBe(1);
+  });
+
+  it('uses parameterized query — days is never string-interpolated into SQL', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getTestTrends({ days: 30 });
+
+    const sql = (client.query.mock.calls[0] as [string])[0];
+    // Should NOT contain a literal number in the INTERVAL clause
+    expect(sql).not.toMatch(/INTERVAL '30 days'/);
+    // Should use a parameter placeholder
+    expect(sql).toMatch(/\$1 \* INTERVAL/);
+  });
+});

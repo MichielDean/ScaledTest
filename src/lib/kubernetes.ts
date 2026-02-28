@@ -1,4 +1,5 @@
 import { readFileSync } from 'fs';
+import https from 'https';
 import { dbLogger as logger, logError } from '../logging/logger';
 import { TestExecution, updateExecutionStatus, listExecutions } from './executions';
 
@@ -10,7 +11,13 @@ export interface KubernetesConfig {
   skipTlsVerify?: boolean;
 }
 
+// Memoized — config reads from the service account token file on disk; no need to re-read
+// on every request. Null means Kubernetes is not configured (local dev without a cluster).
+let _cachedKubernetesConfig: KubernetesConfig | null | undefined = undefined;
+
 function getKubernetesConfig(): KubernetesConfig | null {
+  if (_cachedKubernetesConfig !== undefined) return _cachedKubernetesConfig;
+
   // In-cluster: service account token is mounted at well-known path
   try {
     const token = readFileSync(
@@ -18,7 +25,7 @@ function getKubernetesConfig(): KubernetesConfig | null {
       'utf8'
     ).trim();
     const apiServer = `https://${process.env.KUBERNETES_SERVICE_HOST}:${process.env.KUBERNETES_SERVICE_PORT}`;
-    return {
+    _cachedKubernetesConfig = {
       apiServer,
       token,
       namespace: process.env.SCALEDTEST_NAMESPACE ?? 'scaledtest',
@@ -26,15 +33,23 @@ function getKubernetesConfig(): KubernetesConfig | null {
   } catch {
     // Not in-cluster — check env vars for out-of-cluster dev setup
     if (process.env.KUBERNETES_API_SERVER && process.env.KUBERNETES_TOKEN) {
-      return {
+      _cachedKubernetesConfig = {
         apiServer: process.env.KUBERNETES_API_SERVER,
         token: process.env.KUBERNETES_TOKEN,
         namespace: process.env.SCALEDTEST_NAMESPACE ?? 'scaledtest',
         skipTlsVerify: process.env.KUBERNETES_SKIP_TLS === 'true',
       };
+    } else {
+      _cachedKubernetesConfig = null;
     }
-    return null;
   }
+
+  return _cachedKubernetesConfig;
+}
+
+// Exported for testing only — allows resetting the memoized config between test runs
+export function _resetKubernetesConfigCache(): void {
+  _cachedKubernetesConfig = undefined;
 }
 
 async function kubernetesRequest(
@@ -50,18 +65,22 @@ async function kubernetesRequest(
     Accept: 'application/json',
   };
 
-  const options: { method: string; headers: Record<string, string>; body?: string } = {
+  // When skipTlsVerify is requested (dev clusters with self-signed certs), scope the
+  // rejectUnauthorized:false to THIS request only via an https.Agent.
+  // NEVER set process.env.NODE_TLS_REJECT_UNAUTHORIZED — that disables TLS verification
+  // globally for the entire process, affecting all outbound connections permanently.
+  const fetchOptions: Parameters<typeof fetch>[1] & { agent?: https.Agent } = {
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
   };
 
   if (config.skipTlsVerify) {
-    // Note: In production, always verify TLS. This is only for dev.
-    process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
+    // Only used in dev environments. In production skipTlsVerify must never be true.
+    fetchOptions.agent = new https.Agent({ rejectUnauthorized: false });
   }
 
-  const response = await fetch(url, options);
+  const response = await fetch(url, fetchOptions);
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Kubernetes API ${method} ${path} failed: ${response.status} ${text}`);
@@ -79,6 +98,9 @@ export async function createKubernetesJob(execution: TestExecution): Promise<str
     return 'kubernetes-not-configured';
   }
 
+  // Job name: "scaledtest-" (11) + first 8 hex chars of UUID (8) + "-" (1) + epoch ms (13) = 33 chars.
+  // K8s names must be ≤63 chars, RFC 1123 compliant (lowercase alphanum + "-").
+  // UUID v4 hex chars are [0-9a-f] so substring(0,8) is always RFC-1123-safe.
   const jobName = `scaledtest-${execution.id.substring(0, 8)}-${Date.now()}`;
   const resourceLimits = execution.resourceLimits;
 

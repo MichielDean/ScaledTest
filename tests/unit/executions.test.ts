@@ -196,36 +196,42 @@ describe('updateExecutionStatus', () => {
 });
 
 describe('cancelExecution', () => {
-  it('cancels a queued execution', async () => {
-    const getClient = makeClient([fakeRow]);
-    getClient.query.mockResolvedValue({ rows: [fakeRow] });
-
+  it('cancels a queued execution atomically (single UPDATE with WHERE status=queued)', async () => {
     const cancelledRow = { ...fakeRow, status: 'cancelled' };
-    const updateClient = makeClient([cancelledRow]);
-    updateClient.query.mockResolvedValue({ rows: [cancelledRow] });
-
-    const pool = {
-      connect: jest.fn().mockResolvedValueOnce(getClient).mockResolvedValueOnce(updateClient),
-    };
-    mockGetTimescalePool.mockReturnValue(pool);
+    const client = makeClient([cancelledRow]);
+    // First query: UPDATE ... WHERE status='queued' RETURNING * — returns the cancelled row
+    client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
 
     const result = await cancelExecution('abc-123');
     expect(result!.status).toBe('cancelled');
+
+    // Verify we only made ONE DB call (atomic CAS, no separate read)
+    expect(client.query).toHaveBeenCalledTimes(1);
+    const sql = (client.query.mock.calls[0] as [string])[0].toLowerCase();
+    expect(sql).toContain("status = 'cancelled'");
+    expect(sql).toContain("status = 'queued'");
   });
 
   it('returns null when execution not found', async () => {
     const client = makeClient();
-    client.query.mockResolvedValue({ rows: [] });
+    // UPDATE returns 0 rows (not found) — then SELECT also returns 0 rows
+    client.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE attempt
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }); // fallback SELECT
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
     const result = await cancelExecution('no-such');
     expect(result).toBeNull();
   });
 
-  it('throws when execution is not in queued status', async () => {
+  it('throws when execution is not in queued status (race condition handled)', async () => {
     const runningRow = { ...fakeRow, status: 'running' };
-    const client = makeClient([runningRow]);
-    client.query.mockResolvedValue({ rows: [runningRow] });
+    const client = makeClient();
+    // UPDATE returns 0 rows (already running, CAS failed) — fallback SELECT finds it
+    client.query
+      .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE attempt — CAS failed
+      .mockResolvedValueOnce({ rows: [runningRow], rowCount: 1 }); // fallback SELECT
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
     await expect(cancelExecution('abc-123')).rejects.toThrow(

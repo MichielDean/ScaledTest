@@ -30,12 +30,12 @@ const CreateExecutionSchema = z.object({
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const {
       page: pageStr,
       size: sizeStr,
       status,
       teamId,
+      requestedBy,
       dateFrom,
       dateTo,
     } = req.query as Record<string, string>;
@@ -49,6 +49,7 @@ export default createBetterAuthApi({
         size,
         status: status as ExecutionStatus | undefined,
         teamId,
+        requestedBy,
         dateFrom,
         dateTo,
       });
@@ -68,6 +69,11 @@ export default createBetterAuthApi({
     // Require maintainer or higher
     if (!hasRole(req.user, 'maintainer')) {
       return res.status(403).json({ success: false, error: 'Insufficient permissions' });
+    }
+
+    // Guard: BetterAuth should always populate req.user.id, but be explicit
+    if (!req.user?.id) {
+      return res.status(401).json({ success: false, error: 'Unauthorized' });
     }
 
     const parsed = CreateExecutionSchema.safeParse(req.body);
