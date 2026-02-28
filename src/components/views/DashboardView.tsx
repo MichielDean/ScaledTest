@@ -1,13 +1,68 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '../../hooks/useAuth';
-import { UserRole } from '../../types/roles';
+import { UserRole } from '../../lib/roles';
 import { useSPANavigation } from '../../contexts/SPANavigationContext';
 
+interface StatsData {
+  totalReports: number;
+  totalTests: number;
+  passRateLast7d: number;
+  totalExecutions: number;
+  activeExecutions: number;
+}
+
 const DashboardView: React.FC = () => {
-  const { hasRole } = useAuth();
+  const { hasRole, token } = useAuth();
   const { navigateTo } = useSPANavigation();
+
+  const [stats, setStats] = useState<StatsData | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+  const [statsError, setStatsError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true);
+        setStatsError(null);
+
+        const response = await fetch('/api/v1/stats', {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Stats fetch failed: ${response.status}`);
+        }
+
+        const json = await response.json();
+
+        if (!cancelled) {
+          setStats(json.data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStatsError(err instanceof Error ? err.message : 'Failed to load stats');
+          setStats(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   return (
     <div className="space-y-6">
@@ -42,10 +97,51 @@ const DashboardView: React.FC = () => {
       )}
 
       <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-        <div className="bg-muted/50 aspect-video rounded-xl" />
-        <div className="bg-muted/50 aspect-video rounded-xl" />
-        <div className="bg-muted/50 aspect-video rounded-xl" />
+        {/* Total Reports */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{(stats?.totalReports ?? 0).toLocaleString()}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Tests Run */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Tests Run</CardTitle>
+            <CardDescription>all time</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{(stats?.totalTests ?? 0).toLocaleString()}</p>
+            )}
+          </CardContent>
+        </Card>
+
+        {/* Pass Rate */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Pass Rate</CardTitle>
+            <CardDescription>last 7 days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{stats?.passRateLast7d ?? 0}%</p>
+            )}
+          </CardContent>
+        </Card>
       </div>
+
       <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
     </div>
   );
