@@ -13,7 +13,7 @@ import {
   SidebarRail,
 } from '@/components/ui/sidebar';
 import { useAuth } from '../hooks/useAuth';
-import { hasWriteAccess } from '../lib/permissions';
+import { hasWriteAccess } from '../lib/roles';
 import { useSPANavigation } from '../contexts/SPANavigationContext';
 
 export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>) {

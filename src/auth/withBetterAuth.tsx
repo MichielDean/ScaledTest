@@ -1,6 +1,6 @@
 import React from 'react';
 import { useBetterAuth } from './BetterAuthProvider';
-import { type Role } from '@/lib/permissions';
+import { type Role } from '@/lib/roles';
 import { useRouter } from 'next/router';
 import { useEffect } from 'react';
 
