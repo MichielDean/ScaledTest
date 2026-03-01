@@ -1,10 +1,4 @@
-import React, { useEffect, useState, useCallback } from 'react';
-import { useAuth } from '../../hooks/useAuth';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Skeleton } from '@/components/ui/skeleton';
-import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
+import React, { useState, useEffect, useCallback } from 'react';
 import {
   LineChart,
   Line,
@@ -16,382 +10,275 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import {
-  BarChart3,
-  TrendingUp,
-  CheckCircle,
-  XCircle,
-  RefreshCw,
-  Activity,
-  AlertTriangle,
-  Lock,
-} from 'lucide-react';
-import type { AnalyticsData } from '../../types/analytics';
-import { getPassRateColor, getPassRateVariant } from '../../lib/analyticsFormatting';
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Input } from '@/components/ui/input';
+import { Badge } from '@/components/ui/badge';
+import { useAuth } from '@/hooks/useAuth';
+import type {
+  TrendPoint,
+  FlakyTestResult,
+  ErrorAnalysisResult,
+  DurationBucket,
+} from '@/lib/analytics';
+
+type DateRange = '7' | '30' | '90';
+
+interface AnalyticsState<T> {
+  data: T | null;
+  loading: boolean;
+  error: string | null;
+}
+
+function useFetch<T>(url: string, token: string | null | undefined): AnalyticsState<T> {
+  const [state, setState] = useState<AnalyticsState<T>>({
+    data: null,
+    loading: true,
+    error: null,
+  });
+
+  useEffect(() => {
+    let cancelled = false;
+    setState({ data: null, loading: true, error: null });
+
+    const doFetch = async () => {
+      try {
+        const res = await fetch(url, {
+          headers: token ? { Authorization: `Bearer ${token}` } : {},
+        });
+        if (!res.ok) throw new Error(`Request failed: ${res.status}`);
+        const json = (await res.json()) as { success: boolean; data: T };
+        if (!cancelled) setState({ data: json.data, loading: false, error: null });
+      } catch (err) {
+        if (!cancelled)
+          setState({
+            data: null,
+            loading: false,
+            error: err instanceof Error ? err.message : 'Failed to load',
+          });
+      }
+    };
+
+    void doFetch();
+    return () => {
+      cancelled = true;
+    };
+  }, [url, token]);
+
+  return state;
+}
+
+function SectionSkeleton() {
+  return <Skeleton className="h-48 w-full" />;
+}
+
+function SectionError({ message }: { message: string }) {
+  return (
+    <div className="flex h-48 items-center justify-center text-sm text-destructive">{message}</div>
+  );
+}
 
 const AnalyticsView: React.FC = () => {
   const { token } = useAuth();
-  const [data, setData] = useState<AnalyticsData | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [dateRange, setDateRange] = useState<DateRange>('30');
+  const [tool, setTool] = useState('');
 
-  const fetchAnalytics = useCallback(async () => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
+  const buildUrl = useCallback(
+    (path: string, extra: Record<string, string> = {}) => {
+      const params = new URLSearchParams({ days: dateRange, ...extra });
+      if (tool) params.set('tool', tool);
+      return `/api/v1/analytics/${path}?${params.toString()}`;
+    },
+    [dateRange, tool]
+  );
 
-    setLoading(true);
-    setError(null);
-
-    try {
-      const response = await fetch('/api/analytics', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        const body = (await response.json().catch(() => ({}))) as { error?: string };
-        throw new Error(body.error ?? `Request failed with status ${response.status}`);
-      }
-
-      const json = (await response.json()) as AnalyticsData & { success: boolean };
-
-      if (!json.success) {
-        throw new Error('API returned unsuccessful response');
-      }
-
-      setData(json);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load analytics data');
-    } finally {
-      setLoading(false);
-    }
-  }, [token]);
-
-  useEffect(() => {
-    void fetchAnalytics();
-  }, [fetchAnalytics]);
+  const trendsState = useFetch<TrendPoint[]>(buildUrl('trends'), token);
+  const flakyState = useFetch<FlakyTestResult[]>(buildUrl('flaky-tests'), token);
+  const errorState = useFetch<ErrorAnalysisResult[]>(buildUrl('error-analysis'), token);
+  const durationState = useFetch<DurationBucket[]>(buildUrl('duration-distribution'), token);
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <header className="flex items-center justify-between">
-        <div className="space-y-1">
-          <h1
-            id="analytics-title"
-            className="text-3xl font-bold tracking-tight flex items-center gap-2"
-          >
-            <TrendingUp className="h-8 w-8 text-primary" />
-            Analytics Dashboard
-          </h1>
-          <p className="text-muted-foreground">
-            Aggregated test performance metrics from TimescaleDB
-          </p>
-        </div>
-        <Button
-          id="analytics-refresh-button"
-          variant="outline"
-          size="sm"
-          onClick={() => void fetchAnalytics()}
-          disabled={loading}
-          className="flex items-center gap-2"
-        >
-          <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
-          Refresh
-        </Button>
-      </header>
+      {/* Header row */}
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-2xl font-bold">Analytics</h1>
+        <Select value={dateRange} onValueChange={v => setDateRange(v as DateRange)}>
+          <SelectTrigger id="analytics-date-range" className="w-40">
+            <SelectValue placeholder="Last 30 days" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="7">Last 7 days</SelectItem>
+            <SelectItem value="30">Last 30 days</SelectItem>
+            <SelectItem value="90">Last 90 days</SelectItem>
+          </SelectContent>
+        </Select>
+        <Input
+          id="analytics-tool-filter"
+          className="w-48"
+          placeholder="Filter by tool…"
+          value={tool}
+          onChange={e => setTool(e.target.value)}
+        />
+      </div>
 
-      {/* Loading State */}
-      {loading && (
-        <section aria-label="Loading analytics">
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            {Array.from({ length: 4 }).map((_, i) => (
-              <Card key={i}>
-                <CardHeader className="pb-2">
-                  <Skeleton className="h-4 w-24" />
-                </CardHeader>
-                <CardContent>
-                  <Skeleton className="h-8 w-16" />
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-          <div className="mt-6 grid gap-6 md:grid-cols-2">
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-5 w-32" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-64 w-full" />
-              </CardContent>
-            </Card>
-            <Card>
-              <CardHeader>
-                <Skeleton className="h-5 w-32" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-64 w-full" />
-              </CardContent>
-            </Card>
-          </div>
-        </section>
-      )}
+      {/* Pass Rate Trend — full width */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Pass Rate Trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {trendsState.loading && <SectionSkeleton />}
+          {trendsState.error && <SectionError message={trendsState.error} />}
+          {!trendsState.loading && !trendsState.error && trendsState.data && (
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={trendsState.data}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" tick={{ fontSize: 12 }} />
+                <YAxis domain={[0, 100]} tickFormatter={v => `${v as number}%`} />
+                <Tooltip formatter={(value: number) => [`${value}%`, 'Pass Rate']} />
+                <Line
+                  type="monotone"
+                  dataKey="passRate"
+                  stroke="#22c55e"
+                  strokeWidth={2}
+                  dot={{ r: 4 }}
+                  name="Pass Rate"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          )}
+        </CardContent>
+      </Card>
 
-      {/* Error State */}
-      {!loading && error && (
-        <Alert variant="destructive">
-          <XCircle className="h-4 w-4" />
-          <AlertTitle>Error loading analytics</AlertTitle>
-          <AlertDescription className="mt-2">
-            {error}
-            <div className="mt-3">
-              <Button
-                id="analytics-retry-button"
-                onClick={() => void fetchAnalytics()}
-                variant="outline"
-                size="sm"
-                className="flex items-center gap-2"
-              >
-                <RefreshCw className="h-4 w-4" />
-                Try Again
-              </Button>
-            </div>
-          </AlertDescription>
-        </Alert>
-      )}
+      {/* Two-column row: durations + flaky */}
+      <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
+        {/* Test Durations */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Test Durations</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {durationState.loading && <SectionSkeleton />}
+            {durationState.error && <SectionError message={durationState.error} />}
+            {!durationState.loading && !durationState.error && durationState.data && (
+              <ResponsiveContainer width="100%" height={200}>
+                <BarChart data={durationState.data}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="range" tick={{ fontSize: 11 }} />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="count" fill="#6366f1" name="Tests" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Unauthenticated / no-data state */}
-      {!loading && !error && !data && (
-        <Alert>
-          <Lock className="h-4 w-4" />
-          <AlertTitle>Authentication required</AlertTitle>
-          <AlertDescription>Please sign in to view analytics data.</AlertDescription>
-        </Alert>
-      )}
-
-      {/* Content */}
-      {!loading && !error && data && (
-        <>
-          {/* Stats Cards */}
-          <section aria-labelledby="stats-heading">
-            <h2 id="stats-heading" className="sr-only">
-              Overall Statistics
-            </h2>
-            <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
-                  <BarChart3 className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{data.stats.totalReports}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {data.stats.recentReports} in the last 7 days
+        {/* Flaky Tests */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Flaky Tests</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {flakyState.loading && <SectionSkeleton />}
+            {flakyState.error && <SectionError message={flakyState.error} />}
+            {!flakyState.loading && !flakyState.error && flakyState.data && (
+              <div className="overflow-auto">
+                {flakyState.data.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    No flaky tests detected 🎉
                   </p>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Total Tests</CardTitle>
-                  <Activity className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{data.stats.totalTests.toLocaleString()}</div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Pass Rate</CardTitle>
-                  <CheckCircle className="h-4 w-4 text-green-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className={`text-2xl font-bold ${getPassRateColor(data.stats.passRate)}`}>
-                    {data.stats.passRate}%
-                  </div>
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">Fail Rate</CardTitle>
-                  <XCircle className="h-4 w-4 text-red-600" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold text-red-600">{data.stats.failRate}%</div>
-                </CardContent>
-              </Card>
-            </div>
-          </section>
-
-          {/* Charts Row */}
-          <div className="grid gap-6 md:grid-cols-2">
-            {/* Pass Rate Trend */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <TrendingUp className="h-5 w-5" />
-                  Pass Rate Trend (30 days)
-                </CardTitle>
-                <CardDescription>Daily pass rate percentage over the last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data.trends.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <TrendingUp className="h-8 w-8 mb-2" />
-                    <p className="text-sm">No trend data for the last 30 days</p>
-                  </div>
                 ) : (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <LineChart
-                      data={data.trends}
-                      margin={{ top: 5, right: 10, left: 0, bottom: 5 }}
-                    >
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={d => {
-                          const date = new Date(d + 'T00:00:00Z');
-                          return date.toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            timeZone: 'UTC',
-                          });
-                        }}
-                      />
-                      <YAxis
-                        domain={[0, 100]}
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={v => `${v}%`}
-                      />
-                      <Tooltip
-                        formatter={(value: number) => [`${value}%`, 'Pass Rate']}
-                        labelFormatter={label =>
-                          new Date(label + 'T00:00:00Z').toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            timeZone: 'UTC',
-                          })
-                        }
-                      />
-                      <Line
-                        type="monotone"
-                        dataKey="passRate"
-                        stroke="#22c55e"
-                        strokeWidth={2}
-                        dot={false}
-                        activeDot={{ r: 4 }}
-                      />
-                    </LineChart>
-                  </ResponsiveContainer>
+                  <table className="w-full text-sm">
+                    <thead>
+                      <tr className="border-b text-left">
+                        <th className="pb-2 pr-2">Test Name</th>
+                        <th className="pb-2 pr-2">Suite</th>
+                        <th className="pb-2 pr-2">Pass</th>
+                        <th className="pb-2 pr-2">Fail</th>
+                        <th className="pb-2">Flaky%</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {flakyState.data.slice(0, 10).map((t, i) => (
+                        <tr key={i} className="border-b last:border-0">
+                          <td className="py-1 pr-2 font-mono text-xs">{t.testName}</td>
+                          <td className="py-1 pr-2 text-muted-foreground">{t.suite}</td>
+                          <td className="py-1 pr-2 text-green-600">{t.passed}</td>
+                          <td className="py-1 pr-2 text-red-500">{t.failed}</td>
+                          <td className="py-1">
+                            <Badge variant="destructive">{t.flakyScore}%</Badge>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
                 )}
-              </CardContent>
-            </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
 
-            {/* Daily Test Volume */}
-            <Card>
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <BarChart3 className="h-5 w-5" />
-                  Test Volume (30 days)
-                </CardTitle>
-                <CardDescription>Daily pass/fail counts over the last 30 days</CardDescription>
-              </CardHeader>
-              <CardContent>
-                {data.trends.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center h-64 text-muted-foreground">
-                    <BarChart3 className="h-8 w-8 mb-2" />
-                    <p className="text-sm">No volume data for the last 30 days</p>
-                  </div>
-                ) : (
-                  <ResponsiveContainer width="100%" height={250}>
-                    <BarChart data={data.trends} margin={{ top: 5, right: 10, left: 0, bottom: 5 }}>
-                      <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
-                      <XAxis
-                        dataKey="date"
-                        tick={{ fontSize: 11 }}
-                        tickFormatter={d => {
-                          const date = new Date(d + 'T00:00:00Z');
-                          return date.toLocaleDateString('en-US', {
-                            month: 'short',
-                            day: 'numeric',
-                            timeZone: 'UTC',
-                          });
-                        }}
-                      />
-                      <YAxis tick={{ fontSize: 11 }} />
-                      <Tooltip
-                        labelFormatter={label =>
-                          new Date(label + 'T00:00:00Z').toLocaleDateString('en-US', {
-                            weekday: 'short',
-                            month: 'short',
-                            day: 'numeric',
-                            timeZone: 'UTC',
-                          })
-                        }
-                      />
-                      <Bar dataKey="passed" name="Passed" stackId="a" fill="#22c55e" />
-                      <Bar dataKey="failed" name="Failed" stackId="a" fill="#ef4444" />
-                    </BarChart>
-                  </ResponsiveContainer>
-                )}
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* Top Failing Tests */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <AlertTriangle className="h-5 w-5 text-destructive" />
-                Top Failing Tests
-              </CardTitle>
-              <CardDescription>
-                Tests with the highest failure counts (last 1,000 reports)
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {data.topFailingTests.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
-                  <CheckCircle className="h-10 w-10 mb-3 text-green-600" />
-                  <p className="font-medium text-foreground">No failing tests found</p>
-                  <p className="text-sm mt-1">All tests across your recent reports are passing.</p>
-                </div>
+      {/* Error Analysis — full width */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Error Analysis</CardTitle>
+        </CardHeader>
+        <CardContent>
+          {errorState.loading && <SectionSkeleton />}
+          {errorState.error && <SectionError message={errorState.error} />}
+          {!errorState.loading && !errorState.error && errorState.data && (
+            <div className="overflow-auto">
+              {errorState.data.length === 0 ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">
+                  No errors found in this time range 🎉
+                </p>
               ) : (
-                <div className="space-y-3">
-                  {data.topFailingTests.map((test, index) => (
-                    <div
-                      key={`${test.suite}-${test.name}-${index}`}
-                      className="flex items-start justify-between gap-4 p-3 rounded-lg border bg-card hover:bg-muted/40 transition-colors"
-                    >
-                      <div className="min-w-0 flex-1">
-                        <div className="font-medium text-sm truncate" title={test.name}>
-                          {test.name}
-                        </div>
-                        <div className="text-xs text-muted-foreground mt-0.5">{test.suite}</div>
-                      </div>
-                      <div className="flex items-center gap-3 shrink-0 text-sm">
-                        <span className="text-muted-foreground">
-                          {test.failCount}/{test.totalRuns} runs
-                        </span>
-                        <Badge variant={getPassRateVariant(100 - test.failRate)}>
-                          {test.failRate}% fail rate
-                        </Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b text-left">
+                      <th className="pb-2 pr-4">Error Message</th>
+                      <th className="pb-2 pr-4">Count</th>
+                      <th className="pb-2">Affected Tests</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {errorState.data.map((e, i) => (
+                      <tr key={i} className="border-b last:border-0">
+                        <td className="py-1 pr-4 font-mono text-xs">
+                          {e.errorMessage.length > 80
+                            ? `${e.errorMessage.slice(0, 80)}…`
+                            : e.errorMessage}
+                        </td>
+                        <td className="py-1 pr-4">
+                          <Badge variant="secondary">{e.count}</Badge>
+                        </td>
+                        <td className="py-1 text-muted-foreground">
+                          {e.affectedTests.slice(0, 3).join(', ')}
+                          {e.affectedTests.length > 3 && (
+                            <span className="text-muted-foreground">
+                              {' '}
+                              +{e.affectedTests.length - 3} more
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
               )}
-            </CardContent>
-          </Card>
-        </>
-      )}
+            </div>
+          )}
+        </CardContent>
+      </Card>
     </div>
   );
 };

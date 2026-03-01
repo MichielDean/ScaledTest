@@ -1,214 +1,294 @@
-import type { NextApiResponse } from 'next';
-import type { BetterAuthenticatedRequest } from '../../src/auth/betterAuthApi';
-import type { Logger } from 'pino';
-import { handleGet } from '../../src/pages/api/analytics';
-import { getUserTeams } from '../../src/lib/teamManagement';
-import { getTimescalePool } from '../../src/lib/timescaledb';
+/**
+ * Tests for analytics API endpoints (TDD — written before implementation)
+ */
+import type { NextApiRequest, NextApiResponse } from 'next';
 
-jest.mock('../../src/lib/teamManagement', () => ({
-  getUserTeams: jest.fn(),
+// Mock auth
+jest.mock('../../src/lib/auth', () => ({
+  auth: {
+    api: {
+      getSession: jest.fn(),
+    },
+  },
 }));
 
-jest.mock('../../src/lib/timescaledb', () => ({
-  getTimescalePool: jest.fn(),
+// Mock analytics module
+jest.mock('../../src/lib/analytics', () => ({
+  getTestTrends: jest.fn(),
+  getFlakyTests: jest.fn(),
+  getErrorAnalysis: jest.fn(),
+  getDurationDistribution: jest.fn(),
 }));
 
-// Minimal pino-compatible logger stub for tests
-const mockLogger = {
-  info: jest.fn(),
-  warn: jest.fn(),
-  error: jest.fn(),
-  debug: jest.fn(),
-  fatal: jest.fn(),
-  trace: jest.fn(),
-  silent: jest.fn(),
-  child: jest.fn(),
-  level: 'silent',
-  msgPrefix: '',
-} as unknown as Logger;
+// Mock logger
+jest.mock('../../src/logging/logger', () => ({
+  apiLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  },
+  dbLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  },
+  logError: jest.fn(),
+  getRequestLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  })),
+}));
 
-type MockResponse = NextApiResponse & {
-  status: jest.Mock;
-  json: jest.Mock;
-};
+import { auth } from '../../src/lib/auth';
+import {
+  getTestTrends,
+  getFlakyTests,
+  getErrorAnalysis,
+  getDurationDistribution,
+} from '../../src/lib/analytics';
 
-// Query comment tokens used in analytics.ts to identify which query is running
-type QueryToken = 'analytics_stats' | 'analytics_trends' | 'analytics_top_failing';
+const mockGetSession = auth.api.getSession as jest.Mock;
+const mockGetTestTrends = getTestTrends as jest.Mock;
+const mockGetFlakyTests = getFlakyTests as jest.Mock;
+const mockGetErrorAnalysis = getErrorAnalysis as jest.Mock;
+const mockGetDurationDistribution = getDurationDistribution as jest.Mock;
 
-describe('GET /api/analytics', () => {
-  let mockReq: BetterAuthenticatedRequest;
-  let mockRes: MockResponse;
-  const mockClient = { query: jest.fn(), release: jest.fn() };
-  const mockPool = { connect: jest.fn() };
+function makeReqRes(
+  method = 'GET',
+  query: Record<string, string> = {},
+  headers: Record<string, string> = {}
+) {
+  const mockJson = jest.fn();
+  const mockStatus = jest.fn().mockReturnValue({ json: mockJson, end: jest.fn() });
+
+  const req = {
+    method,
+    query,
+    headers: { authorization: 'Bearer test-token', ...headers },
+  } as unknown as NextApiRequest;
+
+  const res = {
+    status: mockStatus,
+    json: mockJson,
+    setHeader: jest.fn(),
+  } as unknown as NextApiResponse;
+
+  return { req, res, mockJson, mockStatus };
+}
+
+function setupAuth() {
+  mockGetSession.mockResolvedValue({
+    user: { id: 'user-1', email: 'test@example.com', name: 'Test', role: 'readonly' },
+  });
+}
+
+const trendData = [
+  { date: '2024-01-01', passed: 90, failed: 10, skipped: 0, total: 100, passRate: 90 },
+];
+const flakyData = [
+  {
+    testName: 'login test',
+    suite: 'auth',
+    totalRuns: 10,
+    passed: 7,
+    failed: 3,
+    flakyScore: 30,
+    avgDuration: 150,
+  },
+];
+const errorData = [{ errorMessage: 'Expected true', count: 5, affectedTests: ['test-a'] }];
+const durationData = [
+  { range: '<100ms', count: 42, avgDuration: 50 },
+  { range: '100-500ms', count: 0, avgDuration: 0 },
+  { range: '500ms-2s', count: 0, avgDuration: 0 },
+  { range: '2s-10s', count: 0, avgDuration: 0 },
+  { range: '>10s', count: 0, avgDuration: 0 },
+];
+
+describe('GET /api/v1/analytics/trends', () => {
+  let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/pages/api/v1/analytics/trends');
+    handler = mod.default;
+  });
 
   beforeEach(() => {
     jest.clearAllMocks();
-
-    mockReq = {
-      method: 'GET',
-      user: {
-        id: 'user-123',
-        email: 'user@example.com',
-      },
-    } as BetterAuthenticatedRequest;
-
-    mockRes = {
-      status: jest.fn().mockReturnThis(),
-      json: jest.fn().mockReturnThis(),
-    } as unknown as MockResponse;
-
-    mockPool.connect.mockResolvedValue(mockClient);
-    (getTimescalePool as jest.Mock).mockReturnValue(mockPool);
-    mockClient.release.mockResolvedValue(undefined);
-
-    (getUserTeams as jest.Mock).mockResolvedValue([{ id: 'team-123', name: 'QA' }]);
   });
 
-  const setQueryResponses = (options?: {
-    stats?: Array<Record<string, number>>;
-    trends?: Array<{ date: string; total: number; passed: number; failed: number }>;
-    topFailing?: Array<{ name: string; suite: string; fail_count: number; total_runs: number }>;
-    throwOn?: QueryToken;
-    error?: Error;
-  }) => {
-    const statsRows = options?.stats ?? [
-      {
-        total_reports: 10,
-        total_tests: 200,
-        total_passed: 150,
-        total_failed: 50,
-        recent_reports: 4,
-      },
-    ];
+  it('returns 401 when not authenticated', async () => {
+    mockGetSession.mockResolvedValue(null);
+    const { req, res, mockStatus } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(401);
+  });
 
-    const trendRows = options?.trends ?? [
-      { date: '2024-01-01', total: 20, passed: 15, failed: 5 },
-      { date: '2024-01-02', total: 30, passed: 25, failed: 5 },
-    ];
+  it('returns trend data with correct shape', async () => {
+    setupAuth();
+    mockGetTestTrends.mockResolvedValue(trendData);
+    const { req, res, mockJson } = makeReqRes('GET', { days: '30' });
 
-    const topFailingRows = options?.topFailing ?? [
-      { name: 'test A', suite: 'suite 1', fail_count: 3, total_runs: 5 },
-    ];
+    await handler(req, res);
 
-    mockClient.query.mockImplementation(async (query: string) => {
-      if (options?.throwOn && query.includes(options.throwOn)) {
-        throw options.error ?? new Error('DB error');
-      }
-
-      if (query.includes('analytics_stats')) {
-        return { rows: statsRows };
-      }
-
-      if (query.includes('analytics_trends')) {
-        return { rows: trendRows };
-      }
-
-      if (query.includes('analytics_top_failing')) {
-        return { rows: topFailingRows };
-      }
-
-      throw new Error(`Unexpected query: ${query.slice(0, 80)}`);
-    });
-  };
-
-  it('returns 401 when request lacks authenticated user', async () => {
-    mockReq.user = undefined as unknown as BetterAuthenticatedRequest['user'];
-
-    setQueryResponses();
-
-    await handleGet(mockReq, mockRes, mockLogger);
-
-    expect(mockRes.status).toHaveBeenCalledWith(401);
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'User identification required' })
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: trendData })
     );
   });
 
-  it('returns analytics data when database queries succeed', async () => {
-    setQueryResponses();
+  it('passes days param to getTestTrends', async () => {
+    setupAuth();
+    mockGetTestTrends.mockResolvedValue([]);
+    const { req, res } = makeReqRes('GET', { days: '7' });
 
-    await handleGet(mockReq, mockRes, mockLogger);
+    await handler(req, res);
 
-    expect(mockRes.status).toHaveBeenCalledWith(200);
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: true,
-        stats: expect.objectContaining({
-          totalReports: 10,
-          totalTests: 200,
-          passRate: expect.any(Number),
-          recentReports: 4,
-        }),
-        trends: expect.arrayContaining([expect.objectContaining({ date: '2024-01-01' })]),
-        topFailingTests: expect.arrayContaining([
-          expect.objectContaining({ name: 'test A', failRate: expect.any(Number) }),
-        ]),
-      })
+    expect(mockGetTestTrends).toHaveBeenCalledWith(expect.objectContaining({ days: 7 }));
+  });
+
+  it('returns 503 on DB error', async () => {
+    setupAuth();
+    mockGetTestTrends.mockRejectedValue(new Error('DB down'));
+    const { req, res, mockStatus } = makeReqRes();
+
+    await handler(req, res);
+
+    expect(mockStatus).toHaveBeenCalledWith(503);
+  });
+});
+
+describe('GET /api/v1/analytics/flaky-tests', () => {
+  let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/pages/api/v1/analytics/flaky-tests');
+    handler = mod.default;
+  });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('returns 401 when not authenticated', async () => {
+    mockGetSession.mockResolvedValue(null);
+    const { req, res, mockStatus } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(401);
+  });
+
+  it('returns flaky test data', async () => {
+    setupAuth();
+    mockGetFlakyTests.mockResolvedValue(flakyData);
+    const { req, res, mockJson } = makeReqRes('GET', { days: '30' });
+
+    await handler(req, res);
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: flakyData })
     );
   });
 
-  it('returns 503 when TimescaleDB connection fails', async () => {
-    setQueryResponses({
-      throwOn: 'analytics_stats',
-      error: Object.assign(new Error('connect ECONNREFUSED'), { code: 'ECONNREFUSED' }),
-    });
+  it('returns 503 on DB error', async () => {
+    setupAuth();
+    mockGetFlakyTests.mockRejectedValue(new Error('DB down'));
+    const { req, res, mockStatus } = makeReqRes();
 
-    await handleGet(mockReq, mockRes, mockLogger);
+    await handler(req, res);
 
-    expect(mockRes.status).toHaveBeenCalledWith(503);
-    expect(mockRes.json).toHaveBeenCalledWith(
-      expect.objectContaining({ success: false, error: 'Database service unavailable' })
+    expect(mockStatus).toHaveBeenCalledWith(503);
+  });
+});
+
+describe('GET /api/v1/analytics/error-analysis', () => {
+  let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/pages/api/v1/analytics/error-analysis');
+    handler = mod.default;
+  });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('returns 401 when not authenticated', async () => {
+    mockGetSession.mockResolvedValue(null);
+    const { req, res, mockStatus } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(401);
+  });
+
+  it('returns error analysis data', async () => {
+    setupAuth();
+    mockGetErrorAnalysis.mockResolvedValue(errorData);
+    const { req, res, mockJson } = makeReqRes();
+
+    await handler(req, res);
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: errorData })
     );
   });
 
-  it('calculates pass rate to one decimal place', async () => {
-    setQueryResponses({
-      stats: [
-        {
-          total_reports: 5,
-          total_tests: 3,
-          total_passed: 2,
-          total_failed: 1,
-          recent_reports: 1,
-        },
-      ],
-    });
+  it('caps limit at 100', async () => {
+    setupAuth();
+    mockGetErrorAnalysis.mockResolvedValue([]);
+    const { req, res } = makeReqRes('GET', { limit: '500' });
 
-    await handleGet(mockReq, mockRes, mockLogger);
+    await handler(req, res);
 
-    const responsePayload = mockRes.json.mock.calls[0][0] as {
-      stats: { passRate: number; failRate: number };
-    };
-
-    expect(responsePayload.stats.passRate).toBeCloseTo(66.7, 1);
-    expect(responsePayload.stats.failRate).toBeCloseTo(33.3, 1);
+    expect(mockGetErrorAnalysis).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }));
   });
 
-  it('includes trend entries with pass rate calculations', async () => {
-    setQueryResponses({
-      trends: [{ date: '2024-01-03', total: 10, passed: 7, failed: 3 }],
-    });
+  it('returns 503 on DB error', async () => {
+    setupAuth();
+    mockGetErrorAnalysis.mockRejectedValue(new Error('DB down'));
+    const { req, res, mockStatus } = makeReqRes();
 
-    await handleGet(mockReq, mockRes, mockLogger);
+    await handler(req, res);
 
-    const responsePayload = mockRes.json.mock.calls[0][0] as {
-      trends: Array<{
-        date: string;
-        total: number;
-        passed: number;
-        failed: number;
-        passRate: number;
-      }>;
-    };
+    expect(mockStatus).toHaveBeenCalledWith(503);
+  });
+});
 
-    expect(responsePayload.trends).toEqual([
-      expect.objectContaining({
-        date: '2024-01-03',
-        total: 10,
-        passed: 7,
-        failed: 3,
-        passRate: 70,
-      }),
-    ]);
+describe('GET /api/v1/analytics/duration-distribution', () => {
+  let handler: (req: NextApiRequest, res: NextApiResponse) => Promise<void>;
+
+  beforeAll(async () => {
+    const mod = await import('../../src/pages/api/v1/analytics/duration-distribution');
+    handler = mod.default;
+  });
+
+  beforeEach(() => jest.clearAllMocks());
+
+  it('returns 401 when not authenticated', async () => {
+    mockGetSession.mockResolvedValue(null);
+    const { req, res, mockStatus } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(401);
+  });
+
+  it('returns duration distribution data', async () => {
+    setupAuth();
+    mockGetDurationDistribution.mockResolvedValue(durationData);
+    const { req, res, mockJson } = makeReqRes();
+
+    await handler(req, res);
+
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({ success: true, data: durationData })
+    );
+  });
+
+  it('returns 503 on DB error', async () => {
+    setupAuth();
+    mockGetDurationDistribution.mockRejectedValue(new Error('DB down'));
+    const { req, res, mockStatus } = makeReqRes();
+
+    await handler(req, res);
+
+    expect(mockStatus).toHaveBeenCalledWith(503);
   });
 });

@@ -1,7 +1,7 @@
 import type { NextPage } from 'next';
 import Head from 'next/head';
 import withAuth from '../auth/withBetterAuth';
-import { UserRole } from '../types/roles';
+import { UserRole } from '../lib/roles';
 import { SPANavigationProvider } from '../contexts/SPANavigationContext';
 import MainSPAContent from '../components/MainSPAContent';
 

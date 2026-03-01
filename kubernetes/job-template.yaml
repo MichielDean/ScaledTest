@@ -1,0 +1,46 @@
+# Parameterized Job template — values are substituted by the executor service
+# Variables: {{JOB_NAME}}, {{DOCKER_IMAGE}}, {{TEST_COMMAND}}, {{PARALLELISM}},
+#            {{EXECUTION_ID}}, {{API_URL}}, {{CPU_LIMIT}}, {{MEMORY_LIMIT}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: '{{JOB_NAME}}'
+  namespace: scaledtest
+  labels:
+    app.kubernetes.io/name: scaledtest-worker
+    scaledtest.io/execution-id: '{{EXECUTION_ID}}'
+spec:
+  parallelism: { { PARALLELISM } }
+  completions: { { PARALLELISM } }
+  backoffLimit: 1
+  ttlSecondsAfterFinished: 3600
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: scaledtest-worker
+        scaledtest.io/execution-id: '{{EXECUTION_ID}}'
+    spec:
+      serviceAccountName: scaledtest-executor
+      restartPolicy: Never
+      containers:
+        - name: test-worker
+          image: '{{DOCKER_IMAGE}}'
+          env:
+            - name: TEST_COMMAND
+              value: '{{TEST_COMMAND}}'
+            - name: EXECUTION_ID
+              value: '{{EXECUTION_ID}}'
+            - name: SCALEDTEST_API_URL
+              value: '{{API_URL}}'
+            - name: SCALEDTEST_API_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: scaledtest-worker-token
+                  key: token
+          resources:
+            requests:
+              cpu: '{{CPU_REQUEST}}'
+              memory: '{{MEMORY_REQUEST}}'
+            limits:
+              cpu: '{{CPU_LIMIT}}'
+              memory: '{{MEMORY_LIMIT}}'
