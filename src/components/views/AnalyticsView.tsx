@@ -24,37 +24,10 @@ import {
   RefreshCw,
   Activity,
   AlertTriangle,
+  Lock,
 } from 'lucide-react';
-
-type AnalyticsStats = {
-  totalReports: number;
-  totalTests: number;
-  passRate: number;
-  failRate: number;
-  recentReports: number;
-};
-
-type TrendEntry = {
-  date: string;
-  total: number;
-  passed: number;
-  failed: number;
-  passRate: number;
-};
-
-type FailingTest = {
-  name: string;
-  suite: string;
-  failCount: number;
-  totalRuns: number;
-  failRate: number;
-};
-
-type AnalyticsData = {
-  stats: AnalyticsStats;
-  trends: TrendEntry[];
-  topFailingTests: FailingTest[];
-};
+import type { AnalyticsData } from '../../types/analytics';
+import { getPassRateColor, getPassRateVariant } from '../../lib/analyticsFormatting';
 
 const AnalyticsView: React.FC = () => {
   const { token } = useAuth();
@@ -102,20 +75,6 @@ const AnalyticsView: React.FC = () => {
     void fetchAnalytics();
   }, [fetchAnalytics]);
 
-  const getPassRateVariant = (
-    rate: number
-  ): 'default' | 'secondary' | 'destructive' | 'outline' => {
-    if (rate >= 80) return 'default';
-    if (rate >= 60) return 'secondary';
-    return 'destructive';
-  };
-
-  const getPassRateColor = (rate: number): string => {
-    if (rate >= 80) return 'text-green-700';
-    if (rate >= 60) return 'text-yellow-700';
-    return 'text-red-600';
-  };
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -133,6 +92,7 @@ const AnalyticsView: React.FC = () => {
           </p>
         </div>
         <Button
+          id="analytics-refresh-button"
           variant="outline"
           size="sm"
           onClick={() => void fetchAnalytics()}
@@ -189,6 +149,7 @@ const AnalyticsView: React.FC = () => {
             {error}
             <div className="mt-3">
               <Button
+                id="analytics-retry-button"
                 onClick={() => void fetchAnalytics()}
                 variant="outline"
                 size="sm"
@@ -199,6 +160,15 @@ const AnalyticsView: React.FC = () => {
               </Button>
             </div>
           </AlertDescription>
+        </Alert>
+      )}
+
+      {/* Unauthenticated / no-data state */}
+      {!loading && !error && !data && (
+        <Alert>
+          <Lock className="h-4 w-4" />
+          <AlertTitle>Authentication required</AlertTitle>
+          <AlertDescription>Please sign in to view analytics data.</AlertDescription>
         </Alert>
       )}
 

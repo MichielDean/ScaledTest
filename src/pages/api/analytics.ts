@@ -4,7 +4,9 @@ import { BetterAuthenticatedRequest, createBetterAuthApi } from '../../auth/bett
 import { getUserTeams } from '../../lib/teamManagement';
 import { getTimescalePool } from '../../lib/timescaledb';
 import { getRequestLogger, logError } from '../../logging/logger';
+import type { AnalyticsApiResponse } from '../../types/analytics';
 
+// Internal DB row types (not exported — these are query implementation details)
 type AnalyticsStatsRow = {
   total_reports: string | number | null;
   total_tests: string | number | null;
@@ -25,31 +27,6 @@ type AnalyticsFailingRow = {
   suite: string | null;
   fail_count: string | number;
   total_runs: string | number;
-};
-
-type AnalyticsResponse = {
-  success: true;
-  stats: {
-    totalReports: number;
-    totalTests: number;
-    passRate: number;
-    failRate: number;
-    recentReports: number;
-  };
-  trends: Array<{
-    date: string;
-    total: number;
-    passed: number;
-    failed: number;
-    passRate: number;
-  }>;
-  topFailingTests: Array<{
-    name: string;
-    suite: string;
-    failCount: number;
-    totalRuns: number;
-    failRate: number;
-  }>;
 };
 
 type ErrorResponse = {
@@ -215,7 +192,7 @@ const fetchTopFailingTests = async (client: PoolClient, access: AccessClause) =>
 
 export const handleGet = async (
   req: BetterAuthenticatedRequest,
-  res: NextApiResponse<AnalyticsResponse | ErrorResponse>,
+  res: NextApiResponse<AnalyticsApiResponse | ErrorResponse>,
   reqLogger: ReturnType<typeof getRequestLogger>
 ) => {
   try {

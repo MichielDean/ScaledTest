@@ -6,24 +6,13 @@ import { useAuth } from '../../hooks/useAuth';
 import { UserRole } from '../../types/roles';
 import { useSPANavigation } from '../../contexts/SPANavigationContext';
 import { BarChart3, CheckCircle, Activity, TrendingUp } from 'lucide-react';
-
-type DashboardStats = {
-  totalReports: number;
-  totalTests: number;
-  passRate: number;
-  recentReports: number;
-};
-
-const getPassRateColor = (rate: number): string => {
-  if (rate >= 80) return 'text-green-700';
-  if (rate >= 60) return 'text-yellow-700';
-  return 'text-red-600';
-};
+import type { AnalyticsStats } from '../../types/analytics';
+import { getPassRateColor } from '../../lib/analyticsFormatting';
 
 const DashboardView: React.FC = () => {
   const { hasRole, token } = useAuth();
   const { navigateTo } = useSPANavigation();
-  const [stats, setStats] = useState<DashboardStats | null>(null);
+  const [stats, setStats] = useState<AnalyticsStats | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
 
   const fetchStats = useCallback(async () => {
@@ -48,7 +37,7 @@ const DashboardView: React.FC = () => {
 
       const json = (await response.json()) as {
         success: boolean;
-        stats: DashboardStats;
+        stats: AnalyticsStats;
       };
 
       if (json.success) {
@@ -142,7 +131,11 @@ const DashboardView: React.FC = () => {
                 </>
               ) : (
                 <>
-                  <div className={`text-2xl font-bold ${getPassRateColor(stats?.passRate ?? 0)}`}>
+                  <div
+                    className={`text-2xl font-bold ${
+                      stats == null ? 'text-muted-foreground' : getPassRateColor(stats.passRate)
+                    }`}
+                  >
                     {stats != null ? `${stats.passRate}%` : '—'}
                   </div>
                   <p className="text-xs text-muted-foreground mt-1">
@@ -193,10 +186,18 @@ const DashboardView: React.FC = () => {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-2">
-            <Button variant="outline" onClick={() => navigateTo('test-results')}>
+            <Button
+              id="nav-test-results-button"
+              variant="outline"
+              onClick={() => navigateTo('test-results')}
+            >
               Test Results
             </Button>
-            <Button variant="outline" onClick={() => navigateTo('modern-analytics')}>
+            <Button
+              id="nav-analytics-button"
+              variant="outline"
+              onClick={() => navigateTo('modern-analytics')}
+            >
               Analytics
             </Button>
           </div>
