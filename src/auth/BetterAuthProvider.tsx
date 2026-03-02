@@ -1,4 +1,4 @@
-import React, { createContext, useContext, ReactNode } from 'react';
+import React, { createContext, useContext, ReactNode, useState, useEffect } from 'react';
 import { useSession } from '@/lib/auth-client';
 import { authClient } from '@/lib/auth-client';
 import logger from '@/logging/logger';
@@ -67,46 +67,76 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
   const isAuthenticated = !!session;
   const loading = isPending;
 
+  // Cached team memberships for the current user.
+  // Fetched from /api/user-teams on authentication; cleared on logout.
+  const [userTeams, setUserTeams] = useState<Array<{ id: string; name: string; role: string }>>([]);
+
   // Get user role from Better Auth metadata
   const getUserRole = (): Role | null => {
-    // Better Auth stores role information in user metadata
     if (!user) return null;
-
-    // Access role from user object - Better Auth with admin plugin stores this
     const userWithRole = user as { role?: string };
     const userRole = userWithRole.role;
     if (!userRole) return null;
-
-    // Validate that the role is one of our defined roles
     const validRoles: Role[] = ['readonly', 'maintainer', 'owner'];
     return validRoles.includes(userRole as Role) ? (userRole as Role) : null;
   };
 
-  // Get user teams from Better Auth metadata (placeholder data for now)
-  const getUserTeams = () => {
-    if (!user) return [];
+  // Fetch team memberships from the server whenever the user changes.
+  // This replaces the previous placeholder that hard-coded a 'default-team' entry.
+  useEffect(() => {
+    if (!user?.id) {
+      setUserTeams([]);
+      return;
+    }
 
-    // For Phase 6 implementation, provide default team data
-    // In a full implementation, this would come from user metadata
-    const userWithTeams = user as {
-      teams?: Array<{ id: string; name: string; role: string }>;
+    let cancelled = false;
+
+    const fetchTeams = async () => {
+      try {
+        const response = await fetch('/api/user-teams', { credentials: 'include' });
+        if (!response.ok) {
+          logger.warn({ status: response.status }, 'Failed to fetch user teams');
+          return;
+        }
+        const data = (await response.json()) as {
+          success: boolean;
+          teams?: Array<{ id: string; name: string; description?: string; isDefault?: boolean }>;
+        };
+        if (!cancelled && data.success && Array.isArray(data.teams)) {
+          // NOTE: The `role` field here is the user's *global* application role
+          // (readonly / maintainer / owner), not a per-team membership role.
+          // Team-scoped roles are not implemented; this field exists to satisfy
+          // the BetterAuthContextType interface shape.
+          const globalRole = (user as { role?: string }).role || 'readonly';
+          setUserTeams(
+            data.teams.map(t => ({
+              id: t.id,
+              name: t.name,
+              role: globalRole,
+            }))
+          );
+        }
+      } catch (err) {
+        if (!cancelled) {
+          logger.error({ err }, 'Error fetching user teams');
+        }
+      }
     };
 
-    return (
-      userWithTeams.teams || [
-        {
-          id: 'default-team',
-          name: 'Default Team',
-          role: getUserRole() || 'readonly',
-        },
-      ]
-    );
-  };
+    fetchTeams();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.id]);
+
+  // Return cached team memberships synchronously.
+  const getUserTeams = () => userTeams;
+
   const hasRole = (role: Role): boolean => {
     const userRole = getUserRole();
     if (!userRole) return false;
 
-    // Support hierarchical roles - higher roles inherit lower role permissions
     if (role === 'readonly') {
       return userRole === 'readonly' || userRole === 'maintainer' || userRole === 'owner';
     }
@@ -123,19 +153,17 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
   const hasPermission = (permission: Permission): boolean => {
     const userRole = getUserRole();
     if (!userRole) return false;
-
-    // Use the rolePermissions mapping from permissions.ts
     const userPermissions = rolePermissions[userRole] || [];
     return userPermissions.includes(permission);
   };
 
   const logout = async (): Promise<void> => {
     try {
+      setUserTeams([]);
       await authClient.signOut();
-      // Redirect to login page after logout
       window.location.href = '/login';
-    } catch (error) {
-      logger.error({ error }, 'Logout failed');
+    } catch (err) {
+      logger.error({ error: err }, 'Logout failed');
     }
   };
 
@@ -151,8 +179,6 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
     hasPermission,
     token: sessionData?.token || undefined,
     initialized: !loading,
-
-    // Team management functions
     getUserTeams,
   };
 

@@ -32,24 +32,29 @@ export default function RegisterPage() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Load available teams
+  // Load available teams from the public endpoint (no auth required).
+  // Team selection during registration is optional — the user can join teams later.
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        // Temporarily disable teams loading - teams API not implemented
-        // const response = await fetch('/api/teams');
-        // if (response.ok) {
-        //   const data = await response.json();
-        //   if (data?.success && Array.isArray(data.teams)) {
-        //     setAvailableTeams(data.teams);
-        //   }
-        // }
-
-        // For now, just set empty teams list
-        setAvailableTeams([]);
+        const response = await fetch('/api/teams/public');
+        if (response.ok) {
+          const data = (await response.json()) as {
+            success: boolean;
+            teams?: Team[];
+          };
+          if (data?.success && Array.isArray(data.teams)) {
+            setAvailableTeams(data.teams);
+          } else {
+            setAvailableTeams([]);
+          }
+        } else {
+          // Endpoint unavailable — teams are optional, continue with empty list.
+          setAvailableTeams([]);
+        }
       } catch (err) {
         logger.error({ error: err }, 'Failed to load teams for registration');
-        // Continue without teams - they're optional
+        // Continue without teams — they're optional
       } finally {
         setLoadingTeams(false);
       }
