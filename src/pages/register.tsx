@@ -20,7 +20,9 @@ export default function RegisterPage() {
   const { isAuthenticated, loading } = useAuth();
 
   // Business logic state
-  const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
+  // The public endpoint returns a stripped shape — no createdAt/updatedAt.
+  type PublicTeam = Pick<Team, 'id' | 'name' | 'description' | 'isDefault'>;
+  const [availableTeams, setAvailableTeams] = useState<PublicTeam[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -41,7 +43,7 @@ export default function RegisterPage() {
         if (response.ok) {
           const data = (await response.json()) as {
             success: boolean;
-            teams?: Team[];
+            teams?: PublicTeam[];
           };
           if (data?.success && Array.isArray(data.teams)) {
             setAvailableTeams(data.teams);

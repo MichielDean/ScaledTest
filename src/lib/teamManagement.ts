@@ -441,7 +441,10 @@ export async function getAllTeams(): Promise<TeamWithMemberCount[]> {
     return teams;
   } catch (error) {
     dbLogger.error({ error }, 'Error fetching all teams');
-    return [];
+    // Re-throw so callers can decide how to handle the failure.
+    // All call sites (teams API, teams/public API) have their own try/catch
+    // and will return appropriate HTTP error responses.
+    throw error;
   }
 }
 

@@ -13,6 +13,7 @@
 import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
 import { apiLogger } from '@/logging/logger';
+import { validateUuid } from '@/lib/validation';
 
 // The Better Auth admin plugin mounts setRole and listUsers on auth.api.
 // TypeScript's generated InferAPI type doesn't include admin plugin methods,
@@ -97,6 +98,16 @@ async function handleAssignRole(
       return res.status(400).json({ error: 'Missing required fields: userId and role' });
     }
 
+    // Validate userId is a well-formed UUID before passing it to the auth provider.
+    try {
+      validateUuid(userId, 'User ID');
+    } catch (validationError) {
+      return res.status(400).json({
+        error:
+          validationError instanceof Error ? validationError.message : 'Invalid User ID format',
+      });
+    }
+
     if (!VALID_ROLES.includes(role as ValidRole)) {
       return res.status(400).json({
         error: 'Invalid role. Must be one of: ' + VALID_ROLES.join(', '),
@@ -155,6 +166,16 @@ async function handleGetUserRole(
 
     if (!userId || typeof userId !== 'string') {
       return res.status(400).json({ error: 'Missing or invalid userId parameter' });
+    }
+
+    // Validate userId is a well-formed UUID before passing it to the auth provider.
+    try {
+      validateUuid(userId, 'User ID');
+    } catch (validationError) {
+      return res.status(400).json({
+        error:
+          validationError instanceof Error ? validationError.message : 'Invalid User ID format',
+      });
     }
 
     const adminApi = auth.api as unknown as BetterAuthAdminApi;

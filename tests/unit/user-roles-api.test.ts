@@ -30,6 +30,9 @@ jest.mock('@/logging/logger', () => ({
   },
 }));
 
+// Use real validateUuid — it's pure logic with no side effects
+jest.unmock('@/lib/validation');
+
 import { auth } from '@/lib/auth';
 import handler from '@/pages/api/admin/user-roles';
 import type { BetterAuthAdminApi } from '@/pages/api/admin/user-roles';
@@ -82,7 +85,10 @@ describe('/api/admin/user-roles', () => {
   describe('Authentication and Authorization', () => {
     it('returns 401 when no session', async () => {
       mockGetSession.mockResolvedValue(null);
-      const req = makeReq('POST', { userId: 'u1', role: 'maintainer' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'maintainer',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
       expect(res.status).toHaveBeenCalledWith(401);
@@ -90,7 +96,10 @@ describe('/api/admin/user-roles', () => {
 
     it('returns 403 when user is not owner', async () => {
       mockGetSession.mockResolvedValue(maintainerSession);
-      const req = makeReq('POST', { userId: 'u1', role: 'maintainer' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'maintainer',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
       expect(res.status).toHaveBeenCalledWith(403);
@@ -116,7 +125,7 @@ describe('/api/admin/user-roles', () => {
 
     it('returns 400 when role is missing', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      const req = makeReq('POST', { userId: 'u1' });
+      const req = makeReq('POST', { userId: '550e8400-e29b-41d4-a716-446655440001' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
       expect(res.status).toHaveBeenCalledWith(400);
@@ -124,42 +133,70 @@ describe('/api/admin/user-roles', () => {
 
     it('returns 400 for invalid role', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      const req = makeReq('POST', { userId: 'u1', role: 'superadmin' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440000',
+        role: 'superadmin',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
+    it('returns 400 for non-UUID userId', async () => {
+      mockGetSession.mockResolvedValue(ownerSession);
+      const req = makeReq('POST', { userId: 'not-a-uuid', role: 'maintainer' });
+      const res = makeRes();
+      await handler(req as NextApiRequest, res as unknown as NextApiResponse);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringContaining('UUID') })
+      );
+    });
+
     it('calls auth.api.setRole and returns 200 on success', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      mockSetRole.mockResolvedValue({ user: { id: 'u1', role: 'maintainer' } });
+      mockSetRole.mockResolvedValue({
+        user: { id: '550e8400-e29b-41d4-a716-446655440001', role: 'maintainer' },
+      });
 
-      const req = makeReq('POST', { userId: 'u1', role: 'maintainer' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'maintainer',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
       expect(mockSetRole).toHaveBeenCalledWith(
         expect.objectContaining({
-          body: { userId: 'u1', role: 'maintainer' },
+          body: { userId: '550e8400-e29b-41d4-a716-446655440001', role: 'maintainer' },
         })
       );
       expect(res.status).toHaveBeenCalledWith(200);
       expect(res.json).toHaveBeenCalledWith(
-        expect.objectContaining({ success: true, userId: 'u1', role: 'maintainer' })
+        expect.objectContaining({
+          success: true,
+          userId: '550e8400-e29b-41d4-a716-446655440001',
+          role: 'maintainer',
+        })
       );
     });
 
     it('calls auth.api.setRole with readonly role', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      mockSetRole.mockResolvedValue({ user: { id: 'u2', role: 'readonly' } });
+      mockSetRole.mockResolvedValue({
+        user: { id: '550e8400-e29b-41d4-a716-446655440002', role: 'readonly' },
+      });
 
-      const req = makeReq('POST', { userId: 'u2', role: 'readonly' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440002',
+        role: 'readonly',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
       expect(mockSetRole).toHaveBeenCalledWith(
         expect.objectContaining({
-          body: { userId: 'u2', role: 'readonly' },
+          body: { userId: '550e8400-e29b-41d4-a716-446655440002', role: 'readonly' },
         })
       );
       expect(res.status).toHaveBeenCalledWith(200);
@@ -167,15 +204,20 @@ describe('/api/admin/user-roles', () => {
 
     it('calls auth.api.setRole with owner role', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      mockSetRole.mockResolvedValue({ user: { id: 'u3', role: 'owner' } });
+      mockSetRole.mockResolvedValue({
+        user: { id: '550e8400-e29b-41d4-a716-446655440003', role: 'owner' },
+      });
 
-      const req = makeReq('POST', { userId: 'u3', role: 'owner' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440003',
+        role: 'owner',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
       expect(mockSetRole).toHaveBeenCalledWith(
         expect.objectContaining({
-          body: { userId: 'u3', role: 'owner' },
+          body: { userId: '550e8400-e29b-41d4-a716-446655440003', role: 'owner' },
         })
       );
       expect(res.status).toHaveBeenCalledWith(200);
@@ -185,7 +227,10 @@ describe('/api/admin/user-roles', () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockSetRole.mockRejectedValue(new Error('DB error'));
 
-      const req = makeReq('POST', { userId: 'u1', role: 'maintainer' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'maintainer',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -194,9 +239,14 @@ describe('/api/admin/user-roles', () => {
 
     it('does NOT return 501 (stub response) — setRole is always called', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
-      mockSetRole.mockResolvedValue({ user: { id: 'u1', role: 'maintainer' } });
+      mockSetRole.mockResolvedValue({
+        user: { id: '550e8400-e29b-41d4-a716-446655440001', role: 'maintainer' },
+      });
 
-      const req = makeReq('POST', { userId: 'u1', role: 'maintainer' });
+      const req = makeReq('POST', {
+        userId: '550e8400-e29b-41d4-a716-446655440001',
+        role: 'maintainer',
+      });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -215,14 +265,32 @@ describe('/api/admin/user-roles', () => {
       expect(res.status).toHaveBeenCalledWith(400);
     });
 
+    it('returns 400 for non-UUID userId', async () => {
+      mockGetSession.mockResolvedValue(ownerSession);
+      const req = makeReq('GET', {}, { userId: 'not-a-uuid' });
+      const res = makeRes();
+      await handler(req as NextApiRequest, res as unknown as NextApiResponse);
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({ error: expect.stringContaining('UUID') })
+      );
+    });
+
     it('calls auth.api.listUsers and returns 200 with role when user found', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockListUsers.mockResolvedValue({
-        users: [{ id: 'u1', email: 'user@example.com', name: 'Test User', role: 'maintainer' }],
+        users: [
+          {
+            id: '550e8400-e29b-41d4-a716-446655440001',
+            email: 'user@example.com',
+            name: 'Test User',
+            role: 'maintainer',
+          },
+        ],
         total: 1,
       });
 
-      const req = makeReq('GET', {}, { userId: 'u1' });
+      const req = makeReq('GET', {}, { userId: '550e8400-e29b-41d4-a716-446655440001' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -231,7 +299,7 @@ describe('/api/admin/user-roles', () => {
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,
-          userId: 'u1',
+          userId: '550e8400-e29b-41d4-a716-446655440001',
           role: 'maintainer',
           email: 'user@example.com',
         })
@@ -241,11 +309,18 @@ describe('/api/admin/user-roles', () => {
     it('returns 404 when user not found in listUsers results', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockListUsers.mockResolvedValue({
-        users: [{ id: 'other-user', email: 'other@example.com', name: 'Other', role: 'readonly' }],
+        users: [
+          {
+            id: 'cccccccc-dddd-eeee-ffff-000000000001',
+            email: 'other@example.com',
+            name: 'Other',
+            role: 'readonly',
+          },
+        ],
         total: 1,
       });
 
-      const req = makeReq('GET', {}, { userId: 'nonexistent-id' });
+      const req = makeReq('GET', {}, { userId: 'f47ac10b-58cc-4372-a567-0e02b2c3d479' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -255,11 +330,17 @@ describe('/api/admin/user-roles', () => {
     it('returns readonly as default role when role is not set', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockListUsers.mockResolvedValue({
-        users: [{ id: 'u1', email: 'user@example.com', name: 'No Role User' }],
+        users: [
+          {
+            id: '550e8400-e29b-41d4-a716-446655440001',
+            email: 'user@example.com',
+            name: 'No Role User',
+          },
+        ],
         total: 1,
       });
 
-      const req = makeReq('GET', {}, { userId: 'u1' });
+      const req = makeReq('GET', {}, { userId: '550e8400-e29b-41d4-a716-446655440001' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -271,7 +352,7 @@ describe('/api/admin/user-roles', () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockListUsers.mockRejectedValue(new Error('DB error'));
 
-      const req = makeReq('GET', {}, { userId: 'u1' });
+      const req = makeReq('GET', {}, { userId: '550e8400-e29b-41d4-a716-446655440001' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 
@@ -281,11 +362,18 @@ describe('/api/admin/user-roles', () => {
     it('does NOT return 501 (stub response) — listUsers is always called', async () => {
       mockGetSession.mockResolvedValue(ownerSession);
       mockListUsers.mockResolvedValue({
-        users: [{ id: 'u1', email: 'user@example.com', name: 'User', role: 'readonly' }],
+        users: [
+          {
+            id: '550e8400-e29b-41d4-a716-446655440001',
+            email: 'user@example.com',
+            name: 'User',
+            role: 'readonly',
+          },
+        ],
         total: 1,
       });
 
-      const req = makeReq('GET', {}, { userId: 'u1' });
+      const req = makeReq('GET', {}, { userId: '550e8400-e29b-41d4-a716-446655440001' });
       const res = makeRes();
       await handler(req as NextApiRequest, res as unknown as NextApiResponse);
 

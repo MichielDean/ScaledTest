@@ -8,6 +8,10 @@ import Link from 'next/link';
 import { useState, FormEvent } from 'react';
 import { Team } from '../types/team';
 
+// The registration form only needs a subset of the full Team shape —
+// it never renders timestamps or member counts.
+type PublicTeam = Pick<Team, 'id' | 'name' | 'description' | 'isDefault'>;
+
 // Password requirement item component
 interface RequirementItemProps {
   met: boolean;
@@ -45,7 +49,7 @@ interface RegisterFormData {
 }
 
 interface RegisterFormProps {
-  availableTeams: Team[];
+  availableTeams: PublicTeam[];
   loadingTeams: boolean;
   isLoading: boolean;
   error: string;
