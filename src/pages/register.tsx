@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
 import { authLogger as logger } from '../logging/logger';
-import { Team } from '../types/team';
+import { PublicTeam } from '../types/team';
 
 interface RegisterFormData {
   email: string;
@@ -21,7 +21,6 @@ export default function RegisterPage() {
 
   // Business logic state
   // The public endpoint returns a stripped shape — no createdAt/updatedAt.
-  type PublicTeam = Pick<Team, 'id' | 'name' | 'description' | 'isDefault'>;
   const [availableTeams, setAvailableTeams] = useState<PublicTeam[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [isLoading, setIsLoading] = useState(false);

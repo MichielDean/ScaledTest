@@ -67,9 +67,11 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
   const isAuthenticated = !!session;
   const loading = isPending;
 
-  // Cached team memberships for the current user.
-  // Fetched from /api/user-teams on authentication; cleared on logout.
-  const [userTeams, setUserTeams] = useState<Array<{ id: string; name: string; role: string }>>([]);
+  // Cached team IDs and names for the current user.
+  // Role is intentionally NOT stored here — it is derived from the live session
+  // at call time in getUserTeams() so it never goes stale when an owner changes
+  // the user's role without triggering a re-login.
+  const [userTeams, setUserTeams] = useState<Array<{ id: string; name: string }>>([]);
 
   // Get user role from Better Auth metadata
   const getUserRole = (): Role | null => {
@@ -103,18 +105,9 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
           teams?: Array<{ id: string; name: string; description?: string; isDefault?: boolean }>;
         };
         if (!cancelled && data.success && Array.isArray(data.teams)) {
-          // NOTE: The `role` field here is the user's *global* application role
-          // (readonly / maintainer / owner), not a per-team membership role.
-          // Team-scoped roles are not implemented; this field exists to satisfy
-          // the BetterAuthContextType interface shape.
-          const globalRole = (user as { role?: string }).role || 'readonly';
-          setUserTeams(
-            data.teams.map(t => ({
-              id: t.id,
-              name: t.name,
-              role: globalRole,
-            }))
-          );
+          // Store only id and name — role is derived at call time from the live
+          // session so it cannot go stale if an owner updates the user's role.
+          setUserTeams(data.teams.map(t => ({ id: t.id, name: t.name })));
         }
       } catch (err) {
         if (!cancelled) {
@@ -130,8 +123,13 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
     };
   }, [user?.id]);
 
-  // Return cached team memberships synchronously.
-  const getUserTeams = () => userTeams;
+  // Return team memberships with the *current* global role attached at call time.
+  // Role is not cached in state to avoid stale values when an owner changes the
+  // user's role without a re-login.
+  const getUserTeams = () => {
+    const currentRole = getUserRole() || 'readonly';
+    return userTeams.map(t => ({ ...t, role: currentRole }));
+  };
 
   const hasRole = (role: Role): boolean => {
     const userRole = getUserRole();
