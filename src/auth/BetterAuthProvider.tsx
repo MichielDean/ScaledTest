@@ -2,7 +2,7 @@ import React, { createContext, useContext, ReactNode, useState, useEffect } from
 import { useSession } from '@/lib/auth-client';
 import { authClient } from '@/lib/auth-client';
 import logger from '@/logging/logger';
-import { type Role, type Permission, rolePermissions } from '@/lib/permissions';
+import { type Role, type Permission, rolePermissions } from '@/lib/roles';
 
 // Better Auth user interface
 export interface BetterAuthUser {

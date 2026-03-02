@@ -1,58 +1,68 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '../../hooks/useAuth';
-import { UserRole } from '../../types/roles';
+import { UserRole } from '../../lib/roles';
 import { useSPANavigation } from '../../contexts/SPANavigationContext';
-import { BarChart3, CheckCircle, Activity, TrendingUp } from 'lucide-react';
-import type { AnalyticsStats } from '../../types/analytics';
-import { getPassRateColor } from '../../lib/analyticsFormatting';
+
+interface StatsData {
+  totalReports: number;
+  totalTests: number;
+  passRateLast7d: number;
+  totalExecutions: number;
+  activeExecutions: number;
+}
 
 const DashboardView: React.FC = () => {
   const { hasRole, token } = useAuth();
   const { navigateTo } = useSPANavigation();
-  const [stats, setStats] = useState<AnalyticsStats | null>(null);
+
+  const [stats, setStats] = useState<StatsData | null>(null);
   const [statsLoading, setStatsLoading] = useState(true);
-
-  const fetchStats = useCallback(async () => {
-    if (!token) {
-      setStatsLoading(false);
-      return;
-    }
-
-    setStatsLoading(true);
-    try {
-      const response = await fetch('/api/analytics', {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
-
-      if (!response.ok) {
-        // Stats cards are non-critical — silently degrade if unavailable
-        return;
-      }
-
-      const json = (await response.json()) as {
-        success: boolean;
-        stats: AnalyticsStats;
-      };
-
-      if (json.success) {
-        setStats(json.stats);
-      }
-    } catch {
-      // Stats are supplemental — fail silently so the rest of the dashboard works
-    } finally {
-      setStatsLoading(false);
-    }
-  }, [token]);
+  const [statsError, setStatsError] = useState<string | null>(null);
 
   useEffect(() => {
-    void fetchStats();
-  }, [fetchStats]);
+    let cancelled = false;
+
+    const fetchStats = async () => {
+      try {
+        setStatsLoading(true);
+        setStatsError(null);
+
+        const response = await fetch('/api/v1/stats', {
+          headers: {
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+        });
+
+        if (!response.ok) {
+          throw new Error(`Stats fetch failed: ${response.status}`);
+        }
+
+        const json = await response.json();
+
+        if (!cancelled) {
+          setStats(json.data);
+        }
+      } catch (err) {
+        if (!cancelled) {
+          setStatsError(err instanceof Error ? err.message : 'Failed to load stats');
+          setStats(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    fetchStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   return (
     <div className="space-y-6">
@@ -86,123 +96,59 @@ const DashboardView: React.FC = () => {
         </Card>
       )}
 
-      {/* Stats Cards */}
-      <section aria-labelledby="stats-heading">
-        <h2 id="stats-heading" className="sr-only">
-          Quick Stats
-        </h2>
-        <div className="grid auto-rows-min gap-4 md:grid-cols-3">
-          {/* Total Reports */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total Reports</CardTitle>
-              <BarChart3 className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-              {statsLoading ? (
-                <>
-                  <Skeleton className="h-8 w-16 mb-1" />
-                  <Skeleton className="h-3 w-28" />
-                </>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold">{stats?.totalReports ?? '—'}</div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stats != null
-                      ? `${stats.recentReports} in the last 7 days`
-                      : 'Unable to load data'}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+      {statsError && (
+        <p className="text-sm text-destructive" role="alert">
+          {statsError}
+        </p>
+      )}
 
-          {/* Overall Pass Rate */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Overall Pass Rate</CardTitle>
-              <CheckCircle className="h-4 w-4 text-green-600" />
-            </CardHeader>
-            <CardContent>
-              {statsLoading ? (
-                <>
-                  <Skeleton className="h-8 w-16 mb-1" />
-                  <Skeleton className="h-3 w-24" />
-                </>
-              ) : (
-                <>
-                  <div
-                    className={`text-2xl font-bold ${
-                      stats == null ? 'text-muted-foreground' : getPassRateColor(stats.passRate)
-                    }`}
-                  >
-                    {stats != null ? `${stats.passRate}%` : '—'}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stats != null
-                      ? `${stats.totalTests.toLocaleString()} total tests`
-                      : 'Unable to load data'}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
+      <div className="grid auto-rows-min gap-4 md:grid-cols-3">
+        {/* Total Reports */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Total Reports</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{(stats?.totalReports ?? 0).toLocaleString()}</p>
+            )}
+          </CardContent>
+        </Card>
 
-          {/* Recent Activity */}
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Recent Activity</CardTitle>
-              <Activity className="h-4 w-4 text-blue-600" />
-            </CardHeader>
-            <CardContent>
-              {statsLoading ? (
-                <>
-                  <Skeleton className="h-8 w-16 mb-1" />
-                  <Skeleton className="h-3 w-32" />
-                </>
-              ) : (
-                <>
-                  <div className="text-2xl font-bold text-blue-600">
-                    {stats?.recentReports ?? '—'}
-                  </div>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    {stats != null ? 'reports in the last 7 days' : 'Unable to load data'}
-                  </p>
-                </>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </section>
+        {/* Tests Run */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Tests Run</CardTitle>
+            <CardDescription>all time</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{(stats?.totalTests ?? 0).toLocaleString()}</p>
+            )}
+          </CardContent>
+        </Card>
 
-      {/* Quick Navigation */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <TrendingUp className="h-5 w-5" />
-            Quick Navigation
-          </CardTitle>
-          <CardDescription>Jump to the section you need</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button
-              id="nav-test-results-button"
-              variant="outline"
-              onClick={() => navigateTo('test-results')}
-            >
-              Test Results
-            </Button>
-            <Button
-              id="nav-analytics-button"
-              variant="outline"
-              onClick={() => navigateTo('modern-analytics')}
-            >
-              Analytics
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+        {/* Pass Rate */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Pass Rate</CardTitle>
+            <CardDescription>last 7 days</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {statsLoading ? (
+              <Skeleton className="h-8 w-24" />
+            ) : (
+              <p className="text-3xl font-bold">{stats?.passRateLast7d ?? 0}%</p>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="bg-muted/50 min-h-[100vh] flex-1 rounded-xl md:min-h-min" />
     </div>
   );
 };

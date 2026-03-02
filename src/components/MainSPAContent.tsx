@@ -20,6 +20,7 @@ import AnalyticsView from './views/AnalyticsView';
 import ProfileView from './views/ProfileView';
 import AdminUsersView from './views/AdminUsersView';
 import AdminTeamsView from './views/AdminTeamsView';
+import ExecutionsView from './views/ExecutionsView';
 
 interface ViewConfig {
   title: string;
@@ -67,6 +68,11 @@ const viewConfigs: Record<SPAView, ViewConfig> = {
     title: 'Administration - Teams',
     breadcrumbs: [{ label: 'Administration', href: '#' }, { label: 'Teams' }],
     component: AdminTeamsView,
+  },
+  executions: {
+    title: 'Test Executions',
+    breadcrumbs: [{ label: 'Test Executions' }],
+    component: ExecutionsView,
   },
 };
 

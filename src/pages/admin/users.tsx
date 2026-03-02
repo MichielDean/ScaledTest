@@ -2,7 +2,7 @@ import type { NextPage } from 'next';
 import { useEffect } from 'react';
 import { useRouter } from 'next/router';
 import withAuth from '../../auth/withBetterAuth';
-import { UserRole } from '../../types/roles';
+import { UserRole } from '../../lib/roles';
 import { SPANavigationProvider } from '../../contexts/SPANavigationContext';
 import MainSPAContent from '../../components/MainSPAContent';
 import DynamicHead from '../../components/DynamicHead';
