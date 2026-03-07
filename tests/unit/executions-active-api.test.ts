@@ -1,0 +1,224 @@
+/**
+ * Tests for GET /api/v1/executions/active endpoint
+ * TDD: written BEFORE implementation per project convention.
+ *
+ * Covers:
+ * - Zero executions across all teams
+ * - Active-only count (no teamId filter)
+ * - Mixed statuses (only queued/running count as active)
+ * - DB error path (503 response)
+ * - With teamId filter
+ * - Without teamId filter
+ * - Authentication required (401 when unauthenticated)
+ * - Response shape: { success: true, data: { activeExecutions: number } }
+ */
+import type { NextApiRequest, NextApiResponse } from 'next';
+
+// Mock auth — must be before imports
+jest.mock('../../src/lib/auth', () => ({
+  auth: {
+    api: {
+      getSession: jest.fn(),
+    },
+  },
+}));
+
+// Mock timescaledb — pool.query is the key
+const mockPoolQuery = jest.fn();
+jest.mock('../../src/lib/timescaledb', () => ({
+  getTimescalePool: jest.fn(() => ({ query: mockPoolQuery })),
+}));
+
+// Mock logger
+jest.mock('../../src/logging/logger', () => ({
+  apiLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  },
+  logError: jest.fn(),
+  getRequestLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  })),
+}));
+
+import { auth } from '../../src/lib/auth';
+import handler from '../../src/pages/api/v1/executions/active';
+
+const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+
+function makeReqRes(
+  query: Record<string, string> = {},
+  method = 'GET',
+  headers: Record<string, string> = {}
+) {
+  const mockJson = jest.fn();
+  const mockStatus = jest.fn().mockReturnThis();
+
+  const req = {
+    headers: { authorization: 'Bearer test-token', ...headers },
+    method,
+    query,
+  } as unknown as NextApiRequest;
+
+  const res = {
+    status: mockStatus,
+    json: mockJson,
+  } as unknown as NextApiResponse;
+
+  return { req, res, mockJson, mockStatus };
+}
+
+function setupAuth() {
+  mockGetSession.mockResolvedValue({
+    user: {
+      id: 'user-1',
+      email: 'test@example.com',
+      name: 'Test User',
+      role: 'readonly',
+    },
+  });
+}
+
+describe('GET /api/v1/executions/active', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns 401 when not authenticated', async () => {
+    mockGetSession.mockResolvedValue(null);
+    const { req, res, mockStatus } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(401);
+  });
+
+  it('returns 200 with correct response shape', async () => {
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '3' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 3 },
+    });
+  });
+
+  it('returns activeExecutions: 0 when table is empty (zero executions)', async () => {
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '0' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 0 },
+    });
+  });
+
+  it('returns only active (queued+running) executions count — active-only scenario', async () => {
+    setupAuth();
+    // 5 active executions (all queued or running)
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '5' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 5 },
+    });
+    // Verify SQL filters for 'queued' and 'running' statuses
+    const sql = mockPoolQuery.mock.calls[0][0] as string;
+    expect(sql).toContain("'queued'");
+    expect(sql).toContain("'running'");
+  });
+
+  it('counts only active statuses in mixed-status scenario', async () => {
+    setupAuth();
+    // Even though table has completed/failed executions, COUNT query only returns active ones
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 2 },
+    });
+    // The SQL must use WHERE status IN ('queued','running')
+    const sql = mockPoolQuery.mock.calls[0][0] as string;
+    expect(sql).toContain('WHERE');
+    expect(sql).toContain('status');
+  });
+
+  it('returns 503 on DB error', async () => {
+    setupAuth();
+    mockPoolQuery.mockRejectedValueOnce(new Error('DB connection failed'));
+    const { req, res, mockStatus, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(503);
+    expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+  });
+
+  it('returns active count across all teams when no teamId provided', async () => {
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '7' }] });
+    const { req, res, mockJson } = makeReqRes(); // no teamId in query
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 7 },
+    });
+    // Verify no team_id filter in SQL when teamId not provided
+    const [sql, params] = mockPoolQuery.mock.calls[0] as [string, unknown[]?];
+    expect(sql).not.toContain('team_id');
+    expect(params ?? []).toHaveLength(0);
+  });
+
+  it('returns active count filtered by teamId when teamId query param is provided', async () => {
+    setupAuth();
+    const teamId = '550e8400-e29b-41d4-a716-446655440000';
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '4' }] });
+    const { req, res, mockJson } = makeReqRes({ teamId });
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 4 },
+    });
+    // Verify parameterized query uses team_id = $1 and passes teamId as param
+    const [sql, params] = mockPoolQuery.mock.calls[0] as [string, string[]];
+    expect(sql).toContain('team_id');
+    expect(sql).toContain('$1');
+    expect(params).toEqual([teamId]);
+  });
+
+  it('uses COUNT(*) FROM test_executions in query', async () => {
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+    const { req, res } = makeReqRes();
+    await handler(req, res);
+    const sql = mockPoolQuery.mock.calls[0][0] as string;
+    expect(sql).toContain('COUNT(*)');
+    expect(sql).toContain('test_executions');
+  });
+
+  it('activeExecutions is a number, not a string', async () => {
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '9' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    const result = mockJson.mock.calls[0][0] as {
+      success: boolean;
+      data: { activeExecutions: unknown };
+    };
+    expect(typeof result.data.activeExecutions).toBe('number');
+    expect(result.data.activeExecutions).toBe(9);
+  });
+
+  it('returns 405 for non-GET methods', async () => {
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({}, 'POST');
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(405);
+  });
+});
