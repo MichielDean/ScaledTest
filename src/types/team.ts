@@ -108,3 +108,12 @@ export interface TeamPermissions {
   canViewAllTeams: boolean;
   assignableTeams: string[]; // Team IDs this user can assign others to
 }
+
+/**
+ * Public-facing team shape returned by GET /api/teams/public.
+ *
+ * Intentionally omits BaseEntity fields (createdAt, updatedAt) and internal
+ * fields (memberCount) that are not safe or useful for unauthenticated consumers.
+ * Both the registration page and RegisterForm use this type.
+ */
+export type PublicTeam = Pick<Team, 'id' | 'name' | 'description' | 'isDefault'>;

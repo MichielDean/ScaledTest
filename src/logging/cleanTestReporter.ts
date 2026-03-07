@@ -31,6 +31,8 @@ class CleanTestReporter implements Reporter {
   private testLogs: LogEntry[] = [];
   private testStartTimes: Map<string, number> = new Map();
   private testEndTimes: Map<string, number> = new Map();
+  // Track the last error encountered by the reporter for debugging and diagnostics
+  private lastError?: Error;
 
   constructor(globalConfig: Config.GlobalConfig) {
     this._globalConfig = globalConfig;
@@ -38,7 +40,11 @@ class CleanTestReporter implements Reporter {
 
   onRunStart(): void {
     // Clear log files at start of test run
-    this.clearLogFiles();
+    try {
+      this.clearLogFiles();
+    } catch (err) {
+      this.lastError = err instanceof Error ? err : new Error(String(err));
+    }
   }
 
   onTestStart(test?: Test): void {
@@ -120,8 +126,9 @@ class CleanTestReporter implements Reporter {
       .map(line => {
         try {
           return JSON.parse(line) as LogEntry;
-        } catch {
-          // If line is not valid JSON, create a simple log entry
+        } catch (err) {
+          // Record the parsing error for diagnostics but continue to return a usable log entry
+          this.lastError = err instanceof Error ? err : new Error(String(err));
           return {
             level: 30,
             time: new Date().toISOString(),
@@ -133,7 +140,12 @@ class CleanTestReporter implements Reporter {
 
   private showRelevantLogsForFailedTest(test: Test, testResult: TestResult): void {
     // Read the latest logs
-    this.readLogFiles();
+    try {
+      this.readLogFiles();
+    } catch (err) {
+      this.lastError = err instanceof Error ? err : new Error(String(err));
+      return;
+    }
 
     const testPath = test.path;
     const testStartTime = this.testStartTimes.get(testPath);
@@ -241,7 +253,7 @@ class CleanTestReporter implements Reporter {
   }
 
   getLastError(): Error | undefined {
-    return undefined;
+    return this.lastError;
   }
 }
 
