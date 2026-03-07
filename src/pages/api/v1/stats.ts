@@ -38,7 +38,13 @@ const ZERO_STATS: StatsData = {
 async function fetchStatsFromDB(): Promise<StatsData> {
   const pool = getTimescalePool();
 
-  const [reportsResult, testsResult, passRateResult] = await Promise.all([
+  const [
+    reportsResult,
+    testsResult,
+    passRateResult,
+    totalExecutionsResult,
+    activeExecutionsResult,
+  ] = await Promise.all([
     pool.query<{ count: string }>(`SELECT COUNT(*) as count FROM test_reports`),
     pool.query<{ sum: string | null }>(`SELECT SUM(summary_tests) as sum FROM test_reports`),
     pool.query<{ passed: string; total: string }>(`
@@ -48,6 +54,10 @@ async function fetchStatsFromDB(): Promise<StatsData> {
       FROM test_reports
       WHERE timestamp >= NOW() - INTERVAL '7 days'
     `),
+    pool.query<{ count: string }>(`SELECT COUNT(*) as count FROM test_executions`),
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM test_executions WHERE status IN ('queued', 'running')`
+    ),
   ]);
 
   const totalReports = parseInt(reportsResult.rows[0]?.count ?? '0', 10) || 0;
@@ -57,12 +67,15 @@ async function fetchStatsFromDB(): Promise<StatsData> {
   const total = parseInt(passRateResult.rows[0]?.total ?? '0', 10) || 0;
   const passRateLast7d = total === 0 ? 0 : Math.round((passed / total) * 100);
 
+  const totalExecutions = parseInt(totalExecutionsResult.rows[0]?.count ?? '0', 10) || 0;
+  const activeExecutions = parseInt(activeExecutionsResult.rows[0]?.count ?? '0', 10) || 0;
+
   return {
     totalReports,
     totalTests,
     passRateLast7d,
-    totalExecutions: 0,
-    activeExecutions: 0,
+    totalExecutions,
+    activeExecutions,
   };
 }
 

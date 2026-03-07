@@ -70,17 +70,36 @@ function setupAuth() {
   });
 }
 
+/**
+ * Sets up all 5 DB query mocks in Promise.all() order:
+ * 1. COUNT(*) FROM test_reports → { count }
+ * 2. SUM(summary_tests) FROM test_reports → { sum }
+ * 3. pass rate last 7d → { passed, total }
+ * 4. COUNT(*) FROM test_executions → { count: totalExecutions }
+ * 5. COUNT(*) FROM test_executions WHERE status IN ('queued','running') → { count: activeExecutions }
+ */
 function setupDBResponses(overrides?: {
   count?: string;
   sum?: string | null;
   passed?: string;
   total?: string;
+  totalExecutions?: string;
+  activeExecutions?: string;
 }) {
-  const { count = '42', sum = '1234', passed = '90', total = '100' } = overrides ?? {};
+  const {
+    count = '42',
+    sum = '1234',
+    passed = '90',
+    total = '100',
+    totalExecutions = '7',
+    activeExecutions = '3',
+  } = overrides ?? {};
   mockPoolQuery
     .mockResolvedValueOnce({ rows: [{ count }] })
     .mockResolvedValueOnce({ rows: [{ sum }] })
-    .mockResolvedValueOnce({ rows: [{ passed, total }] });
+    .mockResolvedValueOnce({ rows: [{ passed, total }] })
+    .mockResolvedValueOnce({ rows: [{ count: totalExecutions }] })
+    .mockResolvedValueOnce({ rows: [{ count: activeExecutions }] });
 }
 
 describe('GET /api/v1/stats', () => {
@@ -104,8 +123,8 @@ describe('GET /api/v1/stats', () => {
           totalReports: expect.any(Number),
           totalTests: expect.any(Number),
           passRateLast7d: expect.any(Number),
-          totalExecutions: 0,
-          activeExecutions: 0,
+          totalExecutions: expect.any(Number),
+          activeExecutions: expect.any(Number),
         }),
       })
     );
@@ -164,6 +183,8 @@ describe('GET /api/v1/stats', () => {
     expect(responseData.data.totalReports).toBe(0);
     expect(responseData.data.totalTests).toBe(0);
     expect(responseData.data.passRateLast7d).toBe(0);
+    expect(responseData.data.totalExecutions).toBe(0);
+    expect(responseData.data.activeExecutions).toBe(0);
   });
 
   it('returns 401 when not authenticated', async () => {
@@ -175,9 +196,29 @@ describe('GET /api/v1/stats', () => {
     expect(mockStatus).toHaveBeenCalledWith(401);
   });
 
-  it('totalExecutions and activeExecutions are always 0', async () => {
+  it('totalExecutions is queried from test_executions and returned correctly', async () => {
     setupAuth();
-    setupDBResponses();
+    setupDBResponses({ totalExecutions: '15' });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockJson.mock.calls[0][0].data.totalExecutions).toBe(15);
+  });
+
+  it('activeExecutions counts only queued and running statuses', async () => {
+    setupAuth();
+    setupDBResponses({ totalExecutions: '10', activeExecutions: '4' });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockJson.mock.calls[0][0].data.activeExecutions).toBe(4);
+  });
+
+  it('totalExecutions and activeExecutions are both 0 when test_executions table is empty', async () => {
+    setupAuth();
+    setupDBResponses({ totalExecutions: '0', activeExecutions: '0' });
 
     const { req, res, mockJson } = makeReqRes();
     await handler(req, res);
@@ -186,13 +227,44 @@ describe('GET /api/v1/stats', () => {
     expect(mockJson.mock.calls[0][0].data.activeExecutions).toBe(0);
   });
 
+  it('activeExecutions is 0 when all executions are completed (none queued or running)', async () => {
+    setupAuth();
+    // 8 total executions, all completed/failed/cancelled — none active
+    setupDBResponses({ totalExecutions: '8', activeExecutions: '0' });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockJson.mock.calls[0][0].data.totalExecutions).toBe(8);
+    expect(mockJson.mock.calls[0][0].data.activeExecutions).toBe(0);
+  });
+
+  it('activeExecutions equals totalExecutions when all are queued or running', async () => {
+    setupAuth();
+    // 5 total, all active (queued or running)
+    setupDBResponses({ totalExecutions: '5', activeExecutions: '5' });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockJson.mock.calls[0][0].data.totalExecutions).toBe(5);
+    expect(mockJson.mock.calls[0][0].data.activeExecutions).toBe(5);
+  });
+
   it('cache returns same value within 60s (mock Date.now)', async () => {
     setupAuth();
     const now = 1_700_000_000_000;
     const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
 
     // First call: set up DB responses
-    setupDBResponses({ count: '99', sum: '5000', passed: '80', total: '100' });
+    setupDBResponses({
+      count: '99',
+      sum: '5000',
+      passed: '80',
+      total: '100',
+      totalExecutions: '12',
+      activeExecutions: '2',
+    });
 
     const { req: req1, res: res1, mockJson: mockJson1 } = makeReqRes();
     await handler(req1, res1);
@@ -213,6 +285,8 @@ describe('GET /api/v1/stats', () => {
     expect(secondQueryCount).toBe(firstQueryCount);
     expect(mockJson2.mock.calls[0][0].success).toBe(true);
     expect(mockJson2.mock.calls[0][0].data.totalReports).toBe(99);
+    expect(mockJson2.mock.calls[0][0].data.totalExecutions).toBe(12);
+    expect(mockJson2.mock.calls[0][0].data.activeExecutions).toBe(2);
 
     dateSpy.mockRestore();
   });
