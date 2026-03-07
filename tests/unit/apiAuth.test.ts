@@ -54,7 +54,7 @@ describe('API Authentication Middleware', () => {
     mockHandler = jest.fn();
 
     // Get the mocked functions
-    mockGetSession = auth.api.getSession as jest.Mock;
+    mockGetSession = auth.api.getSession as unknown as jest.Mock;
 
     // Default mock implementation - return null (no authentication)
     mockGetSession.mockResolvedValue({ data: null });

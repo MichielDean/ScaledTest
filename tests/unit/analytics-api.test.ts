@@ -53,7 +53,7 @@ import {
   getDurationDistribution,
 } from '../../src/lib/analytics';
 
-const mockGetSession = auth.api.getSession as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as jest.Mock;
 const mockGetTestTrends = getTestTrends as jest.Mock;
 const mockGetFlakyTests = getFlakyTests as jest.Mock;
 const mockGetErrorAnalysis = getErrorAnalysis as jest.Mock;
