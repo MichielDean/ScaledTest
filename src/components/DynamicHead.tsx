@@ -40,6 +40,10 @@ const viewConfigs: Record<SPAView, ViewConfig> = {
     title: 'ScaledTest - Administration - Teams',
     description: 'Team management and administration',
   },
+  executions: {
+    title: 'ScaledTest - Test Executions',
+    description: 'Run and monitor parallel test executions',
+  },
 };
 
 const DynamicHead: React.FC = () => {
