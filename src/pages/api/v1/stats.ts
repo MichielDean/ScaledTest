@@ -35,16 +35,13 @@ const ZERO_STATS: StatsData = {
   activeExecutions: 0,
 };
 
+// Active execution statuses queried from test_executions
+const ACTIVE_STATUSES = `'queued', 'running'`;
+
 async function fetchStatsFromDB(): Promise<StatsData> {
   const pool = getTimescalePool();
 
-  const [
-    reportsResult,
-    testsResult,
-    passRateResult,
-    totalExecutionsResult,
-    activeExecutionsResult,
-  ] = await Promise.all([
+  const [reportsResult, testsResult, passRateResult, executionsResult] = await Promise.all([
     pool.query<{ count: string }>(`SELECT COUNT(*) as count FROM test_reports`),
     pool.query<{ sum: string | null }>(`SELECT SUM(summary_tests) as sum FROM test_reports`),
     pool.query<{ passed: string; total: string }>(`
@@ -54,10 +51,12 @@ async function fetchStatsFromDB(): Promise<StatsData> {
       FROM test_reports
       WHERE timestamp >= NOW() - INTERVAL '7 days'
     `),
-    pool.query<{ count: string }>(`SELECT COUNT(*) as count FROM test_executions`),
-    pool.query<{ count: string }>(
-      `SELECT COUNT(*) as count FROM test_executions WHERE status IN ('queued', 'running')`
-    ),
+    pool.query<{ total: string; active: string }>(`
+      SELECT
+        COUNT(*) as total,
+        COUNT(*) FILTER (WHERE status IN (${ACTIVE_STATUSES})) as active
+      FROM test_executions
+    `),
   ]);
 
   const totalReports = parseInt(reportsResult.rows[0]?.count ?? '0', 10) || 0;
@@ -67,8 +66,8 @@ async function fetchStatsFromDB(): Promise<StatsData> {
   const total = parseInt(passRateResult.rows[0]?.total ?? '0', 10) || 0;
   const passRateLast7d = total === 0 ? 0 : Math.round((passed / total) * 100);
 
-  const totalExecutions = parseInt(totalExecutionsResult.rows[0]?.count ?? '0', 10) || 0;
-  const activeExecutions = parseInt(activeExecutionsResult.rows[0]?.count ?? '0', 10) || 0;
+  const totalExecutions = parseInt(executionsResult.rows[0]?.total ?? '0', 10) || 0;
+  const activeExecutions = parseInt(executionsResult.rows[0]?.active ?? '0', 10) || 0;
 
   return {
     totalReports,

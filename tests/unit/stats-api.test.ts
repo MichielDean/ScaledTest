@@ -71,12 +71,11 @@ function setupAuth() {
 }
 
 /**
- * Sets up all 5 DB query mocks in Promise.all() order:
+ * Sets up all 4 DB query mocks in Promise.all() order:
  * 1. COUNT(*) FROM test_reports → { count }
  * 2. SUM(summary_tests) FROM test_reports → { sum }
  * 3. pass rate last 7d → { passed, total }
- * 4. COUNT(*) FROM test_executions → { count: totalExecutions }
- * 5. COUNT(*) FROM test_executions WHERE status IN ('queued','running') → { count: activeExecutions }
+ * 4. Single query FROM test_executions → { total: totalExecutions, active: activeExecutions }
  */
 function setupDBResponses(overrides?: {
   count?: string;
@@ -98,8 +97,7 @@ function setupDBResponses(overrides?: {
     .mockResolvedValueOnce({ rows: [{ count }] })
     .mockResolvedValueOnce({ rows: [{ sum }] })
     .mockResolvedValueOnce({ rows: [{ passed, total }] })
-    .mockResolvedValueOnce({ rows: [{ count: totalExecutions }] })
-    .mockResolvedValueOnce({ rows: [{ count: activeExecutions }] });
+    .mockResolvedValueOnce({ rows: [{ total: totalExecutions, active: activeExecutions }] });
 }
 
 describe('GET /api/v1/stats', () => {
@@ -204,6 +202,11 @@ describe('GET /api/v1/stats', () => {
     await handler(req, res);
 
     expect(mockJson.mock.calls[0][0].data.totalExecutions).toBe(15);
+
+    // Verify the handler actually queries test_executions for the total count
+    const executionsQuery = mockPoolQuery.mock.calls[3]?.[0] as string;
+    expect(typeof executionsQuery).toBe('string');
+    expect(executionsQuery).toContain('FROM test_executions');
   });
 
   it('activeExecutions counts only queued and running statuses', async () => {
@@ -214,6 +217,12 @@ describe('GET /api/v1/stats', () => {
     await handler(req, res);
 
     expect(mockJson.mock.calls[0][0].data.activeExecutions).toBe(4);
+
+    // Verify the SQL filters by the correct active statuses
+    const hasQueuedAndRunningFilter = mockPoolQuery.mock.calls.some(([sql]) => {
+      return typeof sql === 'string' && sql.includes("'queued'") && sql.includes("'running'");
+    });
+    expect(hasQueuedAndRunningFilter).toBe(true);
   });
 
   it('totalExecutions and activeExecutions are both 0 when test_executions table is empty', async () => {
