@@ -40,7 +40,7 @@ jest.mock('../../src/logging/logger', () => ({
 import { auth } from '../../src/lib/auth';
 import handler, { statsCache } from '../../src/pages/api/v1/stats';
 
-const mockGetSession = auth.api.getSession as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as jest.Mock;
 
 function makeReqRes(method = 'GET', headers: Record<string, string> = {}) {
   const mockJson = jest.fn();
