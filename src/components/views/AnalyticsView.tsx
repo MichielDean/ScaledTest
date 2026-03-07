@@ -146,7 +146,7 @@ const AnalyticsView: React.FC = () => {
                 <Line
                   type="monotone"
                   dataKey="passRate"
-                  stroke="#22c55e"
+                  stroke="var(--chart-1)"
                   strokeWidth={2}
                   dot={{ r: 4 }}
                   name="Pass Rate"
@@ -174,7 +174,7 @@ const AnalyticsView: React.FC = () => {
                   <XAxis dataKey="range" tick={{ fontSize: 11 }} />
                   <YAxis />
                   <Tooltip />
-                  <Bar dataKey="count" fill="#6366f1" name="Tests" />
+                  <Bar dataKey="count" fill="var(--chart-2)" name="Tests" />
                 </BarChart>
               </ResponsiveContainer>
             )}
@@ -211,8 +211,8 @@ const AnalyticsView: React.FC = () => {
                         <tr key={i} className="border-b last:border-0">
                           <td className="py-1 pr-2 font-mono text-xs">{t.testName}</td>
                           <td className="py-1 pr-2 text-muted-foreground">{t.suite}</td>
-                          <td className="py-1 pr-2 text-green-600">{t.passed}</td>
-                          <td className="py-1 pr-2 text-red-500">{t.failed}</td>
+                          <td className="py-1 pr-2 text-muted-foreground">{t.passed}</td>
+                          <td className="py-1 pr-2 text-muted-foreground">{t.failed}</td>
                           <td className="py-1">
                             <Badge variant="destructive">{t.flakyScore}%</Badge>
                           </td>
