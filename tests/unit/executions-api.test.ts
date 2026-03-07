@@ -48,7 +48,7 @@ jest.mock('../../src/logging/logger', () => ({
 import { auth } from '../../src/lib/auth';
 import { createExecution, listExecutions } from '../../src/lib/executions';
 
-const mockGetSession = auth.api.getSession as jest.Mock;
+const mockGetSession = auth.api.getSession as unknown as jest.Mock;
 const mockCreateExecution = createExecution as jest.Mock;
 const mockListExecutions = listExecutions as jest.Mock;
 
