@@ -6,7 +6,7 @@ import { PasswordInput } from '@/components/ui/password-input';
 import { Label } from '@/components/ui/label';
 import Link from 'next/link';
 import { useState, FormEvent } from 'react';
-import { Team } from '../types/team';
+import { PublicTeam } from '../types/team';
 
 // Password requirement item component
 interface RequirementItemProps {
@@ -45,7 +45,7 @@ interface RegisterFormData {
 }
 
 interface RegisterFormProps {
-  availableTeams: Team[];
+  availableTeams: PublicTeam[];
   loadingTeams: boolean;
   isLoading: boolean;
   error: string;

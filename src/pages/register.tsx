@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/router';
 import { useAuth } from '../hooks/useAuth';
 import { authLogger as logger } from '../logging/logger';
-import { Team } from '../types/team';
+import { PublicTeam } from '../types/team';
 
 interface RegisterFormData {
   email: string;
@@ -20,7 +20,8 @@ export default function RegisterPage() {
   const { isAuthenticated, loading } = useAuth();
 
   // Business logic state
-  const [availableTeams, setAvailableTeams] = useState<Team[]>([]);
+  // The public endpoint returns a stripped shape — no createdAt/updatedAt.
+  const [availableTeams, setAvailableTeams] = useState<PublicTeam[]>([]);
   const [loadingTeams, setLoadingTeams] = useState(true);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState('');
@@ -32,24 +33,29 @@ export default function RegisterPage() {
     }
   }, [isAuthenticated, loading, router]);
 
-  // Load available teams
+  // Load available teams from the public endpoint (no auth required).
+  // Team selection during registration is optional — the user can join teams later.
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        // Temporarily disable teams loading - teams API not implemented
-        // const response = await fetch('/api/teams');
-        // if (response.ok) {
-        //   const data = await response.json();
-        //   if (data?.success && Array.isArray(data.teams)) {
-        //     setAvailableTeams(data.teams);
-        //   }
-        // }
-
-        // For now, just set empty teams list
-        setAvailableTeams([]);
+        const response = await fetch('/api/teams/public');
+        if (response.ok) {
+          const data = (await response.json()) as {
+            success: boolean;
+            teams?: PublicTeam[];
+          };
+          if (data?.success && Array.isArray(data.teams)) {
+            setAvailableTeams(data.teams);
+          } else {
+            setAvailableTeams([]);
+          }
+        } else {
+          // Endpoint unavailable — teams are optional, continue with empty list.
+          setAvailableTeams([]);
+        }
       } catch (err) {
         logger.error({ error: err }, 'Failed to load teams for registration');
-        // Continue without teams - they're optional
+        // Continue without teams — they're optional
       } finally {
         setLoadingTeams(false);
       }
