@@ -1,5 +1,5 @@
 import { PoolClient } from 'pg';
-import { getTimescalePool } from './timescaledb';
+import { getTimescalePool, getLinkedReportIds } from './timescaledb';
 import { dbLogger as logger, logError } from '../logging/logger';
 
 export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
@@ -24,6 +24,21 @@ export interface TestExecution {
   totalPods: number;
   completedPods: number;
   failedPods: number;
+}
+
+/**
+ * Extended execution detail returned by GET /api/v1/executions/:id (SCA-10).
+ * Adds derived `activePods` count and the list of linked CTRF report IDs.
+ */
+export interface ExecutionDetail extends TestExecution {
+  /**
+   * Derived from totalPods - completedPods - failedPods.
+   * Represents pods that are currently running (not yet done or failed).
+   * Always >= 0 (floored at 0 to guard against inconsistent DB state).
+   */
+  activePods: number;
+  /** IDs of CTRF reports submitted by worker pods for this execution. */
+  linkedReportIds: string[];
 }
 
 export interface CreateExecutionInput {
@@ -119,6 +134,35 @@ export async function getExecution(id: string): Promise<TestExecution | null> {
     throw error;
   } finally {
     client?.release();
+  }
+}
+
+/**
+ * Returns execution detail for GET /api/v1/executions/:id (SCA-10).
+ *
+ * Enriches the base TestExecution record with:
+ *   - `activePods`: derived as max(0, totalPods - completedPods - failedPods)
+ *   - `linkedReportIds`: report_ids from test_reports where execution_id = id
+ *
+ * Returns null if the execution does not exist.
+ */
+export async function getExecutionDetail(id: string): Promise<ExecutionDetail | null> {
+  try {
+    const execution = await getExecution(id);
+    if (!execution) return null;
+
+    const linkedReportIds = await getLinkedReportIds(id);
+
+    // activePods: pods still running — floored at 0 to guard against counter drift
+    const activePods = Math.max(
+      0,
+      execution.totalPods - execution.completedPods - execution.failedPods
+    );
+
+    return { ...execution, activePods, linkedReportIds };
+  } catch (error) {
+    logError(logger, 'Failed to get execution detail', error, { id });
+    throw error;
   }
 }
 
