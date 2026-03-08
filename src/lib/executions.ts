@@ -298,38 +298,54 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
  * If completedPods reaches totalPods after the increment, marks the execution as 'completed'
  * and sets completedAt.
  *
- * Returns the updated execution row.
+ * Returns the updated execution row, or null if the execution is already in a terminal state
+ * (completed / failed / cancelled) — duplicate callbacks from pods are silently ignored.
+ *
+ * Race-condition mitigations (Copilot SCA-9 review):
+ *   1. LEAST(completed_pods + 1, total_pods) — saturates the counter so concurrent duplicate
+ *      callbacks cannot push completed_pods beyond total_pods.
+ *   2. COALESCE(completed_at, now()) — preserves the first completed_at timestamp; subsequent
+ *      updates do not overwrite it.
+ *   3. WHERE NOT status = ANY(...) guard — skips the UPDATE entirely for terminal executions,
+ *      making duplicate callbacks idempotent without touching the row.
  *
  * Used by the worker result callback endpoint (SCA-9).
  */
-export async function recordExecutionResult(id: string): Promise<TestExecution> {
+export async function recordExecutionResult(id: string): Promise<TestExecution | null> {
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    // Atomic increment + conditional completion in one UPDATE.
-    // CASE expression avoids a separate read + write race condition.
+    // Single atomic UPDATE — no separate read required.
+    // The WHERE clause skips terminal executions so duplicate callbacks are no-ops.
     const result = await client.query(
       `UPDATE test_executions
        SET
-         completed_pods = completed_pods + 1,
+         -- Saturate at total_pods to prevent over-counting from duplicate callbacks
+         completed_pods = LEAST(completed_pods + 1, total_pods),
          status = CASE
-           WHEN completed_pods + 1 >= total_pods THEN 'completed'
+           WHEN LEAST(completed_pods + 1, total_pods) >= total_pods THEN 'completed'
            ELSE status
          END,
+         -- COALESCE preserves the first completed_at; duplicate callbacks don't overwrite it
          completed_at = CASE
-           WHEN completed_pods + 1 >= total_pods THEN now()
+           WHEN LEAST(completed_pods + 1, total_pods) >= total_pods
+             THEN COALESCE(completed_at, now())
            ELSE completed_at
          END,
          updated_at = now()
        WHERE id = $1
+         AND NOT status = ANY(ARRAY['completed','failed','cancelled']::text[])
        RETURNING *`,
       [id]
     );
 
+    // No row returned means either:
+    //   a) the execution doesn't exist (caller already did 404 check), or
+    //   b) it was already in a terminal state — duplicate callback, silently ignore.
     if (!result.rows[0]) {
-      throw new Error(`Execution not found: ${id}`);
+      return null;
     }
 
     return rowToExecution(result.rows[0] as Record<string, unknown>);

@@ -18,113 +18,14 @@
  * - Returns { success: true, reportId }
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
-import { z } from 'zod';
 import { getRequestLogger, logError } from '@/logging/logger';
 import { storeCtrfReport, type TimescaleCtrfReport } from '@/lib/timescaledb';
 import { getExecution, recordExecutionResult } from '@/lib/executions';
+import { isValidUuid } from '@/lib/validation';
+import { CtrfReportSchema } from '@/schemas/ctrf/ctrf-zod';
 
-/** RFC 4122 UUID v1–v5 */
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-/** Execution statuses that accept results from workers */
+/** Execution statuses that no longer accept results from workers */
 const TERMINAL_STATUSES = new Set(['completed', 'cancelled', 'failed']);
-
-/** CTRF report validation schema (same shape as used in test-reports.ts) */
-const CtrfReportSchema = z.object({
-  reportFormat: z.literal('CTRF'),
-  specVersion: z.string().regex(/^[0-9]+\.[0-9]+\.[0-9]+$/),
-  reportId: z.string().uuid().optional(),
-  timestamp: z.string().datetime().optional(),
-  generatedBy: z.string().optional(),
-  results: z.object({
-    tool: z.object({
-      name: z.string(),
-      version: z.string().optional(),
-      url: z.string().optional(),
-      extra: z.record(z.string(), z.unknown()).optional(),
-    }),
-    summary: z.object({
-      tests: z.number().int().min(0),
-      passed: z.number().int().min(0),
-      failed: z.number().int().min(0),
-      skipped: z.number().int().min(0),
-      pending: z.number().int().min(0),
-      other: z.number().int().min(0),
-      suites: z.number().int().min(0).optional(),
-      start: z.number().int(),
-      stop: z.number().int(),
-      extra: z.record(z.string(), z.unknown()).optional(),
-    }),
-    tests: z.array(
-      z.object({
-        name: z.string(),
-        status: z.enum(['passed', 'failed', 'skipped', 'pending', 'other']),
-        duration: z.number().int().min(0),
-        start: z.number().int().optional(),
-        stop: z.number().int().optional(),
-        suite: z.string().optional(),
-        message: z.string().optional(),
-        trace: z.string().optional(),
-        ai: z.string().optional(),
-        line: z.number().int().optional(),
-        rawStatus: z.string().optional(),
-        tags: z.array(z.string()).optional(),
-        type: z.string().optional(),
-        filePath: z.string().optional(),
-        retries: z.number().int().min(0).optional(),
-        flaky: z.boolean().optional(),
-        stdout: z.array(z.string()).optional(),
-        stderr: z.array(z.string()).optional(),
-        threadId: z.string().optional(),
-        browser: z.string().optional(),
-        device: z.string().optional(),
-        screenshot: z.string().optional(),
-        attachments: z
-          .array(
-            z.object({
-              name: z.string(),
-              contentType: z.string(),
-              path: z.string(),
-              extra: z.record(z.string(), z.unknown()).optional(),
-            })
-          )
-          .optional(),
-        parameters: z.record(z.string(), z.unknown()).optional(),
-        steps: z
-          .array(
-            z.object({
-              name: z.string(),
-              status: z.enum(['passed', 'failed', 'skipped', 'pending', 'other']),
-              extra: z.record(z.string(), z.unknown()).optional(),
-            })
-          )
-          .optional(),
-        extra: z.record(z.string(), z.unknown()).optional(),
-      })
-    ),
-    environment: z
-      .object({
-        reportName: z.string().optional(),
-        appName: z.string().optional(),
-        appVersion: z.string().optional(),
-        buildName: z.string().optional(),
-        buildNumber: z.string().optional(),
-        buildUrl: z.string().optional(),
-        repositoryName: z.string().optional(),
-        repositoryUrl: z.string().optional(),
-        commit: z.string().optional(),
-        branchName: z.string().optional(),
-        osPlatform: z.string().optional(),
-        osRelease: z.string().optional(),
-        osVersion: z.string().optional(),
-        testEnvironment: z.string().optional(),
-        extra: z.record(z.string(), z.unknown()).optional(),
-      })
-      .optional(),
-    extra: z.record(z.string(), z.unknown()).optional(),
-  }),
-  extra: z.record(z.string(), z.unknown()).optional(),
-});
 
 type SuccessResponse = { success: true; reportId: string };
 type ErrorResponse = { success: false; error: string; details?: unknown };
@@ -137,6 +38,7 @@ export default async function handler(
 
   // Only POST is allowed
   if (req.method !== 'POST') {
+    res.setHeader('Allow', ['POST']);
     return res.status(405).json({ success: false, error: `Method ${req.method} not allowed` });
   }
 
@@ -150,11 +52,11 @@ export default async function handler(
     return res.status(401).json({ success: false, error: 'Invalid or missing worker token' });
   }
 
-  // --- UUID validation on :id ---
+  // --- UUID validation on :id (shared validator, consistent with the rest of the codebase) ---
   const raw = req.query['id'];
   const id = Array.isArray(raw) ? raw[0] : raw;
 
-  if (!id || !UUID_REGEX.test(id)) {
+  if (!id || !isValidUuid(id)) {
     return res
       .status(400)
       .json({ success: false, error: 'Invalid execution id: must be a valid UUID' });
@@ -190,21 +92,37 @@ export default async function handler(
     const reportId = ctrfReport.reportId ?? crypto.randomUUID();
     const now = new Date().toISOString();
 
-    // --- Store report, linking execution_id ---
-    const storedReportId = await storeCtrfReport({
-      ...ctrfReport,
+    // --- Build a structurally-verified report for storage ---
+    //
+    // TimescaleCtrfReport extends CtrfSchema, which was auto-generated from a JSON Schema
+    // and uses `const enum Status` / `ReportFormat`. The Zod-inferred type uses string
+    // literals instead — the values are identical at runtime but TypeScript sees them as
+    // incompatible types. We bridge with `unknown` here (same pattern used by test-reports.ts)
+    // while still building the object with named fields so TypeScript can catch any structural
+    // omissions.
+    const reportPayload = {
+      reportFormat: ctrfReport.reportFormat,
+      specVersion: ctrfReport.specVersion,
       reportId,
       timestamp: ctrfReport.timestamp ?? now,
+      generatedBy: ctrfReport.generatedBy,
+      results: ctrfReport.results,
+      extra: ctrfReport.extra,
       storedAt: now,
       executionId: id,
       metadata: {
-        uploadedBy: 'worker',
-        userTeams: [],
+        uploadedBy: 'worker' as const,
+        userTeams: [] as string[],
         uploadedAt: now,
       },
-    } as TimescaleCtrfReport);
+    };
+    // Bridge the const-enum incompatibility between the Zod schema and the generated CtrfSchema
+    const reportToStore = reportPayload as unknown as TimescaleCtrfReport;
 
-    // --- Increment completedPods, mark completed if all pods done ---
+    // --- Store report, linking execution_id ---
+    const storedReportId = await storeCtrfReport(reportToStore);
+
+    // --- Atomically increment completedPods; mark completed when all pods have reported in ---
     await recordExecutionResult(id);
 
     reqLogger.info(

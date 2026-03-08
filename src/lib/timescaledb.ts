@@ -234,7 +234,7 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
         test_data = EXCLUDED.test_data,
         environment_data = EXCLUDED.environment_data,
         extra_data = EXCLUDED.extra_data,
-        execution_id = COALESCE(EXCLUDED.execution_id, test_reports.execution_id)
+        execution_id = COALESCE(test_reports.execution_id, EXCLUDED.execution_id)
       RETURNING report_id;
     `;
 

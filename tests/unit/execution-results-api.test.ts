@@ -320,10 +320,12 @@ describe('POST /api/v1/executions/:id/results', () => {
     expect(mockStatus).toHaveBeenCalledWith(503);
   });
 
-  it('returns 405 for non-POST methods', async () => {
+  it('returns 405 for non-POST methods with Allow header', async () => {
     mockGetExecution.mockResolvedValue(runningExecution);
     const { req, res, mockStatus } = makeReqRes('GET', {}, { id: VALID_UUID });
+    const mockSetHeader = res.setHeader as jest.Mock;
     await handler(req, res);
     expect(mockStatus).toHaveBeenCalledWith(405);
+    expect(mockSetHeader).toHaveBeenCalledWith('Allow', ['POST']);
   });
 });
