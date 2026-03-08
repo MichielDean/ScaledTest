@@ -258,4 +258,136 @@ describe('GET /api/v1/executions/active', () => {
     const [, params] = mockPoolQuery.mock.calls[0] as [string, string[]];
     expect(params).toEqual([validUuid]);
   });
+
+  // --- QA edge cases ---
+
+  it('returns 400 for empty string teamId', async () => {
+    // Empty string is not undefined — it should fail UUID validation
+    setupAuth();
+    const { req, res, mockStatus, mockJson } = makeReqRes({ teamId: '' });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for teamId with only whitespace', async () => {
+    // Whitespace strings should not reach the DB
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({ teamId: '   ' });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 when string[] teamId has an invalid UUID as first element', async () => {
+    // Array unwrap uses first element — if it's invalid, should return 400
+    setupAuth();
+    const arrayTeamId: string[] = ['not-a-uuid', '550e8400-e29b-41d4-a716-446655440000'];
+    const { req, res, mockStatus } = makeReqRes({ teamId: arrayTeamId });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 0 when DB returns empty rows array (no rows at all)', async () => {
+    // Edge: rows is [] instead of [{ count: '0' }] — guard against undefined.count
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 0 },
+    });
+  });
+
+  it('returns 0 when DB count value is null (unexpected NULL from DB)', async () => {
+    // Edge: count field comes back as null instead of a string
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: null }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 0 },
+    });
+  });
+
+  it('returns 0 when DB count value is unparseable (NaN path)', async () => {
+    // Edge: parseInt returns NaN — the || 0 guard should kick in
+    setupAuth();
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: 'not-a-number' }] });
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 0 },
+    });
+  });
+
+  it('accepts uppercase UUID as valid teamId (UUID regex is case-insensitive)', async () => {
+    setupAuth();
+    const upperUuid = '550E8400-E29B-41D4-A716-446655440000';
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] });
+    const { req, res, mockJson, mockStatus } = makeReqRes({ teamId: upperUuid });
+    await handler(req, res);
+    // Should NOT return 400 — regex has /i flag
+    expect(mockStatus).not.toHaveBeenCalledWith(400);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 1 },
+    });
+  });
+
+  it('returns 400 for UUID version 0 (regex only allows v1-v5)', async () => {
+    // Version nibble must be 1-5 per RFC 4122; v0 should be rejected
+    setupAuth();
+    const v0Uuid = '550e8400-e29b-01d4-a716-446655440000'; // '0' in version position
+    const { req, res, mockStatus } = makeReqRes({ teamId: v0Uuid });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 405 for DELETE method', async () => {
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({}, 'DELETE');
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(405);
+  });
+
+  it('returns 405 for PUT method', async () => {
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({}, 'PUT');
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(405);
+  });
+
+  it('returns 405 for PATCH method', async () => {
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({}, 'PATCH');
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(405);
+  });
+
+  it('does not call DB for unauthenticated requests', async () => {
+    // Verify no DB leakage when auth fails
+    mockGetSession.mockResolvedValue(null);
+    const { req, res } = makeReqRes();
+    await handler(req, res);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 error body with success: false on DB failure', async () => {
+    setupAuth();
+    mockPoolQuery.mockRejectedValueOnce(new Error('Connection timeout'));
+    const { req, res, mockStatus, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(503);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: false,
+      error: 'Database unavailable',
+    });
+  });
 });
