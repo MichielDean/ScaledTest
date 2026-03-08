@@ -180,7 +180,11 @@ describe('POST /api/v1/teams/[teamId]/tokens', () => {
     mockGetSession.mockResolvedValue(null);
     const res = makeRes();
     await createHandler(
-      makeReq('POST', { query: { teamId: TEAM_ID }, body: { name: 'CI' }, headers: {} }) as NextApiRequest,
+      makeReq('POST', {
+        query: { teamId: TEAM_ID },
+        body: { name: 'CI' },
+        headers: {},
+      }) as NextApiRequest,
       res as unknown as NextApiResponse
     );
     expect(res.status).toHaveBeenCalledWith(401);
@@ -305,7 +309,10 @@ describe('DELETE /api/v1/teams/[teamId]/tokens/[tokenId]', () => {
     mockGetSession.mockResolvedValue(null);
     const res = makeRes();
     await revokeHandler(
-      makeReq('DELETE', { query: { teamId: TEAM_ID, tokenId: TOKEN_ID }, headers: {} }) as NextApiRequest,
+      makeReq('DELETE', {
+        query: { teamId: TEAM_ID, tokenId: TOKEN_ID },
+        headers: {},
+      }) as NextApiRequest,
       res as unknown as NextApiResponse
     );
     expect(res.status).toHaveBeenCalledWith(401);
