@@ -11,6 +11,8 @@
  * - Without teamId filter
  * - Authentication required (401 when unauthenticated)
  * - Response shape: { success: true, data: { activeExecutions: number } }
+ * - Invalid UUID teamId returns 400
+ * - string[] teamId (Next.js array query) is unwrapped to first element
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
 
@@ -53,7 +55,7 @@ import handler from '../../src/pages/api/v1/executions/active';
 const mockGetSession = auth.api.getSession as unknown as jest.Mock;
 
 function makeReqRes(
-  query: Record<string, string> = {},
+  query: Record<string, string | string[]> = {},
   method = 'GET',
   headers: Record<string, string> = {}
 ) {
@@ -220,5 +222,40 @@ describe('GET /api/v1/executions/active', () => {
     const { req, res, mockStatus } = makeReqRes({}, 'POST');
     await handler(req, res);
     expect(mockStatus).toHaveBeenCalledWith(405);
+  });
+
+  it('returns 400 when teamId is not a valid UUID', async () => {
+    setupAuth();
+    const { req, res, mockStatus, mockJson } = makeReqRes({ teamId: 'not-a-uuid' });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
+    // DB should NOT be called for invalid input
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 400 for a malformed UUID (wrong segment lengths)', async () => {
+    setupAuth();
+    const { req, res, mockStatus } = makeReqRes({ teamId: '12345678-1234-1234-1234-12345678' });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('unwraps string[] teamId (Next.js array query) to the first element', async () => {
+    setupAuth();
+    const validUuid = '550e8400-e29b-41d4-a716-446655440000';
+    // Next.js passes duplicate query params as string[]
+    const arrayTeamId: string[] = [validUuid, 'another-value'];
+    mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] });
+    const { req, res, mockJson } = makeReqRes({ teamId: arrayTeamId });
+    await handler(req, res);
+    // Should succeed and pass the first element to the DB
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 2 },
+    });
+    const [, params] = mockPoolQuery.mock.calls[0] as [string, string[]];
+    expect(params).toEqual([validUuid]);
   });
 });

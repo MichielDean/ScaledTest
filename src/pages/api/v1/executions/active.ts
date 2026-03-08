@@ -13,6 +13,9 @@ import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/bet
 import { getTimescalePool } from '@/lib/timescaledb';
 import { apiLogger as logger } from '@/logging/logger';
 
+/** RFC 4122 UUID v1–v5 format check */
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
 async function fetchActiveExecutionCount(teamId?: string): Promise<number> {
   const pool = getTimescalePool();
 
@@ -39,7 +42,19 @@ async function fetchActiveExecutionCount(teamId?: string): Promise<number> {
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
-    const { teamId } = req.query as Record<string, string | undefined>;
+    // req.query values in Next.js are typed as string | string[] | undefined.
+    // Unwrap array case (e.g. ?teamId=a&teamId=b) by taking the first element.
+    const raw = req.query['teamId'];
+    const teamId = Array.isArray(raw) ? raw[0] : raw;
+
+    // Validate UUID format when teamId is provided
+    if (teamId !== undefined) {
+      if (!UUID_REGEX.test(teamId)) {
+        return res
+          .status(400)
+          .json({ success: false, error: 'Invalid teamId: must be a valid UUID' });
+      }
+    }
 
     try {
       const activeExecutions = await fetchActiveExecutionCount(teamId);
