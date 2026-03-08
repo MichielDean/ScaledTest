@@ -2,6 +2,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '../lib/auth';
 import { apiLogger as logger, logError, getRequestLogger } from '../logging/logger';
 import { type RoleName } from '../lib/auth-shared';
+import { TOKEN_PREFIX, validateApiToken } from '../lib/apiTokens';
 
 type Role = RoleName;
 
@@ -67,6 +68,31 @@ export async function authenticateRequest(
 
     // If session auth failed and we have a token, try token validation
     if (token) {
+      // Check for ScaledTest CI tokens (sct_*) before trying Better Auth bearer
+      if (token.startsWith(TOKEN_PREFIX)) {
+        try {
+          const apiToken = await validateApiToken(token);
+          if (apiToken) {
+            logger.debug(
+              { tokenId: apiToken.id, teamId: apiToken.teamId },
+              'Authenticated via API token'
+            );
+            // API tokens grant maintainer-level access on behalf of the creator.
+            // CI pipelines need write access (push test results) but not admin access.
+            return {
+              id: apiToken.createdByUserId,
+              email: `api-token:${apiToken.id}`,
+              name: `API Token: ${apiToken.name}`,
+              role: 'maintainer',
+            };
+          }
+        } catch (apiTokenError) {
+          logger.debug({ error: apiTokenError }, 'API token validation failed');
+        }
+        // sct_ token that didn't validate — no point trying Better Auth
+        return null;
+      }
+
       try {
         // Use Better Auth's session validation with bearer token
         const headers = new Headers({ authorization: `Bearer ${token}` });
