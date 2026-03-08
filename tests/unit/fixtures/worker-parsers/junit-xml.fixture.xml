@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuites name="ScaledTest" tests="4" failures="1" errors="0" time="3.14">
-  <testsuite name="Authentication" tests="3" failures="1" errors="0" skipped="1" time="2.14" timestamp="2024-01-01T00:00:00">
+<testsuites name="ScaledTest" tests="5" failures="1" errors="1" time="3.64">
+  <testsuite name="Authentication" tests="4" failures="1" errors="1" skipped="1" time="2.64" timestamp="2024-01-01T00:00:00">
     <testcase name="User authentication with valid credentials" classname="Authentication" time="1.25">
     </testcase>
     <testcase name="User authentication with invalid password" classname="Authentication" time="0.89">
@@ -9,6 +9,10 @@
     </testcase>
     <testcase name="Password reset flow" classname="Authentication" time="0">
       <skipped/>
+    </testcase>
+    <testcase name="Token refresh on database unavailable" classname="Authentication" time="0.5">
+      <error message="Database connection refused" type="ConnectionError">ConnectionError: Database connection refused
+    at Object.test (token.test.ts:42:5)</error>
     </testcase>
   </testsuite>
   <testsuite name="Dashboard" tests="1" failures="0" errors="0" skipped="0" time="0.5" timestamp="2024-01-01T00:00:03">

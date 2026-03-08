@@ -53,14 +53,11 @@ export const REPORT_FORMAT = {
 // ---------------------------------------------------------------------------
 
 function generateReportId(): string {
-  // crypto.randomUUID() is available in Node 14.17+ / ESM; fall back to a
-  // simple timestamp-based id so the parsers work in both CJS test env and ESM
-  // worker env without extra deps.
-  if (typeof crypto !== 'undefined' && typeof crypto.randomUUID === 'function') {
-    return crypto.randomUUID();
-  }
-  // Fallback: timestamp + random hex
-  return `${Date.now().toString(16)}-${Math.random().toString(16).slice(2)}`;
+  // Node 20 is pinned in the Dockerfile and always provides crypto.randomUUID.
+  // The worker targets Node 20+ exclusively, so no fallback is needed.
+  // Dropping the fallback is intentional: a non-UUID fallback would cause the
+  // API to return 400 (reportId is validated as z.string().uuid() when present).
+  return crypto.randomUUID();
 }
 
 function baseReport(): Omit<CtrfReport, 'results'> {
@@ -295,7 +292,10 @@ function parseSuiteBody(body: string, suiteName: string | undefined, tests: Ctrf
       message = extractAttr(failureMatch[1], 'message') ?? failureMatch[2].trim();
       trace = failureMatch[2].trim() || undefined;
     } else if (errorMatch) {
-      status = 'failed';
+      // Per JUnit spec, <error> indicates an unexpected exception (infrastructure
+      // or setup error), distinct from <failure> which means an assertion failure.
+      // Mapping to 'other' preserves this distinction for consumers that need it.
+      status = 'other';
       message = extractAttr(errorMatch[1], 'message') ?? errorMatch[2].trim();
       trace = errorMatch[2].trim() || undefined;
     } else if (skippedMatch) {

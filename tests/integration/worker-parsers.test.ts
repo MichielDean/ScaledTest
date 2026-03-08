@@ -123,17 +123,19 @@ describe('Worker end-to-end parser integration', () => {
       assertValidCtrfReport(report);
     });
 
-    it('should map all four test cases from the fixture', () => {
-      expect(report.results.tests).toHaveLength(4);
+    it('should map all five test cases from the fixture', () => {
+      expect(report.results.tests).toHaveLength(5);
     });
 
-    it('should correctly identify passed, failed, and skipped tests', () => {
+    it('should correctly identify passed, failed, skipped, and other tests', () => {
       const passed = report.results.tests.filter(t => t.status === 'passed');
       const failed = report.results.tests.filter(t => t.status === 'failed');
       const skipped = report.results.tests.filter(t => t.status === 'skipped');
+      const other = report.results.tests.filter(t => t.status === 'other');
       expect(passed).toHaveLength(2);
       expect(failed).toHaveLength(1);
       expect(skipped).toHaveLength(1);
+      expect(other).toHaveLength(1);
     });
 
     it('should convert JUnit time (seconds) to milliseconds correctly', () => {

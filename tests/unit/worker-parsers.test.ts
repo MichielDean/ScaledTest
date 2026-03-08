@@ -126,7 +126,7 @@ describe('Worker parsers', () => {
 
     it('should parse all testcase elements', () => {
       const report = parseJunitXml(junitXmlFixture, 1700000000000, 1700000003140);
-      expect(report.results.tests).toHaveLength(4);
+      expect(report.results.tests).toHaveLength(5);
     });
 
     it('should map passing testcases to status passed', () => {
@@ -139,6 +139,14 @@ describe('Worker parsers', () => {
       const report = parseJunitXml(junitXmlFixture, 1700000000000, 1700000003140);
       const failed = report.results.tests.filter(t => t.status === 'failed');
       expect(failed).toHaveLength(1);
+    });
+
+    it('should map testcases with <error> to status other (distinguishes from assertion failures)', () => {
+      const report = parseJunitXml(junitXmlFixture, 1700000000000, 1700000003140);
+      const other = report.results.tests.filter(t => t.status === 'other');
+      expect(other).toHaveLength(1);
+      expect(other[0].name).toBe('Token refresh on database unavailable');
+      expect(other[0].message).toContain('Database connection refused');
     });
 
     it('should map testcases with <skipped> to status skipped', () => {
@@ -181,10 +189,11 @@ describe('Worker parsers', () => {
     it('should produce correct summary counts', () => {
       const report = parseJunitXml(junitXmlFixture, 1700000000000, 1700000003140);
       const { summary } = report.results;
-      expect(summary.tests).toBe(4);
+      expect(summary.tests).toBe(5);
       expect(summary.passed).toBe(2);
       expect(summary.failed).toBe(1);
       expect(summary.skipped).toBe(1);
+      expect(summary.other).toBe(1);
     });
 
     it('should throw on empty XML string', () => {
@@ -347,7 +356,7 @@ describe('Worker parsers', () => {
     it('should dispatch to parseJunitXml when format is junit-xml', () => {
       const fixture = fs.readFileSync(path.join(FIXTURE_DIR, 'junit-xml.fixture.xml'), 'utf8');
       const report = parseReport(REPORT_FORMAT.JUNIT_XML, fixture, 'npm test', 0, '', 0, 1000);
-      expect(report.results.tests).toHaveLength(4);
+      expect(report.results.tests).toHaveLength(5);
     });
 
     it('should dispatch to parseCtrfJson when format is ctrf-json', () => {
