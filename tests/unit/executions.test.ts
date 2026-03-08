@@ -5,6 +5,7 @@
 // Must mock before imports
 jest.mock('../../src/lib/timescaledb', () => ({
   getTimescalePool: jest.fn(),
+  getLinkedReportIds: jest.fn(),
 }));
 
 jest.mock('../../src/logging/logger', () => ({
@@ -18,16 +19,18 @@ jest.mock('../../src/logging/logger', () => ({
   logError: jest.fn(),
 }));
 
-import { getTimescalePool } from '../../src/lib/timescaledb';
+import { getTimescalePool, getLinkedReportIds } from '../../src/lib/timescaledb';
 import {
   createExecution,
   getExecution,
+  getExecutionDetail,
   listExecutions,
   updateExecutionStatus,
   cancelExecution,
 } from '../../src/lib/executions';
 
 const mockGetTimescalePool = getTimescalePool as jest.Mock;
+const mockGetLinkedReportIds = getLinkedReportIds as jest.Mock;
 
 // Build a fake client with controllable query
 function makeClient(rows: Record<string, unknown>[] = [], total = rows.length) {
@@ -237,5 +240,87 @@ describe('cancelExecution', () => {
     await expect(cancelExecution('abc-123')).rejects.toThrow(
       'Cannot cancel execution in status: running'
     );
+  });
+});
+
+describe('getExecutionDetail', () => {
+  const REPORT_1 = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+  const REPORT_2 = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('returns null when execution does not exist', async () => {
+    const client = makeClient();
+    client.query.mockResolvedValue({ rows: [] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockGetLinkedReportIds.mockResolvedValue([]);
+
+    const result = await getExecutionDetail('no-such-id');
+    expect(result).toBeNull();
+    // getLinkedReportIds should NOT be called when execution doesn't exist
+    expect(mockGetLinkedReportIds).not.toHaveBeenCalled();
+  });
+
+  it('returns ExecutionDetail with linkedReportIds and computed activePods', async () => {
+    const row = { ...fakeRow, total_pods: 4, completed_pods: 1, failed_pods: 1 };
+    const client = makeClient([row]);
+    client.query.mockResolvedValue({ rows: [row] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockGetLinkedReportIds.mockResolvedValue([REPORT_1, REPORT_2]);
+
+    const result = await getExecutionDetail('abc-123');
+
+    expect(result).not.toBeNull();
+    expect(result!.id).toBe('abc-123');
+    // activePods = totalPods - completedPods - failedPods = 4 - 1 - 1 = 2
+    expect(result!.activePods).toBe(2);
+    expect(result!.linkedReportIds).toEqual([REPORT_1, REPORT_2]);
+    expect(mockGetLinkedReportIds).toHaveBeenCalledWith('abc-123');
+  });
+
+  it('floors activePods at 0 when counter drift occurs (completedPods + failedPods > totalPods)', async () => {
+    // This is the DB counter-drift guard: Math.max(0, ...) in getExecutionDetail
+    const row = { ...fakeRow, total_pods: 3, completed_pods: 2, failed_pods: 2 };
+    const client = makeClient([row]);
+    client.query.mockResolvedValue({ rows: [row] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockGetLinkedReportIds.mockResolvedValue([]);
+
+    const result = await getExecutionDetail('abc-123');
+
+    expect(result).not.toBeNull();
+    // Without the floor: 3 - 2 - 2 = -1. With Math.max(0, ...): 0
+    expect(result!.activePods).toBe(0);
+  });
+
+  it('returns empty linkedReportIds array when no reports exist for the execution', async () => {
+    const client = makeClient([fakeRow]);
+    client.query.mockResolvedValue({ rows: [fakeRow] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockGetLinkedReportIds.mockResolvedValue([]);
+
+    const result = await getExecutionDetail('abc-123');
+
+    expect(result).not.toBeNull();
+    expect(result!.linkedReportIds).toEqual([]);
+  });
+
+  it('propagates error when getLinkedReportIds throws', async () => {
+    const client = makeClient([fakeRow]);
+    client.query.mockResolvedValue({ rows: [fakeRow] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockGetLinkedReportIds.mockRejectedValue(new Error('DB connection lost'));
+
+    await expect(getExecutionDetail('abc-123')).rejects.toThrow('DB connection lost');
+  });
+
+  it('propagates error when getExecution (inner query) throws', async () => {
+    const client = makeClient();
+    client.query.mockRejectedValue(new Error('query timeout'));
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await expect(getExecutionDetail('abc-123')).rejects.toThrow('query timeout');
   });
 });

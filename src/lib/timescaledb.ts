@@ -544,6 +544,35 @@ export const searchCtrfReports = async (
   });
 };
 
+/**
+ * Returns report IDs linked to a given execution.
+ * Used by the execution detail endpoint (SCA-10) to include linkedReportIds
+ * in the GET /api/v1/executions/:id response.
+ */
+export async function getLinkedReportIds(executionId: string): Promise<string[]> {
+  const pool = getTimescalePool();
+  const client = await pool.connect();
+  try {
+    // GROUP BY deduplicates report_id (test_reports PK is (report_id, timestamp) so a
+    // re-submitted report with the same report_id but different timestamp would otherwise
+    // produce duplicate entries). ORDER BY MIN(timestamp) gives deterministic ordering.
+    const result = await client.query<{ report_id: string }>(
+      `SELECT report_id
+       FROM test_reports
+       WHERE execution_id = $1
+       GROUP BY report_id
+       ORDER BY MIN(timestamp) ASC`,
+      [executionId]
+    );
+    return result.rows.map(row => row.report_id);
+  } catch (error) {
+    logError(logger, 'Failed to get linked report IDs', error, { executionId });
+    throw error;
+  } finally {
+    client.release();
+  }
+}
+
 // Graceful shutdown function
 export const shutdownTimescaleDB = async (): Promise<void> => {
   try {
