@@ -1,0 +1,64 @@
+{
+  "numFailedTestSuites": 1,
+  "numFailedTests": 1,
+  "numPassedTestSuites": 1,
+  "numPassedTests": 2,
+  "numPendingTestSuites": 0,
+  "numPendingTests": 1,
+  "numTotalTestSuites": 2,
+  "numTotalTests": 4,
+  "startTime": 1700000000000,
+  "success": false,
+  "testResults": [
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Authentication"],
+          "duration": 1250,
+          "failureMessages": [],
+          "fullName": "Authentication User authentication with valid credentials",
+          "status": "passed",
+          "title": "User authentication with valid credentials"
+        },
+        {
+          "ancestorTitles": ["Authentication"],
+          "duration": 890,
+          "failureMessages": [
+            "Expected login to succeed but got error\n    at Object.test (login.test.ts:15:5)"
+          ],
+          "fullName": "Authentication User authentication with invalid password",
+          "status": "failed",
+          "title": "User authentication with invalid password"
+        },
+        {
+          "ancestorTitles": ["Authentication"],
+          "duration": 0,
+          "failureMessages": [],
+          "fullName": "Authentication Password reset flow",
+          "status": "pending",
+          "title": "Password reset flow"
+        }
+      ],
+      "endTime": 1700000003140,
+      "startTime": 1700000000000,
+      "status": "failed",
+      "testFilePath": "/app/tests/auth/login.test.ts"
+    },
+    {
+      "assertionResults": [
+        {
+          "ancestorTitles": ["Dashboard"],
+          "duration": 500,
+          "failureMessages": [],
+          "fullName": "Dashboard renders correctly",
+          "status": "passed",
+          "title": "renders correctly"
+        }
+      ],
+      "endTime": 1700000003640,
+      "startTime": 1700000003140,
+      "status": "passed",
+      "testFilePath": "/app/tests/dashboard/dashboard.test.ts"
+    }
+  ]
+}
