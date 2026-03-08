@@ -17,6 +17,7 @@ export default [
       "**/debug-auth.js",
       "**/temp/**",
       "**/next-env.d.ts", // Generated Next.js types file
+      "**/.worktrees/**", // Git worktrees — not part of this project's source
     ],
   },
   
