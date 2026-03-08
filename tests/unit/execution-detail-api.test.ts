@@ -23,18 +23,16 @@ jest.mock('../../src/lib/auth', () => ({
   },
 }));
 
-// Mock executions module
+// Mock executions module — spread jest.requireActual so untouched exports use real implementations.
+// Only getExecutionDetail is overridden; everything else falls through to the actual module.
 const mockGetExecutionDetail = jest.fn();
-jest.mock('../../src/lib/executions', () => ({
-  getExecutionDetail: mockGetExecutionDetail,
-  // keep other exports intact
-  createExecution: jest.fn(),
-  listExecutions: jest.fn(),
-  getExecution: jest.fn(),
-  cancelExecution: jest.fn(),
-  updateExecutionStatus: jest.fn(),
-  recordExecutionResult: jest.fn(),
-}));
+jest.mock('../../src/lib/executions', () => {
+  const actual = jest.requireActual('../../src/lib/executions');
+  return {
+    ...actual,
+    getExecutionDetail: mockGetExecutionDetail,
+  };
+});
 
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
@@ -264,7 +262,7 @@ describe('GET /api/v1/executions/:id', () => {
     expect(call.data.linkedReportIds).toEqual([]);
   });
 
-  it('activePods equals totalPods when no pods have completed yet', async () => {
+  it('activePods equals totalPods when no pods have completed yet (activePods = 4 - 0 - 0 = 4)', async () => {
     setupAuthUser('readonly');
     const queuedExecution = {
       ...fakeExecutionDetail,
@@ -272,7 +270,8 @@ describe('GET /api/v1/executions/:id', () => {
       totalPods: 4,
       completedPods: 0,
       failedPods: 0,
-      activePods: 4, // all pods active (none done yet)
+      // activePods = totalPods - completedPods - failedPods = 4 - 0 - 0 = 4
+      activePods: 4,
     };
     mockGetExecutionDetail.mockResolvedValue(queuedExecution);
     const { req, res, mockJson } = makeReqRes('GET', { id: VALID_UUID });
