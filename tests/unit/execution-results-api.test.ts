@@ -328,4 +328,99 @@ describe('POST /api/v1/executions/:id/results', () => {
     expect(mockStatus).toHaveBeenCalledWith(405);
     expect(mockSetHeader).toHaveBeenCalledWith('Allow', ['POST']);
   });
+
+  // ── QA edge cases ──────────────────────────────────────────────────────────
+
+  it('returns 409 when execution status is "failed" (also a terminal status)', async () => {
+    // TERMINAL_STATUSES includes 'failed' but the original test suite only covered
+    // 'completed' and 'cancelled'. Verify 'failed' is also guarded.
+    mockGetExecution.mockResolvedValue({ ...runningExecution, status: 'failed' });
+    const { req, res, mockStatus } = makeReqRes('POST', validCtrfPayload, { id: VALID_UUID });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(409);
+    expect(mockStoreCtrfReport).not.toHaveBeenCalled();
+  });
+
+  it('returns 503 when recordExecutionResult throws after storeCtrfReport succeeds', async () => {
+    // This path was untested: storeCtrfReport succeeds, then recordExecutionResult throws.
+    // The report is stored but completedPods can't be incremented — the outer catch must
+    // still return 503, not leak the exception or return a success response.
+    mockGetExecution.mockResolvedValue(runningExecution);
+    mockStoreCtrfReport.mockResolvedValue(validCtrfPayload.reportId);
+    mockRecordExecutionResult.mockRejectedValue(new Error('DB write failed'));
+    const { req, res, mockStatus } = makeReqRes('POST', validCtrfPayload, { id: VALID_UUID });
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(503);
+  });
+
+  it('returns 401 when WORKER_TOKEN env var is not set (fail-closed)', async () => {
+    // When the WORKER_TOKEN secret is not provisioned (e.g. misconfigured K8s Secret),
+    // every request — even one presenting a token — must be rejected. Fail-closed, not open.
+    const savedToken = process.env.WORKER_TOKEN;
+    delete process.env.WORKER_TOKEN;
+    try {
+      const { req, res, mockStatus } = makeReqRes(
+        'POST',
+        validCtrfPayload,
+        { id: VALID_UUID },
+        { authorization: `Bearer ${WORKER_TOKEN}` }
+      );
+      await handler(req, res);
+      expect(mockStatus).toHaveBeenCalledWith(401);
+      expect(mockGetExecution).not.toHaveBeenCalled();
+    } finally {
+      // Restore for other tests — must run even if the assertion above fails
+      process.env.WORKER_TOKEN = savedToken;
+    }
+  });
+
+  it('handles array form of :id query param (Next.js catch-all) — takes first element', async () => {
+    // Next.js can deliver query params as string[] when multiple values share a key.
+    // The handler uses raw[0] when id is an array. Verify the correct element is used.
+    mockGetExecution.mockResolvedValue(runningExecution);
+    mockStoreCtrfReport.mockResolvedValue(validCtrfPayload.reportId);
+    mockRecordExecutionResult.mockResolvedValue({ ...runningExecution, completedPods: 1 });
+
+    const req = {
+      method: 'POST',
+      body: validCtrfPayload,
+      query: { id: [VALID_UUID, 'second-value'] }, // array form
+      headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+    } as unknown as import('next').NextApiRequest;
+
+    const mockJson = jest.fn();
+    const mockStatus = jest.fn().mockReturnValue({ json: mockJson, end: jest.fn() });
+    const res = {
+      status: mockStatus,
+      json: mockJson,
+      setHeader: jest.fn(),
+    } as unknown as import('next').NextApiResponse;
+
+    await handler(req, res);
+    // Should use VALID_UUID (first element) and proceed normally — not 400
+    expect(mockGetExecution).toHaveBeenCalledWith(VALID_UUID);
+    expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({ success: true }));
+  });
+
+  it('returns 400 when array id has an invalid UUID as first element', async () => {
+    // Array form of :id where even the first element is invalid → 400
+    const req = {
+      method: 'POST',
+      body: validCtrfPayload,
+      query: { id: ['not-a-uuid', VALID_UUID] },
+      headers: { authorization: `Bearer ${WORKER_TOKEN}` },
+    } as unknown as import('next').NextApiRequest;
+
+    const mockJson = jest.fn();
+    const mockStatus = jest.fn().mockReturnValue({ json: mockJson, end: jest.fn() });
+    const res = {
+      status: mockStatus,
+      json: mockJson,
+      setHeader: jest.fn(),
+    } as unknown as import('next').NextApiResponse;
+
+    await handler(req, res);
+    expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockGetExecution).not.toHaveBeenCalled();
+  });
 });
