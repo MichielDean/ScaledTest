@@ -77,29 +77,34 @@ const config: Config = {
   testTimeout: 60000,
   verbose: true, // Enable verbose to show individual test names with checkmarks
   silent: true, // Suppress console.log from tests while keeping Jest verbose output
+  testPathIgnorePatterns: [
+    // Exclude git worktrees — they contain stale test copies that should not run here
+    '/\\.worktrees/',
+    '/node_modules/',
+  ],
   projects: [
     {
       ...createNodeConfig(),
       displayName: 'Unit',
-      testMatch: ['**/tests/unit/**/*.test.ts'],
+      testMatch: ['<rootDir>/tests/unit/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/unit/setup.ts'],
     },
     {
       ...createJSDOMConfig(),
       displayName: 'Components',
-      testMatch: ['**/tests/components/**/*.test.{ts,tsx}'],
+      testMatch: ['<rootDir>/tests/components/**/*.test.{ts,tsx}'],
       setupFilesAfterEnv: ['<rootDir>/tests/components/setup.ts'],
     },
     {
       ...createNodeConfig(),
       displayName: 'Integration',
-      testMatch: ['**/tests/integration/**/*.test.ts'],
+      testMatch: ['<rootDir>/tests/integration/**/*.test.ts'],
       setupFilesAfterEnv: ['<rootDir>/tests/integration/setup.ts'],
     },
     {
       ...createNodeConfig(),
       displayName: 'System',
-      testMatch: ['**/tests/system/**/*.test.ts', '**/tests/ui/**/*.test.ts'],
+      testMatch: ['<rootDir>/tests/system/**/*.test.ts', '<rootDir>/tests/ui/**/*.test.ts'],
       globalSetup: '<rootDir>/tests/system/setup.ts',
       globalTeardown: '<rootDir>/tests/system/teardown.ts',
       setupFilesAfterEnv: ['<rootDir>/tests/system/jest-setup.ts'],
