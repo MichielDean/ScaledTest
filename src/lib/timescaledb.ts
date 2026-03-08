@@ -119,6 +119,8 @@ function getTimescalePool(): Pool {
 export interface TimescaleCtrfReport extends CtrfSchema {
   reportId: string;
   storedAt: string;
+  /** Optional: links the report to a specific test execution (SCA-9) */
+  executionId?: string;
   metadata: {
     uploadedBy: string;
     userTeams: string[];
@@ -220,17 +222,19 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
         user_teams,
         test_data,
         environment_data,
-        extra_data
+        extra_data,
+        execution_id
       ) VALUES (
         $1, $2, $3, $4, $5, $6, $7, $8, $9, $10,
         $11, $12, $13, $14, $15, $16, $17, $18, $19, $20,
-        $21, $22, $23, $24, $25, $26, $27, $28
+        $21, $22, $23, $24, $25, $26, $27, $28, $29
       )
       ON CONFLICT (report_id, timestamp) DO UPDATE SET
         stored_at = EXCLUDED.stored_at,
         test_data = EXCLUDED.test_data,
         environment_data = EXCLUDED.environment_data,
-        extra_data = EXCLUDED.extra_data
+        extra_data = EXCLUDED.extra_data,
+        execution_id = COALESCE(EXCLUDED.execution_id, test_reports.execution_id)
       RETURNING report_id;
     `;
 
@@ -271,6 +275,7 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
           )
         ), // $27 - Store environment data (filter out null/undefined values)
         JSON.stringify(report.extra || {}), // $28
+        report.executionId ?? null, // $29 - Link to test_executions (SCA-9)
       ];
 
       const result = await client.query(insertQuery, values);

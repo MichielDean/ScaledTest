@@ -292,3 +292,51 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
     client?.release();
   }
 }
+
+/**
+ * Atomically increment completedPods for an execution.
+ * If completedPods reaches totalPods after the increment, marks the execution as 'completed'
+ * and sets completedAt.
+ *
+ * Returns the updated execution row.
+ *
+ * Used by the worker result callback endpoint (SCA-9).
+ */
+export async function recordExecutionResult(id: string): Promise<TestExecution> {
+  let client: PoolClient | null = null;
+  try {
+    const pool = getTimescalePool();
+    client = await pool.connect();
+
+    // Atomic increment + conditional completion in one UPDATE.
+    // CASE expression avoids a separate read + write race condition.
+    const result = await client.query(
+      `UPDATE test_executions
+       SET
+         completed_pods = completed_pods + 1,
+         status = CASE
+           WHEN completed_pods + 1 >= total_pods THEN 'completed'
+           ELSE status
+         END,
+         completed_at = CASE
+           WHEN completed_pods + 1 >= total_pods THEN now()
+           ELSE completed_at
+         END,
+         updated_at = now()
+       WHERE id = $1
+       RETURNING *`,
+      [id]
+    );
+
+    if (!result.rows[0]) {
+      throw new Error(`Execution not found: ${id}`);
+    }
+
+    return rowToExecution(result.rows[0] as Record<string, unknown>);
+  } catch (error) {
+    logError(logger, 'Failed to record execution result', error, { id });
+    throw error;
+  } finally {
+    client?.release();
+  }
+}
