@@ -18,6 +18,26 @@ jest.mock('../../src/hooks/useAuth', () => ({
   useAuth: jest.fn(),
 }));
 
+// Mock TeamContext — DashboardView now consumes useTeams
+jest.mock('../../src/contexts/TeamContext', () => ({
+  useTeams: jest.fn(() => ({
+    userTeams: [],
+    selectedTeamIds: [],
+    allTeams: [],
+    loading: false,
+    error: null,
+    setSelectedTeamIds: jest.fn(),
+    selectAllTeams: jest.fn(),
+    clearTeamSelection: jest.fn(),
+    refreshUserTeams: jest.fn(),
+    refreshAllTeams: jest.fn(),
+    selectedTeams: [],
+    hasMultipleTeams: false,
+    canManageTeams: false,
+    effectiveTeamIds: [],
+  })),
+}));
+
 import { useAuth } from '../../src/hooks/useAuth';
 import DashboardView from '../../src/components/views/DashboardView';
 

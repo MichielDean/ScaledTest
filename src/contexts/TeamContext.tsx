@@ -16,6 +16,7 @@ import React, {
 import { useBetterAuth } from '../auth/BetterAuthProvider';
 import { Team } from '../types/team';
 import { uiLogger } from '../logging/logger';
+import { choosePrimaryTeam } from '../lib/teamSelection';
 import axios from 'axios';
 
 interface TeamContextType {
@@ -105,9 +106,12 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
 
       setUserTeams(teams);
 
-      // Auto-select teams if none selected and user has teams
+      // Auto-select the primary team if none selected and user has teams.
+      // choosePrimaryTeam picks the isDefault team, falling back to the first
+      // team in the list. This avoids flooding the dashboard with all-team
+      // data on first load for multi-team users.
       if (selectedTeamIds.length === 0 && teams.length > 0) {
-        setSelectedTeamIds(teams.map(team => team.id));
+        setSelectedTeamIds(choosePrimaryTeam(teams));
       }
     } catch (err) {
       uiLogger.error({ error: err, userId }, 'Failed to fetch user teams');
