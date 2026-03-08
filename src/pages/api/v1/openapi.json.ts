@@ -64,12 +64,30 @@ const SUCCESS_200 = {
   content: { 'application/json': { schema: { $ref: '#/components/schemas/SuccessResponse' } } },
 };
 
-const ERROR_400 = { description: 'Bad request — validation error' };
-const ERROR_401 = { description: 'Authentication required' };
-const ERROR_403 = { description: 'Insufficient permissions' };
-const ERROR_404 = { description: 'Resource not found' };
-const ERROR_409 = { description: 'Conflict — resource in an incompatible state' };
-const ERROR_503 = { description: 'Database unavailable' };
+const ERROR_400 = {
+  description: 'Bad request — validation error',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
+const ERROR_401 = {
+  description: 'Authentication required',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
+const ERROR_403 = {
+  description: 'Insufficient permissions',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
+const ERROR_404 = {
+  description: 'Resource not found',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
+const ERROR_409 = {
+  description: 'Conflict — resource in an incompatible state',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
+const ERROR_503 = {
+  description: 'Database unavailable',
+  content: { 'application/json': { schema: { $ref: '#/components/schemas/ErrorResponse' } } },
+};
 
 const BEARER_SECURITY = [{ BearerAuth: [] as string[] }];
 
@@ -125,8 +143,11 @@ export function buildOpenApiSpec(): OpenApiSpec {
           scheme: 'bearer',
           bearerFormat: 'JWT or opaque token',
           description:
-            'Use a session bearer token from Better Auth, or a ScaledTest CI token (sct_*) ' +
-            'created via POST /api/v1/teams/{teamId}/tokens.',
+            'Use one of: (1) a session bearer token from Better Auth, (2) a ScaledTest CI token ' +
+            '(sct_*) created via POST /api/v1/teams/{teamId}/tokens, or (3) the worker bearer ' +
+            'token configured via the WORKER_TOKEN environment variable, used by execution ' +
+            'workers when calling result callback endpoints such as /api/v1/executions/{id}/results. ' +
+            'The worker token is distinct from user/API tokens but is represented by this bearer scheme.',
         },
       },
       schemas: {
@@ -239,10 +260,14 @@ export function buildOpenApiSpec(): OpenApiSpec {
           parameters: [
             PARAM_PAGE,
             PARAM_SIZE,
+            {
+              name: 'status',
+              in: 'query',
+              description: 'Filter by report status',
+              schema: { type: 'string' },
+            },
             { name: 'tool', in: 'query', schema: { type: 'string' } },
             { name: 'environment', in: 'query', schema: { type: 'string' } },
-            { name: 'dateFrom', in: 'query', schema: { type: 'string', format: 'date-time' } },
-            { name: 'dateTo', in: 'query', schema: { type: 'string', format: 'date-time' } },
           ],
           responses: {
             '200': SUCCESS_200,
@@ -274,7 +299,32 @@ export function buildOpenApiSpec(): OpenApiSpec {
             },
           },
           responses: {
-            '200': { description: 'Report stored successfully' },
+            '201': {
+              description: 'Report stored successfully',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean', enum: [true] },
+                      id: { type: 'string', format: 'uuid' },
+                      message: { type: 'string' },
+                      summary: {
+                        type: 'object',
+                        properties: {
+                          tests: { type: 'integer' },
+                          passed: { type: 'integer' },
+                          failed: { type: 'integer' },
+                          skipped: { type: 'integer' },
+                          pending: { type: 'integer' },
+                          other: { type: 'integer' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             '400': ERROR_400,
             '401': ERROR_401,
             '503': ERROR_503,
@@ -505,11 +555,167 @@ export function buildOpenApiSpec(): OpenApiSpec {
         get: {
           tags: ['Teams'],
           summary: 'List teams',
-          description: "Returns the authenticated user's accessible teams.",
+          description:
+            "Returns the authenticated user's teams with permission information. " +
+            'Requires maintainer or owner access. ' +
+            'Supports an optional `users=true` query parameter to include users with their team assignments.',
           security: BEARER_SECURITY,
+          parameters: [
+            {
+              name: 'users',
+              in: 'query',
+              required: false,
+              description: 'If set to `true`, returns all users with their team assignments.',
+              schema: { type: 'string', enum: ['true', 'false'], default: 'false' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'List of teams with permission information for the authenticated user.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            id: { type: 'string', format: 'uuid' },
+                            name: { type: 'string' },
+                            description: { type: 'string', nullable: true },
+                            memberCount: { type: 'integer' },
+                            isDefault: { type: 'boolean' },
+                            createdAt: { type: 'string', format: 'date-time' },
+                            updatedAt: { type: 'string', format: 'date-time' },
+                          },
+                        },
+                      },
+                      permissions: {
+                        type: 'object',
+                        description: 'Effective permissions for the current user.',
+                        properties: {
+                          canCreateTeam: { type: 'boolean' },
+                          canDeleteTeam: { type: 'boolean' },
+                          canAssignUsers: { type: 'boolean' },
+                          canViewAllTeams: { type: 'boolean' },
+                          assignableTeams: {
+                            type: 'array',
+                            items: { type: 'string', format: 'uuid' },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            '401': ERROR_401,
+            '403': ERROR_403,
+            '503': ERROR_503,
+          },
+        },
+        post: {
+          tags: ['Teams'],
+          summary: 'Create a team or assign a user to a team',
+          description:
+            'Creates a new team when the body contains a `name` field. ' +
+            'Assigns a user to an existing team when the body contains `userId` and `teamId`. ' +
+            'Requires maintainer or owner.',
+          security: BEARER_SECURITY,
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  oneOf: [
+                    {
+                      title: 'Create team',
+                      type: 'object',
+                      properties: {
+                        name: { type: 'string', description: 'Human-readable team name.' },
+                        description: {
+                          type: 'string',
+                          description: 'Optional description for the team.',
+                        },
+                      },
+                      required: ['name'],
+                    },
+                    {
+                      title: 'Assign user to team',
+                      type: 'object',
+                      properties: {
+                        userId: { type: 'string', format: 'uuid' },
+                        teamId: { type: 'string', format: 'uuid' },
+                      },
+                      required: ['userId', 'teamId'],
+                    },
+                  ],
+                },
+              },
+            },
+          },
           responses: {
             '200': SUCCESS_200,
+            '201': {
+              description: 'Team created successfully.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      success: { type: 'boolean' },
+                      data: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string', format: 'uuid' },
+                          name: { type: 'string' },
+                          description: { type: 'string', nullable: true },
+                          memberCount: { type: 'integer' },
+                          isDefault: { type: 'boolean' },
+                          createdAt: { type: 'string', format: 'date-time' },
+                          updatedAt: { type: 'string', format: 'date-time' },
+                        },
+                      },
+                      message: { type: 'string' },
+                    },
+                  },
+                },
+              },
+            },
+            '400': ERROR_400,
             '401': ERROR_401,
+            '403': ERROR_403,
+            '503': ERROR_503,
+          },
+        },
+        delete: {
+          tags: ['Teams'],
+          summary: 'Remove a user from a team',
+          description: 'Removes a team membership. Requires maintainer or owner.',
+          security: BEARER_SECURITY,
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    userId: { type: 'string', format: 'uuid' },
+                    teamId: { type: 'string', format: 'uuid' },
+                  },
+                  required: ['userId', 'teamId'],
+                },
+              },
+            },
+          },
+          responses: {
+            '200': SUCCESS_200,
+            '400': ERROR_400,
+            '401': ERROR_401,
+            '403': ERROR_403,
             '503': ERROR_503,
           },
         },
@@ -742,12 +948,130 @@ export function buildOpenApiSpec(): OpenApiSpec {
           parameters: [
             PARAM_PAGE,
             PARAM_SIZE,
-            { name: 'search', in: 'query', schema: { type: 'string' } },
+            {
+              name: 'search',
+              in: 'query',
+              description: 'Filter by email or name (case-insensitive substring match)',
+              schema: { type: 'string' },
+            },
           ],
           responses: {
-            '200': SUCCESS_200,
+            '200': {
+              description: 'User list with pagination metadata.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      users: {
+                        type: 'array',
+                        items: {
+                          type: 'object',
+                          properties: {
+                            id: { type: 'string' },
+                            email: { type: 'string', format: 'email' },
+                            name: { type: 'string', nullable: true },
+                            emailVerified: { type: 'boolean' },
+                            role: { type: 'string' },
+                            createdAt: { type: 'string', format: 'date-time' },
+                            updatedAt: { type: 'string', format: 'date-time' },
+                          },
+                        },
+                      },
+                      pagination: {
+                        type: 'object',
+                        properties: {
+                          page: { type: 'integer' },
+                          pageSize: { type: 'integer' },
+                          total: { type: 'integer' },
+                          totalPages: { type: 'integer' },
+                          hasNext: { type: 'boolean' },
+                          hasPrev: { type: 'boolean' },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
             '401': ERROR_401,
             '403': ERROR_403,
+          },
+        },
+        post: {
+          tags: ['Admin'],
+          summary: 'Update a user role',
+          description:
+            'Grants or revokes the maintainer role for a user. ' +
+            'Requires owner. Sets role to `maintainer` when `grantMaintainer=true`, ' +
+            'or `readonly` when `grantMaintainer=false`.',
+          security: BEARER_SECURITY,
+          requestBody: {
+            required: true,
+            content: {
+              'application/json': {
+                schema: {
+                  type: 'object',
+                  properties: {
+                    userId: { type: 'string' },
+                    grantMaintainer: {
+                      type: 'boolean',
+                      description: 'true → grant maintainer; false → revoke back to readonly',
+                    },
+                  },
+                  required: ['userId', 'grantMaintainer'],
+                },
+              },
+            },
+          },
+          responses: {
+            '200': {
+              description: 'Role updated successfully.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { message: { type: 'string' } },
+                  },
+                },
+              },
+            },
+            '400': ERROR_400,
+            '401': ERROR_401,
+            '403': ERROR_403,
+            '404': ERROR_404,
+          },
+        },
+        delete: {
+          tags: ['Admin'],
+          summary: 'Delete a user',
+          description: 'Permanently deletes a user account. Requires owner.',
+          security: BEARER_SECURITY,
+          parameters: [
+            {
+              name: 'userId',
+              in: 'query',
+              required: true,
+              description: 'ID of the user to delete',
+              schema: { type: 'string' },
+            },
+          ],
+          responses: {
+            '200': {
+              description: 'User deleted successfully.',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: { message: { type: 'string' } },
+                  },
+                },
+              },
+            },
+            '400': ERROR_400,
+            '401': ERROR_401,
+            '403': ERROR_403,
+            '404': ERROR_404,
           },
         },
       },
@@ -797,23 +1121,13 @@ export function buildOpenApiSpec(): OpenApiSpec {
       },
 
       '/api/v1/admin/user-teams': {
-        get: {
-          tags: ['Admin'],
-          summary: 'List team memberships for a user',
-          description: 'Returns all teams a user belongs to. Requires owner.',
-          security: BEARER_SECURITY,
-          parameters: [{ name: 'userId', in: 'query', required: true, schema: { type: 'string' } }],
-          responses: {
-            '200': SUCCESS_200,
-            '400': ERROR_400,
-            '401': ERROR_401,
-            '403': ERROR_403,
-          },
-        },
         post: {
           tags: ['Admin'],
-          summary: 'Assign a user to a team',
-          description: 'Adds a user to a team. Requires owner.',
+          summary: 'Set team memberships for a user',
+          description:
+            'Replaces all team memberships for a given user in a single atomic operation. ' +
+            'Teams in the request body that the user is not yet a member of are added; ' +
+            'existing memberships not present in the request are removed. Requires owner or maintainer.',
           security: BEARER_SECURITY,
           requestBody: {
             required: true,
@@ -822,37 +1136,21 @@ export function buildOpenApiSpec(): OpenApiSpec {
                 schema: {
                   type: 'object',
                   properties: {
-                    userId: { type: 'string' },
-                    teamId: { type: 'string', format: 'uuid' },
+                    userId: { type: 'string', format: 'uuid' },
+                    teams: {
+                      type: 'array',
+                      items: {
+                        type: 'object',
+                        properties: {
+                          id: { type: 'string', format: 'uuid' },
+                          name: { type: 'string' },
+                          role: { type: 'string' },
+                        },
+                        required: ['id'],
+                      },
+                    },
                   },
-                  required: ['userId', 'teamId'],
-                },
-              },
-            },
-          },
-          responses: {
-            '200': SUCCESS_200,
-            '400': ERROR_400,
-            '401': ERROR_401,
-            '403': ERROR_403,
-          },
-        },
-        delete: {
-          tags: ['Admin'],
-          summary: 'Remove a user from a team',
-          description: 'Removes a team membership. Requires owner.',
-          security: BEARER_SECURITY,
-          requestBody: {
-            required: true,
-            content: {
-              'application/json': {
-                schema: {
-                  type: 'object',
-                  properties: {
-                    userId: { type: 'string' },
-                    teamId: { type: 'string', format: 'uuid' },
-                  },
-                  required: ['userId', 'teamId'],
+                  required: ['userId', 'teams'],
                 },
               },
             },
