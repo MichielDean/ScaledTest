@@ -34,10 +34,21 @@ try {
     maxBuffer: WORKER_MAX_BUFFER_BYTES,
   });
 } catch (err: unknown) {
-  exitCode = (err as { status?: number }).status ?? 1;
-  stderr = (err as { stderr?: string }).stderr ?? String(err);
+  const childErr = err as {
+    status?: number;
+    stdout?: string | Buffer;
+    stderr?: string | Buffer;
+  };
+  exitCode = childErr.status ?? 1;
+  if (typeof childErr.stderr !== 'undefined') {
+    stderr = Buffer.isBuffer(childErr.stderr) ? childErr.stderr.toString('utf8') : childErr.stderr;
+  } else {
+    stderr = String(err);
+  }
   // For jest-json and ctrf-json, stdout may still be populated even on failure
-  stdout = (err as { stdout?: string }).stdout ?? stdout;
+  if (typeof childErr.stdout !== 'undefined') {
+    stdout = Buffer.isBuffer(childErr.stdout) ? childErr.stdout.toString('utf8') : childErr.stdout;
+  }
 }
 
 const stop = Date.now();

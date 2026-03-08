@@ -10,4 +10,5 @@ COPY package.json package-lock.json ./
 RUN npm ci --omit=dev
 
 COPY worker.ts ./
+COPY parsers/ ./parsers/
 ENTRYPOINT ["tsx", "worker.ts"]
