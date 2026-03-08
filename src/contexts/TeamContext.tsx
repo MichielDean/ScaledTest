@@ -9,6 +9,7 @@ import React, {
   createContext,
   useContext,
   useEffect,
+  useRef,
   useState,
   ReactNode,
   useCallback,
@@ -16,6 +17,7 @@ import React, {
 import { useBetterAuth } from '../auth/BetterAuthProvider';
 import { Team } from '../types/team';
 import { uiLogger } from '../logging/logger';
+import { choosePrimaryTeam } from '../lib/teamSelection';
 import axios from 'axios';
 
 interface TeamContextType {
@@ -73,6 +75,13 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Track whether we've already run the initial team auto-selection.
+  // Without this gate, any subsequent refreshUserTeams() call would overwrite
+  // an explicit "All teams" selection (selectedTeamIds === []) back to a single
+  // primary team, because the guard `selectedTeamIds.length === 0` is also
+  // true for "All teams".
+  const hasInitializedSelection = useRef(false);
+
   // Get user ID from Better Auth user object
   const userWithId = user as { id?: string };
   const userId = userWithId?.id;
@@ -93,7 +102,12 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
       };
       const userTeamsFromAuth = userWithTeams?.teams || [];
 
-      // Convert Better Auth team format to our Team interface
+      // Convert Better Auth team format to our Team interface.
+      // NOTE: Better Auth user metadata does not expose an isDefault/primaryTeamId
+      // field yet. We set isDefault: false for all teams here.  choosePrimaryTeam()
+      // will fall back to the first team in the list, which is acceptable until
+      // the backend exposes a primary-team designation (e.g. from user metadata or
+      // the /api/v1/teams response's permissions.assignableTeams).
       const teams: Team[] = userTeamsFromAuth.map(team => ({
         id: team.id,
         name: team.name,
@@ -105,16 +119,22 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
 
       setUserTeams(teams);
 
-      // Auto-select teams if none selected and user has teams
-      if (selectedTeamIds.length === 0 && teams.length > 0) {
-        setSelectedTeamIds(teams.map(team => team.id));
+      // Auto-select the primary team on first initialization only.
+      // We use a ref (not state) so this check is not included in the
+      // refreshUserTeams dependency array, which would cause an infinite loop.
+      // Once set, subsequent calls to refreshUserTeams() (e.g. after a team
+      // management action) will NOT override the user's current selection —
+      // including an explicit "All teams" (selectedTeamIds === []) choice.
+      if (!hasInitializedSelection.current && teams.length > 0) {
+        hasInitializedSelection.current = true;
+        setSelectedTeamIds(choosePrimaryTeam(teams));
       }
     } catch (err) {
       uiLogger.error({ error: err, userId }, 'Failed to fetch user teams');
       setError('Failed to load team information');
       setUserTeams([]);
     }
-  }, [isAuthenticated, user, userId, selectedTeamIds.length]);
+  }, [isAuthenticated, user, userId]);
 
   // Fetch all teams (for admin/maintainer users) via API
   const refreshAllTeams = useCallback(async () => {
