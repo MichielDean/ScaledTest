@@ -119,6 +119,7 @@ const DashboardView: React.FC = () => {
                   <Button
                     variant="outline"
                     size="sm"
+                    id="team-switcher-button"
                     data-testid="team-switcher"
                     className="flex items-center gap-1"
                   >
@@ -139,7 +140,7 @@ const DashboardView: React.FC = () => {
                     </DropdownMenuItem>
                   ))}
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => setSelectedTeamIds([])}>
+                  <DropdownMenuItem id="all-teams-option" onClick={() => setSelectedTeamIds([])}>
                     All teams
                   </DropdownMenuItem>
                 </DropdownMenuContent>

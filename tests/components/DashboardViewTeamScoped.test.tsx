@@ -194,23 +194,16 @@ describe('DashboardView — team-scoped filtering', () => {
     await userEvent.click(switcher, { pointerEventsCheck: 0 as never });
 
     // Radix portals render into document.body; query there
-    const betaOption = document.body.querySelector('[role="menuitem"]');
-    if (betaOption) {
-      // If the dropdown rendered, click the Beta Team item
+    // We assert the Beta Team item is present and click it, failing if not found.
+    await waitFor(() => {
       const items = document.body.querySelectorAll('[role="menuitem"]');
       const betaItem = Array.from(items).find(el => el.textContent?.includes('Beta Team'));
+      expect(betaItem).toBeDefined();
       if (betaItem) {
         fireEvent.click(betaItem);
         expect(setSelectedTeamIds).toHaveBeenCalledWith(['team-2']);
-      } else {
-        // Dropdown opened but Beta Team item not found — still verifies switcher exists
-        expect(switcher).toBeInTheDocument();
       }
-    } else {
-      // In some jsdom environments Radix portals don't mount; verify the
-      // switcher button is correctly rendered with the right props
-      expect(switcher).toHaveAttribute('data-testid', 'team-switcher');
-    }
+    });
   });
 
   it('shows fallback message when no team is selected', async () => {
