@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuites name="ScaledTest" tests="4" failures="1" errors="0" time="3.14">
+  <testsuite name="Authentication" tests="3" failures="1" errors="0" skipped="1" time="2.14" timestamp="2024-01-01T00:00:00">
+    <testcase name="User authentication with valid credentials" classname="Authentication" time="1.25">
+    </testcase>
+    <testcase name="User authentication with invalid password" classname="Authentication" time="0.89">
+      <failure message="Expected login to succeed but got error" type="AssertionError">AssertionError: Expected login to succeed but got error
+    at Object.test (login.test.ts:15:5)</failure>
+    </testcase>
+    <testcase name="Password reset flow" classname="Authentication" time="0">
+      <skipped/>
+    </testcase>
+  </testsuite>
+  <testsuite name="Dashboard" tests="1" failures="0" errors="0" skipped="0" time="0.5" timestamp="2024-01-01T00:00:03">
+    <testcase name="renders correctly" classname="Dashboard" time="0.5">
+    </testcase>
+  </testsuite>
+</testsuites>

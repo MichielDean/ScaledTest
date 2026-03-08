@@ -1,10 +1,15 @@
 import { execSync } from 'child_process';
 import axios from 'axios';
+import { parseReport, REPORT_FORMAT } from './parsers/index.js';
 
 const API_URL = process.env.SCALEDTEST_API_URL ?? 'http://scaledtest-service/api/v1';
 const API_TOKEN = process.env.SCALEDTEST_API_TOKEN ?? '';
 const TEST_COMMAND = process.env.TEST_COMMAND ?? '';
 const EXECUTION_ID = process.env.EXECUTION_ID ?? '';
+
+// REPORT_FORMAT env var controls how stdout is parsed.
+// Supported values: jest-json | junit-xml | ctrf-json | exit-code (default)
+const REPORT_FORMAT_ENV = process.env.REPORT_FORMAT ?? REPORT_FORMAT.EXIT_CODE;
 
 // Configurable timeout — defaults to 1 hour. Set WORKER_TIMEOUT_MS env var to override.
 // Without a timeout, a runaway test process hangs the pod forever consuming K8s resources.
@@ -31,40 +36,14 @@ try {
 } catch (err: unknown) {
   exitCode = (err as { status?: number }).status ?? 1;
   stderr = (err as { stderr?: string }).stderr ?? String(err);
+  // For jest-json and ctrf-json, stdout may still be populated even on failure
+  stdout = (err as { stdout?: string }).stdout ?? stdout;
 }
 
 const stop = Date.now();
 
-// Build a minimal CTRF report from the exit code
-const report = {
-  reportFormat: 'CTRF',
-  specVersion: '1.0.0',
-  reportId: crypto.randomUUID(),
-  timestamp: new Date().toISOString(),
-  generatedBy: 'scaledtest-worker',
-  results: {
-    tool: { name: 'scaledtest-worker' },
-    summary: {
-      tests: 1,
-      passed: exitCode === 0 ? 1 : 0,
-      failed: exitCode !== 0 ? 1 : 0,
-      skipped: 0,
-      pending: 0,
-      other: 0,
-      start,
-      stop,
-    },
-    tests: [
-      {
-        name: TEST_COMMAND,
-        status: exitCode === 0 ? 'passed' : 'failed',
-        duration: stop - start,
-        message: stderr || undefined,
-        stdout: stdout ? [stdout] : undefined,
-      },
-    ],
-  },
-};
+// Parse the test runner output according to the configured format
+const report = parseReport(REPORT_FORMAT_ENV, stdout, TEST_COMMAND, exitCode, stderr, start, stop);
 
 // POST to ScaledTest API — best-effort, don't fail the pod on submission error
 try {
