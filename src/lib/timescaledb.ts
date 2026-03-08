@@ -544,6 +544,25 @@ export const searchCtrfReports = async (
   });
 };
 
+/**
+ * Returns report IDs linked to a given execution.
+ * Used by the execution detail endpoint (SCA-10) to include linkedReportIds
+ * in the GET /api/v1/executions/:id response.
+ */
+export async function getLinkedReportIds(executionId: string): Promise<string[]> {
+  const pool = getTimescalePool();
+  const client = await pool.connect();
+  try {
+    const result = await client.query<{ report_id: string }>(
+      `SELECT report_id FROM test_reports WHERE execution_id = $1 ORDER BY timestamp ASC`,
+      [executionId]
+    );
+    return result.rows.map(row => row.report_id);
+  } finally {
+    client.release();
+  }
+}
+
 // Graceful shutdown function
 export const shutdownTimescaleDB = async (): Promise<void> => {
   try {
