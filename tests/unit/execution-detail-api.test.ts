@@ -264,7 +264,7 @@ describe('GET /api/v1/executions/:id', () => {
     expect(call.data.linkedReportIds).toEqual([]);
   });
 
-  it('activePods is 0 when execution is queued (no pods running)', async () => {
+  it('activePods equals totalPods when no pods have completed yet', async () => {
     setupAuthUser('readonly');
     const queuedExecution = {
       ...fakeExecutionDetail,

@@ -52,6 +52,43 @@ jest.mock('../../src/lib/teamManagement', () => ({
   getUserTeams: jest.fn().mockResolvedValue([{ id: 'team-1', name: 'Test Team' }]),
 }));
 
+// Mock executions module for execution detail integration tests
+const mockGetExecutionDetail = jest.fn();
+jest.mock('../../src/lib/executions', () => ({
+  getExecutionDetail: mockGetExecutionDetail,
+  createExecution: jest.fn(),
+  listExecutions: jest.fn(),
+  getExecution: jest.fn(),
+  cancelExecution: jest.fn(),
+  updateExecutionStatus: jest.fn(),
+  recordExecutionResult: jest.fn(),
+}));
+
+// Mock logger for execution detail handler
+jest.mock('../../src/logging/logger', () => ({
+  apiLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  },
+  dbLogger: {
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+    child: jest.fn().mockReturnThis(),
+  },
+  logError: jest.fn(),
+  getRequestLogger: jest.fn(() => ({
+    info: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+    warn: jest.fn(),
+  })),
+}));
+
 // Mock crypto for testing
 const originalCrypto = global.crypto;
 Object.defineProperty(global, 'crypto', {
@@ -61,6 +98,7 @@ Object.defineProperty(global, 'crypto', {
 });
 
 import ctrfReportsHandler from '../../src/pages/api/test-reports';
+import executionDetailHandler from '../../src/pages/api/v1/executions/[id]';
 
 const mockReq = (
   method: string,
@@ -198,6 +236,71 @@ describe('API Endpoints', () => {
         expect.objectContaining({
           success: false,
           error: 'Method PUT not allowed',
+        })
+      );
+    });
+  });
+
+  describe('Execution Detail API (GET /api/v1/executions/:id)', () => {
+    /** Valid UUID for integration tests */
+    const VALID_UUID = 'a1b2c3d4-e5f6-4789-abcd-ef1234567890';
+    const REPORT_UUID_1 = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+    const REPORT_UUID_2 = 'bbbbbbbb-cccc-4ddd-8eee-ffffffffffff';
+
+    /** Canonical execution detail fixture with activePods and linkedReportIds */
+    const fakeExecutionDetail = {
+      id: VALID_UUID,
+      status: 'running' as const,
+      dockerImage: 'my-image:latest',
+      testCommand: 'npm test',
+      parallelism: 3,
+      environmentVars: {},
+      resourceLimits: {},
+      requestedBy: 'user-123',
+      teamId: 'team-1',
+      startedAt: '2026-01-01T00:00:00.000Z',
+      completedAt: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      kubernetesJobName: 'job-abc',
+      kubernetesNamespace: 'default',
+      errorMessage: null,
+      totalPods: 3,
+      completedPods: 1,
+      failedPods: 0,
+      // activePods = totalPods - completedPods - failedPods = 3 - 1 - 0 = 2
+      activePods: 2,
+      linkedReportIds: [REPORT_UUID_1, REPORT_UUID_2],
+    };
+
+    it('returns 200 with activePods and linkedReportIds for a valid UUID', async () => {
+      mockGetExecutionDetail.mockResolvedValue(fakeExecutionDetail);
+      const { res } = await runHandlerTest(executionDetailHandler, 'GET', undefined, {
+        id: VALID_UUID,
+      });
+
+      expect(res.status).not.toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: true,
+          data: expect.objectContaining({
+            id: VALID_UUID,
+            activePods: 2,
+            linkedReportIds: [REPORT_UUID_1, REPORT_UUID_2],
+          }),
+        })
+      );
+    });
+
+    it('returns 400 when :id is not a valid UUID', async () => {
+      const { res } = await runHandlerTest(executionDetailHandler, 'GET', undefined, {
+        id: 'not-a-uuid',
+      });
+
+      expect(res.status).toHaveBeenCalledWith(400);
+      expect(res.json).toHaveBeenCalledWith(
+        expect.objectContaining({
+          success: false,
         })
       );
     });
