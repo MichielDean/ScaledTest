@@ -1,6 +1,7 @@
 import { execSync } from 'child_process';
 import axios from 'axios';
 import { parseReport, buildExitCodeReport, REPORT_FORMAT } from './parsers/index.js';
+import { buildSubmissionUrl } from './submission.js';
 
 const API_URL = process.env.SCALEDTEST_API_URL ?? 'http://scaledtest-service/api/v1';
 const API_TOKEN = process.env.SCALEDTEST_API_TOKEN ?? '';
@@ -68,13 +69,21 @@ try {
 }
 
 // POST to ScaledTest API — best-effort, don't fail the pod on submission error
+//
+// When EXECUTION_ID is set, post to the execution-scoped callback endpoint:
+//   POST /api/v1/executions/:id/results
+// This endpoint accepts the worker bearer token, links the report to the
+// execution, and increments completedPods so the orchestrator knows when
+// all pods have reported in.
+//
+// Without EXECUTION_ID, fall back to the legacy /api/v1/reports endpoint.
 try {
-  await axios.post(`${API_URL}/reports`, report, {
+  const submissionUrl = buildSubmissionUrl(API_URL, EXECUTION_ID);
+  await axios.post(submissionUrl, report, {
     headers: {
       Authorization: `Bearer ${API_TOKEN}`,
       'Content-Type': 'application/json',
     },
-    params: EXECUTION_ID ? { executionId: EXECUTION_ID } : undefined,
   });
   process.stdout.write('Test results submitted successfully\n');
 } catch (err) {
