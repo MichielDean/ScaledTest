@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 import axios from 'axios';
-import { parseReport, REPORT_FORMAT } from './parsers/index.js';
+import { parseReport, buildExitCodeReport, REPORT_FORMAT } from './parsers/index.js';
 
 const API_URL = process.env.SCALEDTEST_API_URL ?? 'http://scaledtest-service/api/v1';
 const API_TOKEN = process.env.SCALEDTEST_API_TOKEN ?? '';
@@ -53,8 +53,19 @@ try {
 
 const stop = Date.now();
 
-// Parse the test runner output according to the configured format
-const report = parseReport(REPORT_FORMAT_ENV, stdout, TEST_COMMAND, exitCode, stderr, start, stop);
+// Parse the test runner output according to the configured format.
+// If the test runner crashed before writing output (OOM kill, SIGKILL, truncated stdout),
+// parseReport may throw for jest-json, junit-xml, and ctrf-json. Fall back to the
+// exit-code report so the worker always submits something and always exits correctly.
+let report;
+try {
+  report = parseReport(REPORT_FORMAT_ENV, stdout, TEST_COMMAND, exitCode, stderr, start, stop);
+} catch (parseErr) {
+  process.stderr.write(
+    `Failed to parse test output (format: ${REPORT_FORMAT_ENV}): ${String(parseErr)}\n`
+  );
+  report = buildExitCodeReport(TEST_COMMAND, exitCode, stderr, start, stop, stdout || undefined);
+}
 
 // POST to ScaledTest API — best-effort, don't fail the pod on submission error
 try {

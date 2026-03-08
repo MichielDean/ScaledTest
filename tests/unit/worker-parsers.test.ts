@@ -245,6 +245,38 @@ describe('Worker parsers', () => {
       });
       expect(() => parseCtrfJson(bad)).toThrow();
     });
+
+    it('should throw when results is missing', () => {
+      const bad = JSON.stringify({ reportFormat: 'CTRF', specVersion: '1.0.0' });
+      expect(() => parseCtrfJson(bad)).toThrow('parseCtrfJson: results must be an object');
+    });
+
+    it('should throw when results.tests is not an array', () => {
+      const bad = JSON.stringify({
+        reportFormat: 'CTRF',
+        specVersion: '1.0.0',
+        results: { tool: { name: 'x' }, summary: {}, tests: null },
+      });
+      expect(() => parseCtrfJson(bad)).toThrow('parseCtrfJson: results.tests must be an array');
+    });
+
+    it('should throw when results.summary is missing', () => {
+      const bad = JSON.stringify({
+        reportFormat: 'CTRF',
+        specVersion: '1.0.0',
+        results: { tool: { name: 'x' }, tests: [] },
+      });
+      expect(() => parseCtrfJson(bad)).toThrow('parseCtrfJson: results.summary must be an object');
+    });
+
+    it('should throw when results.tool is missing', () => {
+      const bad = JSON.stringify({
+        reportFormat: 'CTRF',
+        specVersion: '1.0.0',
+        results: { summary: {}, tests: [] },
+      });
+      expect(() => parseCtrfJson(bad)).toThrow('parseCtrfJson: results.tool must be an object');
+    });
   });
 
   describe('buildExitCodeReport', () => {

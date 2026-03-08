@@ -353,6 +353,26 @@ export function parseCtrfJson(raw: string): CtrfReport {
     );
   }
 
+  // Validate structural fields so callers get a clear parse-time error rather
+  // than a cryptic downstream failure in the API when required fields are missing.
+  if (typeof report.results !== 'object' || report.results === null) {
+    throw new Error('parseCtrfJson: results must be an object');
+  }
+
+  const results = report.results as Record<string, unknown>;
+
+  if (!Array.isArray(results.tests)) {
+    throw new Error('parseCtrfJson: results.tests must be an array');
+  }
+
+  if (typeof results.summary !== 'object' || results.summary === null) {
+    throw new Error('parseCtrfJson: results.summary must be an object');
+  }
+
+  if (typeof results.tool !== 'object' || results.tool === null) {
+    throw new Error('parseCtrfJson: results.tool must be an object');
+  }
+
   return report as unknown as CtrfReport;
 }
 
