@@ -1,10 +1,15 @@
 import { execSync } from 'child_process';
 import axios from 'axios';
+import { parseReport, buildExitCodeReport, REPORT_FORMAT } from './parsers/index.js';
 
 const API_URL = process.env.SCALEDTEST_API_URL ?? 'http://scaledtest-service/api/v1';
 const API_TOKEN = process.env.SCALEDTEST_API_TOKEN ?? '';
 const TEST_COMMAND = process.env.TEST_COMMAND ?? '';
 const EXECUTION_ID = process.env.EXECUTION_ID ?? '';
+
+// REPORT_FORMAT env var controls how stdout is parsed.
+// Supported values: jest-json | junit-xml | ctrf-json | exit-code (default)
+const REPORT_FORMAT_ENV = process.env.REPORT_FORMAT ?? REPORT_FORMAT.EXIT_CODE;
 
 // Configurable timeout — defaults to 1 hour. Set WORKER_TIMEOUT_MS env var to override.
 // Without a timeout, a runaway test process hangs the pod forever consuming K8s resources.
@@ -29,42 +34,38 @@ try {
     maxBuffer: WORKER_MAX_BUFFER_BYTES,
   });
 } catch (err: unknown) {
-  exitCode = (err as { status?: number }).status ?? 1;
-  stderr = (err as { stderr?: string }).stderr ?? String(err);
+  const childErr = err as {
+    status?: number;
+    stdout?: string | Buffer;
+    stderr?: string | Buffer;
+  };
+  exitCode = childErr.status ?? 1;
+  if (typeof childErr.stderr !== 'undefined') {
+    stderr = Buffer.isBuffer(childErr.stderr) ? childErr.stderr.toString('utf8') : childErr.stderr;
+  } else {
+    stderr = String(err);
+  }
+  // For jest-json and ctrf-json, stdout may still be populated even on failure
+  if (typeof childErr.stdout !== 'undefined') {
+    stdout = Buffer.isBuffer(childErr.stdout) ? childErr.stdout.toString('utf8') : childErr.stdout;
+  }
 }
 
 const stop = Date.now();
 
-// Build a minimal CTRF report from the exit code
-const report = {
-  reportFormat: 'CTRF',
-  specVersion: '1.0.0',
-  reportId: crypto.randomUUID(),
-  timestamp: new Date().toISOString(),
-  generatedBy: 'scaledtest-worker',
-  results: {
-    tool: { name: 'scaledtest-worker' },
-    summary: {
-      tests: 1,
-      passed: exitCode === 0 ? 1 : 0,
-      failed: exitCode !== 0 ? 1 : 0,
-      skipped: 0,
-      pending: 0,
-      other: 0,
-      start,
-      stop,
-    },
-    tests: [
-      {
-        name: TEST_COMMAND,
-        status: exitCode === 0 ? 'passed' : 'failed',
-        duration: stop - start,
-        message: stderr || undefined,
-        stdout: stdout ? [stdout] : undefined,
-      },
-    ],
-  },
-};
+// Parse the test runner output according to the configured format.
+// If the test runner crashed before writing output (OOM kill, SIGKILL, truncated stdout),
+// parseReport may throw for jest-json, junit-xml, and ctrf-json. Fall back to the
+// exit-code report so the worker always submits something and always exits correctly.
+let report;
+try {
+  report = parseReport(REPORT_FORMAT_ENV, stdout, TEST_COMMAND, exitCode, stderr, start, stop);
+} catch (parseErr) {
+  process.stderr.write(
+    `Failed to parse test output (format: ${REPORT_FORMAT_ENV}): ${String(parseErr)}\n`
+  );
+  report = buildExitCodeReport(TEST_COMMAND, exitCode, stderr, start, stop, stdout || undefined);
+}
 
 // POST to ScaledTest API — best-effort, don't fail the pod on submission error
 try {
