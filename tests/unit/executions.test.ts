@@ -219,7 +219,7 @@ describe('updateExecutionStatus', () => {
     client.query.mockResolvedValue({ rows: [updatedRow] });
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
-    await updateExecutionStatus('abc-123', 'completed', { completedAt: new Date() });
+    await updateExecutionStatus('abc-123', 'completed', { completedAt: new Date().toISOString() });
 
     const sql = client.query.mock.calls[0][0] as string;
     // Must guard against overwriting terminal states
