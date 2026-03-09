@@ -73,7 +73,10 @@ describe('deleteKubernetesJob — propagation policy', () => {
     await deleteKubernetesJob('test-job-abc123');
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
-    const [, fetchInit] = mockFetch.mock.calls[0] as [string, RequestInit & { body?: string }];
+    const [, fetchInit] = mockFetch.mock.calls[0] as [
+      string,
+      { method?: string; body?: string; headers?: Record<string, string> },
+    ];
     const body = JSON.parse(fetchInit.body ?? '{}');
     expect(body.propagationPolicy).toBe('Background');
     expect(body.propagationPolicy).not.toBe('Foreground');
