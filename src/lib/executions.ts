@@ -234,6 +234,17 @@ export async function listExecutions(
   }
 }
 
+/**
+ * Update the status (and optional fields) of an execution.
+ *
+ * Terminal-state guard: the WHERE clause includes
+ *   AND status NOT IN ('cancelled', 'completed', 'failed')
+ * so this function is a no-op (returns null) if the execution is already in a
+ * terminal state. This prevents the executor loop from overwriting a 'cancelled'
+ * execution back to 'completed' or 'failed' under concurrent access.
+ *
+ * Returns the updated execution row, or null if not found OR already terminal.
+ */
 export async function updateExecutionStatus(
   id: string,
   status: ExecutionStatus,
@@ -290,7 +301,7 @@ export async function updateExecutionStatus(
 
     values.push(id);
     const result = await client.query(
-      `UPDATE test_executions SET ${sets.join(', ')} WHERE id = $${p} RETURNING *`,
+      `UPDATE test_executions SET ${sets.join(', ')} WHERE id = $${p} AND status NOT IN ('cancelled', 'completed', 'failed') RETURNING *`,
       values
     );
     return result.rows[0] ? rowToExecution(result.rows[0] as Record<string, unknown>) : null;

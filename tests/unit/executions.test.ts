@@ -209,6 +209,36 @@ describe('updateExecutionStatus', () => {
     const sql = client.query.mock.calls[0][0] as string;
     expect(sql).toContain('kubernetes_job_name');
   });
+
+  it('includes NOT IN terminal-state guard in WHERE clause (prevents executor loop race)', async () => {
+    // Regression test for the race condition where the executor loop can overwrite
+    // a 'cancelled' execution back to 'completed'/'failed'.
+    // The WHERE clause must include: AND status NOT IN ('cancelled', 'completed', 'failed')
+    const updatedRow = { ...fakeRow, status: 'completed' };
+    const client = makeClient([updatedRow]);
+    client.query.mockResolvedValue({ rows: [updatedRow] });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await updateExecutionStatus('abc-123', 'completed', { completedAt: new Date() });
+
+    const sql = client.query.mock.calls[0][0] as string;
+    // Must guard against overwriting terminal states
+    expect(sql).toMatch(/AND\s+status\s+NOT\s+IN/i);
+    expect(sql).toContain("'cancelled'");
+    expect(sql).toContain("'completed'");
+    expect(sql).toContain("'failed'");
+  });
+
+  it('returns null (no-op) when execution is already in a terminal state', async () => {
+    // Simulates executor loop calling updateExecutionStatus on a cancelled execution.
+    // The WHERE clause guard should make the UPDATE a no-op (0 rows returned).
+    const client = makeClient();
+    client.query.mockResolvedValue({ rows: [], rowCount: 0 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    const result = await updateExecutionStatus('abc-123', 'completed');
+    expect(result).toBeNull();
+  });
 });
 
 describe('cancelExecution', () => {
