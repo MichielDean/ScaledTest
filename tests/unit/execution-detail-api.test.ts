@@ -36,6 +36,18 @@ jest.mock('../../src/lib/executions', () => {
   };
 });
 
+// Mock auditLog — must come before handler import so the module-level mock is in effect
+// when handler is first required. jest.doMock (inside a test body) does not override
+// already-imported modules, so the mock MUST be hoisted here.
+const mockAppendAuditLog = jest.fn();
+jest.mock('../../src/lib/auditLog', () => {
+  const actual = jest.requireActual('../../src/lib/auditLog');
+  return {
+    ...actual,
+    appendAuditLog: mockAppendAuditLog,
+  };
+});
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -409,7 +421,10 @@ describe('DELETE /api/v1/executions/:id', () => {
   it('returns 200 with cancelled execution data for owner', async () => {
     setupAuthUser('owner');
     const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: null };
-    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
+    mockCancelExecution.mockResolvedValue({
+      execution: cancelledExecution,
+      previousStatus: 'queued',
+    });
     const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
 
     await handler(req, res);
@@ -434,7 +449,10 @@ describe('DELETE /api/v1/executions/:id', () => {
   it('uses first element when id is array (Next.js multi-value param handling)', async () => {
     setupAuthUser('owner');
     const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: null };
-    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
+    mockCancelExecution.mockResolvedValue({
+      execution: cancelledExecution,
+      previousStatus: 'queued',
+    });
 
     const mockJson = jest.fn();
     const mockStatus = jest.fn().mockReturnValue({ json: mockJson, end: jest.fn() });
@@ -461,18 +479,25 @@ describe('DELETE /api/v1/executions/:id', () => {
   it('logs audit entry with correct previousStatus (not "cancelled")', async () => {
     setupAuthUser('owner');
     const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: 'team-1' };
-    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
-
-    const mockAppendAuditLog = jest.fn().mockResolvedValue(undefined);
-    jest.doMock('../../src/lib/auditLog', () => ({
-      ...jest.requireActual('../../src/lib/auditLog'),
-      appendAuditLog: mockAppendAuditLog,
-    }));
+    mockCancelExecution.mockResolvedValue({
+      execution: cancelledExecution,
+      previousStatus: 'queued',
+    });
+    mockAppendAuditLog.mockResolvedValue(undefined);
 
     const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
     await handler(req, res);
 
     // The response should include the execution data
     expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
+
+    // appendAuditLog must be called with previousStatus='queued' — NOT 'cancelled'.
+    // If cancelExecution() returned the post-update row and we logged execution.status,
+    // it would always be 'cancelled'. This test guards against that regression.
+    expect(mockAppendAuditLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metadata: expect.objectContaining({ previousStatus: 'queued' }),
+      })
+    );
   });
 });
