@@ -1,0 +1,161 @@
+/**
+ * /api/admin/invitations
+ *
+ * POST — Create a new invitation (maintainer or owner only).
+ *   Body: { email: string; role: 'readonly' | 'maintainer' | 'owner'; teamId?: string }
+ *   Returns 201 { invitation: SafeInvitation; token: string }
+ *   Note: `token` is the raw invite token — only returned here, never again.
+ *
+ * GET  — List all invitations (maintainer or owner only).
+ *   Returns 200 { invitations: SafeInvitation[] }
+ */
+
+import { NextApiResponse } from 'next';
+import { BetterAuthenticatedRequest, BetterAuthMethodHandler } from '@/auth/betterAuthApi';
+import { createBetterAuthApi } from '@/auth/betterAuthApi';
+import { getRequestLogger } from '@/logging/logger';
+import {
+  generateInviteToken,
+  hashInviteToken,
+  createInvitation,
+  listInvitations,
+  type Invitation,
+} from '@/lib/invitations';
+import { validateUuid } from '@/lib/validation';
+
+// ── Types ─────────────────────────────────────────────────────────────────────
+
+/** Invitation shape safe to return to API consumers — no tokenHash. */
+export type SafeInvitation = Omit<Invitation, 'tokenHash'>;
+
+/** Valid roles that can be assigned via invitation. */
+const VALID_ROLES = ['readonly', 'maintainer', 'owner'] as const;
+type InviteRole = (typeof VALID_ROLES)[number];
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+/** Strip tokenHash from an invitation before returning it to callers. */
+function safeInvitation(inv: Invitation): SafeInvitation {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const { tokenHash: _omit, ...safe } = inv;
+  return safe;
+}
+
+/** Basic RFC 5322-ish email validation. */
+function isValidEmail(email: unknown): email is string {
+  if (typeof email !== 'string' || email.length === 0) return false;
+  // Simple check: contains @ with at least one char on each side, dot after @
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+}
+
+// ── Handlers ──────────────────────────────────────────────────────────────────
+
+const handlePost: BetterAuthMethodHandler = async (
+  req: BetterAuthenticatedRequest,
+  res: NextApiResponse,
+  reqLogger: ReturnType<typeof getRequestLogger>
+) => {
+  const { email, role, teamId } = req.body as {
+    email?: unknown;
+    role?: unknown;
+    teamId?: unknown;
+  };
+
+  // Validate email
+  if (!isValidEmail(email)) {
+    return res.status(400).json({ error: 'Invalid or missing email address' });
+  }
+
+  // Validate role
+  if (!role || !VALID_ROLES.includes(role as InviteRole)) {
+    return res.status(400).json({
+      error: `Invalid role. Must be one of: ${VALID_ROLES.join(', ')}`,
+    });
+  }
+
+  // Maintainers can only invite readonly or maintainer — not owner
+  if (req.user.role === 'maintainer' && role === 'owner') {
+    return res.status(403).json({
+      error: 'Maintainers cannot invite users with the owner role',
+    });
+  }
+
+  // Validate optional teamId
+  const resolvedTeamId =
+    teamId !== undefined && teamId !== null && typeof teamId === 'string' ? teamId : null;
+
+  // Validate teamId as UUID if provided
+  if (resolvedTeamId !== null) {
+    try {
+      validateUuid(resolvedTeamId, 'teamId');
+    } catch {
+      return res.status(400).json({ error: 'Invalid teamId: must be a valid UUID' });
+    }
+  }
+
+  try {
+    const rawToken = generateInviteToken();
+    const tokenHash = hashInviteToken(rawToken);
+    // First 16 chars of raw token used as display prefix (includes 'inv_' prefix)
+    const tokenPrefix = rawToken.substring(0, 16);
+
+    const invitation = await createInvitation({
+      email: email as string,
+      role: role as string,
+      tokenHash,
+      tokenPrefix,
+      invitedByUserId: req.user.id,
+      teamId: resolvedTeamId,
+    });
+
+    reqLogger.info(
+      { invitationId: invitation.id, email: invitation.email, role: invitation.role },
+      'Invitation created'
+    );
+
+    return res.status(201).json({
+      invitation: safeInvitation(invitation),
+      token: rawToken,
+    });
+  } catch (error) {
+    reqLogger.error({ error }, 'Failed to create invitation');
+    return res.status(500).json({ error: 'Failed to create invitation' });
+  }
+};
+
+const handleGet: BetterAuthMethodHandler = async (
+  req: BetterAuthenticatedRequest,
+  res: NextApiResponse,
+  reqLogger: ReturnType<typeof getRequestLogger>
+) => {
+  const teamId = req.query.teamId && typeof req.query.teamId === 'string' ? req.query.teamId : null;
+
+  try {
+    const invitations = await listInvitations(teamId);
+
+    reqLogger.info({ count: invitations.length }, 'Invitations listed');
+
+    return res.status(200).json({
+      invitations: invitations.map(safeInvitation),
+    });
+  } catch (error) {
+    reqLogger.error({ error }, 'Failed to list invitations');
+    return res.status(500).json({ error: 'Failed to list invitations' });
+  }
+};
+
+// ── Export ────────────────────────────────────────────────────────────────────
+
+/**
+ * /api/admin/invitations
+ *
+ * Requires maintainer or owner role.
+ * Readonly users cannot create or list invitations.
+ */
+export default createBetterAuthApi(
+  {
+    POST: handlePost,
+    GET: handleGet,
+  },
+  'maintainer'
+);
