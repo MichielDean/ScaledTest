@@ -15,7 +15,7 @@ import { hasRole } from '@/lib/roles';
 import { getExecutionDetail, cancelExecution } from '@/lib/executions';
 import { deleteKubernetesJob } from '@/lib/kubernetes';
 import { isValidUuid } from '@/lib/validation';
-import { dbLogger as logger, logError } from '@/logging/logger';
+import { apiLogger as logger, logError } from '@/logging/logger';
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
