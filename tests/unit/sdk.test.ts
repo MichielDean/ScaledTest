@@ -26,9 +26,11 @@ global.fetch = mockFetch;
 import {
   ScaledTestClient,
   ScaledTestError,
+  type CtrfSchema,
   type GetReportsOptions,
   type ListExecutionsOptions,
 } from '../../src/sdk/index';
+import { ReportFormat } from '../../src/schemas/ctrf/ctrf';
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -50,8 +52,8 @@ function makeErrorResponse(body: unknown, status: number) {
   } as unknown as Response;
 }
 
-const MINIMAL_CTRF_REPORT = {
-  reportFormat: 'CTRF',
+const MINIMAL_CTRF_REPORT: CtrfSchema = {
+  reportFormat: ReportFormat.CTRF,
   specVersion: '0.0.0',
   results: {
     tool: { name: 'jest' },
@@ -96,6 +98,24 @@ describe('ScaledTestClient — constructor', () => {
   it('constructs without error given valid options', () => {
     expect(
       () => new ScaledTestClient({ baseUrl: 'http://localhost:3000', token: 'sct_abc' })
+    ).not.toThrow();
+  });
+
+  it('constructs with explicit timeoutMs', () => {
+    expect(
+      () =>
+        new ScaledTestClient({
+          baseUrl: 'http://localhost:3000',
+          token: 'sct_abc',
+          timeoutMs: 5000,
+        })
+    ).not.toThrow();
+  });
+
+  it('constructs with timeoutMs 0 (timeout disabled)', () => {
+    expect(
+      () =>
+        new ScaledTestClient({ baseUrl: 'http://localhost:3000', token: 'sct_abc', timeoutMs: 0 })
     ).not.toThrow();
   });
 
@@ -632,6 +652,55 @@ describe('ScaledTestClient.getActiveExecutions()', () => {
       makeErrorResponse({ success: false, error: 'Authentication required' }, 401)
     );
     await expect(client.getActiveExecutions()).rejects.toThrow(ScaledTestError);
+  });
+});
+
+// ── Timeout / AbortSignal ─────────────────────────────────────────────────────
+
+describe('ScaledTestClient — timeout', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('aborts hanging requests when timeoutMs expires', async () => {
+    // fetch never resolves — simulates a hanging connection (e.g. firewall drop)
+    mockFetch.mockImplementationOnce(
+      (_url: string, init?: { signal?: AbortSignal; [key: string]: unknown }) =>
+        new Promise((_resolve, reject) => {
+          if (init?.signal) {
+            init.signal.addEventListener('abort', () =>
+              reject(new DOMException('The operation was aborted.', 'AbortError'))
+            );
+          }
+          // Otherwise hangs forever — the AbortSignal should fire and cancel it.
+        })
+    );
+
+    const client = new ScaledTestClient({
+      baseUrl: 'http://localhost:3000',
+      token: 'sct_abc',
+      timeoutMs: 50, // very short for test speed
+    });
+
+    await expect(client.uploadReport({ report: MINIMAL_CTRF_REPORT })).rejects.toThrow();
+  });
+
+  it('does not use AbortSignal when timeoutMs is 0 (timeout disabled)', async () => {
+    // Verify that with timeoutMs=0, no signal is injected into fetch
+    let capturedSignal: AbortSignal | undefined = undefined;
+    mockFetch.mockImplementationOnce(
+      (_url: string, init?: { signal?: AbortSignal; [key: string]: unknown }) => {
+        capturedSignal = init?.signal;
+        return Promise.resolve(makeOkResponse({ success: true, id: 'r1', message: 'stored' }));
+      }
+    );
+
+    const client = new ScaledTestClient({
+      baseUrl: 'http://localhost:3000',
+      token: 'sct_abc',
+      timeoutMs: 0,
+    });
+
+    await client.uploadReport({ report: MINIMAL_CTRF_REPORT });
+    expect(capturedSignal).toBeUndefined();
   });
 });
 

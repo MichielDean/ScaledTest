@@ -2,7 +2,8 @@
  * @scaledtest/sdk — TypeScript/JavaScript client for the ScaledTest API
  *
  * Provides a typed API client for uploading CTRF test reports and querying
- * results programmatically. Supports Bearer token (API token) authentication.
+ * results programmatically. Authentication is via Bearer token (sct_* API tokens)
+ * only — session cookies are not supported by this client.
  *
  * Usage:
  *   import { ScaledTestClient } from '@scaledtest/sdk';
@@ -33,6 +34,13 @@ export class ScaledTestError extends Error {
   }
 }
 
+// ── Re-exported CTRF type ─────────────────────────────────────────────────────
+
+// Re-export the project's canonical CTRF schema type so SDK consumers get the
+// same compile-time shape as the server validates against at runtime.
+export type { CtrfSchema } from '../schemas/ctrf/ctrf';
+import type { CtrfSchema } from '../schemas/ctrf/ctrf';
+
 // ── Option types ──────────────────────────────────────────────────────────────
 
 export interface ScaledTestClientOptions {
@@ -40,11 +48,17 @@ export interface ScaledTestClientOptions {
   baseUrl: string;
   /** Bearer token (sct_*) for authentication */
   token: string;
+  /**
+   * Request timeout in milliseconds. Defaults to 30 000 ms (30 s).
+   * A hanging request is aborted and a TypeError is thrown.
+   * Set to 0 to disable the timeout entirely.
+   */
+  timeoutMs?: number;
 }
 
 export interface UploadReportOptions {
-  /** CTRF-formatted test report payload */
-  report: Record<string, unknown>;
+  /** CTRF-formatted test report payload. Use the CtrfSchema type for full type safety. */
+  report: CtrfSchema;
 }
 
 export interface GetReportsOptions {
@@ -75,8 +89,8 @@ export interface CreateExecutionOptions {
 }
 
 export interface SubmitResultsOptions {
-  /** CTRF-formatted test report payload */
-  report: Record<string, unknown>;
+  /** CTRF-formatted test report payload. Use the CtrfSchema type for full type safety. */
+  report: CtrfSchema;
 }
 
 // ── Response shapes ───────────────────────────────────────────────────────────
@@ -157,6 +171,8 @@ export interface ListExecutionsResult {
 export class ScaledTestClient {
   private readonly baseUrl: string;
   private readonly token: string;
+  /** 0 means disabled. */
+  private readonly timeoutMs: number;
 
   constructor(options: ScaledTestClientOptions) {
     if (!options.baseUrl || options.baseUrl.trim() === '') {
@@ -188,6 +204,7 @@ export class ScaledTestClient {
     // Strip trailing slash to avoid double-slash in URLs
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.token = options.token;
+    this.timeoutMs = options.timeoutMs ?? 30_000;
   }
 
   // ── Private helpers ─────────────────────────────────────────────────────────
@@ -215,27 +232,45 @@ export class ScaledTestClient {
     url: string,
     init: { method: string; body?: string; headers?: Record<string, string> }
   ): Promise<T> {
-    const response = await fetch(url, {
-      method: init.method,
-      body: init.body,
-      headers: {
-        ...this.authHeaders,
-        ...(init.headers ?? {}),
-      },
-    });
-
-    if (!response.ok) {
-      let message: string;
-      try {
-        const body = (await response.json()) as { error?: string };
-        message = body.error ?? `HTTP ${response.status}`;
-      } catch {
-        message = `HTTP ${response.status}`;
-      }
-      throw new ScaledTestError(message, response.status);
+    // Wire up an AbortController timeout so CI pipelines don't hang indefinitely
+    // if the server is unreachable or a firewall silently drops packets.
+    // timeoutMs === 0 means disabled (no AbortSignal injected).
+    let timeoutId: ReturnType<typeof setTimeout> | undefined;
+    let signal: AbortSignal | undefined;
+    if (this.timeoutMs > 0) {
+      const controller = new AbortController();
+      signal = controller.signal;
+      timeoutId = setTimeout(() => controller.abort(), this.timeoutMs);
     }
 
-    return response.json() as Promise<T>;
+    try {
+      const response = await fetch(url, {
+        method: init.method,
+        body: init.body,
+        headers: {
+          ...this.authHeaders,
+          ...(init.headers ?? {}),
+        },
+        signal,
+      });
+
+      if (!response.ok) {
+        let message: string;
+        try {
+          const body = (await response.json()) as { error?: string };
+          message = body.error ?? `HTTP ${response.status}`;
+        } catch {
+          message = `HTTP ${response.status}`;
+        }
+        throw new ScaledTestError(message, response.status);
+      }
+
+      return response.json() as Promise<T>;
+    } finally {
+      if (timeoutId !== undefined) {
+        clearTimeout(timeoutId);
+      }
+    }
   }
 
   // ── Reports ─────────────────────────────────────────────────────────────────
