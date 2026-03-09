@@ -299,7 +299,13 @@ export async function updateExecutionStatus(
   }
 }
 
-export async function cancelExecution(id: string): Promise<TestExecution | null> {
+export interface CancelExecutionResult {
+  execution: TestExecution;
+  /** The status the execution had before cancellation — 'queued' in this implementation. */
+  previousStatus: ExecutionStatus;
+}
+
+export async function cancelExecution(id: string): Promise<CancelExecutionResult | null> {
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
@@ -326,7 +332,7 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
       );
     }
 
-    return rowToExecution(result.rows[0] as Record<string, unknown>);
+    return { execution: rowToExecution(result.rows[0] as Record<string, unknown>), previousStatus: 'queued' };
   } catch (error) {
     // Re-throw business logic errors as-is; wrap DB errors
     if (error instanceof Error && error.message.startsWith('Cannot cancel')) throw error;

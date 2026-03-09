@@ -199,7 +199,7 @@ describe('updateExecutionStatus', () => {
 });
 
 describe('cancelExecution', () => {
-  it('cancels a queued execution atomically (single UPDATE with WHERE status=queued)', async () => {
+  it('cancels a queued execution and returns { execution, previousStatus: "queued" }', async () => {
     const cancelledRow = { ...fakeRow, status: 'cancelled' };
     const client = makeClient([cancelledRow]);
     // First query: UPDATE ... WHERE status='queued' RETURNING * — returns the cancelled row
@@ -207,7 +207,10 @@ describe('cancelExecution', () => {
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
     const result = await cancelExecution('abc-123');
-    expect(result!.status).toBe('cancelled');
+    expect(result).not.toBeNull();
+    expect(result!.execution.status).toBe('cancelled');
+    // previousStatus must be 'queued' — not 'cancelled' (the post-update status)
+    expect(result!.previousStatus).toBe('queued');
 
     // Verify we only made ONE DB call (atomic CAS, no separate read)
     expect(client.query).toHaveBeenCalledTimes(1);

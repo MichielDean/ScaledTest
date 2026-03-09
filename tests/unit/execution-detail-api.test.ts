@@ -408,8 +408,8 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('returns 200 with cancelled execution data for owner', async () => {
     setupAuthUser('owner');
-    const cancelledExecution = { id: VALID_UUID, status: 'cancelled' };
-    mockCancelExecution.mockResolvedValue(cancelledExecution);
+    const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: null };
+    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
     const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
 
     await handler(req, res);
@@ -433,8 +433,8 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('uses first element when id is array (Next.js multi-value param handling)', async () => {
     setupAuthUser('owner');
-    const cancelledExecution = { id: VALID_UUID, status: 'cancelled' };
-    mockCancelExecution.mockResolvedValue(cancelledExecution);
+    const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: null };
+    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
 
     const mockJson = jest.fn();
     const mockStatus = jest.fn().mockReturnValue({ json: mockJson, end: jest.fn() });
@@ -455,6 +455,24 @@ describe('DELETE /api/v1/executions/:id', () => {
 
     // Should use first element VALID_UUID, not fail with 400
     expect(mockCancelExecution).toHaveBeenCalledWith(VALID_UUID);
+    expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
+  });
+
+  it('logs audit entry with correct previousStatus (not "cancelled")', async () => {
+    setupAuthUser('owner');
+    const cancelledExecution = { id: VALID_UUID, status: 'cancelled', teamId: 'team-1' };
+    mockCancelExecution.mockResolvedValue({ execution: cancelledExecution, previousStatus: 'queued' });
+
+    const mockAppendAuditLog = jest.fn().mockResolvedValue(undefined);
+    jest.doMock('../../src/lib/auditLog', () => ({
+      ...jest.requireActual('../../src/lib/auditLog'),
+      appendAuditLog: mockAppendAuditLog,
+    }));
+
+    const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
+    await handler(req, res);
+
+    // The response should include the execution data
     expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
   });
 });
