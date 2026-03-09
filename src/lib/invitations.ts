@@ -19,9 +19,7 @@
  */
 
 import { createHash, randomBytes } from 'crypto';
-import { Pool } from 'pg';
-import { dbLogger } from '../logging/logger';
-import { getRequiredEnvVar } from '../environment/env';
+import { getDbPool } from './teamManagement';
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -43,32 +41,12 @@ const DEFAULT_EXPIRY_DAYS = 3;
 const MAX_EXPIRY_DAYS = 7;
 
 // ── DB pool ───────────────────────────────────────────────────────────────────
+// Delegated to the shared pool in teamManagement to avoid connection exhaustion
+// from multiple independent pools targeting the same database URL.
 
-let invitationPool: Pool | null = null;
-
-/** Get (or lazily create) the singleton DB pool for invitations queries. */
-export function getInvitationPool(): Pool {
-  if (!invitationPool) {
-    invitationPool = new Pool({
-      connectionString: getRequiredEnvVar(
-        'TIMESCALE_DATABASE_URL',
-        'Invitation management requires a database connection'
-      ),
-      max: 10,
-      idleTimeoutMillis: 30_000,
-      connectionTimeoutMillis: 5_000,
-    });
-
-    invitationPool.on('error', err => {
-      dbLogger.error({ error: err.message }, 'invitations pool error');
-    });
-  }
-  return invitationPool;
-}
-
-/** Override the pool — for tests and DI only. */
-export function setInvitationPool(pool: Pool | null): void {
-  invitationPool = pool;
+/** Get the shared DB pool for invitation queries. */
+export function getInvitationPool() {
+  return getDbPool();
 }
 
 // ── Token helpers ─────────────────────────────────────────────────────────────
