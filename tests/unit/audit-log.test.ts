@@ -275,6 +275,36 @@ describe('listAuditLog', () => {
     expect(countParams[0]).toBe('execution.%');
   });
 
+  it('escapes backslashes in actionPrefix before building LIKE pattern', async () => {
+    mockCountAndData(0, []);
+
+    // A backslash in the input must become \\\\ in the LIKE pattern so it is
+    // treated as a literal backslash character, not as an escape prefix.
+    await listAuditLog({ actionPrefix: 'weird\\prefix' });
+
+    const countParams: string[] = mockQuery.mock.calls[0][1];
+    // First param is the LIKE pattern — backslash must be doubled
+    expect(countParams[0]).toBe('weird\\\\prefix.%');
+  });
+
+  it('escapes percent signs in actionPrefix before building LIKE pattern', async () => {
+    mockCountAndData(0, []);
+
+    await listAuditLog({ actionPrefix: '100%done' });
+
+    const countParams: string[] = mockQuery.mock.calls[0][1];
+    expect(countParams[0]).toBe('100\\%done.%');
+  });
+
+  it('escapes underscores in actionPrefix before building LIKE pattern', async () => {
+    mockCountAndData(0, []);
+
+    await listAuditLog({ actionPrefix: 'my_action' });
+
+    const countParams: string[] = mockQuery.mock.calls[0][1];
+    expect(countParams[0]).toBe('my\\_action.%');
+  });
+
   it('applies resourceType filter', async () => {
     mockCountAndData(0, []);
 

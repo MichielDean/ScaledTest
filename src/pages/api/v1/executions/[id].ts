@@ -14,6 +14,7 @@ import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/bet
 import { hasRole } from '@/lib/roles';
 import { getExecutionDetail, cancelExecution } from '@/lib/executions';
 import { isValidUuid } from '@/lib/validation';
+import { appendAuditLog, AuditAction } from '@/lib/auditLog';
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
@@ -58,6 +59,22 @@ export default createBetterAuthApi({
       if (execution === null) {
         return res.status(404).json({ success: false, error: 'Execution not found' });
       }
+
+      // Append-only audit log — fire-and-forget; never blocks the response.
+      void appendAuditLog({
+        actorId: req.user?.id ?? null,
+        actorEmail: req.user?.email ?? null,
+        action: AuditAction.EXECUTION_CANCELLED,
+        resourceType: 'execution',
+        resourceId: id,
+        teamId: execution.teamId,
+        metadata: { previousStatus: execution.status },
+        ipAddress:
+          (req.headers['x-forwarded-for'] as string | undefined) ??
+          req.socket?.remoteAddress ??
+          null,
+      });
+
       return res.json({ success: true, data: execution });
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('Cannot cancel execution in status:')) {

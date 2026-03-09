@@ -168,7 +168,13 @@ export async function listAuditLog(options: ListAuditLogOptions = {}): Promise<L
   if (actionPrefix) {
     // Match "execution" -> "execution.%" to catch all execution.* events.
     // Also match exact action if it already contains a dot.
-    params.push(`${actionPrefix.replace(/%/g, '\\%').replace(/_/g, '\\_')}.%`);
+    // Escape backslashes first, then LIKE special characters (% and _),
+    // so that a backslash in the input does not corrupt the escape sequence.
+    const escapedPrefix = actionPrefix
+      .replace(/\\/g, '\\\\')
+      .replace(/%/g, '\\%')
+      .replace(/_/g, '\\_');
+    params.push(`${escapedPrefix}.%`);
     params.push(actionPrefix);
     conditions.push(
       `(action LIKE $${params.length - 1} ESCAPE '\\' OR action = $${params.length})`
