@@ -642,6 +642,44 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
+  it('logs CRITICAL and still unclaims when deleteUser is unavailable and role assignment fails', async () => {
+    // Simulates the case where authAdminApi.deleteUser is absent (optional on the interface).
+    // The handler must: log CRITICAL, skip deleteUser, still unclaim, return 500.
+    const { authAdminApi: mockAuthAdminApiModule } = jest.requireMock('@/lib/auth') as {
+      authAdminApi: {
+        createUser: jest.Mock;
+        updateUser: jest.Mock;
+        deleteUser: jest.Mock | undefined;
+      };
+    };
+    const originalDeleteUser = mockAuthAdminApiModule.deleteUser;
+    mockAuthAdminApiModule.deleteUser = undefined as unknown as jest.Mock;
+
+    const inv = makeInvitation();
+    mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
+    mockCreateUser.mockResolvedValueOnce({
+      user: { id: 'new-user-id', email: inv.email, name: 'Test User' },
+    });
+    mockUpdateUser.mockRejectedValueOnce(new Error('role assignment failed'));
+    mockUnclaimInvitation.mockResolvedValueOnce(undefined);
+
+    const req = makeReq(
+      'POST',
+      { name: 'Test User', password: 'SecurePass1!', email: inv.email },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    // deleteUser was absent — orphaned user path — but invitation must still be unclaimed
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+
+    // Restore
+    mockAuthAdminApiModule.deleteUser = originalDeleteUser;
+  });
+
   it('returns 500 and does not touch DB if authAdminApi.createUser or updateUser is not available', async () => {
     // Simulate a misconfigured Better Auth admin plugin (createUser not available).
     // The guard fires BEFORE any DB side effects — no claim, no createUser, no orphan user.
