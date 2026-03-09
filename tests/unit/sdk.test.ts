@@ -80,6 +80,19 @@ describe('ScaledTestClient — constructor', () => {
     expect(() => new ScaledTestClient({ baseUrl: 'http://localhost:3000', token: '' })).toThrow();
   });
 
+  it('throws if baseUrl is not a valid URL (missing scheme)', () => {
+    // 'localhost:3000' parses as scheme=localhost: which would silently misbehave
+    expect(() => new ScaledTestClient({ baseUrl: 'localhost:3000', token: 'sct_test' })).toThrow(
+      /must use http or https scheme/i
+    );
+  });
+
+  it('throws if baseUrl is not a valid URL (garbage string)', () => {
+    expect(() => new ScaledTestClient({ baseUrl: 'not-a-url', token: 'sct_test' })).toThrow(
+      /not a valid URL/i
+    );
+  });
+
   it('constructs without error given valid options', () => {
     expect(
       () => new ScaledTestClient({ baseUrl: 'http://localhost:3000', token: 'sct_abc' })
@@ -191,6 +204,21 @@ describe('ScaledTestClient.uploadReport()', () => {
     await expect(client.uploadReport({ report: MINIMAL_CTRF_REPORT })).rejects.toThrow(
       ScaledTestError
     );
+  });
+
+  it('throws ScaledTestError with HTTP <status> message when error body is not JSON (e.g. 502 from proxy)', async () => {
+    // Simulates an nginx/CDN 502 or 503 that returns an HTML error page instead of JSON.
+    // The request() fallback catches the json() parse failure and falls back to "HTTP <status>".
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 502,
+      json: jest.fn().mockRejectedValue(new SyntaxError('Unexpected token < in JSON')),
+      text: jest.fn().mockResolvedValue('<html><body>Bad Gateway</body></html>'),
+    } as unknown as Response);
+    const err = await client.uploadReport({ report: MINIMAL_CTRF_REPORT }).catch(e => e);
+    expect(err).toBeInstanceOf(ScaledTestError);
+    expect((err as ScaledTestError).status).toBe(502);
+    expect((err as ScaledTestError).message).toBe('HTTP 502');
   });
 
   it('throws on network error (fetch throws)', async () => {
@@ -464,12 +492,26 @@ describe('ScaledTestClient.createExecution()', () => {
     expect(result.id).toBe('exec-2');
   });
 
-  it('throws ScaledTestError on 400 (validation failure)', async () => {
+  it('throws if dockerImage is empty (pre-validation, no fetch)', async () => {
+    await expect(
+      client.createExecution({ dockerImage: '', testCommand: 'npm test' })
+    ).rejects.toThrow(/dockerImage is required/i);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('throws if testCommand is empty (pre-validation, no fetch)', async () => {
+    await expect(
+      client.createExecution({ dockerImage: 'node:20', testCommand: '' })
+    ).rejects.toThrow(/testCommand is required/i);
+    expect(mockFetch).not.toHaveBeenCalled();
+  });
+
+  it('throws ScaledTestError on 400 from server (e.g. additional server-side validation)', async () => {
     mockFetch.mockResolvedValueOnce(
       makeErrorResponse({ success: false, error: 'Validation failed' }, 400)
     );
     await expect(
-      client.createExecution({ dockerImage: '', testCommand: 'npm test' })
+      client.createExecution({ dockerImage: 'node:20', testCommand: 'npm test' })
     ).rejects.toThrow(ScaledTestError);
   });
 });

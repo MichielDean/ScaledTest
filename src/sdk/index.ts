@@ -165,6 +165,26 @@ export class ScaledTestClient {
     if (!options.token || options.token.trim() === '') {
       throw new Error('ScaledTestClient: token is required and must not be empty');
     }
+    // Validate baseUrl is parseable and has an http/https scheme.
+    // buildUrl() calls `new URL(this.baseUrl + path)` so a bad baseUrl would throw
+    // a confusing TypeError deep inside a method call; fail fast here instead.
+    // We also require http/https: 'localhost:3000' parses as scheme=localhost: which
+    // would silently misbehave when paths are appended.
+    let parsedUrl: URL;
+    try {
+      parsedUrl = new URL(options.baseUrl);
+    } catch {
+      throw new Error(
+        `ScaledTestClient: baseUrl is not a valid URL (${options.baseUrl}). ` +
+          'Ensure it includes a scheme, e.g. https://api.example.com'
+      );
+    }
+    if (parsedUrl.protocol !== 'http:' && parsedUrl.protocol !== 'https:') {
+      throw new Error(
+        `ScaledTestClient: baseUrl must use http or https scheme (got ${parsedUrl.protocol}). ` +
+          'Example: https://api.example.com'
+      );
+    }
     // Strip trailing slash to avoid double-slash in URLs
     this.baseUrl = options.baseUrl.replace(/\/+$/, '');
     this.token = options.token;
@@ -330,6 +350,12 @@ export class ScaledTestClient {
    * POST /api/v1/executions
    */
   async createExecution(options: CreateExecutionOptions): Promise<ExecutionRecord> {
+    if (!options.dockerImage || options.dockerImage.trim() === '') {
+      throw new Error('createExecution: dockerImage is required and must not be empty');
+    }
+    if (!options.testCommand || options.testCommand.trim() === '') {
+      throw new Error('createExecution: testCommand is required and must not be empty');
+    }
     const url = this.buildUrl('/api/v1/executions');
     const body = await this.request<{ success: true; data: ExecutionRecord }>(url, {
       method: 'POST',
