@@ -301,7 +301,7 @@ export async function updateExecutionStatus(
 
 export interface CancelExecutionResult {
   execution: TestExecution;
-  /** The status the execution had before cancellation — 'queued' in this implementation. */
+  /** The actual status the execution had before cancellation (e.g. 'queued' or 'running'). */
   previousStatus: ExecutionStatus;
 }
 
@@ -312,13 +312,18 @@ export async function cancelExecution(id: string): Promise<CancelExecutionResult
     client = await pool.connect();
 
     // Atomic compare-and-swap: only cancel if currently 'queued'.
-    // A separate read+check would have a TOCTOU race — two concurrent cancellations
-    // could both pass the check. Single UPDATE with WHERE status='queued' is atomic.
+    // Uses a CTE to capture the previous status before the UPDATE so the audit log
+    // records what actually happened rather than hardcoding 'queued'.
+    // When PR #65 (z8c) widens the WHERE clause to IN ('queued', 'running'), the
+    // previous_status column will correctly reflect whichever state was cancelled.
     const result = await client.query(
-      `UPDATE test_executions
+      `WITH prev AS (
+         SELECT status FROM test_executions WHERE id = $1
+       )
+       UPDATE test_executions
        SET status = 'cancelled', updated_at = now()
        WHERE id = $1 AND status = 'queued'
-       RETURNING *`,
+       RETURNING *, (SELECT status FROM prev) AS previous_status`,
       [id]
     );
 
@@ -332,7 +337,10 @@ export async function cancelExecution(id: string): Promise<CancelExecutionResult
       );
     }
 
-    return { execution: rowToExecution(result.rows[0] as Record<string, unknown>), previousStatus: 'queued' };
+    return {
+      execution: rowToExecution(result.rows[0] as Record<string, unknown>),
+      previousStatus: (result.rows[0] as Record<string, unknown>).previous_status as ExecutionStatus,
+    };
   } catch (error) {
     // Re-throw business logic errors as-is; wrap DB errors
     if (error instanceof Error && error.message.startsWith('Cannot cancel')) throw error;

@@ -199,24 +199,32 @@ describe('updateExecutionStatus', () => {
 });
 
 describe('cancelExecution', () => {
-  it('cancels a queued execution and returns { execution, previousStatus: "queued" }', async () => {
-    const cancelledRow = { ...fakeRow, status: 'cancelled' };
+  it('cancels a queued execution and returns { execution, previousStatus } from CTE', async () => {
+    // The CTE returns previous_status alongside the updated row so we don't hardcode 'queued'.
+    // Mock includes both the post-update fields and the CTE-captured previous_status.
+    const cancelledRow = { ...fakeRow, status: 'cancelled', previous_status: 'queued' };
     const client = makeClient([cancelledRow]);
-    // First query: UPDATE ... WHERE status='queued' RETURNING * — returns the cancelled row
+    // Single query: CTE captures old status, UPDATE sets new status, RETURNING * includes both
     client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
     const result = await cancelExecution('abc-123');
     expect(result).not.toBeNull();
     expect(result!.execution.status).toBe('cancelled');
-    // previousStatus must be 'queued' — not 'cancelled' (the post-update status)
+    // previousStatus must be 'queued' (the CTE-captured pre-update status) — not 'cancelled'
     expect(result!.previousStatus).toBe('queued');
 
-    // Verify we only made ONE DB call (atomic CAS, no separate read)
+    // Verify we only made ONE DB call (CTE + UPDATE in a single round-trip)
     expect(client.query).toHaveBeenCalledTimes(1);
     const sql = (client.query.mock.calls[0] as [string])[0].toLowerCase();
+    // CTE captures old status
+    expect(sql).toContain('with prev as');
+    expect(sql).toContain('select status from test_executions');
+    // UPDATE sets new status
     expect(sql).toContain("status = 'cancelled'");
     expect(sql).toContain("status = 'queued'");
+    // Returns the CTE column alongside the updated row
+    expect(sql).toContain('previous_status');
   });
 
   it('returns null when execution not found', async () => {

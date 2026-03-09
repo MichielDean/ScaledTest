@@ -8,16 +8,7 @@ import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/bet
 import { hasRole } from '@/lib/roles';
 import { createExecution, listExecutions, type ExecutionStatus } from '@/lib/executions';
 import { appendAuditLog, AuditAction } from '@/lib/auditLog';
-
-/**
- * Normalize x-forwarded-for: it can be a string (possibly comma-separated for proxy chains)
- * or a string array (when Node/Next.js dedups repeated headers). Always return a single IP.
- */
-function normalizeIp(header: string | string[] | undefined, fallback: string | undefined): string | null {
-  if (!header) return fallback ?? null;
-  const raw = Array.isArray(header) ? header[0] : header;
-  return raw.split(',')[0].trim() || fallback || null;
-}
+import { normalizeIp } from '@/lib/requestUtils';
 
 // Regex: docker image names — no shell injection
 const DOCKER_IMAGE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$/;
