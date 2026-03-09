@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { createExecution, listExecutions, type ExecutionStatus } from '@/lib/executions';
+import { appendAuditLog, AuditAction } from '@/lib/auditLog';
 
 // Regex: docker image names — no shell injection
 const DOCKER_IMAGE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$/;
@@ -97,6 +98,21 @@ export default createBetterAuthApi({
         resourceLimits,
         requestedBy: req.user.id,
         teamId,
+      });
+
+      // Append-only audit log — fire-and-forget; never blocks the response.
+      void appendAuditLog({
+        actorId: req.user.id,
+        actorEmail: req.user.email,
+        action: AuditAction.EXECUTION_CREATED,
+        resourceType: 'execution',
+        resourceId: execution.id,
+        teamId: teamId ?? null,
+        metadata: { dockerImage, parallelism },
+        ipAddress:
+          (req.headers['x-forwarded-for'] as string | undefined) ??
+          req.socket?.remoteAddress ??
+          null,
       });
 
       return res.status(201).json({ success: true, data: execution });

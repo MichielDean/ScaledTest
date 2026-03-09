@@ -14,6 +14,7 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { auth } from '@/lib/auth';
 import { apiLogger } from '@/logging/logger';
 import { validateUuid } from '@/lib/validation';
+import { appendAuditLog, AuditAction } from '@/lib/auditLog';
 
 // The Better Auth admin plugin mounts setRole and listUsers on auth.api.
 // TypeScript's generated InferAPI type doesn't include admin plugin methods,
@@ -124,6 +125,17 @@ async function handleAssignRole(
       { userId, role, assignedBy: requesterId },
       'Role assigned successfully via Better Auth admin API'
     );
+
+    // Append-only audit log — fire-and-forget; never blocks the response.
+    void appendAuditLog({
+      actorId: requesterId,
+      actorEmail: null,
+      action: AuditAction.ADMIN_ROLE_CHANGED,
+      resourceType: 'user',
+      resourceId: userId,
+      teamId: null,
+      metadata: { role },
+    });
 
     return res
       .status(200)
