@@ -1,7 +1,9 @@
 import { PoolClient } from 'pg';
 import { getTimescalePool, getLinkedReportIds } from './timescaledb';
 import { dbLogger as logger, logError } from '../logging/logger';
-import { deleteKubernetesJob } from './kubernetes';
+// Note: kubernetes.ts imports from this module (executions.ts), so we must NOT import
+// from kubernetes.ts here — that would create a circular dependency.
+// The K8s job deletion after cancellation is handled by the API handler layer ([id].ts).
 
 export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -329,25 +331,10 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
 
     const cancelled = rowToExecution(result.rows[0] as Record<string, unknown>);
 
-    // Best-effort: delete the Kubernetes Job if one was assigned.
-    // DB is already updated to 'cancelled' — even if K8s delete fails, the execution
-    // is cancelled from the system's perspective. The K8s Job has a ttlSecondsAfterFinished
-    // and will be reaped by the cluster GC regardless.
-    if (cancelled.kubernetesJobName) {
-      try {
-        await deleteKubernetesJob(cancelled.kubernetesJobName);
-      } catch (k8sError) {
-        logError(
-          logger,
-          'Failed to delete Kubernetes Job during cancellation (best-effort)',
-          k8sError,
-          {
-            id,
-            kubernetesJobName: cancelled.kubernetesJobName,
-          }
-        );
-      }
-    }
+    // DB transaction complete — release the client now so it's not held open
+    // while we wait for the K8s API call in the layer above.
+    client.release();
+    client = null;
 
     return cancelled;
   } catch (error) {

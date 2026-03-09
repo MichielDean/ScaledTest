@@ -13,7 +13,9 @@ import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { getExecutionDetail, cancelExecution } from '@/lib/executions';
+import { deleteKubernetesJob } from '@/lib/kubernetes';
 import { isValidUuid } from '@/lib/validation';
+import { dbLogger as logger, logError } from '@/logging/logger';
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
@@ -58,6 +60,25 @@ export default createBetterAuthApi({
       if (execution === null) {
         return res.status(404).json({ success: false, error: 'Execution not found' });
       }
+
+      // Best-effort: delete the Kubernetes Job if one was assigned.
+      // DB is already updated to 'cancelled' before we reach here — even if K8s
+      // delete fails, the execution is cancelled from the system's perspective.
+      // TTL (ttlSecondsAfterFinished) will reap the Job once it finishes, but
+      // an explicit delete here avoids leaving running Jobs for cancelled executions.
+      if (execution.kubernetesJobName) {
+        try {
+          await deleteKubernetesJob(execution.kubernetesJobName);
+        } catch (k8sError) {
+          logError(
+            logger,
+            'Failed to delete Kubernetes Job during cancellation (best-effort)',
+            k8sError,
+            { id, kubernetesJobName: execution.kubernetesJobName }
+          );
+        }
+      }
+
       return res.json({ success: true, data: execution });
     } catch (err) {
       if (err instanceof Error && err.message.startsWith('Cannot cancel execution in status:')) {

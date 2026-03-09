@@ -36,6 +36,13 @@ jest.mock('../../src/lib/executions', () => {
   };
 });
 
+// Mock kubernetes so API handler can call deleteKubernetesJob without a real cluster
+const mockDeleteKubernetesJob = jest.fn().mockResolvedValue(undefined);
+jest.mock('../../src/lib/kubernetes', () => ({
+  ...jest.requireActual('../../src/lib/kubernetes'),
+  deleteKubernetesJob: mockDeleteKubernetesJob,
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -457,6 +464,59 @@ describe('DELETE /api/v1/executions/:id', () => {
 
     // Should use first element VALID_UUID, not fail with 400
     expect(mockCancelExecution).toHaveBeenCalledWith(VALID_UUID);
+    expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
+  });
+
+  // ---- K8s Job deletion (best-effort) ----
+
+  it('calls deleteKubernetesJob when cancelled execution has a kubernetesJobName', async () => {
+    setupAuthUser('owner');
+    const cancelledExecution = {
+      id: VALID_UUID,
+      status: 'cancelled',
+      kubernetesJobName: 'scaledtest-abc12345-1234567890',
+    };
+    mockCancelExecution.mockResolvedValue(cancelledExecution);
+    mockDeleteKubernetesJob.mockResolvedValueOnce(undefined);
+
+    const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
+    await handler(req, res);
+
+    expect(mockDeleteKubernetesJob).toHaveBeenCalledWith('scaledtest-abc12345-1234567890');
+    expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
+  });
+
+  it('does NOT call deleteKubernetesJob when kubernetesJobName is null', async () => {
+    setupAuthUser('owner');
+    const cancelledExecution = {
+      id: VALID_UUID,
+      status: 'cancelled',
+      kubernetesJobName: null,
+    };
+    mockCancelExecution.mockResolvedValue(cancelledExecution);
+
+    const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
+    await handler(req, res);
+
+    expect(mockDeleteKubernetesJob).not.toHaveBeenCalled();
+    expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
+  });
+
+  it('still returns 200 with cancelled execution when deleteKubernetesJob throws (best-effort)', async () => {
+    setupAuthUser('owner');
+    const cancelledExecution = {
+      id: VALID_UUID,
+      status: 'cancelled',
+      kubernetesJobName: 'scaledtest-abc12345-9999',
+    };
+    mockCancelExecution.mockResolvedValue(cancelledExecution);
+    mockDeleteKubernetesJob.mockRejectedValueOnce(new Error('K8s API unreachable'));
+
+    const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
+    await handler(req, res);
+
+    // K8s failure is best-effort — should not cause a 500
+    expect(mockDeleteKubernetesJob).toHaveBeenCalledWith('scaledtest-abc12345-9999');
     expect(mockJson).toHaveBeenCalledWith({ success: true, data: cancelledExecution });
   });
 });
