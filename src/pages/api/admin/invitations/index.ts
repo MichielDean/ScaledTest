@@ -42,11 +42,16 @@ function safeInvitation(inv: Invitation): SafeInvitation {
   return safe;
 }
 
-/** Basic RFC 5322-ish email validation. */
+/** Basic email validation — linear-time, no backtracking risk. */
 function isValidEmail(email: unknown): email is string {
-  if (typeof email !== 'string' || email.length === 0) return false;
-  // Simple check: contains @ with at least one char on each side, dot after @
-  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+  if (typeof email !== 'string') return false;
+  // Locate '@' — must appear exactly once, not at the start or end.
+  const atIdx = email.indexOf('@');
+  if (atIdx <= 0 || atIdx === email.length - 1 || atIdx !== email.lastIndexOf('@')) return false;
+  const domain = email.slice(atIdx + 1);
+  // Domain must contain at least one '.' that isn't at the start or end.
+  const dotIdx = domain.indexOf('.');
+  return dotIdx > 0 && dotIdx < domain.length - 1;
 }
 
 // ── Handlers ──────────────────────────────────────────────────────────────────
