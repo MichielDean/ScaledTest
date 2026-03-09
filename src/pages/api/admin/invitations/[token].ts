@@ -229,12 +229,17 @@ async function handlePost(
   // from registering as attacker@evil.com and receiving alice's role.
   if (normaliseEmail(emailInput) !== inv.email) {
     // Unclaim so the rightful invitee can still use the token.
-    await unclaimInvitation(inv.id).catch(e =>
+    // If unclaim fails the invitation is stuck — return 500 so the admin knows to re-issue it.
+    try {
+      await unclaimInvitation(inv.id);
+    } catch (unclaimError) {
       reqLogger.error(
-        { error: e, invitationId: inv!.id },
-        'Failed to unclaim invitation after email mismatch'
-      )
-    );
+        { error: unclaimError, invitationId: inv.id },
+        'CRITICAL: failed to unclaim invitation after email mismatch — invitation is stuck; re-issue required'
+      );
+      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      return;
+    }
     res.status(400).json({ error: 'Email address does not match the invitation' });
     return;
   }
@@ -250,12 +255,17 @@ async function handlePost(
     const message = signUpResult.error?.message ?? 'Registration failed';
     reqLogger.warn({ email: inv.email, error: message }, 'Sign-up failed during invitation accept');
     // Unclaim so the invitation can be retried after the signup issue is resolved.
-    await unclaimInvitation(inv.id).catch(e =>
+    // If unclaim fails the invitation is stuck — return 500 so the admin knows to re-issue it.
+    try {
+      await unclaimInvitation(inv.id);
+    } catch (unclaimError) {
       reqLogger.error(
-        { error: e, invitationId: inv!.id },
-        'Failed to unclaim invitation after sign-up failure'
-      )
-    );
+        { error: unclaimError, invitationId: inv.id },
+        'CRITICAL: failed to unclaim invitation after sign-up failure — invitation is stuck; re-issue required'
+      );
+      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      return;
+    }
     res.status(400).json({ error: message });
     return;
   }
@@ -280,12 +290,17 @@ async function handlePost(
         'Rollback failed: could not delete user'
       );
     }
-    await unclaimInvitation(inv.id).catch(e =>
+    // If unclaim fails the invitation is stuck — return a distinct message so the admin knows.
+    try {
+      await unclaimInvitation(inv.id);
+    } catch (unclaimError) {
       reqLogger.error(
-        { error: e, invitationId: inv!.id },
-        'Failed to unclaim invitation after role assignment failure'
-      )
-    );
+        { error: unclaimError, invitationId: inv.id },
+        'CRITICAL: failed to unclaim invitation after role assignment failure — invitation is stuck; re-issue required'
+      );
+      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      return;
+    }
     res.status(500).json({ error: 'Failed to assign role. Please try again.' });
     return;
   }

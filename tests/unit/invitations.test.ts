@@ -692,6 +692,69 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
     expect(res.status).toHaveBeenCalledWith(405);
   });
+
+  it('returns 500 when email mismatch AND unclaimInvitation throws (stuck invitation)', async () => {
+    const inv = makeInvitation();
+    mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
+    mockUnclaimInvitation.mockRejectedValueOnce(new Error('DB down'));
+
+    const req = makeReq(
+      'POST',
+      { name: 'Bob', password: 'StrongPass1!', email: 'wrong@example.com' },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    // Unclaim was attempted but failed — we must return 500, not 400
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('returns 500 when signUp fails AND unclaimInvitation throws (stuck invitation)', async () => {
+    const inv = makeInvitation();
+    mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
+    mockSignUp.mockResolvedValueOnce({ error: { message: 'Email already in use' }, data: null });
+    mockUnclaimInvitation.mockRejectedValueOnce(new Error('DB timeout'));
+
+    const req = makeReq(
+      'POST',
+      { name: 'Alice', password: 'StrongPass1!', email: inv.email },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    // Unclaim was attempted but failed — must return 500, not 400
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('returns 500 with stuck-invitation message when role assignment fails AND unclaimInvitation throws', async () => {
+    const inv = makeInvitation();
+    mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
+    mockSignUp.mockResolvedValueOnce({
+      error: null,
+      data: { user: { id: 'new-user-id' } },
+    });
+    mockUpdateUser.mockRejectedValueOnce(new Error('Role assignment failed'));
+    mockDeleteUser.mockResolvedValueOnce(undefined);
+    mockUnclaimInvitation.mockRejectedValueOnce(new Error('DB down'));
+
+    const req = makeReq(
+      'POST',
+      { name: 'Charlie', password: 'StrongPass1!', email: inv.email },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    // Unclaim failed — must return 500 with re-issue message
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(res.status).toHaveBeenCalledWith(500);
+    const jsonCall = (res.json as jest.Mock).mock.calls[0][0];
+    expect(jsonCall.error).toMatch(/contact an administrator/i);
+  });
 });
 
 // ── DELETE /api/admin/invitations/[token] (revoke) ──────────────────────────
