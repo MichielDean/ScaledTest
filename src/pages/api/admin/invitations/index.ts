@@ -11,8 +11,11 @@
  */
 
 import { NextApiResponse } from 'next';
-import { BetterAuthenticatedRequest, BetterAuthMethodHandler } from '@/auth/betterAuthApi';
-import { createBetterAuthApi } from '@/auth/betterAuthApi';
+import {
+  BetterAuthenticatedRequest,
+  BetterAuthMethodHandler,
+  createBetterAuthApi,
+} from '@/auth/betterAuthApi';
 import { getRequestLogger } from '@/logging/logger';
 import {
   generateInviteToken,
@@ -37,8 +40,18 @@ type InviteRole = (typeof VALID_ROLES)[number];
 
 /** Strip tokenHash from an invitation before returning it to callers. */
 function safeInvitation(inv: Invitation): SafeInvitation {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { tokenHash: _omit, ...safe } = inv;
+  const safe: Omit<Invitation, 'tokenHash'> = {
+    id: inv.id,
+    email: inv.email,
+    role: inv.role,
+    tokenPrefix: inv.tokenPrefix,
+    invitedByUserId: inv.invitedByUserId,
+    teamId: inv.teamId,
+    expiresAt: inv.expiresAt,
+    acceptedAt: inv.acceptedAt,
+    revokedAt: inv.revokedAt,
+    createdAt: inv.createdAt,
+  };
   return safe;
 }
 
@@ -135,6 +148,15 @@ const handleGet: BetterAuthMethodHandler = async (
   reqLogger: ReturnType<typeof getRequestLogger>
 ) => {
   const teamId = req.query.teamId && typeof req.query.teamId === 'string' ? req.query.teamId : null;
+
+  // Validate teamId as UUID if provided — prevents unexpected Postgres cast errors
+  if (teamId !== null) {
+    try {
+      validateUuid(teamId, 'teamId');
+    } catch {
+      return res.status(400).json({ error: 'Invalid teamId: must be a valid UUID' });
+    }
+  }
 
   try {
     const invitations = await listInvitations(teamId);

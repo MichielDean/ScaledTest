@@ -12,7 +12,7 @@
  *   - Only the SHA-256 hash of the token is stored in the DB.
  *   - The raw token is returned to the caller exactly once (at creation).
  *   - tokenHash is never returned to any API consumer.
- *   - Invitations expire after INVITE_EXPIRY_DAYS (default 7 days).
+ *   - Invitations expire after INVITE_EXPIRY_DAYS (default 3 days, max 7).
  *   - Once accepted or revoked an invitation is permanently invalid (410 Gone).
  *   - Emails are normalised to lowercase before storage and comparison.
  *   - Acceptance is gated on an atomic conditional UPDATE to prevent TOCTOU races.
@@ -105,7 +105,8 @@ export function normaliseEmail(email: string): string {
  */
 function computeExpiryDate(): Date {
   const raw = parseInt(process.env.INVITE_EXPIRY_DAYS ?? String(DEFAULT_EXPIRY_DAYS), 10);
-  const days = Number.isFinite(raw) && raw > 0 ? Math.min(raw, MAX_EXPIRY_DAYS) : DEFAULT_EXPIRY_DAYS;
+  const days =
+    Number.isFinite(raw) && raw > 0 ? Math.min(raw, MAX_EXPIRY_DAYS) : DEFAULT_EXPIRY_DAYS;
   const expiry = new Date();
   expiry.setDate(expiry.getDate() + days);
   return expiry;
@@ -270,8 +271,8 @@ export async function getInvitationByToken(rawToken: string): Promise<Invitation
  * (already accepted, revoked, expired, or not found).
  *
  * ⚠️ The caller must call markInvitationAccepted() after user creation succeeds.
- *    This function only locks the invitation — it does NOT set accepted_at.
- *    accepted_at is set in a second UPDATE after user creation to allow rollback.
+ *    This function locks the invitation by setting accepted_at = NOW() as a sentinel.
+ *    markInvitationAccepted() then re-sets accepted_at to the real acceptance time.
  */
 export async function claimInvitationForAcceptance(rawToken: string): Promise<Invitation | null> {
   const pool = getInvitationPool();
@@ -331,22 +332,24 @@ export async function listInvitations(teamId?: string | null): Promise<Invitatio
  * Revoke an invitation by its raw token.
  * Sets revoked_at to NOW() so the token is permanently invalidated.
  *
- * Returns true if the invitation was found and updated, false otherwise.
+ * Returns the revoked invitation's UUID on success, or null if the invitation
+ * was not found, already revoked, or already accepted.
  */
-export async function revokeInvitation(rawToken: string): Promise<boolean> {
+export async function revokeInvitation(rawToken: string): Promise<string | null> {
   const pool = getInvitationPool();
   const hash = hashInviteToken(rawToken);
 
-  const result = await pool.query(
+  const result = await pool.query<{ id: string }>(
     `UPDATE invitations
      SET revoked_at = NOW()
      WHERE token_hash = $1
        AND revoked_at IS NULL
-       AND accepted_at IS NULL`,
+       AND accepted_at IS NULL
+     RETURNING id`,
     [hash]
   );
 
-  return (result.rowCount ?? 0) > 0;
+  return result.rows.length > 0 ? result.rows[0].id : null;
 }
 
 /**

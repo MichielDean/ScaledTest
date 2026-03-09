@@ -9,7 +9,7 @@
  *   Body: { name: string; password: string; email: string }
  *   - email must match the invited email (case-insensitive)
  *   - Atomically claims the invitation via conditional UPDATE (TOCTOU guard)
- *   - Unclams on any failure so the invitation can be retried
+ *   - Unclaims on any failure so the invitation can be retried
  *   Returns 201 { message: string }
  *   Returns 400 if validation fails or email mismatch
  *   Returns 410 if invitation not found / expired / already accepted / revoked
@@ -176,7 +176,11 @@ async function handlePost(
     return;
   }
 
-  const { name, password, email: emailInput } = req.body as {
+  const {
+    name,
+    password,
+    email: emailInput,
+  } = req.body as {
     name?: unknown;
     password?: unknown;
     email?: unknown;
@@ -268,15 +272,32 @@ async function handlePost(
 
   // Assign role.
   // On failure: delete the user AND unclaim the invitation for retry.
+  // Guard explicitly: if authAdminApi is not available, we cannot assign the role.
+  // Failing loudly here is correct — creating a user without a role is silent data corruption.
+  if (!authAdminApi?.updateUser) {
+    reqLogger.error(
+      { invitationId: inv.id },
+      'authAdminApi.updateUser not available — cannot assign role. Rolling back.'
+    );
+    await unclaimInvitation(inv.id).catch(e =>
+      reqLogger.error(
+        { error: e, invitationId: inv.id },
+        'Failed to unclaim invitation after authAdminApi unavailable'
+      )
+    );
+    res.status(500).json({ error: 'Server configuration error. Please contact an administrator.' });
+    return;
+  }
+
   try {
-    await authAdminApi?.updateUser?.({ userId: newUserId, role: inv.role });
+    await authAdminApi.updateUser({ userId: newUserId, role: inv.role });
   } catch (roleError) {
     reqLogger.error(
       { error: roleError, userId: newUserId, role: inv.role },
       'Role assignment failed — rolling back user creation and unclaiming invitation'
     );
     try {
-      await authAdminApi?.deleteUser?.({ userId: newUserId });
+      await authAdminApi.deleteUser?.({ userId: newUserId });
     } catch (deleteError) {
       reqLogger.error(
         { error: deleteError, userId: newUserId },
@@ -305,7 +326,10 @@ async function handlePost(
     );
   }
 
-  reqLogger.info({ userId: newUserId, invitationId: inv.id, role: inv.role }, 'Invitation accepted');
+  reqLogger.info(
+    { userId: newUserId, invitationId: inv.id, role: inv.role },
+    'Invitation accepted'
+  );
   res.status(201).json({ message: 'Account created successfully' });
 }
 
@@ -332,20 +356,20 @@ async function handleDelete(
     return;
   }
 
-  let revoked: boolean;
+  let revokedId: string | null;
   try {
-    revoked = await revokeInvitation(rawToken);
+    revokedId = await revokeInvitation(rawToken);
   } catch (error) {
     reqLogger.error({ error }, 'DB error revoking invitation');
     res.status(500).json({ error: 'Failed to revoke invitation' });
     return;
   }
 
-  if (!revoked) {
+  if (!revokedId) {
     res.status(404).json({ error: 'Invitation not found or already used/revoked' });
     return;
   }
 
-  reqLogger.info({ invitationId: rawToken }, 'Invitation revoked');
+  reqLogger.info({ invitationId: revokedId }, 'Invitation revoked');
   res.status(200).json({ message: 'Invitation revoked' });
 }

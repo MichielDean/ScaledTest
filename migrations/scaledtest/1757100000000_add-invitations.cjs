@@ -63,7 +63,7 @@ exports.up = pgm => {
       onDelete: 'SET NULL',
     },
     expires_at: {
-      // When the invitation link expires (default: 7 days from creation).
+      // When the invitation link expires (default: 3 days from creation, max: 7 days).
       type: 'timestamptz',
       notNull: true,
     },
