@@ -18,6 +18,13 @@
  * DELETE — Revoke invitation (maintainer or owner only).
  *   Returns 200 { message: string }
  *   Returns 404 if not found.
+ *
+ * Security note — raw token in URL path:
+ *   The token travels as a path param (/api/admin/invitations/:token).
+ *   This application uses pino without a request serializer; no framework
+ *   middleware logs req.url. This handler never logs the raw token or req.url.
+ *   Structured log fields use invitationId (UUID) only. HTTPS in transit is
+ *   assumed for production deployments.
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
