@@ -172,9 +172,7 @@ export async function listAuditLog(options: ListAuditLogOptions = {}): Promise<L
     // inputs, so there is no risk of injection or encoding bugs.
     params.push(`${actionPrefix}.`);
     params.push(actionPrefix);
-    conditions.push(
-      `(starts_with(action, $${params.length - 1}) OR action = $${params.length})`
-    );
+    conditions.push(`(starts_with(action, $${params.length - 1}) OR action = $${params.length})`);
   }
 
   if (resourceType) {

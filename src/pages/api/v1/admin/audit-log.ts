@@ -57,10 +57,14 @@ export default createBetterAuthApi(
       // Validate date parameters — invalid strings would cause PostgreSQL to throw a timestamptz
       // cast error and bubble up as an unhandled 500. Reject early with a clear 400 instead.
       if (dateFrom && isNaN(Date.parse(dateFrom))) {
-        return res.status(400).json({ success: false, error: 'Invalid dateFrom: expected ISO8601 date string' });
+        return res
+          .status(400)
+          .json({ success: false, error: 'Invalid dateFrom: expected ISO8601 date string' });
       }
       if (dateTo && isNaN(Date.parse(dateTo))) {
-        return res.status(400).json({ success: false, error: 'Invalid dateTo: expected ISO8601 date string' });
+        return res
+          .status(400)
+          .json({ success: false, error: 'Invalid dateTo: expected ISO8601 date string' });
       }
 
       const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
