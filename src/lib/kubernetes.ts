@@ -242,11 +242,16 @@ export async function deleteKubernetesJob(jobName: string): Promise<void> {
       config,
       'DELETE',
       `/apis/batch/v1/namespaces/${config.namespace}/jobs/${jobName}`,
-      { propagationPolicy: 'Foreground' }
+      // Background propagation: the API returns immediately and GC handles pod cleanup
+      // asynchronously. This keeps the HTTP response time short — consistent with the
+      // best-effort intent at the call site. Foreground would block until all pods
+      // terminate, potentially stalling the API handler for 30+ seconds.
+      { propagationPolicy: 'Background' }
     );
     logger.info({ jobName }, 'Kubernetes Job deleted');
   } catch (error) {
-    logError(logger, 'Failed to delete job', error, { jobName });
+    // Do NOT call logError here — the caller (API handler) owns error logging.
+    // Logging here would produce a duplicate entry for the same failure.
     throw error;
   }
 }
