@@ -95,11 +95,14 @@ exports.up = pgm => {
   // Do NOT add another createIndex — that would create a duplicate bloating every write.
 
   // Active invitations per email+team: prevent duplicate active invites.
-  // Partial (pending only) so accepted/revoked records don't interfere.
+  // Partial (pending + non-expired only) so accepted, revoked, and expired records don't block
+  // re-inviting the same email to the same team. Without the expires_at guard, an expired
+  // invitation would hold the unique slot indefinitely (both accepted_at and revoked_at are NULL
+  // on an expired invitation, so it would satisfy the old WHERE clause).
   pgm.sql(`
     CREATE UNIQUE INDEX invitations_active_per_email_team
       ON invitations (email, COALESCE(team_id, '00000000-0000-0000-0000-000000000000'::uuid))
-     WHERE accepted_at IS NULL AND revoked_at IS NULL
+     WHERE accepted_at IS NULL AND revoked_at IS NULL AND expires_at > NOW()
   `);
 
   // Support listing by team, inviter, and email.

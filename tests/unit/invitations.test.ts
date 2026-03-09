@@ -326,6 +326,20 @@ describe('POST /api/admin/invitations', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
+  it('returns 409 when an active invitation already exists for the email + team (unique_violation)', async () => {
+    // Simulates a PostgreSQL unique_violation on the partial index —
+    // i.e. an active (non-expired, non-accepted, non-revoked) invitation already exists.
+    mockGetSession.mockResolvedValue(ownerSession);
+    const pgError = Object.assign(new Error('duplicate key value'), { code: '23505' });
+    mockCreateInvitation.mockRejectedValue(pgError);
+    const req = makeReq('POST', { email: 'duplicate@example.com', role: 'readonly' });
+    const res = makeRes();
+    await indexHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+    expect(res.status).toHaveBeenCalledWith(409);
+    const jsonArg = (res.json as jest.Mock).mock.calls[0][0];
+    expect(jsonArg.error).toMatch(/active invitation already exists/i);
+  });
+
   it('does not expose the token hash in the response', async () => {
     mockGetSession.mockResolvedValue(ownerSession);
     const inv = makeInvitation();
@@ -628,11 +642,15 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-    it('returns 500 and does not touch DB if authAdminApi.createUser or updateUser is not available', async () => {
+  it('returns 500 and does not touch DB if authAdminApi.createUser or updateUser is not available', async () => {
     // Simulate a misconfigured Better Auth admin plugin (createUser not available).
     // The guard fires BEFORE any DB side effects — no claim, no createUser, no orphan user.
     const { authAdminApi: mockAuthAdminApiModule } = jest.requireMock('@/lib/auth') as {
-      authAdminApi: { createUser: jest.Mock | undefined; updateUser: jest.Mock | undefined; deleteUser: jest.Mock };
+      authAdminApi: {
+        createUser: jest.Mock | undefined;
+        updateUser: jest.Mock | undefined;
+        deleteUser: jest.Mock;
+      };
     };
     const originalCreateUser = mockAuthAdminApiModule.createUser;
     mockAuthAdminApiModule.createUser = undefined as unknown as jest.Mock;
