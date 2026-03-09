@@ -28,7 +28,8 @@
  */
 
 import { NextApiRequest, NextApiResponse } from 'next';
-import { auth, authAdminApi } from '@/lib/auth';
+import { authAdminApi } from '@/lib/auth';
+import { authenticateRequest } from '@/auth/betterAuthApi';
 import { getRequestLogger, logError } from '@/logging/logger';
 import {
   claimInvitationForAcceptance,
@@ -41,10 +42,8 @@ import {
   type Invitation,
 } from '@/lib/invitations';
 import { authClient } from '@/lib/auth-client';
-import type { RoleName } from '@/lib/auth-shared';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
 /** Safe public view of an invitation — no tokenHash, no internal fields. */
 interface PublicInvitation {
   id: string;
@@ -86,26 +85,7 @@ function publicInvitation(inv: Invitation): PublicInvitation {
   };
 }
 
-/** Determine the caller's role from the session (returns null if unauthenticated). */
-async function getCallerRole(req: NextApiRequest): Promise<RoleName | null> {
-  try {
-    const session = await auth.api.getSession({
-      headers: new Headers(req.headers as Record<string, string>),
-    });
-    if (!session?.user) return null;
-    return ((session.user as { role?: RoleName }).role as RoleName) ?? null;
-  } catch {
-    return null;
-  }
-}
-
-/** Returns true if the role is at least maintainer. */
-function isMaintainerOrAbove(role: RoleName | null): boolean {
-  return role === 'maintainer' || role === 'owner';
-}
-
 // ── Route handler ─────────────────────────────────────────────────────────────
-
 export default async function handler(req: NextApiRequest, res: NextApiResponse): Promise<void> {
   const reqLogger = getRequestLogger(req);
 
@@ -213,6 +193,18 @@ async function handlePost(
     return;
   }
 
+  // Fail fast if authAdminApi is not available — we cannot assign a role.
+  // This check must happen BEFORE any DB side effects (claim, signUp) to avoid
+  // creating orphan users or claimed-but-unfinishable invitations.
+  if (!authAdminApi?.updateUser) {
+    reqLogger.error(
+      {},
+      'authAdminApi.updateUser not available — cannot process invitation acceptance'
+    );
+    res.status(500).json({ error: 'Server configuration error. Please contact an administrator.' });
+    return;
+  }
+
   // Atomically claim the invitation.
   // This single UPDATE guards against TOCTOU races: only one concurrent request
   // can claim the invitation. Any subsequent request finds accepted_at IS NOT NULL
@@ -272,23 +264,7 @@ async function handlePost(
 
   // Assign role.
   // On failure: delete the user AND unclaim the invitation for retry.
-  // Guard explicitly: if authAdminApi is not available, we cannot assign the role.
-  // Failing loudly here is correct — creating a user without a role is silent data corruption.
-  if (!authAdminApi?.updateUser) {
-    reqLogger.error(
-      { invitationId: inv.id },
-      'authAdminApi.updateUser not available — cannot assign role. Rolling back.'
-    );
-    await unclaimInvitation(inv.id).catch(e =>
-      reqLogger.error(
-        { error: e, invitationId: inv.id },
-        'Failed to unclaim invitation after authAdminApi unavailable'
-      )
-    );
-    res.status(500).json({ error: 'Server configuration error. Please contact an administrator.' });
-    return;
-  }
-
+  // Note: authAdminApi availability was already checked before any side effects above.
   try {
     await authAdminApi.updateUser({ userId: newUserId, role: inv.role });
   } catch (roleError) {
@@ -340,12 +316,14 @@ async function handleDelete(
   res: NextApiResponse,
   reqLogger: ReturnType<typeof getRequestLogger>
 ): Promise<void> {
-  const callerRole = await getCallerRole(req);
-  if (!callerRole) {
+  // Use the shared authenticateRequest helper so that both session-cookie auth
+  // AND Bearer/API-token auth are supported — consistent with all other admin endpoints.
+  const caller = await authenticateRequest(req);
+  if (!caller) {
     res.status(401).json({ error: 'Authentication required' });
     return;
   }
-  if (!isMaintainerOrAbove(callerRole)) {
+  if (caller.role !== 'maintainer' && caller.role !== 'owner') {
     res.status(403).json({ error: 'Insufficient permissions. Maintainer or owner required.' });
     return;
   }
