@@ -41,7 +41,6 @@ import {
   validatePassword,
   type Invitation,
 } from '@/lib/invitations';
-import { authClient } from '@/lib/auth-client';
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 /** Safe public view of an invitation — no tokenHash, no internal fields. */
@@ -193,13 +192,13 @@ async function handlePost(
     return;
   }
 
-  // Fail fast if authAdminApi is not available — we cannot assign a role.
-  // This check must happen BEFORE any DB side effects (claim, signUp) to avoid
+  // Fail fast if authAdminApi is not available — we cannot create or assign a role to the user.
+  // This check must happen BEFORE any DB side effects (claim, createUser) to avoid
   // creating orphan users or claimed-but-unfinishable invitations.
-  if (!authAdminApi?.updateUser) {
+  if (!authAdminApi?.createUser || !authAdminApi?.updateUser) {
     reqLogger.error(
       {},
-      'authAdminApi.updateUser not available — cannot process invitation acceptance'
+      'authAdminApi.createUser or authAdminApi.updateUser not available — cannot process invitation acceptance'
     );
     res.status(500).json({ error: 'Server configuration error. Please contact an administrator.' });
     return;
@@ -246,16 +245,27 @@ async function handlePost(
     return;
   }
 
-  // Create user account via Better Auth using the canonical invited email (from DB).
-  const signUpResult = await authClient.signUp.email({
-    email: inv.email,
-    password,
-    name: name.trim(),
-  });
-
-  if (signUpResult.error || !signUpResult.data?.user) {
-    const message = signUpResult.error?.message ?? 'Registration failed';
-    reqLogger.warn({ email: inv.email, error: message }, 'Sign-up failed during invitation accept');
+  // Create user account via the Better Auth admin API.
+  // Using authAdminApi.createUser (server-side) instead of authClient.signUp.email because:
+  // 1. Invitation acceptance inherently proves email ownership — no verification email needed.
+  // 2. authClient.signUp.email goes through the standard signup flow which sends a verification
+  //    email and may block login until the user verifies — defeating the purpose of invitations.
+  // 3. The admin API sets emailVerified: true via the data field, matching the invitation intent.
+  let createUserResult: { user: { id: string; email: string; name: string } };
+  try {
+    createUserResult = await authAdminApi.createUser({
+      body: {
+        email: inv.email,
+        password,
+        name: name.trim(),
+        role: inv.role,
+        data: { emailVerified: true },
+      },
+    });
+  } catch (signUpError) {
+    const message =
+      signUpError instanceof Error ? signUpError.message : 'Registration failed';
+    reqLogger.warn({ email: inv.email, error: message }, 'User creation failed during invitation accept');
     // Unclaim so the invitation can be retried after the signup issue is resolved.
     // If unclaim fails the invitation is stuck — return 500 so the admin knows to re-issue it.
     try {
@@ -274,11 +284,12 @@ async function handlePost(
     return;
   }
 
-  const newUserId = signUpResult.data.user.id;
+  const newUserId = createUserResult.user.id;
 
-  // Assign role.
+  // The role was already set by createUser above. This updateUser call is a belt-and-suspenders
+  // check to ensure the role is correctly persisted via the admin API's role-setting path.
   // On failure: delete the user AND unclaim the invitation for retry.
-  // Note: authAdminApi availability was already checked before any side effects above.
+  // Note: authAdminApi availability (createUser + updateUser) was already checked above.
   try {
     await authAdminApi.updateUser({ userId: newUserId, role: inv.role });
   } catch (roleError) {
@@ -286,12 +297,21 @@ async function handlePost(
       { error: roleError, userId: newUserId, role: inv.role },
       'Role assignment failed — rolling back user creation and unclaiming invitation'
     );
-    try {
-      await authAdminApi.deleteUser?.({ userId: newUserId });
-    } catch (deleteError) {
+    // Best-effort user deletion rollback. If deleteUser is unavailable (it's optional on the
+    // interface), log a CRITICAL alert so an admin knows to clean up manually.
+    if (authAdminApi.deleteUser) {
+      try {
+        await authAdminApi.deleteUser({ userId: newUserId });
+      } catch (deleteError) {
+        reqLogger.error(
+          { error: deleteError, userId: newUserId },
+          'Rollback failed: could not delete user'
+        );
+      }
+    } else {
       reqLogger.error(
-        { error: deleteError, userId: newUserId },
-        'Rollback failed: could not delete user'
+        { userId: newUserId },
+        'CRITICAL: authAdminApi.deleteUser unavailable — orphaned user requires manual cleanup'
       );
     }
     // If unclaim fails the invitation is stuck — return a distinct message so the admin knows.

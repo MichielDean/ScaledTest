@@ -21,16 +21,9 @@ jest.mock('@/lib/auth', () => ({
     },
   },
   authAdminApi: {
+    createUser: jest.fn(),
     updateUser: jest.fn(),
     deleteUser: jest.fn(),
-  },
-}));
-
-jest.mock('@/lib/auth-client', () => ({
-  authClient: {
-    signUp: {
-      email: jest.fn(),
-    },
   },
 }));
 
@@ -74,7 +67,6 @@ jest.mock('@/lib/invitations', () => {
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 import { auth, authAdminApi } from '@/lib/auth';
-import { authClient } from '@/lib/auth-client';
 import {
   generateInviteToken,
   hashInviteToken,
@@ -94,9 +86,9 @@ import tokenHandler from '@/pages/api/admin/invitations/[token]';
 // ── Typed mocks ───────────────────────────────────────────────────────────────
 
 const mockGetSession = auth.api.getSession as unknown as jest.Mock;
+const mockCreateUser = (authAdminApi as { createUser: jest.Mock }).createUser;
 const mockUpdateUser = (authAdminApi as { updateUser: jest.Mock }).updateUser;
 const mockDeleteUser = (authAdminApi as { deleteUser: jest.Mock }).deleteUser;
-const mockSignUp = authClient.signUp.email as jest.Mock;
 const mockCreateInvitation = createInvitation as jest.Mock;
 const mockGetInvitationByToken = getInvitationByToken as jest.Mock;
 const mockClaimInvitationForAcceptance = claimInvitationForAcceptance as jest.Mock;
@@ -537,7 +529,7 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(400);
     // Validation must short-circuit before any DB access
     expect(mockClaimInvitationForAcceptance).not.toHaveBeenCalled();
-    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
   });
 
   it('returns 400 when email confirmation is missing', async () => {
@@ -584,9 +576,8 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
   it('returns 201 on successful accept: creates user, assigns role, marks accepted', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValue(inv);
-    mockSignUp.mockResolvedValue({
-      data: { user: { id: 'new-user-id', email: inv.email } },
-      error: null,
+    mockCreateUser.mockResolvedValue({
+      user: { id: 'new-user-id', email: inv.email, name: 'Test User' },
     });
     mockUpdateUser.mockResolvedValue(undefined);
     mockMarkInvitationAccepted.mockResolvedValue(undefined);
@@ -599,10 +590,14 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
 
-    expect(mockSignUp).toHaveBeenCalledWith({
-      email: inv.email,
-      password: 'SecurePass1!',
-      name: 'Test User',
+    expect(mockCreateUser).toHaveBeenCalledWith({
+      body: {
+        email: inv.email,
+        password: 'SecurePass1!',
+        name: 'Test User',
+        role: inv.role,
+        data: { emailVerified: true },
+      },
     });
     expect(mockUpdateUser).toHaveBeenCalledWith({ userId: 'new-user-id', role: inv.role });
     expect(mockMarkInvitationAccepted).toHaveBeenCalledWith(inv.id);
@@ -612,9 +607,8 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
   it('rolls back user and unclaims invitation if role assignment fails', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValue(inv);
-    mockSignUp.mockResolvedValue({
-      data: { user: { id: 'new-user-id', email: inv.email } },
-      error: null,
+    mockCreateUser.mockResolvedValue({
+      user: { id: 'new-user-id', email: inv.email, name: 'Test User' },
     });
     mockUpdateUser.mockRejectedValue(new Error('role assignment failed'));
     mockDeleteUser.mockResolvedValue(undefined);
@@ -634,14 +628,14 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-    it('returns 500 and does not touch DB if authAdminApi.updateUser is not available', async () => {
-    // Simulate a misconfigured Better Auth admin plugin (updateUser not available).
-    // The guard fires BEFORE any DB side effects — no claim, no signUp, no orphan user.
+    it('returns 500 and does not touch DB if authAdminApi.createUser or updateUser is not available', async () => {
+    // Simulate a misconfigured Better Auth admin plugin (createUser not available).
+    // The guard fires BEFORE any DB side effects — no claim, no createUser, no orphan user.
     const { authAdminApi: mockAuthAdminApiModule } = jest.requireMock('@/lib/auth') as {
-      authAdminApi: { updateUser: jest.Mock | undefined; deleteUser: jest.Mock };
+      authAdminApi: { createUser: jest.Mock | undefined; updateUser: jest.Mock | undefined; deleteUser: jest.Mock };
     };
-    const originalUpdateUser = mockAuthAdminApiModule.updateUser;
-    mockAuthAdminApiModule.updateUser = undefined as unknown as jest.Mock;
+    const originalCreateUser = mockAuthAdminApiModule.createUser;
+    mockAuthAdminApiModule.createUser = undefined as unknown as jest.Mock;
 
     const inv = makeInvitation();
 
@@ -655,23 +649,20 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
 
     // The guard fires before any DB side effects
     expect(mockClaimInvitationForAcceptance).not.toHaveBeenCalled();
-    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockCreateUser).not.toHaveBeenCalled();
     expect(mockUnclaimInvitation).not.toHaveBeenCalled();
     expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
 
     // Restore
-    mockAuthAdminApiModule.updateUser = originalUpdateUser;
+    mockAuthAdminApiModule.createUser = originalCreateUser;
   });
 
-  it('returns 400 when signUp fails (e.g. email already taken)', async () => {
+  it('returns 400 when user creation fails (e.g. email already taken)', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValue(inv);
     mockUnclaimInvitation.mockResolvedValue(undefined);
-    mockSignUp.mockResolvedValue({
-      data: null,
-      error: { message: 'User already exists' },
-    });
+    mockCreateUser.mockRejectedValue(new Error('User already exists'));
 
     const req = makeReq(
       'POST',
@@ -711,10 +702,10 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-  it('returns 500 when signUp fails AND unclaimInvitation throws (stuck invitation)', async () => {
+  it('returns 500 when user creation fails AND unclaimInvitation throws (stuck invitation)', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
-    mockSignUp.mockResolvedValueOnce({ error: { message: 'Email already in use' }, data: null });
+    mockCreateUser.mockRejectedValueOnce(new Error('Email already in use'));
     mockUnclaimInvitation.mockRejectedValueOnce(new Error('DB timeout'));
 
     const req = makeReq(
@@ -733,9 +724,8 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
   it('returns 500 with stuck-invitation message when role assignment fails AND unclaimInvitation throws', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValueOnce(inv);
-    mockSignUp.mockResolvedValueOnce({
-      error: null,
-      data: { user: { id: 'new-user-id' } },
+    mockCreateUser.mockResolvedValueOnce({
+      user: { id: 'new-user-id', email: inv.email, name: 'Charlie' },
     });
     mockUpdateUser.mockRejectedValueOnce(new Error('Role assignment failed'));
     mockDeleteUser.mockResolvedValueOnce(undefined);

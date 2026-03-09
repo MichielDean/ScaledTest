@@ -39,6 +39,16 @@ export interface AuthAdminApi {
   }) => Promise<void>;
   // Delete a user by id
   deleteUser?: (opts: { userId: string }) => Promise<void>;
+  // Create a user server-side (bypasses email verification — caller must verify intent)
+  createUser?: (opts: {
+    body: {
+      email: string;
+      password: string;
+      name: string;
+      role?: string;
+      data?: Record<string, unknown>;
+    };
+  }) => Promise<{ user: { id: string; email: string; name: string; role?: string } }>;
   // Additional admin helpers may be present depending on Better Auth plugins
   [key: string]: unknown;
 }
