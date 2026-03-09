@@ -139,6 +139,24 @@ const handlePost: BetterAuthMethodHandler = async (
       token: rawToken,
     });
   } catch (error) {
+    // Unique constraint violation — an active (non-expired, non-accepted, non-revoked) invitation
+    // already exists for this email + team combination. Return 409 so the caller knows to revoke
+    // the existing invitation first (or wait for it to expire).
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'code' in error &&
+      (error as { code: string }).code === '23505'
+    ) {
+      reqLogger.warn(
+        { email },
+        'Invitation already exists for this email + team (unique_violation 23505)'
+      );
+      return res.status(409).json({
+        error:
+          'An active invitation already exists for this email address. Revoke it before re-inviting.',
+      });
+    }
     reqLogger.error({ error }, 'Failed to create invitation');
     return res.status(500).json({ error: 'Failed to create invitation' });
   }

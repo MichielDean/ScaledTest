@@ -263,9 +263,11 @@ async function handlePost(
       },
     });
   } catch (signUpError) {
-    const message =
-      signUpError instanceof Error ? signUpError.message : 'Registration failed';
-    reqLogger.warn({ email: inv.email, error: message }, 'User creation failed during invitation accept');
+    const message = signUpError instanceof Error ? signUpError.message : 'Registration failed';
+    reqLogger.warn(
+      { email: inv.email, error: message },
+      'User creation failed during invitation accept'
+    );
     // Unclaim so the invitation can be retried after the signup issue is resolved.
     // If unclaim fails the invitation is stuck — return 500 so the admin knows to re-issue it.
     try {
