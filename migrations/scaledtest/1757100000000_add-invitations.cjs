@@ -24,17 +24,20 @@ exports.up = pgm => {
       default: pgm.func('uuid_generate_v4()'),
     },
     email: {
-      // Email address of the person being invited
+      // Normalised (lowercased) email address of the person being invited
       type: 'varchar(255)',
       notNull: true,
     },
     role: {
-      // Role to assign on acceptance: readonly | maintainer | owner
+      // Role to assign on acceptance
       type: 'varchar(50)',
       notNull: true,
+      // DB-level guard — application validation is NOT a substitute
+      check: "role IN ('readonly', 'maintainer', 'owner')",
     },
     token_hash: {
-      // SHA-256 hex digest of the raw invitation token — never store the raw value
+      // SHA-256 hex digest of the raw invitation token — NEVER store the raw value.
+      // unique: true also creates the covering index; no separate createIndex needed.
       type: 'char(64)',
       notNull: true,
       unique: true,
@@ -45,27 +48,31 @@ exports.up = pgm => {
       notNull: true,
     },
     invited_by_user_id: {
-      // Better Auth user ID of the person who sent the invitation
+      // Better Auth user ID of the person who sent the invitation.
+      // varchar(255) to match Better Auth's user.id type; no FK because Better Auth
+      // manages its users table and we don't want a hard DB dependency on it.
+      // Orphan records (inviter deleted) are acceptable — the invitation remains readable.
       type: 'varchar(255)',
       notNull: true,
     },
     team_id: {
-      // Optional: scope the invitation to a specific team
+      // Optional: scope the invitation to a specific team.
+      // SET NULL on team deletion — acceptance flow must handle null team_id gracefully.
       type: 'uuid',
       references: 'teams(id)',
       onDelete: 'SET NULL',
     },
     expires_at: {
-      // When the invitation link expires (typically 7 days after creation)
+      // When the invitation link expires (default: 7 days from creation).
       type: 'timestamptz',
       notNull: true,
     },
     accepted_at: {
-      // Set when the invitee completes registration — makes token permanently invalid
+      // Set atomically when the invitee completes registration — makes token permanently invalid.
       type: 'timestamptz',
     },
     revoked_at: {
-      // Set when an admin revokes the invitation — makes token permanently invalid
+      // Set when an admin revokes the invitation — makes token permanently invalid.
       type: 'timestamptz',
     },
     created_at: {
@@ -75,13 +82,29 @@ exports.up = pgm => {
     },
   });
 
-  // Primary lookup: validate an incoming token on every accept/preview request
-  pgm.createIndex('invitations', 'token_hash');
-  // List invitations scoped to a team
+  // Sanity constraints — enforce invariants the application also checks.
+  pgm.sql(`
+    ALTER TABLE invitations
+      ADD CONSTRAINT invitations_expires_after_created
+        CHECK (expires_at > created_at),
+      ADD CONSTRAINT invitations_accepted_xor_revoked
+        CHECK (NOT (accepted_at IS NOT NULL AND revoked_at IS NOT NULL))
+  `);
+
+  // NOTE: token_hash already has a covering unique index from unique: true above.
+  // Do NOT add another createIndex — that would create a duplicate bloating every write.
+
+  // Active invitations per email+team: prevent duplicate active invites.
+  // Partial (pending only) so accepted/revoked records don't interfere.
+  pgm.sql(`
+    CREATE UNIQUE INDEX invitations_active_per_email_team
+      ON invitations (email, COALESCE(team_id, '00000000-0000-0000-0000-000000000000'::uuid))
+     WHERE accepted_at IS NULL AND revoked_at IS NULL
+  `);
+
+  // Support listing by team, inviter, and email.
   pgm.createIndex('invitations', 'team_id');
-  // List invitations sent by a specific user
   pgm.createIndex('invitations', 'invited_by_user_id');
-  // Filter by email (check for existing pending invites)
   pgm.createIndex('invitations', 'email');
 };
 

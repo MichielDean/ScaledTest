@@ -63,6 +63,8 @@ jest.mock('@/lib/invitations', () => {
     ...actual,
     createInvitation: jest.fn(),
     getInvitationByToken: jest.fn(),
+    claimInvitationForAcceptance: jest.fn(),
+    unclaimInvitation: jest.fn(),
     listInvitations: jest.fn(),
     revokeInvitation: jest.fn(),
     markInvitationAccepted: jest.fn(),
@@ -79,6 +81,8 @@ import {
   INVITE_TOKEN_PREFIX,
   createInvitation,
   getInvitationByToken,
+  claimInvitationForAcceptance,
+  unclaimInvitation,
   listInvitations,
   revokeInvitation,
   markInvitationAccepted,
@@ -95,6 +99,8 @@ const mockDeleteUser = (authAdminApi as { deleteUser: jest.Mock }).deleteUser;
 const mockSignUp = authClient.signUp.email as jest.Mock;
 const mockCreateInvitation = createInvitation as jest.Mock;
 const mockGetInvitationByToken = getInvitationByToken as jest.Mock;
+const mockClaimInvitationForAcceptance = claimInvitationForAcceptance as jest.Mock;
+const mockUnclaimInvitation = unclaimInvitation as jest.Mock;
 const mockListInvitations = listInvitations as jest.Mock;
 const mockRevokeInvitation = revokeInvitation as jest.Mock;
 const mockMarkInvitationAccepted = markInvitationAccepted as jest.Mock;
@@ -473,59 +479,50 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  it('returns 404 when invitation token not found', async () => {
-    mockGetInvitationByToken.mockResolvedValue(null);
+  it('returns 400 when email confirmation is missing', async () => {
+    // The handler validates email presence before hitting the DB.
     const req = makeReq(
       'POST',
       { name: 'Test User', password: 'Pass1234!' },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+    expect(res.status).toHaveBeenCalledWith(400);
+  });
+
+  it('returns 410 when invitation is not claimable (not found / expired / already accepted / revoked)', async () => {
+    // claimInvitationForAcceptance returns null for all invalid states —
+    // not found, expired, accepted, revoked — the handler collapses them all to 410.
+    mockClaimInvitationForAcceptance.mockResolvedValue(null);
+    const req = makeReq(
+      'POST',
+      { name: 'Test User', password: 'Pass1234!', email: 'invitee@example.com' },
       { token: 'inv_missing' }
     );
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
-    expect(res.status).toHaveBeenCalledWith(404);
-  });
-
-  it('returns 410 when invitation has expired', async () => {
-    mockGetInvitationByToken.mockResolvedValue(
-      makeInvitation({ expiresAt: new Date(Date.now() - 1000) })
-    );
-    const req = makeReq(
-      'POST',
-      { name: 'Test User', password: 'Pass1234!' },
-      { token: 'inv_expired' }
-    );
-    const res = makeRes();
-    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
     expect(res.status).toHaveBeenCalledWith(410);
   });
 
-  it('returns 410 when invitation already accepted', async () => {
-    mockGetInvitationByToken.mockResolvedValue(makeInvitation({ acceptedAt: new Date() }));
+  it('returns 400 when supplied email does not match invitation email', async () => {
+    const inv = makeInvitation(); // email: 'invitee@example.com'
+    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
+    mockUnclaimInvitation.mockResolvedValue(undefined);
     const req = makeReq(
       'POST',
-      { name: 'Test User', password: 'Pass1234!' },
-      { token: 'inv_used' }
+      { name: 'Test User', password: 'Pass1234!', email: 'wrong@example.com' },
+      { token: 'inv_valid' }
     );
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
-    expect(res.status).toHaveBeenCalledWith(410);
-  });
-
-  it('returns 410 when invitation has been revoked', async () => {
-    mockGetInvitationByToken.mockResolvedValue(makeInvitation({ revokedAt: new Date() }));
-    const req = makeReq(
-      'POST',
-      { name: 'Test User', password: 'Pass1234!' },
-      { token: 'inv_revoked' }
-    );
-    const res = makeRes();
-    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
-    expect(res.status).toHaveBeenCalledWith(410);
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(res.status).toHaveBeenCalledWith(400);
   });
 
   it('returns 201 on successful accept: creates user, assigns role, marks accepted', async () => {
     const inv = makeInvitation();
-    mockGetInvitationByToken.mockResolvedValue(inv);
+    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
     mockSignUp.mockResolvedValue({
       data: { user: { id: 'new-user-id', email: inv.email } },
       error: null,
@@ -535,7 +532,7 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
 
     const req = makeReq(
       'POST',
-      { name: 'Test User', password: 'SecurePass1!' },
+      { name: 'Test User', password: 'SecurePass1!', email: inv.email },
       { token: 'inv_valid' }
     );
     const res = makeRes();
@@ -551,32 +548,35 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('rolls back user if role assignment fails', async () => {
+  it('rolls back user and unclams invitation if role assignment fails', async () => {
     const inv = makeInvitation();
-    mockGetInvitationByToken.mockResolvedValue(inv);
+    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
     mockSignUp.mockResolvedValue({
       data: { user: { id: 'new-user-id', email: inv.email } },
       error: null,
     });
     mockUpdateUser.mockRejectedValue(new Error('role assignment failed'));
     mockDeleteUser.mockResolvedValue(undefined);
+    mockUnclaimInvitation.mockResolvedValue(undefined);
 
     const req = makeReq(
       'POST',
-      { name: 'Test User', password: 'SecurePass1!' },
+      { name: 'Test User', password: 'SecurePass1!', email: inv.email },
       { token: 'inv_valid' }
     );
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
 
     expect(mockDeleteUser).toHaveBeenCalledWith({ userId: 'new-user-id' });
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
     expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
   it('returns 400 when signUp fails (e.g. email already taken)', async () => {
     const inv = makeInvitation();
-    mockGetInvitationByToken.mockResolvedValue(inv);
+    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
+    mockUnclaimInvitation.mockResolvedValue(undefined);
     mockSignUp.mockResolvedValue({
       data: null,
       error: { message: 'User already exists' },
@@ -584,17 +584,19 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
 
     const req = makeReq(
       'POST',
-      { name: 'Test User', password: 'SecurePass1!' },
+      { name: 'Test User', password: 'SecurePass1!', email: inv.email },
       { token: 'inv_valid' }
     );
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
 
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
-  it('returns 405 for unsupported methods (DELETE)', async () => {
-    const req = makeReq('DELETE', {}, { token: 'inv_valid' });
+  it('returns 405 for unsupported methods (PUT)', async () => {
+    // DELETE is a supported method on this endpoint (revoke). Use PUT instead.
+    const req = makeReq('PUT', {}, { token: 'inv_valid' });
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
     expect(res.status).toHaveBeenCalledWith(405);
