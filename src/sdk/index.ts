@@ -2,8 +2,7 @@
  * @scaledtest/sdk — TypeScript/JavaScript client for the ScaledTest API
  *
  * Provides a typed API client for uploading CTRF test reports and querying
- * results programmatically. Supports both session cookies and Bearer token
- * (API token) authentication.
+ * results programmatically. Supports Bearer token (API token) authentication.
  *
  * Usage:
  *   import { ScaledTestClient } from '@scaledtest/sdk';
@@ -39,7 +38,7 @@ export class ScaledTestError extends Error {
 export interface ScaledTestClientOptions {
   /** Base URL of the ScaledTest instance, e.g. https://scaledtest.example.com */
   baseUrl: string;
-  /** Bearer token (sct_*) or session token for authentication */
+  /** Bearer token (sct_*) for authentication */
   token: string;
 }
 
@@ -58,15 +57,21 @@ export interface GetReportsOptions {
 
 export interface ListExecutionsOptions {
   page?: number;
-  pageSize?: number;
+  /** Page size — maps to query param "size" on the server */
+  size?: number;
   status?: string;
   teamId?: string;
 }
 
 export interface CreateExecutionOptions {
-  name: string;
-  teamId: string;
-  [key: string]: unknown;
+  /** Docker image to run, e.g. "node:20" */
+  dockerImage: string;
+  /** Shell command to execute inside the container, e.g. "npm test" */
+  testCommand: string;
+  parallelism?: number;
+  environmentVars?: Record<string, string>;
+  resourceLimits?: { cpu?: string; memory?: string };
+  teamId?: string;
 }
 
 export interface SubmitResultsOptions {
@@ -100,7 +105,6 @@ export interface PaginationMeta {
   page: number;
   size: number;
   total: number;
-  [key: string]: unknown;
 }
 
 export interface GetReportsResult {
@@ -129,13 +133,11 @@ export interface ExecutionRecord {
   [key: string]: unknown;
 }
 
+/** Pagination meta returned by GET /api/v1/executions — matches server contract */
 export interface ExecutionPaginationMeta {
   page: number;
-  pageSize: number;
+  size: number;
   total: number;
-  totalPages: number;
-  hasNext: boolean;
-  hasPrev: boolean;
 }
 
 export interface ListExecutionsResult {
@@ -294,7 +296,7 @@ export class ScaledTestClient {
   async listExecutions(options?: ListExecutionsOptions): Promise<ListExecutionsResult> {
     const url = this.buildUrl('/api/v1/executions', {
       page: options?.page,
-      pageSize: options?.pageSize,
+      size: options?.size, // server expects "size", not "pageSize"
       status: options?.status,
       teamId: options?.teamId,
     });
@@ -339,46 +341,51 @@ export class ScaledTestClient {
   /**
    * Submit test results into an existing execution.
    * POST /api/v1/executions/{id}/results
+   * Returns { reportId } matching the server contract.
    */
   async submitExecutionResults(
     id: string,
     options: SubmitResultsOptions
-  ): Promise<{ message: string }> {
+  ): Promise<{ reportId: string }> {
     if (!id || id.trim() === '') {
       throw new Error('submitExecutionResults: id is required and must not be empty');
     }
     const url = this.buildUrl(`/api/v1/executions/${encodeURIComponent(id)}/results`);
-    const body = await this.request<{ success: true; message: string }>(url, {
+    const body = await this.request<{ success: true; reportId: string }>(url, {
       method: 'POST',
       body: JSON.stringify(options.report),
     });
-    return { message: body.message };
+    return { reportId: body.reportId };
   }
 
   /**
    * Cancel / delete an execution.
    * DELETE /api/v1/executions/{id}
+   * Returns the cancelled ExecutionRecord matching server contract.
    */
-  async cancelExecution(id: string): Promise<{ message: string }> {
+  async cancelExecution(id: string): Promise<ExecutionRecord> {
     if (!id || id.trim() === '') {
       throw new Error('cancelExecution: id is required and must not be empty');
     }
     const url = this.buildUrl(`/api/v1/executions/${encodeURIComponent(id)}`);
-    const body = await this.request<{ success: true; message: string }>(url, {
+    const body = await this.request<{ success: true; data: ExecutionRecord }>(url, {
       method: 'DELETE',
     });
-    return { message: body.message };
+    return body.data;
   }
 
   /**
-   * Get currently active (queued/running) executions.
+   * Get the count of currently active (queued/running) executions.
    * GET /api/v1/executions/active
+   * Returns { activeExecutions: number } matching server contract.
    */
-  async getActiveExecutions(): Promise<ExecutionRecord[]> {
-    const url = this.buildUrl('/api/v1/executions/active');
-    const body = await this.request<{ success: true; data: ExecutionRecord[] }>(url, {
+  async getActiveExecutions(options?: { teamId?: string }): Promise<{ activeExecutions: number }> {
+    const url = this.buildUrl('/api/v1/executions/active', {
+      teamId: options?.teamId,
+    });
+    const body = await this.request<{ success: true; data: { activeExecutions: number } }>(url, {
       method: 'GET',
     });
-    return body.data;
+    return { activeExecutions: body.data.activeExecutions };
   }
 }

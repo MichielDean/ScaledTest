@@ -91,7 +91,6 @@ describe('ScaledTestClient — constructor', () => {
       baseUrl: 'http://localhost:3000/',
       token: 'sct_abc',
     });
-    // Verified indirectly: a call should not produce double-slash in URL
     mockFetch.mockResolvedValueOnce(
       makeOkResponse({
         success: true,
@@ -163,6 +162,8 @@ describe('ScaledTestClient.uploadReport()', () => {
   });
 
   it('thrown error contains status code on 400', async () => {
+    // expect.assertions(2) guards against the catch block never running
+    expect.assertions(2);
     mockFetch.mockResolvedValueOnce(
       makeErrorResponse({ success: false, error: 'validation failed' }, 400)
     );
@@ -246,7 +247,7 @@ describe('ScaledTestClient.getReports()', () => {
   it('returns reports array and pagination', async () => {
     const mockData = {
       success: true,
-      data: [{ _id: 'r1', reportId: 'r1' }],
+      data: [{ _id: 'r1', reportId: 'r1', storedAt: '' }],
       total: 1,
       pagination: { page: 1, size: 20, total: 1 },
     };
@@ -350,19 +351,28 @@ describe('ScaledTestClient.listExecutions()', () => {
         success: true,
         data: [],
         total: 0,
-        pagination: {
-          page: 1,
-          pageSize: 20,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false,
-        },
+        pagination: { page: 1, size: 20, total: 0 },
       })
     );
     await client.listExecutions();
     const calledUrl: string = mockFetch.mock.calls[0][0];
     expect(calledUrl).toContain('/api/v1/executions');
+  });
+
+  it('sends "size" query param (not "pageSize")', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeOkResponse({
+        success: true,
+        data: [],
+        total: 0,
+        pagination: { page: 1, size: 10, total: 0 },
+      })
+    );
+    const opts: ListExecutionsOptions = { size: 10 };
+    await client.listExecutions(opts);
+    const calledUrl: string = mockFetch.mock.calls[0][0];
+    expect(calledUrl).toContain('size=10');
+    expect(calledUrl).not.toContain('pageSize');
   });
 
   it('appends status query param when provided', async () => {
@@ -371,14 +381,7 @@ describe('ScaledTestClient.listExecutions()', () => {
         success: true,
         data: [],
         total: 0,
-        pagination: {
-          page: 1,
-          pageSize: 20,
-          total: 0,
-          totalPages: 0,
-          hasNext: false,
-          hasPrev: false,
-        },
+        pagination: { page: 1, size: 20, total: 0 },
       })
     );
     const opts: ListExecutionsOptions = { status: 'running' };
@@ -387,25 +390,20 @@ describe('ScaledTestClient.listExecutions()', () => {
     expect(calledUrl).toContain('status=running');
   });
 
-  it('returns executions array', async () => {
+  it('returns executions array and pagination matching server contract', async () => {
     mockFetch.mockResolvedValueOnce(
       makeOkResponse({
         success: true,
         data: [{ id: 'exec-1', status: 'running' }],
         total: 1,
-        pagination: {
-          page: 1,
-          pageSize: 20,
-          total: 1,
-          totalPages: 1,
-          hasNext: false,
-          hasPrev: false,
-        },
+        pagination: { page: 1, size: 20, total: 1 },
       })
     );
     const result = await client.listExecutions();
     expect(result.data).toHaveLength(1);
     expect(result.data[0].id).toBe('exec-1');
+    expect(result.pagination.size).toBe(20);
+    expect(result.pagination.total).toBe(1);
   });
 });
 
@@ -447,15 +445,32 @@ describe('ScaledTestClient.createExecution()', () => {
     client = new ScaledTestClient({ baseUrl: 'http://localhost:3000', token: 'sct_abc' });
   });
 
-  it('POSTs to /api/v1/executions', async () => {
+  it('POSTs to /api/v1/executions with dockerImage and testCommand', async () => {
     mockFetch.mockResolvedValueOnce(
       makeOkResponse({ success: true, data: { id: 'exec-2', status: 'queued' } }, 201)
     );
-    const result = await client.createExecution({ name: 'nightly', teamId: 't1' });
+    const payload = { dockerImage: 'node:20', testCommand: 'npm test', teamId: 't1' };
+    const result = await client.createExecution(payload);
     const calledUrl: string = mockFetch.mock.calls[0][0];
+    const fetchOptions = mockFetch.mock.calls[0][1] as {
+      method: string;
+      body?: string;
+      headers?: Record<string, string>;
+    };
     expect(calledUrl).toContain('/api/v1/executions');
-    expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+    expect(fetchOptions.method).toBe('POST');
+    const requestBody = fetchOptions.body ? JSON.parse(fetchOptions.body as string) : undefined;
+    expect(requestBody).toEqual(payload);
     expect(result.id).toBe('exec-2');
+  });
+
+  it('throws ScaledTestError on 400 (validation failure)', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeErrorResponse({ success: false, error: 'Validation failed' }, 400)
+    );
+    await expect(
+      client.createExecution({ dockerImage: '', testCommand: 'npm test' })
+    ).rejects.toThrow(ScaledTestError);
   });
 });
 
@@ -469,11 +484,23 @@ describe('ScaledTestClient.submitExecutionResults()', () => {
   });
 
   it('POSTs to /api/v1/executions/{id}/results', async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, message: 'results stored' }));
+    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, reportId: 'rpt-abc-123' }));
     await client.submitExecutionResults('exec-1', { report: MINIMAL_CTRF_REPORT });
     const calledUrl: string = mockFetch.mock.calls[0][0];
     expect(calledUrl).toContain('/api/v1/executions/exec-1/results');
     expect(mockFetch.mock.calls[0][1].method).toBe('POST');
+  });
+
+  it('returns reportId matching server contract', async () => {
+    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, reportId: 'rpt-abc-123' }));
+    const result = await client.submitExecutionResults('exec-1', { report: MINIMAL_CTRF_REPORT });
+    expect(result.reportId).toBe('rpt-abc-123');
+  });
+
+  it('throws if id is empty', async () => {
+    await expect(
+      client.submitExecutionResults('', { report: MINIMAL_CTRF_REPORT })
+    ).rejects.toThrow();
   });
 
   it('throws ScaledTestError on 404', async () => {
@@ -494,11 +521,24 @@ describe('ScaledTestClient.cancelExecution()', () => {
   });
 
   it('DELETEs /api/v1/executions/{id}', async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, message: 'cancelled' }));
+    const execution = { id: 'exec-1', status: 'cancelled' };
+    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, data: execution }));
     await client.cancelExecution('exec-1');
     const calledUrl: string = mockFetch.mock.calls[0][0];
     expect(calledUrl).toContain('/api/v1/executions/exec-1');
     expect(mockFetch.mock.calls[0][1].method).toBe('DELETE');
+  });
+
+  it('returns the cancelled ExecutionRecord matching server contract', async () => {
+    const execution = { id: 'exec-1', status: 'cancelled' };
+    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, data: execution }));
+    const result = await client.cancelExecution('exec-1');
+    expect(result.id).toBe('exec-1');
+    expect(result.status).toBe('cancelled');
+  });
+
+  it('throws if id is empty', async () => {
+    await expect(client.cancelExecution('')).rejects.toThrow();
   });
 
   it('throws ScaledTestError on 409 (bad state)', async () => {
@@ -519,19 +559,37 @@ describe('ScaledTestClient.getActiveExecutions()', () => {
   });
 
   it('GETs /api/v1/executions/active', async () => {
-    mockFetch.mockResolvedValueOnce(makeOkResponse({ success: true, data: [] }));
+    mockFetch.mockResolvedValueOnce(
+      makeOkResponse({ success: true, data: { activeExecutions: 0 } })
+    );
     await client.getActiveExecutions();
     const calledUrl: string = mockFetch.mock.calls[0][0];
     expect(calledUrl).toContain('/api/v1/executions/active');
   });
 
-  it('returns active executions array', async () => {
+  it('returns active execution count matching server contract', async () => {
     mockFetch.mockResolvedValueOnce(
-      makeOkResponse({ success: true, data: [{ id: 'exec-3', status: 'running' }] })
+      makeOkResponse({ success: true, data: { activeExecutions: 3 } })
     );
     const result = await client.getActiveExecutions();
-    expect(result).toHaveLength(1);
-    expect(result[0].status).toBe('running');
+    expect(result.activeExecutions).toBe(3);
+  });
+
+  it('includes teamId query param when provided', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeOkResponse({ success: true, data: { activeExecutions: 2 } })
+    );
+    await client.getActiveExecutions({ teamId: 'team-123' });
+    const calledUrl: string = mockFetch.mock.calls[0][0];
+    expect(calledUrl).toContain('/api/v1/executions/active');
+    expect(calledUrl).toContain('teamId=team-123');
+  });
+
+  it('throws ScaledTestError on 401', async () => {
+    mockFetch.mockResolvedValueOnce(
+      makeErrorResponse({ success: false, error: 'Authentication required' }, 401)
+    );
+    await expect(client.getActiveExecutions()).rejects.toThrow(ScaledTestError);
   });
 });
 
