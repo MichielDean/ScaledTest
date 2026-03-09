@@ -574,7 +574,7 @@ describe('GET /api/v1/admin/audit-log — review fixes', () => {
     };
     const res = makeRes();
 
-    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+    await auditLogHandler(req as unknown as NextApiRequest, res as unknown as NextApiResponse);
 
     // Should not 400 — first element taken, length check is on a string
     expect(res.status).toHaveBeenCalledWith(200);
