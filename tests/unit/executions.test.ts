@@ -19,7 +19,13 @@ jest.mock('../../src/logging/logger', () => ({
   logError: jest.fn(),
 }));
 
+// Mock kubernetes so cancelExecution can call deleteKubernetesJob without a real cluster
+jest.mock('../../src/lib/kubernetes', () => ({
+  deleteKubernetesJob: jest.fn().mockResolvedValue(undefined),
+}));
+
 import { getTimescalePool, getLinkedReportIds } from '../../src/lib/timescaledb';
+import { deleteKubernetesJob } from '../../src/lib/kubernetes';
 import {
   createExecution,
   getExecution,
@@ -28,6 +34,8 @@ import {
   updateExecutionStatus,
   cancelExecution,
 } from '../../src/lib/executions';
+
+const mockDeleteKubernetesJob = deleteKubernetesJob as jest.Mock;
 
 const mockGetTimescalePool = getTimescalePool as jest.Mock;
 const mockGetLinkedReportIds = getLinkedReportIds as jest.Mock;
@@ -199,10 +207,13 @@ describe('updateExecutionStatus', () => {
 });
 
 describe('cancelExecution', () => {
-  it('cancels a queued execution atomically (single UPDATE with WHERE status=queued)', async () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  it('cancels a queued execution atomically (single UPDATE for queued OR running)', async () => {
     const cancelledRow = { ...fakeRow, status: 'cancelled' };
     const client = makeClient([cancelledRow]);
-    // First query: UPDATE ... WHERE status='queued' RETURNING * — returns the cancelled row
     client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
@@ -213,7 +224,8 @@ describe('cancelExecution', () => {
     expect(client.query).toHaveBeenCalledTimes(1);
     const sql = (client.query.mock.calls[0] as [string])[0].toLowerCase();
     expect(sql).toContain("status = 'cancelled'");
-    expect(sql).toContain("status = 'queued'");
+    // Both queued and running are cancellable
+    expect(sql).toMatch(/status.*in.*queued|status.*=.*queued/i);
   });
 
   it('returns null when execution not found', async () => {
@@ -228,18 +240,80 @@ describe('cancelExecution', () => {
     expect(result).toBeNull();
   });
 
-  it('throws when execution is not in queued status (race condition handled)', async () => {
-    const runningRow = { ...fakeRow, status: 'running' };
+  it('throws when execution is in a terminal status (completed/failed/cancelled)', async () => {
+    const completedRow = { ...fakeRow, status: 'completed' };
     const client = makeClient();
-    // UPDATE returns 0 rows (already running, CAS failed) — fallback SELECT finds it
+    // UPDATE returns 0 rows (already completed, CAS failed) — fallback SELECT finds it
     client.query
       .mockResolvedValueOnce({ rows: [], rowCount: 0 }) // UPDATE attempt — CAS failed
-      .mockResolvedValueOnce({ rows: [runningRow], rowCount: 1 }); // fallback SELECT
+      .mockResolvedValueOnce({ rows: [completedRow], rowCount: 1 }); // fallback SELECT
     mockGetTimescalePool.mockReturnValue(makePool(client));
 
     await expect(cancelExecution('abc-123')).rejects.toThrow(
-      'Cannot cancel execution in status: running'
+      'Cannot cancel execution in status: completed'
     );
+  });
+
+  it('cancels a running execution AND deletes the Kubernetes Job', async () => {
+    const runningRow = {
+      ...fakeRow,
+      status: 'running',
+      kubernetes_job_name: 'scaledtest-abc12345-1234567890',
+    };
+    const cancelledRow = { ...runningRow, status: 'cancelled' };
+    const client = makeClient([cancelledRow]);
+    client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockDeleteKubernetesJob.mockResolvedValueOnce(undefined);
+
+    const result = await cancelExecution('abc-123');
+
+    expect(result!.status).toBe('cancelled');
+    expect(mockDeleteKubernetesJob).toHaveBeenCalledWith('scaledtest-abc12345-1234567890');
+  });
+
+  it('cancels a running execution with null kubernetes_job_name (no K8s call)', async () => {
+    const runningRow = { ...fakeRow, status: 'running', kubernetes_job_name: null };
+    const cancelledRow = { ...runningRow, status: 'cancelled' };
+    const client = makeClient([cancelledRow]);
+    client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    const result = await cancelExecution('abc-123');
+
+    expect(result!.status).toBe('cancelled');
+    expect(mockDeleteKubernetesJob).not.toHaveBeenCalled();
+  });
+
+  it('still returns cancelled execution even when K8s job delete fails (best-effort)', async () => {
+    const runningRow = {
+      ...fakeRow,
+      status: 'running',
+      kubernetes_job_name: 'scaledtest-abc12345-9999',
+    };
+    const cancelledRow = { ...runningRow, status: 'cancelled' };
+    const client = makeClient([cancelledRow]);
+    client.query.mockResolvedValue({ rows: [cancelledRow], rowCount: 1 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+    mockDeleteKubernetesJob.mockRejectedValueOnce(new Error('K8s API unreachable'));
+
+    // Should not throw — K8s delete is best-effort
+    const result = await cancelExecution('abc-123');
+
+    expect(result!.status).toBe('cancelled');
+    expect(mockDeleteKubernetesJob).toHaveBeenCalledWith('scaledtest-abc12345-9999');
+  });
+
+  it('cancels a queued execution and does not call deleteKubernetesJob (no job assigned yet)', async () => {
+    const queuedCancelledRow = { ...fakeRow, status: 'cancelled', kubernetes_job_name: null };
+    const client = makeClient([queuedCancelledRow]);
+    client.query.mockResolvedValue({ rows: [queuedCancelledRow], rowCount: 1 });
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    const result = await cancelExecution('abc-123');
+
+    expect(result!.status).toBe('cancelled');
+    expect(mockDeleteKubernetesJob).not.toHaveBeenCalled();
   });
 });
 

@@ -388,9 +388,11 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   // ---- 409 — execution not cancellable ----
 
-  it('returns 409 when execution is not in cancellable status', async () => {
+  it('returns 409 when execution is in a terminal status (completed/failed/cancelled)', async () => {
     setupAuthUser('owner');
-    mockCancelExecution.mockRejectedValue(new Error('Cannot cancel execution in status: running'));
+    mockCancelExecution.mockRejectedValue(
+      new Error('Cannot cancel execution in status: completed')
+    );
     const { req, res, mockStatus, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
 
     await handler(req, res);

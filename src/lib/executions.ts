@@ -1,6 +1,7 @@
 import { PoolClient } from 'pg';
 import { getTimescalePool, getLinkedReportIds } from './timescaledb';
 import { dbLogger as logger, logError } from '../logging/logger';
+import { deleteKubernetesJob } from './kubernetes';
 
 export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -305,19 +306,19 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    // Atomic compare-and-swap: only cancel if currently 'queued'.
-    // A separate read+check would have a TOCTOU race — two concurrent cancellations
-    // could both pass the check. Single UPDATE with WHERE status='queued' is atomic.
+    // Atomic compare-and-swap: cancel if status is 'queued' OR 'running'.
+    // Terminal statuses (completed, failed, cancelled) are not cancellable.
+    // Single UPDATE with WHERE status IN (...) is atomic — avoids TOCTOU race.
     const result = await client.query(
       `UPDATE test_executions
        SET status = 'cancelled', updated_at = now()
-       WHERE id = $1 AND status = 'queued'
+       WHERE id = $1 AND status IN ('queued', 'running')
        RETURNING *`,
       [id]
     );
 
     if (result.rowCount === 0) {
-      // Either id doesn't exist, or execution is not in queued state.
+      // Either id doesn't exist, or execution is already in a terminal state.
       // Distinguish the two to give callers a useful error.
       const existing = await client.query('SELECT status FROM test_executions WHERE id = $1', [id]);
       if (existing.rowCount === 0) return null;
@@ -326,7 +327,29 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
       );
     }
 
-    return rowToExecution(result.rows[0] as Record<string, unknown>);
+    const cancelled = rowToExecution(result.rows[0] as Record<string, unknown>);
+
+    // Best-effort: delete the Kubernetes Job if one was assigned.
+    // DB is already updated to 'cancelled' — even if K8s delete fails, the execution
+    // is cancelled from the system's perspective. The K8s Job has a ttlSecondsAfterFinished
+    // and will be reaped by the cluster GC regardless.
+    if (cancelled.kubernetesJobName) {
+      try {
+        await deleteKubernetesJob(cancelled.kubernetesJobName);
+      } catch (k8sError) {
+        logError(
+          logger,
+          'Failed to delete Kubernetes Job during cancellation (best-effort)',
+          k8sError,
+          {
+            id,
+            kubernetesJobName: cancelled.kubernetesJobName,
+          }
+        );
+      }
+    }
+
+    return cancelled;
   } catch (error) {
     // Re-throw business logic errors as-is; wrap DB errors
     if (error instanceof Error && error.message.startsWith('Cannot cancel')) throw error;
