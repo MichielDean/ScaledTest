@@ -264,45 +264,44 @@ describe('listAuditLog', () => {
     expect(countParams[0]).toBe('user-42');
   });
 
-  it('applies actionPrefix filter as LIKE with dot suffix', async () => {
+  it('applies actionPrefix filter using starts_with with dot suffix', async () => {
     mockCountAndData(0, []);
 
     await listAuditLog({ actionPrefix: 'execution' });
 
     const countSql: string = mockQuery.mock.calls[0][0];
     const countParams: string[] = mockQuery.mock.calls[0][1];
-    expect(countSql).toContain('LIKE');
-    expect(countParams[0]).toBe('execution.%');
+    expect(countSql).toContain('starts_with');
+    expect(countParams[0]).toBe('execution.');
   });
 
-  it('escapes backslashes in actionPrefix before building LIKE pattern', async () => {
+  it('passes actionPrefix value verbatim (no escaping needed with starts_with)', async () => {
     mockCountAndData(0, []);
 
-    // A backslash in the input must become \\\\ in the LIKE pattern so it is
-    // treated as a literal backslash character, not as an escape prefix.
+    // With starts_with() there is no LIKE escaping — the prefix is passed as-is.
     await listAuditLog({ actionPrefix: 'weird\\prefix' });
 
     const countParams: string[] = mockQuery.mock.calls[0][1];
-    // First param is the LIKE pattern — backslash must be doubled
-    expect(countParams[0]).toBe('weird\\\\prefix.%');
+    // First param is the starts_with prefix — no escaping applied
+    expect(countParams[0]).toBe('weird\\prefix.');
   });
 
-  it('escapes percent signs in actionPrefix before building LIKE pattern', async () => {
+  it('passes actionPrefix with percent signs verbatim (starts_with is not LIKE)', async () => {
     mockCountAndData(0, []);
 
     await listAuditLog({ actionPrefix: '100%done' });
 
     const countParams: string[] = mockQuery.mock.calls[0][1];
-    expect(countParams[0]).toBe('100\\%done.%');
+    expect(countParams[0]).toBe('100%done.');
   });
 
-  it('escapes underscores in actionPrefix before building LIKE pattern', async () => {
+  it('passes actionPrefix with underscores verbatim (starts_with is not LIKE)', async () => {
     mockCountAndData(0, []);
 
     await listAuditLog({ actionPrefix: 'my_action' });
 
     const countParams: string[] = mockQuery.mock.calls[0][1];
-    expect(countParams[0]).toBe('my\\_action.%');
+    expect(countParams[0]).toBe('my_action.');
   });
 
   it('applies resourceType filter', async () => {
@@ -494,7 +493,7 @@ describe('GET /api/v1/admin/audit-log', () => {
     // Verify the query was passed through — the COUNT query should contain actorId and action filters
     const countSql: string = mockQuery.mock.calls[0][0];
     expect(countSql).toContain('actor_id = $');
-    expect(countSql).toContain('LIKE');
+    expect(countSql).toContain('starts_with');
     expect(countSql).toContain('resource_type = $');
   });
 
