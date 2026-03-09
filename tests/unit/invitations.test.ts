@@ -199,6 +199,43 @@ describe('invitation token helpers', () => {
   });
 });
 
+// ── validatePassword ──────────────────────────────────────────────────────────
+
+import { validatePassword } from '@/lib/invitations';
+
+describe('validatePassword', () => {
+  it('returns an error string when password is too short', () => {
+    const result = validatePassword('Ab1!');
+    expect(typeof result).toBe('string');
+    expect(result).toMatch(/at least 8/i);
+  });
+
+  it('returns an error string when password has no letters', () => {
+    const result = validatePassword('12345678!');
+    expect(typeof result).toBe('string');
+    expect(result).toMatch(/letter/i);
+  });
+
+  it('returns an error string when password has no digits or symbols', () => {
+    const result = validatePassword('abcdefghi');
+    expect(typeof result).toBe('string');
+    expect(result).toMatch(/digit or symbol/i);
+  });
+
+  it('returns null for a valid password (letter + non-letter, min length)', () => {
+    expect(validatePassword('SecurePass1!')).toBeNull();
+  });
+
+  it('returns null for a password with exactly 8 chars (boundary)', () => {
+    expect(validatePassword('Passw0rd')).toBeNull();
+  });
+
+  it('returns error for a 7-char password (just under minimum)', () => {
+    const result = validatePassword('Pass1!x');
+    expect(result).not.toBeNull();
+  });
+});
+
 // ── POST /api/admin/invitations ───────────────────────────────────────────────
 
 describe('POST /api/admin/invitations', () => {
@@ -381,6 +418,15 @@ describe('GET /api/admin/invitations', () => {
     await indexHandler(req as NextApiRequest, res as unknown as NextApiResponse);
     expect(res.status).toHaveBeenCalledWith(500);
   });
+
+  it('returns 400 when teamId query param is not a valid UUID', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+    const req = makeReq('GET', {}, { teamId: 'not-a-uuid' });
+    const res = makeRes();
+    await indexHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+    expect(res.status).toHaveBeenCalledWith(400);
+    expect(mockListInvitations).not.toHaveBeenCalled();
+  });
 });
 
 // ── GET /api/admin/invitations/[token] ────────────────────────────────────────
@@ -479,6 +525,21 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
+  it('returns 400 when password is too weak and does not touch DB', async () => {
+    expect.assertions(3);
+    const req = makeReq(
+      'POST',
+      { name: 'Test User', password: 'weak', email: 'invitee@example.com' },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+    expect(res.status).toHaveBeenCalledWith(400);
+    // Validation must short-circuit before any DB access
+    expect(mockClaimInvitationForAcceptance).not.toHaveBeenCalled();
+    expect(mockSignUp).not.toHaveBeenCalled();
+  });
+
   it('returns 400 when email confirmation is missing', async () => {
     // The handler validates email presence before hitting the DB.
     const req = makeReq(
@@ -548,7 +609,7 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(201);
   });
 
-  it('rolls back user and unclams invitation if role assignment fails', async () => {
+  it('rolls back user and unclaims invitation if role assignment fails', async () => {
     const inv = makeInvitation();
     mockClaimInvitationForAcceptance.mockResolvedValue(inv);
     mockSignUp.mockResolvedValue({
@@ -571,6 +632,39 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
     expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
+  });
+
+  it('returns 500 and unclams if authAdminApi.updateUser is not available', async () => {
+    // Simulate a misconfigured Better Auth admin plugin (updateUser not available).
+    // The guard should catch this before creating a user with no role.
+    const { authAdminApi: mockAuthAdminApiModule } = jest.requireMock('@/lib/auth') as {
+      authAdminApi: { updateUser: jest.Mock | undefined; deleteUser: jest.Mock };
+    };
+    const originalUpdateUser = mockAuthAdminApiModule.updateUser;
+    mockAuthAdminApiModule.updateUser = undefined as unknown as jest.Mock;
+
+    const inv = makeInvitation();
+    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
+    mockSignUp.mockResolvedValue({
+      data: { user: { id: 'new-user-id', email: inv.email } },
+      error: null,
+    });
+    mockUnclaimInvitation.mockResolvedValue(undefined);
+
+    const req = makeReq(
+      'POST',
+      { name: 'Test User', password: 'SecurePass1!', email: inv.email },
+      { token: 'inv_valid' }
+    );
+    const res = makeRes();
+    await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(500);
+
+    // Restore
+    mockAuthAdminApiModule.updateUser = originalUpdateUser;
   });
 
   it('returns 400 when signUp fails (e.g. email already taken)', async () => {
@@ -626,7 +720,7 @@ describe('DELETE /api/admin/invitations/[token] (revoke)', () => {
 
   it('returns 404 when invitation not found', async () => {
     mockGetSession.mockResolvedValue(ownerSession);
-    mockRevokeInvitation.mockResolvedValue(false);
+    mockRevokeInvitation.mockResolvedValue(null);
     const req = makeReq('DELETE', {}, { token: 'inv_missing' });
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
@@ -635,7 +729,7 @@ describe('DELETE /api/admin/invitations/[token] (revoke)', () => {
 
   it('returns 200 when invitation is successfully revoked by owner', async () => {
     mockGetSession.mockResolvedValue(ownerSession);
-    mockRevokeInvitation.mockResolvedValue(true);
+    mockRevokeInvitation.mockResolvedValue('550e8400-e29b-41d4-a716-446655440001');
     const req = makeReq('DELETE', {}, { token: 'inv_valid' });
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
@@ -645,7 +739,7 @@ describe('DELETE /api/admin/invitations/[token] (revoke)', () => {
 
   it('returns 200 when invitation is successfully revoked by maintainer', async () => {
     mockGetSession.mockResolvedValue(maintainerSession);
-    mockRevokeInvitation.mockResolvedValue(true);
+    mockRevokeInvitation.mockResolvedValue('550e8400-e29b-41d4-a716-446655440001');
     const req = makeReq('DELETE', {}, { token: 'inv_valid' });
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
