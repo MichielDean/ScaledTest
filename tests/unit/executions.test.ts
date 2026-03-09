@@ -19,9 +19,12 @@ jest.mock('../../src/logging/logger', () => ({
   logError: jest.fn(),
 }));
 
-// Mock kubernetes to prevent accidental real-cluster calls if someone re-adds the import
-// in executions.ts. executions.ts intentionally does NOT import kubernetes (circular dep risk);
-// this mock + the `not.toHaveBeenCalled()` assertion in the tests below act as a regression guard.
+// Regression guard: executions.ts must NEVER import kubernetes.ts (circular dependency risk —
+// kubernetes.ts already imports from executions.ts). This mock exists solely to prevent
+// accidental real-cluster calls if that import is ever re-added. The `not.toHaveBeenCalled()`
+// assertions in cancelExecution tests are intentionally vacuous today (executions.ts has no
+// K8s import so the mock can never be called), but they document the expected contract:
+// cancelExecution() is a DB-only operation; K8s deletion is the API handler's responsibility.
 jest.mock('../../src/lib/kubernetes', () => ({
   deleteKubernetesJob: jest.fn().mockResolvedValue(undefined),
 }));
