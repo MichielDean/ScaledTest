@@ -1,6 +1,9 @@
 import { PoolClient } from 'pg';
 import { getTimescalePool, getLinkedReportIds } from './timescaledb';
 import { dbLogger as logger, logError } from '../logging/logger';
+// Note: kubernetes.ts imports from this module (executions.ts), so we must NOT import
+// from kubernetes.ts here — that would create a circular dependency.
+// The K8s job deletion after cancellation is handled by the API handler layer ([id].ts).
 
 export type ExecutionStatus = 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
 
@@ -231,6 +234,17 @@ export async function listExecutions(
   }
 }
 
+/**
+ * Update the status (and optional fields) of an execution.
+ *
+ * Terminal-state guard: the WHERE clause includes
+ *   AND status NOT IN ('cancelled', 'completed', 'failed')
+ * so this function is a no-op (returns null) if the execution is already in a
+ * terminal state. This prevents the executor loop from overwriting a 'cancelled'
+ * execution back to 'completed' or 'failed' under concurrent access.
+ *
+ * Returns the updated execution row, or null if not found OR already terminal.
+ */
 export async function updateExecutionStatus(
   id: string,
   status: ExecutionStatus,
@@ -287,7 +301,7 @@ export async function updateExecutionStatus(
 
     values.push(id);
     const result = await client.query(
-      `UPDATE test_executions SET ${sets.join(', ')} WHERE id = $${p} RETURNING *`,
+      `UPDATE test_executions SET ${sets.join(', ')} WHERE id = $${p} AND status NOT IN ('cancelled', 'completed', 'failed') RETURNING *`,
       values
     );
     return result.rows[0] ? rowToExecution(result.rows[0] as Record<string, unknown>) : null;
@@ -305,19 +319,19 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    // Atomic compare-and-swap: only cancel if currently 'queued'.
-    // A separate read+check would have a TOCTOU race — two concurrent cancellations
-    // could both pass the check. Single UPDATE with WHERE status='queued' is atomic.
+    // Atomic compare-and-swap: cancel if status is 'queued' OR 'running'.
+    // Terminal statuses (completed, failed, cancelled) are not cancellable.
+    // Single UPDATE with WHERE status IN (...) is atomic — avoids TOCTOU race.
     const result = await client.query(
       `UPDATE test_executions
        SET status = 'cancelled', updated_at = now()
-       WHERE id = $1 AND status = 'queued'
+       WHERE id = $1 AND status IN ('queued', 'running')
        RETURNING *`,
       [id]
     );
 
     if (result.rowCount === 0) {
-      // Either id doesn't exist, or execution is not in queued state.
+      // Either id doesn't exist, or execution is already in a terminal state.
       // Distinguish the two to give callers a useful error.
       const existing = await client.query('SELECT status FROM test_executions WHERE id = $1', [id]);
       if (existing.rowCount === 0) return null;
@@ -326,7 +340,12 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
       );
     }
 
-    return rowToExecution(result.rows[0] as Record<string, unknown>);
+    const cancelled = rowToExecution(result.rows[0] as Record<string, unknown>);
+
+    // DB work is complete. The finally block releases the connection.
+    // cancelExecution() is a DB-only operation — K8s deletion is the API
+    // handler's responsibility (see pages/api/v1/executions/[id].ts).
+    return cancelled;
   } catch (error) {
     // Re-throw business logic errors as-is; wrap DB errors
     if (error instanceof Error && error.message.startsWith('Cannot cancel')) throw error;
