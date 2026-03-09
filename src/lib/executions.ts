@@ -331,11 +331,9 @@ export async function cancelExecution(id: string): Promise<TestExecution | null>
 
     const cancelled = rowToExecution(result.rows[0] as Record<string, unknown>);
 
-    // DB transaction complete — release the client now so it's not held open
-    // while we wait for the K8s API call in the layer above.
-    client.release();
-    client = null;
-
+    // DB work is complete. The finally block releases the connection.
+    // cancelExecution() is a DB-only operation — K8s deletion is the API
+    // handler's responsibility (see pages/api/v1/executions/[id].ts).
     return cancelled;
   } catch (error) {
     // Re-throw business logic errors as-is; wrap DB errors
