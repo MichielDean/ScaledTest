@@ -15,20 +15,7 @@ import { hasRole } from '@/lib/roles';
 import { getExecutionDetail, cancelExecution } from '@/lib/executions';
 import { isValidUuid } from '@/lib/validation';
 import { appendAuditLog, AuditAction } from '@/lib/auditLog';
-
-/**
- * Normalize x-forwarded-for: it can be a string (possibly comma-separated for proxy chains)
- * or a string array (when Node/Next.js dedups repeated headers). Always return a single IP.
- */
-function normalizeIp(
-  header: string | string[] | undefined,
-  fallback: string | undefined
-): string | null {
-  if (!header) return fallback ?? null;
-  const raw = Array.isArray(header) ? header[0] : header;
-  // Take the first IP in a comma-separated proxy chain (leftmost = original client)
-  return raw.split(',')[0].trim() || fallback || null;
-}
+import { normalizeIp } from '@/lib/requestUtils';
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
