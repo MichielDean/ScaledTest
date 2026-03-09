@@ -17,6 +17,7 @@ import { getRequestLogger } from '@/logging/logger';
 import {
   generateInviteToken,
   hashInviteToken,
+  normaliseEmail,
   createInvitation,
   listInvitations,
   type Invitation,
@@ -100,7 +101,7 @@ const handlePost: BetterAuthMethodHandler = async (
     const tokenPrefix = rawToken.substring(0, 16);
 
     const invitation = await createInvitation({
-      email: email as string,
+      email: normaliseEmail(email as string),
       role: role as string,
       tokenHash,
       tokenPrefix,

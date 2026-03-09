@@ -6,10 +6,14 @@
  *   Returns 404 if not found, 410 if expired/accepted/revoked.
  *
  * POST   — Accept invitation: create account + assign role (public, no auth required).
- *   Body: { name: string; password: string }
+ *   Body: { name: string; password: string; email: string }
+ *   - email must match the invited email (case-insensitive)
+ *   - Atomically claims the invitation via conditional UPDATE (TOCTOU guard)
+ *   - Unclams on any failure so the invitation can be retried
  *   Returns 201 { message: string }
- *   Returns 400 if validation fails or email already taken.
- *   Rolls back user creation if role assignment fails.
+ *   Returns 400 if validation fails or email mismatch
+ *   Returns 410 if invitation not found / expired / already accepted / revoked
+ *   Returns 500 with rollback if role assignment fails
  *
  * DELETE — Revoke invitation (maintainer or owner only).
  *   Returns 200 { message: string }
@@ -20,9 +24,13 @@ import { NextApiRequest, NextApiResponse } from 'next';
 import { auth, authAdminApi } from '@/lib/auth';
 import { getRequestLogger, logError } from '@/logging/logger';
 import {
+  claimInvitationForAcceptance,
+  unclaimInvitation,
   getInvitationByToken,
-  revokeInvitation,
   markInvitationAccepted,
+  revokeInvitation,
+  normaliseEmail,
+  validatePassword,
   type Invitation,
 } from '@/lib/invitations';
 import { authClient } from '@/lib/auth-client';
@@ -39,6 +47,10 @@ interface PublicInvitation {
   createdAt: Date;
 }
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+const MAX_NAME_LENGTH = 100;
+
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /** Extract and validate the raw token from req.query.token. */
@@ -48,7 +60,7 @@ function extractToken(req: NextApiRequest): string | null {
   return token;
 }
 
-/** Check if an invitation is usable (not expired, accepted, or revoked). */
+/** Check if an invitation is still previewable (not expired, accepted, or revoked). */
 function isInvitationValid(inv: Invitation): { valid: boolean; reason?: string } {
   if (inv.revokedAt) return { valid: false, reason: 'revoked' };
   if (inv.acceptedAt) return { valid: false, reason: 'accepted' };
@@ -157,39 +169,74 @@ async function handlePost(
     return;
   }
 
-  const { name, password } = req.body as { name?: unknown; password?: unknown };
+  const { name, password, email: emailInput } = req.body as {
+    name?: unknown;
+    password?: unknown;
+    email?: unknown;
+  };
 
+  // Validate name
   if (!name || typeof name !== 'string' || name.trim().length === 0) {
     res.status(400).json({ error: 'Missing or invalid name' });
     return;
   }
-
-  if (!password || typeof password !== 'string' || password.length === 0) {
-    res.status(400).json({ error: 'Missing or invalid password' });
+  if (name.trim().length > MAX_NAME_LENGTH) {
+    res.status(400).json({ error: `Name must be ${MAX_NAME_LENGTH} characters or fewer` });
     return;
   }
 
+  // Validate password strength before hitting the DB
+  if (!password || typeof password !== 'string') {
+    res.status(400).json({ error: 'Missing or invalid password' });
+    return;
+  }
+  const passwordError = validatePassword(password);
+  if (passwordError) {
+    res.status(400).json({ error: passwordError });
+    return;
+  }
+
+  // Require email confirmation before touching the DB
+  if (!emailInput || typeof emailInput !== 'string' || emailInput.trim().length === 0) {
+    res.status(400).json({ error: 'Missing email confirmation' });
+    return;
+  }
+
+  // Atomically claim the invitation.
+  // This single UPDATE guards against TOCTOU races: only one concurrent request
+  // can claim the invitation. Any subsequent request finds accepted_at IS NOT NULL
+  // and receives null → 410.
   let inv: Invitation | null;
   try {
-    inv = await getInvitationByToken(rawToken);
+    inv = await claimInvitationForAcceptance(rawToken);
   } catch (error) {
-    reqLogger.error({ error }, 'DB error fetching invitation for acceptance');
-    res.status(500).json({ error: 'Failed to fetch invitation' });
+    reqLogger.error({ error }, 'DB error claiming invitation for acceptance');
+    res.status(500).json({ error: 'Failed to process invitation' });
     return;
   }
 
   if (!inv) {
-    res.status(404).json({ error: 'Invitation not found' });
+    // Covers: not found, expired, already accepted, already revoked.
+    res.status(410).json({ error: 'Invitation is not valid or has already been used' });
     return;
   }
 
-  const { valid, reason } = isInvitationValid(inv);
-  if (!valid) {
-    res.status(410).json({ error: `Invitation is no longer valid (${reason})` });
+  // Verify the requester-supplied email matches the invited email (case-insensitive).
+  // This prevents an attacker holding a high-privilege token for alice@corp.com
+  // from registering as attacker@evil.com and receiving alice's role.
+  if (normaliseEmail(emailInput) !== inv.email) {
+    // Unclaim so the rightful invitee can still use the token.
+    await unclaimInvitation(inv.id).catch(e =>
+      reqLogger.error(
+        { error: e, invitationId: inv!.id },
+        'Failed to unclaim invitation after email mismatch'
+      )
+    );
+    res.status(400).json({ error: 'Email address does not match the invitation' });
     return;
   }
 
-  // Create user account via Better Auth
+  // Create user account via Better Auth using the canonical invited email (from DB).
   const signUpResult = await authClient.signUp.email({
     email: inv.email,
     password,
@@ -199,19 +246,27 @@ async function handlePost(
   if (signUpResult.error || !signUpResult.data?.user) {
     const message = signUpResult.error?.message ?? 'Registration failed';
     reqLogger.warn({ email: inv.email, error: message }, 'Sign-up failed during invitation accept');
+    // Unclaim so the invitation can be retried after the signup issue is resolved.
+    await unclaimInvitation(inv.id).catch(e =>
+      reqLogger.error(
+        { error: e, invitationId: inv!.id },
+        'Failed to unclaim invitation after sign-up failure'
+      )
+    );
     res.status(400).json({ error: message });
     return;
   }
 
   const newUserId = signUpResult.data.user.id;
 
-  // Assign role — roll back user on failure
+  // Assign role.
+  // On failure: delete the user AND unclaim the invitation for retry.
   try {
     await authAdminApi?.updateUser?.({ userId: newUserId, role: inv.role });
   } catch (roleError) {
     reqLogger.error(
       { error: roleError, userId: newUserId, role: inv.role },
-      'Role assignment failed — rolling back user creation'
+      'Role assignment failed — rolling back user creation and unclaiming invitation'
     );
     try {
       await authAdminApi?.deleteUser?.({ userId: newUserId });
@@ -221,25 +276,29 @@ async function handlePost(
         'Rollback failed: could not delete user'
       );
     }
+    await unclaimInvitation(inv.id).catch(e =>
+      reqLogger.error(
+        { error: e, invitationId: inv!.id },
+        'Failed to unclaim invitation after role assignment failure'
+      )
+    );
     res.status(500).json({ error: 'Failed to assign role. Please try again.' });
     return;
   }
 
-  // Mark invitation accepted
+  // accepted_at was already set by claimInvitationForAcceptance. This call ensures
+  // the timestamp is refreshed to the actual acceptance time (not the claim time).
+  // Non-fatal: user exists with correct role regardless.
   try {
     await markInvitationAccepted(inv.id);
   } catch (acceptError) {
-    // Non-fatal: user is created and role is assigned. Log and continue.
     reqLogger.warn(
       { error: acceptError, invitationId: inv.id },
-      'Could not mark invitation as accepted — user was created successfully'
+      'Could not refresh accepted_at timestamp — user was created and role assigned successfully'
     );
   }
 
-  reqLogger.info(
-    { userId: newUserId, invitationId: inv.id, role: inv.role },
-    'Invitation accepted'
-  );
+  reqLogger.info({ userId: newUserId, invitationId: inv.id, role: inv.role }, 'Invitation accepted');
   res.status(201).json({ message: 'Account created successfully' });
 }
 
@@ -250,7 +309,6 @@ async function handleDelete(
   res: NextApiResponse,
   reqLogger: ReturnType<typeof getRequestLogger>
 ): Promise<void> {
-  // Auth check
   const callerRole = await getCallerRole(req);
   if (!callerRole) {
     res.status(401).json({ error: 'Authentication required' });
@@ -281,6 +339,6 @@ async function handleDelete(
     return;
   }
 
-  reqLogger.info({ token: rawToken }, 'Invitation revoked');
+  reqLogger.info({ invitationId: rawToken }, 'Invitation revoked');
   res.status(200).json({ message: 'Invitation revoked' });
 }
