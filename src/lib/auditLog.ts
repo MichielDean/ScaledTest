@@ -188,11 +188,20 @@ export async function listAuditLog(options: ListAuditLogOptions = {}): Promise<L
   }
 
   if (dateFrom) {
+    // Validate ISO8601 format up front — an invalid string would cause PostgreSQL to throw
+    // a cast error on the timestamptz comparison, bubbling up as an unhandled 500.
+    if (isNaN(Date.parse(dateFrom))) {
+      throw new Error(`Invalid dateFrom: expected ISO8601 date string, got "${dateFrom}"`);
+    }
     params.push(dateFrom);
     conditions.push(`created_at >= $${params.length}`);
   }
 
   if (dateTo) {
+    // Same validation — invalid string → PostgreSQL cast error → unhandled 500.
+    if (isNaN(Date.parse(dateTo))) {
+      throw new Error(`Invalid dateTo: expected ISO8601 date string, got "${dateTo}"`);
+    }
     params.push(dateTo);
     conditions.push(`created_at <= $${params.length}`);
   }

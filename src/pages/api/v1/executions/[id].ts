@@ -16,6 +16,17 @@ import { getExecutionDetail, cancelExecution } from '@/lib/executions';
 import { isValidUuid } from '@/lib/validation';
 import { appendAuditLog, AuditAction } from '@/lib/auditLog';
 
+/**
+ * Normalize x-forwarded-for: it can be a string (possibly comma-separated for proxy chains)
+ * or a string array (when Node/Next.js dedups repeated headers). Always return a single IP.
+ */
+function normalizeIp(header: string | string[] | undefined, fallback: string | undefined): string | null {
+  if (!header) return fallback ?? null;
+  const raw = Array.isArray(header) ? header[0] : header;
+  // Take the first IP in a comma-separated proxy chain (leftmost = original client)
+  return raw.split(',')[0].trim() || fallback || null;
+}
+
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
     const raw = req.query['id'];
@@ -55,10 +66,12 @@ export default createBetterAuthApi({
     }
 
     try {
-      const execution = await cancelExecution(id);
-      if (execution === null) {
+      const result = await cancelExecution(id);
+      if (result === null) {
         return res.status(404).json({ success: false, error: 'Execution not found' });
       }
+
+      const { execution, previousStatus } = result;
 
       // Append-only audit log — fire-and-forget; never blocks the response.
       void appendAuditLog({
@@ -68,11 +81,9 @@ export default createBetterAuthApi({
         resourceType: 'execution',
         resourceId: id,
         teamId: execution.teamId,
-        metadata: { previousStatus: execution.status },
-        ipAddress:
-          (req.headers['x-forwarded-for'] as string | undefined) ??
-          req.socket?.remoteAddress ??
-          null,
+        // previousStatus is the status BEFORE cancellation (queued/running) — not 'cancelled'
+        metadata: { previousStatus },
+        ipAddress: normalizeIp(req.headers['x-forwarded-for'], req.socket?.remoteAddress),
       });
 
       return res.json({ success: true, data: execution });

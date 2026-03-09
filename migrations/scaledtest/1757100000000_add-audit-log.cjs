@@ -80,7 +80,7 @@ exports.up = pgm => {
   pgm.createIndex('audit_log', 'created_at');
   // Filter by actor.
   pgm.createIndex('audit_log', 'actor_id');
-  // Filter by action category (prefix search via LIKE 'execution.%').
+  // Filter by action category (prefix/category filtering via starts_with(), e.g. 'execution.*').
   pgm.createIndex('audit_log', 'action');
   // Filter by resource.
   pgm.createIndex('audit_log', ['resource_type', 'resource_id']);

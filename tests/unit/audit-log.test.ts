@@ -531,3 +531,119 @@ describe('AuditAction constants', () => {
     expect(categories).toContain('team');
   });
 });
+
+// ── Additional regression tests (from code review findings) ──────────────────
+
+describe('GET /api/v1/admin/audit-log — review fixes', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+    mockGetSession.mockReset();
+  });
+
+  function mockCountAndData(total: number, rows: object[]) {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: String(total) }] })
+      .mockResolvedValueOnce({ rows });
+  }
+
+  it('returns 503 when listAuditLog throws (DB unavailable)', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+    mockQuery.mockRejectedValue(new Error('DB connection refused'));
+
+    const req = makeReq('GET');
+    const res = makeRes();
+
+    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    expect(res.status).toHaveBeenCalledWith(503);
+    const body = (res.json as jest.Mock).mock.calls[0][0];
+    expect(body.success).toBe(false);
+    expect(body.error).toMatch(/unavailable/i);
+  });
+
+  it('normalizes array query params — takes first element when param appears multiple times', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+    mockCountAndData(0, []);
+
+    // Simulate Next.js passing an array when the same param appears twice
+    const req = {
+      method: 'GET',
+      headers: { cookie: 'session=test' },
+      query: { actorId: ['user-1', 'user-2'] as unknown as string },
+      body: {},
+    };
+    const res = makeRes();
+
+    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    // Should not 400 — first element taken, length check is on a string
+    expect(res.status).toHaveBeenCalledWith(200);
+    // actorId filter should use 'user-1' (first element)
+    const countParams: string[] = mockQuery.mock.calls[0][1];
+    expect(countParams[0]).toBe('user-1');
+  });
+
+  it('returns 400 for invalid dateFrom (non-ISO string)', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+
+    const req = makeReq('GET', { query: { dateFrom: 'not-a-date' } });
+    const res = makeRes();
+
+    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = (res.json as jest.Mock).mock.calls[0][0];
+    expect(body.error).toMatch(/dateFrom/);
+  });
+
+  it('returns 400 for invalid dateTo (non-ISO string)', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+
+    const req = makeReq('GET', { query: { dateTo: 'yesterday' } });
+    const res = makeRes();
+
+    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    expect(res.status).toHaveBeenCalledWith(400);
+    const body = (res.json as jest.Mock).mock.calls[0][0];
+    expect(body.error).toMatch(/dateTo/);
+  });
+
+  it('accepts valid ISO dateFrom/dateTo', async () => {
+    mockGetSession.mockResolvedValue(ownerSession);
+    mockCountAndData(0, []);
+
+    const req = makeReq('GET', {
+      query: { dateFrom: '2026-01-01T00:00:00Z', dateTo: '2026-12-31T23:59:59Z' },
+    });
+    const res = makeRes();
+
+    await auditLogHandler(req as NextApiRequest, res as unknown as NextApiResponse);
+
+    expect(res.status).toHaveBeenCalledWith(200);
+  });
+});
+
+describe('listAuditLog — invalid date handling', () => {
+  beforeEach(() => {
+    mockQuery.mockReset();
+  });
+
+  it('throws on invalid dateFrom to prevent PostgreSQL cast error (500 risk)', async () => {
+    await expect(listAuditLog({ dateFrom: 'not-a-date' })).rejects.toThrow(/dateFrom/);
+  });
+
+  it('throws on invalid dateTo to prevent PostgreSQL cast error (500 risk)', async () => {
+    await expect(listAuditLog({ dateTo: 'yesterday' })).rejects.toThrow(/dateTo/);
+  });
+
+  it('accepts valid ISO dateFrom/dateTo without throwing', async () => {
+    mockQuery
+      .mockResolvedValueOnce({ rows: [{ total: '0' }] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    await expect(
+      listAuditLog({ dateFrom: '2026-01-01T00:00:00Z', dateTo: '2026-12-31T23:59:59Z' })
+    ).resolves.not.toThrow();
+  });
+});
