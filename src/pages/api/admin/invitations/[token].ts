@@ -237,7 +237,9 @@ async function handlePost(
         { error: unclaimError, invitationId: inv.id },
         'CRITICAL: failed to unclaim invitation after email mismatch — invitation is stuck; re-issue required'
       );
-      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      res.status(500).json({
+        error: 'Server error. Please contact an administrator to re-issue the invitation.',
+      });
       return;
     }
     res.status(400).json({ error: 'Email address does not match the invitation' });
@@ -263,7 +265,9 @@ async function handlePost(
         { error: unclaimError, invitationId: inv.id },
         'CRITICAL: failed to unclaim invitation after sign-up failure — invitation is stuck; re-issue required'
       );
-      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      res.status(500).json({
+        error: 'Server error. Please contact an administrator to re-issue the invitation.',
+      });
       return;
     }
     res.status(400).json({ error: message });
@@ -298,7 +302,9 @@ async function handlePost(
         { error: unclaimError, invitationId: inv.id },
         'CRITICAL: failed to unclaim invitation after role assignment failure — invitation is stuck; re-issue required'
       );
-      res.status(500).json({ error: 'Server error. Please contact an administrator to re-issue the invitation.' });
+      res.status(500).json({
+        error: 'Server error. Please contact an administrator to re-issue the invitation.',
+      });
       return;
     }
     res.status(500).json({ error: 'Failed to assign role. Please try again.' });
