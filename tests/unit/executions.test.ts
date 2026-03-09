@@ -19,7 +19,9 @@ jest.mock('../../src/logging/logger', () => ({
   logError: jest.fn(),
 }));
 
-// Mock kubernetes so cancelExecution can call deleteKubernetesJob without a real cluster
+// Mock kubernetes to prevent accidental real-cluster calls if someone re-adds the import
+// in executions.ts. executions.ts intentionally does NOT import kubernetes (circular dep risk);
+// this mock + the `not.toHaveBeenCalled()` assertion in the tests below act as a regression guard.
 jest.mock('../../src/lib/kubernetes', () => ({
   deleteKubernetesJob: jest.fn().mockResolvedValue(undefined),
 }));
