@@ -166,18 +166,14 @@ export async function listAuditLog(options: ListAuditLogOptions = {}): Promise<L
   }
 
   if (actionPrefix) {
-    // Match "execution" -> "execution.%" to catch all execution.* events.
-    // Also match exact action if it already contains a dot.
-    // Escape backslashes first, then LIKE special characters (% and _),
-    // so that a backslash in the input does not corrupt the escape sequence.
-    const escapedPrefix = actionPrefix
-      .replace(/\\/g, '\\\\')
-      .replace(/%/g, '\\%')
-      .replace(/_/g, '\\_');
-    params.push(`${escapedPrefix}.%`);
+    // Match "execution" -> all "execution.*" actions OR an exact "execution" action.
+    // Use starts_with() (PostgreSQL 11+) instead of LIKE to avoid any string-escaping
+    // concerns: both the column name and the prefix value are passed as parameterised
+    // inputs, so there is no risk of injection or encoding bugs.
+    params.push(`${actionPrefix}.`);
     params.push(actionPrefix);
     conditions.push(
-      `(action LIKE $${params.length - 1} ESCAPE '\\' OR action = $${params.length})`
+      `(starts_with(action, $${params.length - 1}) OR action = $${params.length})`
     );
   }
 

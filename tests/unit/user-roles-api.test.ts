@@ -28,6 +28,30 @@ jest.mock('@/logging/logger', () => ({
     error: jest.fn(),
     debug: jest.fn(),
   },
+  dbLogger: {
+    info: jest.fn(),
+    warn: jest.fn(),
+    error: jest.fn(),
+    debug: jest.fn(),
+  },
+}));
+
+// Mock audit log — fire-and-forget calls must not try to reach TimescaleDB in unit tests.
+jest.mock('@/lib/auditLog', () => ({
+  appendAuditLog: jest.fn().mockResolvedValue(undefined),
+  AuditAction: {
+    REPORT_SUBMITTED: 'report.submitted',
+    REPORT_DELETED: 'report.deleted',
+    EXECUTION_CREATED: 'execution.created',
+    EXECUTION_CANCELLED: 'execution.cancelled',
+    EXECUTION_COMPLETED: 'execution.completed',
+    EXECUTION_FAILED: 'execution.failed',
+    ADMIN_ROLE_CHANGED: 'admin.role_changed',
+    ADMIN_USER_DELETED: 'admin.user_deleted',
+    ADMIN_USER_INVITED: 'admin.user_invited',
+    TEAM_MEMBER_ADDED: 'team.member_added',
+    TEAM_MEMBER_REMOVED: 'team.member_removed',
+  },
 }));
 
 // Use real validateUuid — it's pure logic with no side effects
