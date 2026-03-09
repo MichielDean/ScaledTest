@@ -58,6 +58,8 @@ function safeInvitation(inv: Invitation): SafeInvitation {
 /** Basic email validation — linear-time, no backtracking risk. */
 function isValidEmail(email: unknown): email is string {
   if (typeof email !== 'string') return false;
+  // Reject unreasonably long strings before any character scanning
+  if (email.length > 254) return false;
   // Locate '@' — must appear exactly once, not at the start or end.
   const atIdx = email.indexOf('@');
   if (atIdx <= 0 || atIdx === email.length - 1 || atIdx !== email.lastIndexOf('@')) return false;

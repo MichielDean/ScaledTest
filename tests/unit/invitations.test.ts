@@ -634,9 +634,9 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     expect(res.status).toHaveBeenCalledWith(500);
   });
 
-  it('returns 500 and unclams if authAdminApi.updateUser is not available', async () => {
+    it('returns 500 and does not touch DB if authAdminApi.updateUser is not available', async () => {
     // Simulate a misconfigured Better Auth admin plugin (updateUser not available).
-    // The guard should catch this before creating a user with no role.
+    // The guard fires BEFORE any DB side effects — no claim, no signUp, no orphan user.
     const { authAdminApi: mockAuthAdminApiModule } = jest.requireMock('@/lib/auth') as {
       authAdminApi: { updateUser: jest.Mock | undefined; deleteUser: jest.Mock };
     };
@@ -644,12 +644,6 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     mockAuthAdminApiModule.updateUser = undefined as unknown as jest.Mock;
 
     const inv = makeInvitation();
-    mockClaimInvitationForAcceptance.mockResolvedValue(inv);
-    mockSignUp.mockResolvedValue({
-      data: { user: { id: 'new-user-id', email: inv.email } },
-      error: null,
-    });
-    mockUnclaimInvitation.mockResolvedValue(undefined);
 
     const req = makeReq(
       'POST',
@@ -659,7 +653,10 @@ describe('POST /api/admin/invitations/[token] (accept)', () => {
     const res = makeRes();
     await tokenHandler(req as NextApiRequest, res as unknown as NextApiResponse);
 
-    expect(mockUnclaimInvitation).toHaveBeenCalledWith(inv.id);
+    // The guard fires before any DB side effects
+    expect(mockClaimInvitationForAcceptance).not.toHaveBeenCalled();
+    expect(mockSignUp).not.toHaveBeenCalled();
+    expect(mockUnclaimInvitation).not.toHaveBeenCalled();
     expect(mockMarkInvitationAccepted).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(500);
 
