@@ -583,6 +583,7 @@ export const getCtrfReportById = async (
           uploaded_by, user_teams, test_data, environment_data, extra_data
         FROM test_reports
         WHERE ${conditions.join(' AND ')}
+        ORDER BY stored_at DESC
         LIMIT 1
       `;
 
