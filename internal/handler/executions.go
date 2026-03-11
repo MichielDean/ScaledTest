@@ -14,6 +14,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
@@ -112,6 +113,11 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
+
+	// Sanitize user-provided strings
+	req.Command = sanitize.String(req.Command)
+	req.Image = sanitize.String(req.Image)
+	req.EnvVars = sanitize.StringMap(req.EnvVars)
 
 	// Build config JSON from image and env vars
 	var configJSON []byte
@@ -253,6 +259,9 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
+
+	// Sanitize user-provided strings
+	req.ErrorMsg = sanitize.String(req.ErrorMsg)
 
 	now := time.Now()
 

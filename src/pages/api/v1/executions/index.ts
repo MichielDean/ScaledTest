@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { createExecution, listExecutions, type ExecutionStatus } from '@/lib/executions';
+import { sanitizeString, sanitizeStringRecord } from '@/lib/sanitize';
 
 // Regex: docker image names — no shell injection
 const DOCKER_IMAGE_RE = /^[a-zA-Z0-9][a-zA-Z0-9._\-/:@]*$/;
@@ -90,10 +91,10 @@ export default createBetterAuthApi({
 
     try {
       const execution = await createExecution({
-        dockerImage,
-        testCommand,
+        dockerImage: sanitizeString(dockerImage),
+        testCommand: sanitizeString(testCommand),
         parallelism,
-        environmentVars,
+        environmentVars: sanitizeStringRecord(environmentVars),
         resourceLimits,
         requestedBy: req.user.id,
         teamId,
