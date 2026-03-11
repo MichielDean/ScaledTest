@@ -137,7 +137,10 @@ export class ScaledTestClient {
       throw new Error(`baseUrl must use http or https (got ${parsed.protocol})`)
     }
 
-    this.baseUrl = options.baseUrl.replace(/\/+$/, '')
+    // Strip trailing slash(es) from base URL
+    let base = options.baseUrl
+    while (base.endsWith('/')) base = base.slice(0, -1)
+    this.baseUrl = base
     this.token = options.token
     this.timeoutMs = options.timeoutMs ?? 30_000
   }
