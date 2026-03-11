@@ -8,16 +8,16 @@ export function RootLayout() {
     <div className="min-h-screen bg-background text-foreground">
       <nav className="border-b">
         <div className="flex h-14 items-center px-6 gap-6">
-          <Link to="/" className="font-bold text-lg">ScaledTest</Link>
+          <Link to="/" id="nav-home" className="font-bold text-lg">ScaledTest</Link>
           {isAuthenticated && (
             <div className="flex gap-4 text-sm">
-              <Link to="/" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Dashboard</Link>
-              <Link to="/reports" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Reports</Link>
-              <Link to="/executions" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Executions</Link>
-              <Link to="/analytics" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Analytics</Link>
-              <Link to="/quality-gates" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Quality Gates</Link>
+              <Link to="/" id="nav-dashboard" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Dashboard</Link>
+              <Link to="/reports" id="nav-reports" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Reports</Link>
+              <Link to="/executions" id="nav-executions" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Executions</Link>
+              <Link to="/analytics" id="nav-analytics" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Analytics</Link>
+              <Link to="/quality-gates" id="nav-quality-gates" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Quality Gates</Link>
               {user?.role === 'owner' && (
-                <Link to="/admin" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Admin</Link>
+                <Link to="/admin" id="nav-admin" className="text-muted-foreground hover:text-foreground [&.active]:text-foreground">Admin</Link>
               )}
             </div>
           )}
@@ -26,6 +26,7 @@ export function RootLayout() {
               <>
                 <span className="text-sm text-muted-foreground">{user?.display_name || user?.email}</span>
                 <button
+                  id="btn-sign-out"
                   onClick={() => logout()}
                   className="text-sm text-muted-foreground hover:text-foreground"
                 >
@@ -33,7 +34,7 @@ export function RootLayout() {
                 </button>
               </>
             ) : (
-              <Link to="/login" className="text-sm text-muted-foreground hover:text-foreground">
+              <Link to="/login" id="nav-sign-in" className="text-sm text-muted-foreground hover:text-foreground">
                 Sign In
               </Link>
             )}
