@@ -299,3 +299,408 @@ func TestCompareReports_NoDB(t *testing.T) {
 		t.Errorf("Compare without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
+
+// --- CTRF report creation edge cases ---
+
+func TestCreateReport_EmptyBody(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(""))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with empty body: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateReport_NoTests(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":0},"tests":[]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with no tests: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateReport_InvalidTestStatus(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[{"name":"t1","status":"unknown_status","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with invalid status: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	var body map[string]string
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["error"] == "" {
+		t.Error("expected error message in response")
+	}
+}
+
+func TestCreateReport_TestMissingName(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[{"name":"","status":"passed","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with missing test name: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCreateReport_NoDB_AllTestStatuses(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"pytest"},"summary":{"tests":5,"passed":1,"failed":1,"skipped":1,"pending":1,"other":1},"tests":[
+		{"name":"t1","status":"passed","duration":10},
+		{"name":"t2","status":"failed","duration":20,"message":"assertion error","trace":"line 42"},
+		{"name":"t3","status":"skipped","duration":0},
+		{"name":"t4","status":"pending","duration":0},
+		{"name":"t5","status":"other","duration":5}
+	]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with all statuses: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["tool"] != "pytest" {
+		t.Errorf("tool = %v, want pytest", resp["tool"])
+	}
+	if resp["tests"] != float64(5) {
+		t.Errorf("tests = %v, want 5", resp["tests"])
+	}
+	if resp["message"] != "report accepted" {
+		t.Errorf("message = %v, want 'report accepted'", resp["message"])
+	}
+}
+
+func TestCreateReport_NoDB_RichCTRFData(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{
+		"tool":{"name":"playwright","version":"1.40.0"},
+		"summary":{"tests":2,"passed":1,"failed":1,"skipped":0,"pending":0,"other":0,"start":1700000000,"stop":1700000060},
+		"tests":[
+			{"name":"login test","status":"passed","duration":1500,"suite":"auth","filePath":"tests/auth.spec.ts","tags":["smoke","auth"]},
+			{"name":"signup test","status":"failed","duration":3000,"suite":"auth","filePath":"tests/auth.spec.ts","message":"timeout","trace":"at signup.ts:15","retry":2,"flaky":true}
+		],
+		"environment":{"appName":"myapp","appVersion":"2.0","branchName":"main","buildNumber":"42"}
+	}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with rich CTRF: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["tool"] != "playwright" {
+		t.Errorf("tool = %v, want playwright", resp["tool"])
+	}
+	if resp["tests"] != float64(2) {
+		t.Errorf("tests = %v, want 2", resp["tests"])
+	}
+}
+
+func TestCreateReport_NoDB_NoExecutionIDInResponse(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("got %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["execution_id"]; ok {
+		t.Error("execution_id should not be present when not provided")
+	}
+}
+
+// --- Date filtering tests ---
+
+func TestListReports_DateFilterParams_NoDB(t *testing.T) {
+	// Verify that date filter params don't cause crashes when DB is nil.
+	// The handler parses dates before hitting the DB, so this tests the parse path.
+	tests := []struct {
+		name  string
+		query string
+	}{
+		{"valid since", "?since=2026-01-01T00:00:00Z"},
+		{"valid until", "?until=2026-12-31T23:59:59Z"},
+		{"both dates", "?since=2026-01-01T00:00:00Z&until=2026-12-31T23:59:59Z"},
+		{"invalid since format", "?since=not-a-date"},
+		{"invalid until format", "?until=2026-13-45"},
+		{"empty since", "?since="},
+		{"empty until", "?until="},
+		{"since with timezone offset", "?since=2026-01-01T00:00:00+05:00"},
+		{"until with timezone offset", "?until=2026-12-31T23:59:59-08:00"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &ReportsHandler{DB: nil}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest("GET", "/api/v1/reports"+tt.query, nil)
+			r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+			h.List(w, r)
+
+			// With nil DB, we always get 503 — the important thing is we don't panic
+			if w.Code != http.StatusServiceUnavailable {
+				t.Errorf("List(%s): got %d, want %d", tt.query, w.Code, http.StatusServiceUnavailable)
+			}
+		})
+	}
+}
+
+func TestListReports_DateFilterWithPagination_NoDB(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?since=2026-01-01T00:00:00Z&until=2026-06-01T00:00:00Z&limit=25&offset=10", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.List(w, r)
+
+	// Verifies date filters and pagination params combine without error
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+// --- Team scoping tests ---
+
+func TestListReports_RequiresClaims(t *testing.T) {
+	// Without any claims, List must return 401 regardless of query params
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?limit=10", nil)
+
+	h.List(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("List without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestCreateReport_DifferentTeams_NoDB(t *testing.T) {
+	// Verify that reports created by different teams work in no-DB fallback mode
+	teams := []struct {
+		teamID string
+		tool   string
+	}{
+		{"team-alpha", "jest"},
+		{"team-beta", "pytest"},
+		{"team-gamma", "mocha"},
+	}
+
+	for _, tt := range teams {
+		t.Run(tt.teamID, func(t *testing.T) {
+			h := &ReportsHandler{DB: nil}
+			w := httptest.NewRecorder()
+			report := `{"results":{"tool":{"name":"` + tt.tool + `"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+			r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+			r = testWithClaimsSimple(r, "user-1", tt.teamID, "owner")
+
+			h.Create(w, r)
+
+			if w.Code != http.StatusCreated {
+				t.Errorf("Create for %s: got %d, want %d", tt.teamID, w.Code, http.StatusCreated)
+			}
+		})
+	}
+}
+
+func TestGetReport_RequiresBothClaimsAndID(t *testing.T) {
+	// Missing claims → 401 (takes priority over missing ID)
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/some-id", nil)
+	r = testWithChiParam(r, "reportID", "some-id")
+
+	h.Get(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Get without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestDeleteReport_RequiresBothClaimsAndID(t *testing.T) {
+	// Missing claims → 401 (takes priority over missing ID)
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("DELETE", "/api/v1/reports/some-id", nil)
+	r = testWithChiParam(r, "reportID", "some-id")
+
+	h.Delete(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Delete without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+// --- Error response structure tests ---
+
+func TestErrorResponses_HaveErrorField(t *testing.T) {
+	tests := []struct {
+		name    string
+		method  string
+		path    string
+		setup   func(r *http.Request) *http.Request
+		handler func(h *ReportsHandler, w http.ResponseWriter, r *http.Request)
+	}{
+		{
+			name:   "List unauthorized",
+			method: "GET", path: "/api/v1/reports",
+			setup:   func(r *http.Request) *http.Request { return r },
+			handler: func(h *ReportsHandler, w http.ResponseWriter, r *http.Request) { h.List(w, r) },
+		},
+		{
+			name:   "Create unauthorized",
+			method: "POST", path: "/api/v1/reports",
+			setup:   func(r *http.Request) *http.Request { return r },
+			handler: func(h *ReportsHandler, w http.ResponseWriter, r *http.Request) { h.Create(w, r) },
+		},
+		{
+			name:   "Get missing ID",
+			method: "GET", path: "/api/v1/reports/",
+			setup: func(r *http.Request) *http.Request {
+				r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+				return testWithChiParam(r, "reportID", "")
+			},
+			handler: func(h *ReportsHandler, w http.ResponseWriter, r *http.Request) { h.Get(w, r) },
+		},
+		{
+			name:   "Delete missing ID",
+			method: "DELETE", path: "/api/v1/reports/",
+			setup: func(r *http.Request) *http.Request {
+				r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+				return testWithChiParam(r, "reportID", "")
+			},
+			handler: func(h *ReportsHandler, w http.ResponseWriter, r *http.Request) { h.Delete(w, r) },
+		},
+		{
+			name:   "Compare missing params",
+			method: "GET", path: "/api/v1/reports/compare",
+			setup: func(r *http.Request) *http.Request {
+				return testWithClaimsSimple(r, "user-1", "team-1", "owner")
+			},
+			handler: func(h *ReportsHandler, w http.ResponseWriter, r *http.Request) { h.Compare(w, r) },
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &ReportsHandler{}
+			w := httptest.NewRecorder()
+			r := httptest.NewRequest(tt.method, tt.path, strings.NewReader("{}"))
+			r = tt.setup(r)
+
+			tt.handler(h, w, r)
+
+			var body map[string]string
+			if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+				t.Fatalf("failed to decode error response: %v", err)
+			}
+			if body["error"] == "" {
+				t.Errorf("expected non-empty 'error' field in response body")
+			}
+		})
+	}
+}
+
+// --- Pagination edge cases ---
+
+func TestParsePagination_AdditionalCases(t *testing.T) {
+	tests := []struct {
+		query      string
+		wantLimit  int
+		wantOffset int
+	}{
+		{"?limit=1", 1, 0},          // minimum valid limit
+		{"?limit=99&offset=0", 99, 0},
+		{"?limit=50&offset=1000", 50, 1000}, // large offset
+		{"?limit=101", 50, 0},               // just over max
+		{"?offset=abc", 50, 0},              // non-numeric offset
+		{"?limit=10.5", 50, 0},              // float limit
+		{"?offset=10.5", 50, 0},             // float offset
+	}
+
+	for _, tt := range tests {
+		r := httptest.NewRequest("GET", "/api/v1/reports"+tt.query, nil)
+		limit, offset := parsePagination(r)
+		if limit != tt.wantLimit || offset != tt.wantOffset {
+			t.Errorf("parsePagination(%q) = (%d, %d), want (%d, %d)",
+				tt.query, limit, offset, tt.wantLimit, tt.wantOffset)
+		}
+	}
+}
+
+// --- Compare endpoint edge cases ---
+
+func TestCompareReports_BothParamsEmpty(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=&head=", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Compare with empty params: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCompareReports_OnlyBaseEmpty(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=&head=abc", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Compare with empty base: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCompareReports_OnlyHeadEmpty(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=abc&head=", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Compare with empty head: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
