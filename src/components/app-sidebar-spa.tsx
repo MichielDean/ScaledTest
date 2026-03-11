@@ -41,6 +41,7 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
       icon: BarChart3,
       isActive: [
         'test-results',
+        'report-detail',
         'modern-analytics',
         'visualization-playground',
         'simple-test-dashboard',
