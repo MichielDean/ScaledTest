@@ -38,6 +38,8 @@ next-env.d.ts
 
 # compiled outputs
 dist
+!internal/spa/dist/
+!internal/spa/dist/placeholder
 /bin/
 
 # Go build artifacts
