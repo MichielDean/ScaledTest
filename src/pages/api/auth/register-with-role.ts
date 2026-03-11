@@ -3,6 +3,7 @@ import { authClient } from '../../../lib/auth-client';
 import { roleNames } from '../../../lib/auth-shared';
 import { apiLogger } from '../../../logging/logger';
 import { authAdminApi } from '../../../lib/auth';
+import { sanitizeString } from '../../../lib/sanitize';
 
 interface RegisterRequest {
   email: string;
@@ -53,11 +54,14 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse<
       });
     }
 
+    // Sanitize user-provided name
+    const sanitizedName = sanitizeString(name);
+
     // First, create the user using Better Auth
     const signUpResult = await authClient.signUp.email({
       email,
       password,
-      name,
+      name: sanitizedName,
     });
 
     if (!signUpResult.data?.user) {
