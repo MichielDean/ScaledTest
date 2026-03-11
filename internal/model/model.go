@@ -68,19 +68,49 @@ type APIToken struct {
 
 // TestExecution tracks a K8s Job-based test execution.
 type TestExecution struct {
-	ID         string           `json:"id"`
-	TeamID     string           `json:"team_id"`
-	Status     string           `json:"status"` // pending, running, completed, failed, cancelled
-	Command    string           `json:"command"`
-	Config     json.RawMessage  `json:"config,omitempty"`
-	ReportID   *string          `json:"report_id,omitempty"`
-	K8sJobName *string          `json:"k8s_job_name,omitempty"`
-	K8sPodName *string          `json:"k8s_pod_name,omitempty"`
-	ErrorMsg   *string          `json:"error_msg,omitempty"`
-	StartedAt  *time.Time       `json:"started_at,omitempty"`
-	FinishedAt *time.Time       `json:"finished_at,omitempty"`
-	CreatedAt  time.Time        `json:"created_at"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	ID            string          `json:"id"`
+	TeamID        string          `json:"team_id"`
+	Status        string          `json:"status"` // pending, running, completed, failed, cancelled
+	Command       string          `json:"command"`
+	Config        json.RawMessage `json:"config,omitempty"`
+	Parallelism   int             `json:"parallelism"`                // Number of workers (1 = sequential)
+	SplitStrategy string          `json:"split_strategy,omitempty"`   // round-robin, by-file, by-duration
+	TestFiles     []string        `json:"test_files,omitempty"`       // Explicit test file list for splitting
+	ReportID      *string         `json:"report_id,omitempty"`        // Aggregated report ID
+	K8sJobName    *string         `json:"k8s_job_name,omitempty"`     // Set for single-worker executions
+	K8sPodName    *string         `json:"k8s_pod_name,omitempty"`
+	ErrorMsg      *string         `json:"error_msg,omitempty"`
+	StartedAt     *time.Time      `json:"started_at,omitempty"`
+	FinishedAt    *time.Time      `json:"finished_at,omitempty"`
+	CreatedAt     time.Time       `json:"created_at"`
+	UpdatedAt     time.Time       `json:"updated_at"`
+}
+
+// WorkerExecution tracks an individual worker within a parallel execution.
+type WorkerExecution struct {
+	ID          string          `json:"id"`
+	ExecutionID string          `json:"execution_id"`
+	WorkerIndex int             `json:"worker_index"` // 0-based index within the pool
+	Status      string          `json:"status"`       // pending, running, completed, failed, cancelled
+	Command     string          `json:"command"`       // Worker-specific command (subset of tests)
+	TestFiles   []string        `json:"test_files,omitempty"` // Tests assigned to this worker
+	ReportID    *string         `json:"report_id,omitempty"`
+	K8sJobName  *string         `json:"k8s_job_name,omitempty"`
+	K8sPodName  *string         `json:"k8s_pod_name,omitempty"`
+	ErrorMsg    *string         `json:"error_msg,omitempty"`
+	StartedAt   *time.Time      `json:"started_at,omitempty"`
+	FinishedAt  *time.Time      `json:"finished_at,omitempty"`
+	CreatedAt   time.Time       `json:"created_at"`
+	UpdatedAt   time.Time       `json:"updated_at"`
+}
+
+// ParallelConfig is the user-facing configuration for parallel execution.
+type ParallelConfig struct {
+	Workers       int               `json:"workers" validate:"required,min=1,max=64"`
+	SplitStrategy string            `json:"split_strategy" validate:"required,oneof=round-robin by-file by-duration"`
+	TestFiles     []string          `json:"test_files,omitempty"`     // Explicit file list
+	FilePattern   string            `json:"file_pattern,omitempty"`   // Glob pattern to discover test files
+	DurationData  map[string]int64  `json:"duration_data,omitempty"`  // File -> avg ms for by-duration splitting
 }
 
 // TestReport represents a CTRF test report.
