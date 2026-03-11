@@ -22,7 +22,8 @@ export function NavProjects({
 }: {
   projects: {
     name: string;
-    url: string;
+    url?: string;
+    onClick?: () => void;
     icon: LucideIcon;
   }[];
 }) {
@@ -36,10 +37,17 @@ export function NavProjects({
           {projects.map(item => (
             <SidebarMenuItem key={item.name}>
               <SidebarMenuButton asChild>
-                <a href={item.url}>
-                  <item.icon />
-                  <span>{item.name}</span>
-                </a>
+                {item.onClick ? (
+                  <button onClick={item.onClick} className="w-full text-left">
+                    <item.icon />
+                    <span>{item.name}</span>
+                  </button>
+                ) : (
+                  <a href={item.url ?? '#'}>
+                    <item.icon />
+                    <span>{item.name}</span>
+                  </a>
+                )}
               </SidebarMenuButton>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>

@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BarChart3, Building2, FileText, Home, Play, Settings, TestTube } from 'lucide-react';
+import { BarChart3, Building2, Home, Play, Settings } from 'lucide-react';
 
 import { NavMain } from '@/components/nav-main-spa';
 import { NavProjects } from '@/components/nav-projects';
@@ -15,10 +15,12 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { hasWriteAccess } from '../lib/roles';
 import { useSPANavigation } from '../contexts/SPANavigationContext';
+import { useTeams } from '../contexts/TeamContext';
 
 export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user: userProfile, logout } = useAuth();
   const { navigateTo, currentView } = useSPANavigation();
+  const { userTeams, setSelectedTeamIds } = useTeams();
 
   // SPA navigation structure with click handlers instead of URLs
   const navMain = [
@@ -95,24 +97,15 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
       : []),
   ];
 
-  // User teams as projects
-  const teams = [
-    {
-      name: 'Development',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: Building2,
+  // Map user teams from context to NavProjects format
+  const teams = userTeams.map(team => ({
+    name: team.name,
+    icon: Building2,
+    onClick: () => {
+      setSelectedTeamIds([team.id]);
+      navigateTo('dashboard');
     },
-    {
-      name: 'QA Testing',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: TestTube,
-    },
-    {
-      name: 'Reports',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: FileText,
-    },
-  ];
+  }));
 
   const user = {
     name: userProfile?.name || 'User',
