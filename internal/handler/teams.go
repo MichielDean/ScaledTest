@@ -10,6 +10,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 )
 
 // TeamsHandler handles team management endpoints.
@@ -91,6 +92,9 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotImplemented, "create team requires database connection")
 		return
 	}
+
+	// Sanitize user-provided strings
+	req.Name = sanitize.String(req.Name)
 
 	// Use a transaction so team + membership are atomic
 	tx, err := h.DB.Begin(r.Context())
@@ -308,6 +312,9 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusForbidden, "only team owners can manage tokens")
 		return
 	}
+
+	// Sanitize user-provided strings
+	req.Name = sanitize.String(req.Name)
 
 	// Generate API token
 	tokenResult, err := auth.GenerateAPIToken()

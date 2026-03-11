@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
@@ -84,6 +85,10 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Sanitize user-provided strings
+	req.Name = sanitize.String(req.Name)
+	req.Description = sanitize.String(req.Description)
+
 	gate, err := h.Store.Create(r.Context(), claims.TeamID, req.Name, req.Description, req.Rules)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create quality gate")
@@ -145,6 +150,10 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotImplemented, "update quality gate requires database connection")
 		return
 	}
+
+	// Sanitize user-provided strings
+	req.Name = sanitize.String(req.Name)
+	req.Description = sanitize.String(req.Description)
 
 	active := true
 	if req.Active != nil {

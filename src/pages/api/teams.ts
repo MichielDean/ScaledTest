@@ -16,6 +16,7 @@ import {
   UserWithTeams,
   CreateTeamRequest,
 } from '../../types/team';
+import { sanitizeString } from '../../lib/sanitize';
 import type { Logger } from 'pino';
 
 interface AuthenticatedUser {
@@ -511,11 +512,13 @@ async function handleCreateTeam(
       });
     }
 
-    // Create the team
+    // Sanitize and create the team
     const newTeam = await createTeam(
       {
-        name: trimmedName,
-        description: createData.description?.trim(),
+        name: sanitizeString(trimmedName),
+        description: createData.description
+          ? sanitizeString(createData.description.trim())
+          : undefined,
       },
       createdBy
     );
