@@ -97,6 +97,26 @@ export class HeaderComponent {
   }
 
   /**
+   * Navigate to team management page via sidebar
+   */
+  async navigateToTeamManagement(): Promise<void> {
+    const administrationSection = this.page.locator('#nav-administration').first();
+    await administrationSection.waitFor({ state: 'visible', timeout: 10000 });
+
+    const teamsLink = this.page.locator('#headerAdminTeams');
+    const isTeamsLinkVisible = await teamsLink.isVisible();
+
+    if (!isTeamsLinkVisible) {
+      await administrationSection.click();
+      await this.page.waitForTimeout(500);
+    }
+
+    await teamsLink.waitFor({ state: 'visible', timeout: 5000 });
+    await teamsLink.click();
+    await this.page.waitForLoadState('networkidle');
+  }
+
+  /**
    * Log out the current user
    */
   async logout() {
