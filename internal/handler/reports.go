@@ -326,6 +326,212 @@ func (h *ReportsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// Compare handles GET /api/v1/reports/compare?base=<id>&head=<id>.
+// It computes a diff between two CTRF reports: new failures, fixed tests,
+// and duration regressions.
+func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	baseID := r.URL.Query().Get("base")
+	headID := r.URL.Query().Get("head")
+	if baseID == "" || headID == "" {
+		Error(w, http.StatusBadRequest, "base and head report IDs are required")
+		return
+	}
+	if baseID == headID {
+		Error(w, http.StatusBadRequest, "base and head must be different reports")
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	// Fetch both report metadata in parallel (sequential for simplicity, both must belong to team)
+	fetchReport := func(id string) (*model.TestReport, error) {
+		var rpt model.TestReport
+		err := h.DB.QueryRow(r.Context(),
+			`SELECT id, team_id, execution_id, tool_name, tool_version, environment, summary, created_at
+			 FROM test_reports WHERE id = $1 AND team_id = $2`,
+			id, claims.TeamID).Scan(
+			&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
+			&rpt.ToolVersion, &rpt.Environment, &rpt.Summary, &rpt.CreatedAt,
+		)
+		return &rpt, err
+	}
+
+	baseReport, err := fetchReport(baseID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "base report not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch base report")
+		return
+	}
+
+	headReport, err := fetchReport(headID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "head report not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch head report")
+		return
+	}
+
+	// Fetch test results for both reports
+	fetchResults := func(reportID string) (map[string]*model.TestResult, error) {
+		rows, err := h.DB.Query(r.Context(),
+			`SELECT id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at
+			 FROM test_results WHERE report_id = $1 AND team_id = $2`,
+			reportID, claims.TeamID)
+		if err != nil {
+			return nil, err
+		}
+		defer rows.Close()
+
+		results := make(map[string]*model.TestResult)
+		for rows.Next() {
+			var res model.TestResult
+			if err := rows.Scan(
+				&res.ID, &res.ReportID, &res.TeamID, &res.Name, &res.Status,
+				&res.DurationMs, &res.Message, &res.Trace, &res.FilePath,
+				&res.Suite, &res.Tags, &res.Retry, &res.Flaky, &res.CreatedAt,
+			); err != nil {
+				return nil, err
+			}
+			results[res.Name] = &res
+		}
+		return results, rows.Err()
+	}
+
+	baseResults, err := fetchResults(baseID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch base test results")
+		return
+	}
+
+	headResults, err := fetchResults(headID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch head test results")
+		return
+	}
+
+	// Compute diff
+	type TestDiff struct {
+		Name           string  `json:"name"`
+		Suite          string  `json:"suite,omitempty"`
+		FilePath       string  `json:"file_path,omitempty"`
+		BaseStatus     string  `json:"base_status,omitempty"`
+		HeadStatus     string  `json:"head_status,omitempty"`
+		BaseDurationMs int64   `json:"base_duration_ms,omitempty"`
+		HeadDurationMs int64   `json:"head_duration_ms,omitempty"`
+		DurationDelta  int64   `json:"duration_delta_ms,omitempty"`
+		DurationPct    float64 `json:"duration_delta_pct,omitempty"`
+		Message        string  `json:"message,omitempty"`
+	}
+
+	var newFailures []TestDiff
+	var fixed []TestDiff
+	var durationRegressions []TestDiff
+
+	// Tests in head: compare against base
+	for name, headRes := range headResults {
+		baseRes, existed := baseResults[name]
+		if !existed {
+			// New test — only flag if it failed
+			if headRes.Status == "failed" {
+				newFailures = append(newFailures, TestDiff{
+					Name:           name,
+					Suite:          headRes.Suite,
+					FilePath:       headRes.FilePath,
+					HeadStatus:     headRes.Status,
+					HeadDurationMs: headRes.DurationMs,
+					Message:        headRes.Message,
+				})
+			}
+			continue
+		}
+
+		// Status changes
+		if baseRes.Status != "failed" && headRes.Status == "failed" {
+			newFailures = append(newFailures, TestDiff{
+				Name:           name,
+				Suite:          headRes.Suite,
+				FilePath:       headRes.FilePath,
+				BaseStatus:     baseRes.Status,
+				HeadStatus:     headRes.Status,
+				BaseDurationMs: baseRes.DurationMs,
+				HeadDurationMs: headRes.DurationMs,
+				Message:        headRes.Message,
+			})
+		} else if baseRes.Status == "failed" && headRes.Status == "passed" {
+			fixed = append(fixed, TestDiff{
+				Name:           name,
+				Suite:          headRes.Suite,
+				FilePath:       headRes.FilePath,
+				BaseStatus:     baseRes.Status,
+				HeadStatus:     headRes.Status,
+				BaseDurationMs: baseRes.DurationMs,
+				HeadDurationMs: headRes.DurationMs,
+			})
+		}
+
+		// Duration regression: >20% slower AND at least 100ms longer
+		if baseRes.DurationMs > 0 {
+			delta := headRes.DurationMs - baseRes.DurationMs
+			pct := float64(delta) / float64(baseRes.DurationMs) * 100
+			if delta >= 100 && pct >= 20 {
+				durationRegressions = append(durationRegressions, TestDiff{
+					Name:           name,
+					Suite:          headRes.Suite,
+					FilePath:       headRes.FilePath,
+					BaseStatus:     baseRes.Status,
+					HeadStatus:     headRes.Status,
+					BaseDurationMs: baseRes.DurationMs,
+					HeadDurationMs: headRes.DurationMs,
+					DurationDelta:  delta,
+					DurationPct:    pct,
+				})
+			}
+		}
+	}
+
+	// Tests that existed in base but are gone from head (treat as removed, not failure)
+	// No action needed per spec — just track new failures / fixed.
+
+	type DiffSummary struct {
+		BaseTests           int `json:"base_tests"`
+		HeadTests           int `json:"head_tests"`
+		NewFailures         int `json:"new_failures"`
+		Fixed               int `json:"fixed"`
+		DurationRegressions int `json:"duration_regressions"`
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"base": baseReport,
+		"head": headReport,
+		"diff": map[string]interface{}{
+			"new_failures":         newFailures,
+			"fixed":                fixed,
+			"duration_regressions": durationRegressions,
+			"summary": DiffSummary{
+				BaseTests:           len(baseResults),
+				HeadTests:           len(headResults),
+				NewFailures:         len(newFailures),
+				Fixed:               len(fixed),
+				DurationRegressions: len(durationRegressions),
+			},
+		},
+	})
+}
+
 // nullString returns a *string that is nil for empty strings.
 func nullString(s string) *string {
 	if s == "" {

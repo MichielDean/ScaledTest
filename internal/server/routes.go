@@ -108,6 +108,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
 			r.Post("/", reportsH.Create)
+			r.Get("/compare", reportsH.Compare)
 			r.Get("/{reportID}", reportsH.Get)
 			r.Delete("/{reportID}", reportsH.Delete)
 		})

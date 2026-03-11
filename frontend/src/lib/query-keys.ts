@@ -2,6 +2,7 @@ export const queryKeys = {
   reports: {
     all: ['reports'] as const,
     detail: (id: string) => ['reports', id] as const,
+    compare: (base: string, head: string) => ['reports', 'compare', base, head] as const,
   },
   executions: {
     all: ['executions'] as const,
@@ -25,4 +26,4 @@ export const queryKeys = {
   admin: {
     users: () => ['admin', 'users'] as const,
   },
-} as const
+} as const;
