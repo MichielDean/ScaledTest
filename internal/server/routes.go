@@ -63,7 +63,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	execH := &handler.ExecutionsHandler{DB: dbPool}
 	analyticsH := &handler.AnalyticsHandler{}
 	qgH := &handler.QualityGatesHandler{}
-	teamsH := &handler.TeamsHandler{}
+	teamsH := &handler.TeamsHandler{DB: dbPool}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
