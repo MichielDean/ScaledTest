@@ -89,6 +89,11 @@ func jsonError(w http.ResponseWriter, msg string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{"error": msg})
 }
 
+// SetClaims stores claims in context. Useful for testing.
+func SetClaims(ctx context.Context, claims *Claims) context.Context {
+	return context.WithValue(ctx, ClaimsContextKey, claims)
+}
+
 func extractToken(r *http.Request) string {
 	// Check Authorization header: "Bearer <token>" or raw "sct_<token>"
 	authHeader := r.Header.Get("Authorization")

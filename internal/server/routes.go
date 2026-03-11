@@ -17,6 +17,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
+	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
@@ -65,7 +66,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	reportsH := &handler.ReportsHandler{DB: dbPool}
 	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
-	qgH := &handler.QualityGatesHandler{DB: dbPool}
+	var qgStore *store.QualityGateStore
+	if dbPool != nil {
+		qgStore = store.NewQualityGateStore(dbPool)
+	}
+	qgH := &handler.QualityGatesHandler{Store: qgStore}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 
 	// Health check
@@ -120,6 +125,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.Put("/{gateID}", qgH.Update)
 			r.Delete("/{gateID}", qgH.Delete)
 			r.Post("/{gateID}/evaluate", qgH.Evaluate)
+			r.Get("/{gateID}/evaluations", qgH.ListEvaluations)
 		})
 
 		r.Route("/teams", func(r chi.Router) {
