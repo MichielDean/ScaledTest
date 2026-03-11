@@ -8,6 +8,8 @@ import { ExecutionsPage } from './executions'
 import { QualityGatesPage } from './quality-gates'
 import { AdminPage } from './admin'
 import { ReportsComparePage } from './reports-compare'
+import { AnalyticsPage } from './analytics'
+import { TestResultsPage } from './test-results'
 import { useAuthStore } from '../stores/auth-store'
 
 function requireAuth() {
@@ -49,12 +51,7 @@ const reportsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/reports',
   beforeLoad: requireAuth,
-  component: () => (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Reports</h1>
-      <p className="text-muted-foreground mt-2">Test reports will appear here.</p>
-    </div>
-  ),
+  component: TestResultsPage,
 });
 
 const reportsCompareRoute = createRoute({
@@ -75,12 +72,7 @@ const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/analytics',
   beforeLoad: requireAuth,
-  component: () => (
-    <div className="p-6">
-      <h1 className="text-2xl font-bold">Analytics</h1>
-      <p className="text-muted-foreground mt-2">Test analytics will appear here.</p>
-    </div>
-  ),
+  component: AnalyticsPage,
 });
 
 const qualityGatesRoute = createRoute({
