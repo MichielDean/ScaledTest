@@ -1,0 +1,2 @@
+This directory will contain the built React SPA.
+Placeholder file ensures go:embed works during development.
