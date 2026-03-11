@@ -1,17 +1,23 @@
 package handler
 
 import (
+	"context"
+	"net"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/db"
 )
+
+const refreshTokenCookie = "refresh_token"
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	JWT *auth.JWTManager
-	// DB queries will be injected when the database task is wired up.
-	// For now, handlers return structured errors indicating the flow.
+	DB  *db.Pool
 }
 
 // RegisterRequest is the request body for user registration.
@@ -44,37 +50,272 @@ type UserResponse struct {
 
 // Register handles POST /auth/register.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
 	var req RegisterRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
 		return
 	}
 
-	// TODO: Check if email exists in DB, create user, generate tokens
-	// For now, return the expected response shape
-	Error(w, http.StatusNotImplemented, "registration requires database connection")
+	// Check if email already exists
+	var exists bool
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", req.Email).Scan(&exists)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if exists {
+		Error(w, http.StatusConflict, "email already registered")
+		return
+	}
+
+	// Hash password
+	hash, err := auth.HashPassword(req.Password)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Create user
+	var userID, role string
+	err = h.DB.QueryRow(r.Context(),
+		`INSERT INTO users (email, password_hash, display_name)
+		 VALUES ($1, $2, $3)
+		 RETURNING id, role`,
+		req.Email, hash, req.DisplayName,
+	).Scan(&userID, &role)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Generate token pair and create session
+	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, "")
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	resp.User = UserResponse{
+		ID:          userID,
+		Email:       req.Email,
+		DisplayName: req.DisplayName,
+		Role:        role,
+	}
+
+	JSON(w, http.StatusCreated, resp)
 }
 
 // Login handles POST /auth/login.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
 	var req LoginRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
 		return
 	}
 
-	// TODO: Look up user, verify password, generate tokens
-	Error(w, http.StatusNotImplemented, "login requires database connection")
+	// Look up user by email
+	var userID, passwordHash, displayName, role string
+	err := h.DB.QueryRow(r.Context(),
+		`SELECT id, password_hash, display_name, role FROM users WHERE email = $1`,
+		req.Email,
+	).Scan(&userID, &passwordHash, &displayName, &role)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Verify password
+	if !auth.CheckPassword(req.Password, passwordHash) {
+		Error(w, http.StatusUnauthorized, "invalid credentials")
+		return
+	}
+
+	// Generate token pair and create session
+	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, "")
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	resp.User = UserResponse{
+		ID:          userID,
+		Email:       req.Email,
+		DisplayName: displayName,
+		Role:        role,
+	}
+
+	JSON(w, http.StatusOK, resp)
 }
 
 // Refresh handles POST /auth/refresh.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	// TODO: Read refresh token from httpOnly cookie, validate, issue new pair
-	Error(w, http.StatusNotImplemented, "refresh requires database connection")
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	cookie, err := r.Cookie(refreshTokenCookie)
+	if err != nil {
+		Error(w, http.StatusUnauthorized, "missing refresh token")
+		return
+	}
+
+	// Look up session by refresh token
+	var sessionID, userID string
+	var expiresAt time.Time
+	err = h.DB.QueryRow(r.Context(),
+		`SELECT s.id, s.user_id, s.expires_at
+		 FROM sessions s
+		 WHERE s.refresh_token = $1`,
+		cookie.Value,
+	).Scan(&sessionID, &userID, &expiresAt)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "invalid refresh token")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	if time.Now().After(expiresAt) {
+		// Delete expired session
+		_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE id = $1", sessionID)
+		clearRefreshCookie(w, r)
+		Error(w, http.StatusUnauthorized, "refresh token expired")
+		return
+	}
+
+	// Look up user
+	var email, displayName, role string
+	err = h.DB.QueryRow(r.Context(),
+		`SELECT email, display_name, role FROM users WHERE id = $1`, userID,
+	).Scan(&email, &displayName, &role)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Delete old session (rotate refresh token)
+	_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE id = $1", sessionID)
+
+	// Issue new token pair
+	resp, err := h.issueTokens(r.Context(), w, r, userID, email, role, "")
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	resp.User = UserResponse{
+		ID:          userID,
+		Email:       email,
+		DisplayName: displayName,
+		Role:        role,
+	}
+
+	JSON(w, http.StatusOK, resp)
 }
 
 // Logout handles POST /auth/logout.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	// TODO: Invalidate refresh token in DB, clear cookie
-	Error(w, http.StatusNotImplemented, "logout requires database connection")
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	cookie, err := r.Cookie(refreshTokenCookie)
+	if err != nil {
+		// No cookie — already logged out, just return success
+		JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+		return
+	}
+
+	// Delete session by refresh token
+	_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE refresh_token = $1", cookie.Value)
+	clearRefreshCookie(w, r)
+
+	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
+}
+
+// issueTokens generates a token pair, stores the session in DB, and sets the refresh cookie.
+func (h *AuthHandler) issueTokens(ctx context.Context, w http.ResponseWriter, r *http.Request, userID, email, role, teamID string) (*AuthResponse, error) {
+	pair, err := h.JWT.GenerateTokenPair(userID, email, role, teamID)
+	if err != nil {
+		return nil, err
+	}
+
+	// Extract client metadata
+	userAgent := r.UserAgent()
+	ipAddr := net.ParseIP(r.RemoteAddr)
+	// RemoteAddr may include port — try to parse host only
+	if ipAddr == nil {
+		host, _, _ := net.SplitHostPort(r.RemoteAddr)
+		ipAddr = net.ParseIP(host)
+	}
+
+	expiresAt := time.Now().Add(h.JWT.RefreshDuration())
+
+	_, err = h.DB.Exec(ctx,
+		`INSERT INTO sessions (user_id, refresh_token, user_agent, ip_address, expires_at)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		userID, pair.RefreshToken, userAgent, ipAddr, expiresAt,
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	setRefreshCookie(w, r, pair.RefreshToken, h.JWT.RefreshDuration())
+
+	return &AuthResponse{
+		AccessToken: pair.AccessToken,
+		ExpiresAt:   pair.ExpiresAt,
+	}, nil
+}
+
+func setRefreshCookie(w http.ResponseWriter, r *http.Request, token string, maxAge time.Duration) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    token,
+		Path:     "/auth",
+		MaxAge:   int(maxAge.Seconds()),
+		HttpOnly: true,
+		Secure:   isSecureRequest(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+func clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
+	http.SetCookie(w, &http.Cookie{
+		Name:     refreshTokenCookie,
+		Value:    "",
+		Path:     "/auth",
+		MaxAge:   -1,
+		HttpOnly: true,
+		Secure:   isSecureRequest(r),
+		SameSite: http.SameSiteStrictMode,
+	})
+}
+
+// isSecureRequest returns true if the request was made over HTTPS.
+// Checks TLS directly and the X-Forwarded-Proto header for proxied requests.
+func isSecureRequest(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https"
 }

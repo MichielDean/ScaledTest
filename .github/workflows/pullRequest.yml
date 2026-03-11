@@ -92,11 +92,3 @@ jobs:
 
       - name: Build worker binary
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/scaledtest-worker ./cmd/worker
-
-  # Gate job that satisfies the branch protection required status check.
-  # The ruleset requires a check named "build-and-test" to pass before merge.
-  build-and-test:
-    runs-on: ubuntu-latest
-    needs: [go-test, frontend-build, go-build]
-    steps:
-      - run: echo "All checks passed"

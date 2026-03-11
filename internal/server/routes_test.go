@@ -30,7 +30,7 @@ func testToken() string {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
@@ -45,7 +45,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestPublicAuthEndpoints(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 
 	endpoints := []struct {
 		method string
@@ -72,7 +72,7 @@ func TestPublicAuthEndpoints(t *testing.T) {
 }
 
 func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 
 	endpoints := []struct {
 		method string
@@ -97,7 +97,7 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 }
 
 func TestAuthenticatedEndpointsWithToken(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 	token := testToken()
 
 	endpoints := []struct {
@@ -105,12 +105,12 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 		path       string
 		wantStatus int
 	}{
-		{"GET", "/api/v1/reports", http.StatusOK},
-		{"GET", "/api/v1/executions", http.StatusOK},
-		{"GET", "/api/v1/analytics/trends", http.StatusOK},
-		{"GET", "/api/v1/analytics/flaky-tests", http.StatusOK},
-		{"GET", "/api/v1/analytics/error-analysis", http.StatusOK},
-		{"GET", "/api/v1/analytics/duration-distribution", http.StatusOK},
+		{"GET", "/api/v1/reports", http.StatusServiceUnavailable},                        // no DB configured
+		{"GET", "/api/v1/executions", http.StatusServiceUnavailable},                      // no DB configured
+		{"GET", "/api/v1/analytics/trends", http.StatusServiceUnavailable},                // no DB configured
+		{"GET", "/api/v1/analytics/flaky-tests", http.StatusServiceUnavailable},           // no DB configured
+		{"GET", "/api/v1/analytics/error-analysis", http.StatusServiceUnavailable},        // no DB configured
+		{"GET", "/api/v1/analytics/duration-distribution", http.StatusServiceUnavailable}, // no DB configured
 		{"GET", "/api/v1/quality-gates", http.StatusOK},
 		{"GET", "/api/v1/teams", http.StatusOK},
 		{"GET", "/api/v1/admin/users", http.StatusOK}, // owner role
@@ -129,7 +129,7 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 }
 
 func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 
 	// Create a token with readonly role
 	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -146,7 +146,7 @@ func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
 }
 
 func TestCTRFReportIngestion(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 	token := testToken()
 
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":2,"passed":1,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"test1","status":"passed","duration":100},{"name":"test2","status":"failed","duration":200,"message":"oops"}]}}`
@@ -163,7 +163,7 @@ func TestCTRFReportIngestion(t *testing.T) {
 }
 
 func TestCTRFReportInvalidPayload(t *testing.T) {
-	router := NewRouter(testConfig())
+	router := NewRouter(testConfig(), nil)
 	token := testToken()
 
 	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{invalid json}`))
