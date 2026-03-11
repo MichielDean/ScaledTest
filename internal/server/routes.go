@@ -95,8 +95,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		w.Write([]byte(`{"csrf_token":"` + token + `"}`))
 	})
 
-	// Auth routes (public)
+	// Auth routes (public) — stricter rate limit to prevent brute-force
 	r.Route("/auth", func(r chi.Router) {
+		r.Use(httprate.LimitByIP(10, 1*time.Minute))
 		r.Post("/register", authH.Register)
 		r.Post("/login", authH.Login)
 		r.Post("/refresh", authH.Refresh)
@@ -112,7 +113,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
-			r.Post("/", reportsH.Create)
+			r.With(httprate.LimitByIP(30, 1*time.Minute)).Post("/", reportsH.Create)
 			r.Get("/compare", reportsH.Compare)
 			r.Get("/{reportID}", reportsH.Get)
 			r.Delete("/{reportID}", reportsH.Delete)
@@ -120,7 +121,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/executions", func(r chi.Router) {
 			r.Get("/", execH.List)
-			r.Post("/", execH.Create)
+			r.With(httprate.LimitByIP(20, 1*time.Minute)).Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
 			r.Delete("/{executionID}", execH.Cancel)
 			r.Put("/{executionID}/status", execH.UpdateStatus)
