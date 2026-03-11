@@ -111,10 +111,17 @@ export const api = {
 
   // Quality Gates
   getQualityGates: () => fetchAPI<{ quality_gates: unknown[]; total: number }>('/api/v1/quality-gates'),
+  getQualityGate: (id: string) => fetchAPI(`/api/v1/quality-gates/${id}`),
   createQualityGate: (data: unknown) =>
     fetchAPI('/api/v1/quality-gates', { method: 'POST', body: JSON.stringify(data) }),
+  updateQualityGate: (id: string, data: unknown) =>
+    fetchAPI(`/api/v1/quality-gates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteQualityGate: (id: string) =>
+    fetchAPI(`/api/v1/quality-gates/${id}`, { method: 'DELETE' }),
   evaluateQualityGate: (id: string) =>
     fetchAPI(`/api/v1/quality-gates/${id}/evaluate`, { method: 'POST' }),
+  getQualityGateEvaluations: (id: string, limit = 20) =>
+    fetchAPI<{ evaluations: unknown[]; total: number }>(`/api/v1/quality-gates/${id}/evaluations?limit=${limit}`),
 
   // Teams
   getTeams: () => fetchAPI<{ teams: unknown[] }>('/api/v1/teams'),

@@ -299,4 +299,121 @@ describe('GET /api/v1/stats', () => {
 
     dateSpy.mockRestore();
   });
+
+  it('cache expires after 60s and re-queries DB', async () => {
+    setupAuth();
+    const now = 1_700_000_000_000;
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    // First call
+    setupDBResponses({ count: '10', sum: '100' });
+    const { req: req1, res: res1 } = makeReqRes();
+    await handler(req1, res1);
+
+    const firstQueryCount = mockPoolQuery.mock.calls.length;
+    expect(firstQueryCount).toBe(4); // 4 parallel queries
+
+    // Advance 61s — past TTL
+    dateSpy.mockReturnValue(now + 61_000);
+
+    // Second call — should hit DB again
+    setupDBResponses({ count: '20', sum: '200' });
+    const { req: req2, res: res2, mockJson: mockJson2 } = makeReqRes();
+    await handler(req2, res2);
+
+    // New DB queries were made
+    expect(mockPoolQuery.mock.calls.length).toBe(8); // 4 + 4
+    expect(mockJson2.mock.calls[0][0].data.totalReports).toBe(20);
+
+    dateSpy.mockRestore();
+  });
+
+  it('caches zero stats when DB throws (serves zeros from cache on next call)', async () => {
+    setupAuth();
+    const now = 1_700_000_000_000;
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValue(now);
+
+    // First call — DB fails
+    mockPoolQuery.mockRejectedValue(new Error('DB down'));
+    const { req: req1, res: res1, mockJson: mockJson1 } = makeReqRes();
+    await handler(req1, res1);
+    expect(mockJson1.mock.calls[0][0].data.totalReports).toBe(0);
+
+    // Second call within TTL — should serve cached zeros without querying DB
+    dateSpy.mockReturnValue(now + 10_000);
+    const queryCountAfterFirst = mockPoolQuery.mock.calls.length;
+
+    const { req: req2, res: res2, mockJson: mockJson2 } = makeReqRes();
+    await handler(req2, res2);
+
+    expect(mockPoolQuery.mock.calls.length).toBe(queryCountAfterFirst);
+    expect(mockJson2.mock.calls[0][0].data.totalReports).toBe(0);
+
+    dateSpy.mockRestore();
+  });
+
+  it('returns 405 for non-GET methods', async () => {
+    setupAuth();
+
+    const { req, res, mockStatus, mockJson } = makeReqRes('POST');
+    await handler(req, res);
+
+    expect(mockStatus).toHaveBeenCalledWith(405);
+    expect(mockJson).toHaveBeenCalledWith(
+      expect.objectContaining({
+        success: false,
+        error: expect.stringContaining('not allowed'),
+      })
+    );
+  });
+
+  it('handles null sum from DB gracefully (totalTests defaults to 0)', async () => {
+    setupAuth();
+    setupDBResponses({ sum: null });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockJson.mock.calls[0][0].data.totalTests).toBe(0);
+  });
+
+  it('rounds passRateLast7d to nearest integer (e.g. 2/3 → 67)', async () => {
+    setupAuth();
+    setupDBResponses({ passed: '2', total: '3' });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    // 2/3 = 0.6667 → Math.round(66.67) = 67
+    expect(mockJson.mock.calls[0][0].data.passRateLast7d).toBe(67);
+  });
+
+  it('handles empty rows from DB (missing row data)', async () => {
+    setupAuth();
+    mockPoolQuery
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] })
+      .mockResolvedValueOnce({ rows: [] });
+
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+
+    const data = mockJson.mock.calls[0][0].data;
+    expect(data.totalReports).toBe(0);
+    expect(data.totalTests).toBe(0);
+    expect(data.passRateLast7d).toBe(0);
+    expect(data.totalExecutions).toBe(0);
+    expect(data.activeExecutions).toBe(0);
+  });
+
+  it('makes exactly 4 parallel DB queries per uncached request', async () => {
+    setupAuth();
+    setupDBResponses();
+
+    const { req, res } = makeReqRes();
+    await handler(req, res);
+
+    expect(mockPoolQuery).toHaveBeenCalledTimes(4);
+  });
 });
