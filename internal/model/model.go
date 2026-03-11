@@ -148,6 +148,48 @@ type QualityGateEvaluation struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
+// TestDurationHistory tracks historical test durations for intelligent sharding.
+type TestDurationHistory struct {
+	ID             string    `json:"id"`
+	TeamID         string    `json:"team_id"`
+	TestName       string    `json:"test_name"`
+	Suite          string    `json:"suite"`
+	AvgDurationMs  int64     `json:"avg_duration_ms"`
+	P95DurationMs  int64     `json:"p95_duration_ms"`
+	MinDurationMs  int64     `json:"min_duration_ms"`
+	MaxDurationMs  int64     `json:"max_duration_ms"`
+	RunCount       int       `json:"run_count"`
+	LastStatus     string    `json:"last_status"`
+	UpdatedAt      time.Time `json:"updated_at"`
+	CreatedAt      time.Time `json:"created_at"`
+}
+
+// ShardAssignment represents a test assigned to a specific worker shard.
+type ShardAssignment struct {
+	WorkerID       string `json:"worker_id"`
+	TestName       string `json:"test_name"`
+	Suite          string `json:"suite,omitempty"`
+	EstDurationMs  int64  `json:"est_duration_ms"`
+}
+
+// ShardPlan is the complete distribution plan for a sharded execution.
+type ShardPlan struct {
+	ExecutionID    string            `json:"execution_id"`
+	TotalWorkers   int               `json:"total_workers"`
+	Strategy       string            `json:"strategy"` // duration_balanced, round_robin, suite_grouped
+	Shards         []Shard           `json:"shards"`
+	EstTotalMs     int64             `json:"est_total_ms"`
+	EstWallClockMs int64             `json:"est_wall_clock_ms"`
+}
+
+// Shard represents one worker's assigned tests.
+type Shard struct {
+	WorkerID       string   `json:"worker_id"`
+	TestNames      []string `json:"test_names"`
+	EstDurationMs  int64    `json:"est_duration_ms"`
+	TestCount      int      `json:"test_count"`
+}
+
 // Webhook represents a webhook subscription.
 type Webhook struct {
 	ID        string    `json:"id"`
