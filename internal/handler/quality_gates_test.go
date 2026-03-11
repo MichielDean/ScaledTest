@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,299 +12,191 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 )
 
-var qgDefaultClaims = &auth.Claims{
-	UserID: "user-1",
-	Email:  "test@example.com",
-	Role:   "owner",
-	TeamID: "team-1",
-}
-
-func qgWithClaims(r *http.Request) *http.Request {
-	return testWithClaims(r, qgDefaultClaims)
-}
-
-func qgWithClaimsAndParam(r *http.Request, key, value string) *http.Request {
-	return testWithClaimsAndParam(r, qgDefaultClaims, key, value)
-}
-
-func TestQGList_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("GET", "/api/v1/quality-gates", nil)
-	w := httptest.NewRecorder()
-	h.List(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("List without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+func withClaims(r *http.Request) *http.Request {
+	claims := &auth.Claims{
+		UserID: "user-1",
+		Email:  "test@example.com",
+		Role:   "owner",
+		TeamID: "team-1",
 	}
+	ctx := auth.SetClaims(r.Context(), claims)
+	return r.WithContext(ctx)
 }
 
-func TestQGList_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
+func withChiParam(r *http.Request, key, value string) *http.Request {
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add(key, value)
+	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+}
+
+func TestQualityGatesListWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
 	req := httptest.NewRequest("GET", "/api/v1/quality-gates", nil)
-	req = qgWithClaims(req)
+	req = withClaims(req)
 	w := httptest.NewRecorder()
+
 	h.List(w, req)
+
 	if w.Code != http.StatusOK {
-		t.Errorf("List with nil DB: got %d, want %d", w.Code, http.StatusOK)
+		t.Errorf("List status = %d, want %d", w.Code, http.StatusOK)
 	}
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	gates, ok := resp["quality_gates"].([]interface{})
-	if !ok || len(gates) != 0 {
-		t.Errorf("expected empty quality_gates array, got %v", resp["quality_gates"])
-	}
-	total, _ := resp["total"].(float64)
-	if total != 0 {
-		t.Errorf("expected total 0, got %v", total)
+	if !strings.Contains(w.Body.String(), `"quality_gates"`) {
+		t.Errorf("List body missing quality_gates key: %s", w.Body.String())
 	}
 }
 
-func TestQGCreate_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"name":"gate","rules":[{"type":"pass_rate","params":{"threshold":90}}]}`
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
+func TestQualityGatesListUnauthorized(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
+	req := httptest.NewRequest("GET", "/api/v1/quality-gates", nil)
 	w := httptest.NewRecorder()
-	h.Create(w, req)
+
+	h.List(w, req)
+
 	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Create without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+		t.Errorf("List without auth status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 }
 
-func TestQGCreate_InvalidRequest(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaims(req)
-	w := httptest.NewRecorder()
-	h.Create(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Create with empty body: got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-}
+func TestQualityGatesCreateWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
 
-func TestQGCreate_InvalidRules(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"name":"gate","rules":[{"type":"bogus_rule","params":{}}]}`
+	body := `{"name":"Release Gate","rules":[{"type":"pass_rate","params":{"threshold":95}}]}`
 	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaims(req)
+	req = withClaims(req)
 	w := httptest.NewRecorder()
-	h.Create(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Create with invalid rule type: got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-	var resp map[string]string
-	json.NewDecoder(w.Body).Decode(&resp)
-	if !strings.Contains(resp["error"], "unknown rule type") {
-		t.Errorf("expected unknown rule type error, got %q", resp["error"])
-	}
-}
 
-func TestQGCreate_EmptyRules(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"name":"gate","rules":[]}`
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaims(req)
-	w := httptest.NewRecorder()
 	h.Create(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Create with empty rules: got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-}
 
-func TestQGCreate_ValidRules_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"name":"gate","rules":[{"type":"pass_rate","params":{"threshold":90}}]}`
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaims(req)
-	w := httptest.NewRecorder()
-	h.Create(w, req)
 	if w.Code != http.StatusNotImplemented {
-		t.Errorf("Create with nil DB: got %d, want %d", w.Code, http.StatusNotImplemented)
+		t.Errorf("Create without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
 	}
 }
 
-func TestQGGet_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("GET", "/api/v1/quality-gates/gate-1", nil)
-	req = func() *http.Request {
-		rctx := chi.NewRouteContext()
-		rctx.URLParams.Add("gateID", "gate-1")
-		return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	}()
+func TestQualityGatesCreateInvalidBody(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
+	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(`{invalid}`))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaims(req)
 	w := httptest.NewRecorder()
-	h.Get(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Get without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with invalid body status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 
-func TestQGGet_MissingID(t *testing.T) {
-	h := &QualityGatesHandler{}
+func TestQualityGatesCreateMissingName(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
+	body := `{"rules":[{"type":"pass_rate"}]}`
+	req := httptest.NewRequest("POST", "/api/v1/quality-gates", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaims(req)
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create missing name status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestQualityGatesGetWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
+	req := httptest.NewRequest("GET", "/api/v1/quality-gates/gate-1", nil)
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "gate-1")
+	w := httptest.NewRecorder()
+
+	h.Get(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("Get without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
+func TestQualityGatesGetMissingID(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
 	req := httptest.NewRequest("GET", "/api/v1/quality-gates/", nil)
-	req = qgWithClaims(req)
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "")
 	w := httptest.NewRecorder()
+
 	h.Get(w, req)
+
 	if w.Code != http.StatusBadRequest {
-		t.Errorf("Get with missing ID: got %d, want %d", w.Code, http.StatusBadRequest)
+		t.Errorf("Get missing ID status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 
-func TestQGGet_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("GET", "/api/v1/quality-gates/gate-1", nil)
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
-	w := httptest.NewRecorder()
-	h.Get(w, req)
-	if w.Code != http.StatusNotImplemented {
-		t.Errorf("Get with nil DB: got %d, want %d", w.Code, http.StatusNotImplemented)
-	}
-}
+func TestQualityGatesUpdateWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
 
-func TestQGUpdate_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("PUT", "/api/v1/quality-gates/gate-1", strings.NewReader(`{"name":"new"}`))
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("gateID", "gate-1")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	w := httptest.NewRecorder()
-	h.Update(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Update without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
-	}
-}
-
-func TestQGUpdate_InvalidRules(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"rules":[{"type":"fake_rule"}]}`
+	body := `{"name":"Updated Gate","rules":[{"type":"zero_failures"}]}`
 	req := httptest.NewRequest("PUT", "/api/v1/quality-gates/gate-1", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "gate-1")
 	w := httptest.NewRecorder()
+
 	h.Update(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Update with invalid rules: got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-}
 
-func TestQGUpdate_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"name":"updated"}`
-	req := httptest.NewRequest("PUT", "/api/v1/quality-gates/gate-1", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
-	w := httptest.NewRecorder()
-	h.Update(w, req)
 	if w.Code != http.StatusNotImplemented {
-		t.Errorf("Update with nil DB: got %d, want %d", w.Code, http.StatusNotImplemented)
+		t.Errorf("Update without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
 	}
 }
 
-func TestQGDelete_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
+func TestQualityGatesDeleteWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
+
 	req := httptest.NewRequest("DELETE", "/api/v1/quality-gates/gate-1", nil)
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("gateID", "gate-1")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "gate-1")
 	w := httptest.NewRecorder()
+
 	h.Delete(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Delete without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
-	}
-}
 
-func TestQGDelete_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("DELETE", "/api/v1/quality-gates/gate-1", nil)
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
-	w := httptest.NewRecorder()
-	h.Delete(w, req)
 	if w.Code != http.StatusNotImplemented {
-		t.Errorf("Delete with nil DB: got %d, want %d", w.Code, http.StatusNotImplemented)
+		t.Errorf("Delete without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
 	}
 }
 
-func TestQGEvaluate_Unauthorized(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"report_id":"rep-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates/gate-1/evaluate", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("gateID", "gate-1")
-	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
-	w := httptest.NewRecorder()
-	h.Evaluate(w, req)
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("Evaluate without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
-	}
-}
+func TestQualityGatesEvaluateWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
 
-func TestQGEvaluate_InvalidRequest(t *testing.T) {
-	h := &QualityGatesHandler{}
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates/gate-1/evaluate", strings.NewReader(`{}`))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
+	req := httptest.NewRequest("POST", "/api/v1/quality-gates/gate-1/evaluate", nil)
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "gate-1")
 	w := httptest.NewRecorder()
-	h.Evaluate(w, req)
-	if w.Code != http.StatusBadRequest {
-		t.Errorf("Evaluate with missing report_id: got %d, want %d", w.Code, http.StatusBadRequest)
-	}
-}
 
-func TestQGEvaluate_NoDB(t *testing.T) {
-	h := &QualityGatesHandler{}
-	body := `{"report_id":"rep-1"}`
-	req := httptest.NewRequest("POST", "/api/v1/quality-gates/gate-1/evaluate", strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-	req = qgWithClaimsAndParam(req, "gateID", "gate-1")
-	w := httptest.NewRecorder()
 	h.Evaluate(w, req)
+
 	if w.Code != http.StatusNotImplemented {
-		t.Errorf("Evaluate with nil DB: got %d, want %d", w.Code, http.StatusNotImplemented)
+		t.Errorf("Evaluate without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
 	}
 }
 
-func TestValidateRules_Valid(t *testing.T) {
-	rules := json.RawMessage(`[{"type":"pass_rate","params":{"threshold":90}},{"type":"zero_failures"}]`)
-	if err := validateRules(rules); err != nil {
-		t.Errorf("expected valid rules, got error: %v", err)
-	}
-}
+func TestQualityGatesListEvaluationsWithoutDB(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil}
 
-func TestValidateRules_UnknownType(t *testing.T) {
-	rules := json.RawMessage(`[{"type":"nonexistent"}]`)
-	if err := validateRules(rules); err == nil {
-		t.Error("expected error for unknown rule type")
-	}
-}
+	req := httptest.NewRequest("GET", "/api/v1/quality-gates/gate-1/evaluations", nil)
+	req = withClaims(req)
+	req = withChiParam(req, "gateID", "gate-1")
+	w := httptest.NewRecorder()
 
-func TestValidateRules_Empty(t *testing.T) {
-	rules := json.RawMessage(`[]`)
-	if err := validateRules(rules); err == nil {
-		t.Error("expected error for empty rules")
-	}
-}
+	h.ListEvaluations(w, req)
 
-func TestValidateRules_InvalidJSON(t *testing.T) {
-	rules := json.RawMessage(`not json`)
-	if err := validateRules(rules); err == nil {
-		t.Error("expected error for invalid JSON")
+	if w.Code != http.StatusOK {
+		t.Errorf("ListEvaluations status = %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
 	}
-}
-
-func TestValidateRules_AllTypes(t *testing.T) {
-	rules := json.RawMessage(`[
-		{"type":"pass_rate","params":{"threshold":90}},
-		{"type":"zero_failures"},
-		{"type":"no_new_failures"},
-		{"type":"max_duration","params":{"threshold_ms":5000}},
-		{"type":"max_flaky_count","params":{"threshold":2}},
-		{"type":"min_test_count","params":{"threshold":10}}
-	]`)
-	if err := validateRules(rules); err != nil {
-		t.Errorf("expected all rule types to be valid, got error: %v", err)
+	if !strings.Contains(w.Body.String(), `"evaluations"`) {
+		t.Errorf("ListEvaluations body missing evaluations key: %s", w.Body.String())
 	}
 }

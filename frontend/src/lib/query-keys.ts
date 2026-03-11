@@ -16,6 +16,7 @@ export const queryKeys = {
   qualityGates: {
     all: ['quality-gates'] as const,
     detail: (id: string) => ['quality-gates', id] as const,
+    evaluations: (id: string) => ['quality-gates', id, 'evaluations'] as const,
   },
   teams: {
     all: ['teams'] as const,
