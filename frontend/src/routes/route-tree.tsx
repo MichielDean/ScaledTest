@@ -4,6 +4,7 @@ import { DashboardPage } from './dashboard'
 import { LoginPage } from './login'
 import { RegisterPage } from './register'
 import { OAuthCallbackPage } from './oauth-callback'
+import { ExecutionsPage } from './executions'
 import { QualityGatesPage } from './quality-gates'
 import { AdminPage } from './admin'
 import { useAuthStore } from '../stores/auth-store'
@@ -54,7 +55,7 @@ const executionsRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/executions',
   beforeLoad: requireAuth,
-  component: () => <div className="p-6"><h1 className="text-2xl font-bold">Executions</h1><p className="text-muted-foreground mt-2">Test executions will appear here.</p></div>,
+  component: ExecutionsPage,
 })
 
 const analyticsRoute = createRoute({

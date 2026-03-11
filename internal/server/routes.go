@@ -57,10 +57,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// Auth middleware (nil tokenLookup until DB is wired)
 	authMW := auth.Middleware(jwtMgr, nil)
 
+	// WebSocket hub for real-time execution streaming
+	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")
+
 	// Handlers
 	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
 	reportsH := &handler.ReportsHandler{DB: dbPool}
-	execH := &handler.ExecutionsHandler{DB: dbPool}
+	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
 	qgH := &handler.QualityGatesHandler{DB: dbPool}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
@@ -98,6 +101,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.Get("/{executionID}", execH.Get)
 			r.Delete("/{executionID}", execH.Cancel)
 			r.Put("/{executionID}/status", execH.UpdateStatus)
+			r.Post("/{executionID}/progress", execH.ReportProgress)
+			r.Post("/{executionID}/test-result", execH.ReportTestResult)
+			r.Post("/{executionID}/worker-status", execH.ReportWorkerStatus)
 		})
 
 		r.Route("/analytics", func(r chi.Router) {
@@ -137,7 +143,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	})
 
 	// WebSocket — mount the execution hub for real-time status updates
-	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")
 	r.Get("/ws/executions", wsHub.HandleConnect)
 
 	// SPA fallback — serves embedded React app

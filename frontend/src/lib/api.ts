@@ -92,10 +92,16 @@ export const api = {
 
   // Executions
   getExecutions: () => fetchAPI<{ executions: unknown[]; total: number }>('/api/v1/executions'),
+  getExecution: (id: string) => fetchAPI<unknown>(`/api/v1/executions/${id}`),
   createExecution: (command: string) =>
     fetchAPI('/api/v1/executions', { method: 'POST', body: JSON.stringify({ command }) }),
   cancelExecution: (id: string) =>
     fetchAPI(`/api/v1/executions/${id}`, { method: 'DELETE' }),
+  updateExecutionStatus: (id: string, status: string, errorMsg?: string) =>
+    fetchAPI(`/api/v1/executions/${id}/status`, {
+      method: 'PUT',
+      body: JSON.stringify({ status, error_msg: errorMsg }),
+    }),
 
   // Analytics
   getTrends: () => fetchAPI('/api/v1/analytics/trends'),
