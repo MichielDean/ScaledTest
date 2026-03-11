@@ -66,3 +66,31 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	// TODO: Cancel K8s Job, update execution status
 	Error(w, http.StatusNotImplemented, "cancel execution requires K8s integration")
 }
+
+// UpdateStatusRequest is the request body for updating execution status.
+type UpdateStatusRequest struct {
+	Status   string `json:"status" validate:"required,oneof=running completed failed cancelled"`
+	ErrorMsg string `json:"error_msg,omitempty"`
+}
+
+// UpdateStatus handles PUT /api/v1/executions/{executionID}/status.
+// Called by workers to report execution progress.
+func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request) {
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return
+	}
+
+	var req UpdateStatusRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// TODO: Update execution status in DB
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"execution_id": executionID,
+		"status":       req.Status,
+	})
+}
