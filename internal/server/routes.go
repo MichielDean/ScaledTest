@@ -75,6 +75,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 	qgH := &handler.QualityGatesHandler{Store: qgStore}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
+	var durStore *store.DurationStore
+	if dbPool != nil {
+		durStore = store.NewDurationStore(dbPool)
+	}
+	shardH := &handler.ShardingHandler{DurationStore: durStore}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -151,6 +156,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Post("/", teamsH.CreateToken)
 				r.Delete("/{tokenID}", teamsH.DeleteToken)
 			})
+		})
+
+		r.Route("/sharding", func(r chi.Router) {
+			r.Post("/plan", shardH.CreatePlan)
+			r.Post("/rebalance", shardH.Rebalance)
+			r.Get("/durations", shardH.ListDurations)
+			r.Get("/durations/{testName}", shardH.GetDuration)
 		})
 
 		r.Route("/admin", func(r chi.Router) {
