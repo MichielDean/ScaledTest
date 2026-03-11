@@ -1,16 +1,16 @@
-import { createRootRoute, createRoute, redirect } from '@tanstack/react-router'
-import { RootLayout } from '../components/layout/root-layout'
-import { DashboardPage } from './dashboard'
-import { LoginPage } from './login'
-import { RegisterPage } from './register'
-import { OAuthCallbackPage } from './oauth-callback'
-import { ExecutionsPage } from './executions'
-import { QualityGatesPage } from './quality-gates'
-import { AdminPage } from './admin'
-import { ReportsComparePage } from './reports-compare'
-import { AnalyticsPage } from './analytics'
-import { TestResultsPage } from './test-results'
-import { useAuthStore } from '../stores/auth-store'
+import { createRootRoute, createRoute, redirect } from '@tanstack/react-router';
+import { RootLayout } from '../components/layout/root-layout';
+import { DashboardPage } from './dashboard';
+import { LoginPage } from './login';
+import { RegisterPage } from './register';
+import { OAuthCallbackPage } from './oauth-callback';
+import { ExecutionsPage } from './executions';
+import { QualityGatesPage } from './quality-gates';
+import { AdminPage } from './admin';
+import { ReportsComparePage } from './reports-compare';
+import { AnalyticsPage } from './analytics';
+import { TestResultsPage } from './test-results';
+import { useAuthStore } from '../stores/auth-store';
 
 function requireAuth() {
   if (!useAuthStore.getState().isAuthenticated) {
@@ -66,7 +66,7 @@ const executionsRoute = createRoute({
   path: '/executions',
   beforeLoad: requireAuth,
   component: ExecutionsPage,
-})
+});
 
 const analyticsRoute = createRoute({
   getParentRoute: () => rootRoute,
