@@ -105,11 +105,11 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 		path       string
 		wantStatus int
 	}{
-		{"GET", "/api/v1/reports", http.StatusOK},
-		{"GET", "/api/v1/executions", http.StatusServiceUnavailable},              // no DB configured
-		{"GET", "/api/v1/analytics/trends", http.StatusServiceUnavailable},          // no DB configured
-		{"GET", "/api/v1/analytics/flaky-tests", http.StatusServiceUnavailable},     // no DB configured
-		{"GET", "/api/v1/analytics/error-analysis", http.StatusServiceUnavailable},  // no DB configured
+		{"GET", "/api/v1/reports", http.StatusServiceUnavailable},                        // no DB configured
+		{"GET", "/api/v1/executions", http.StatusServiceUnavailable},                      // no DB configured
+		{"GET", "/api/v1/analytics/trends", http.StatusServiceUnavailable},                // no DB configured
+		{"GET", "/api/v1/analytics/flaky-tests", http.StatusServiceUnavailable},           // no DB configured
+		{"GET", "/api/v1/analytics/error-analysis", http.StatusServiceUnavailable},        // no DB configured
 		{"GET", "/api/v1/analytics/duration-distribution", http.StatusServiceUnavailable}, // no DB configured
 		{"GET", "/api/v1/quality-gates", http.StatusOK},
 		{"GET", "/api/v1/teams", http.StatusOK},

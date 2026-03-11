@@ -315,21 +315,3 @@ func getExecution(ctx context.Context, pool *db.Pool, id, teamID string) (*model
 	return &e, nil
 }
 
-// parsePagination extracts limit and offset from query parameters.
-func parsePagination(r *http.Request) (int, int) {
-	limit := 50
-	offset := 0
-
-	if l := r.URL.Query().Get("limit"); l != "" {
-		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 100 {
-			limit = v
-		}
-	}
-	if o := r.URL.Query().Get("offset"); o != "" {
-		if v, err := strconv.Atoi(o); err == nil && v >= 0 {
-			offset = v
-		}
-	}
-
-	return limit, offset
-}
