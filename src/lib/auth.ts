@@ -62,14 +62,22 @@ function getAuth(): ReturnType<typeof betterAuth> {
           : true, // Default to true for safety
       },
       socialProviders: {
-        github: {
-          clientId: process.env.GITHUB_CLIENT_ID!,
-          clientSecret: process.env.GITHUB_CLIENT_SECRET!,
-        },
-        google: {
-          clientId: process.env.GOOGLE_CLIENT_ID!,
-          clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-        },
+        ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
+          ? {
+              github: {
+                clientId: process.env.GITHUB_CLIENT_ID,
+                clientSecret: process.env.GITHUB_CLIENT_SECRET,
+              },
+            }
+          : {}),
+        ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
+          ? {
+              google: {
+                clientId: process.env.GOOGLE_CLIENT_ID,
+                clientSecret: process.env.GOOGLE_CLIENT_SECRET,
+              },
+            }
+          : {}),
       },
       plugins: [
         admin({
@@ -92,6 +100,13 @@ function getAuth(): ReturnType<typeof betterAuth> {
         },
       },
     });
+
+    if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
+      logger.debug('GitHub OAuth not configured — social login with GitHub disabled');
+    }
+    if (!process.env.GOOGLE_CLIENT_ID || !process.env.GOOGLE_CLIENT_SECRET) {
+      logger.debug('Google OAuth not configured — social login with Google disabled');
+    }
 
     logger.debug('Better Auth instance created successfully');
   }
