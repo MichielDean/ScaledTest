@@ -61,6 +61,7 @@ ecosystem.config.js.bak
 
 # Dolt database files (added by bd init)
 .dolt/
+.beads/
 *.db
 
 # Gas Town (added by gt)
