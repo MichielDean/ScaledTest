@@ -148,6 +148,32 @@ type QualityGateEvaluation struct {
 	CreatedAt time.Time       `json:"created_at"`
 }
 
+// FlakyTestQuarantine represents a quarantined flaky test.
+type FlakyTestQuarantine struct {
+	ID                 string    `json:"id"`
+	TeamID             string    `json:"team_id"`
+	TestName           string    `json:"test_name"`
+	Suite              string    `json:"suite,omitempty"`
+	FilePath           string    `json:"file_path,omitempty"`
+	Reason             string    `json:"reason"`
+	AutoDetected       bool      `json:"auto_detected"`
+	Active             bool      `json:"active"`
+	FlipCount          int       `json:"flip_count"`
+	FlipRate           float64   `json:"flip_rate"`
+	TotalRuns          int       `json:"total_runs"`
+	LastFailureMessage string    `json:"last_failure_message,omitempty"`
+	QuarantinedAt      time.Time `json:"quarantined_at"`
+	CreatedAt          time.Time `json:"created_at"`
+	UpdatedAt          time.Time `json:"updated_at"`
+}
+
+// RetryConfig defines retry behavior for test executions.
+type RetryConfig struct {
+	MaxRetries      int  `json:"max_retries"`       // Max times to retry a failed test (0 = no retry)
+	FlakyDetection  bool `json:"flaky_detection"`   // Mark tests as flaky if they pass on retry
+	QuarantineFlaky bool `json:"quarantine_flaky"`  // Auto-quarantine detected flaky tests
+}
+
 // Webhook represents a webhook subscription.
 type Webhook struct {
 	ID        string    `json:"id"`

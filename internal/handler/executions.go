@@ -6,6 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/retry"
 )
 
 // ExecutionsHandler handles test execution endpoints.
@@ -13,9 +15,18 @@ type ExecutionsHandler struct{}
 
 // CreateExecutionRequest is the request body for creating a test execution.
 type CreateExecutionRequest struct {
-	Command string            `json:"command" validate:"required"`
-	Image   string            `json:"image,omitempty"`
-	EnvVars map[string]string `json:"env_vars,omitempty"`
+	Command     string             `json:"command" validate:"required"`
+	Image       string             `json:"image,omitempty"`
+	EnvVars     map[string]string  `json:"env_vars,omitempty"`
+	RetryConfig *model.RetryConfig `json:"retry_config,omitempty"`
+}
+
+// ExecutionResponse extends execution data with retry information.
+type ExecutionResponse struct {
+	ID          string             `json:"id"`
+	Status      string             `json:"status"`
+	Command     string             `json:"command"`
+	RetryConfig *model.RetryConfig `json:"retry_config,omitempty"`
 }
 
 // List handles GET /api/v1/executions.
@@ -38,6 +49,11 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
 		return
+	}
+
+	// Validate and clamp retry configuration
+	if req.RetryConfig != nil {
+		req.RetryConfig.MaxRetries = retry.ClampRetries(req.RetryConfig.MaxRetries)
 	}
 
 	// TODO: Create execution in DB, dispatch K8s Job
@@ -65,6 +81,12 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: Cancel K8s Job, update execution status
 	Error(w, http.StatusNotImplemented, "cancel execution requires K8s integration")
+}
+
+// QuarantinedTestsResponse is returned to workers listing quarantined tests for an execution.
+type QuarantinedTestsResponse struct {
+	QuarantinedTests []string `json:"quarantined_tests"`
+	Total            int      `json:"total"`
 }
 
 // UpdateStatusRequest is the request body for updating execution status.
