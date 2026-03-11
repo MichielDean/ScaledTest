@@ -112,6 +112,16 @@ describe('getTestTrends', () => {
 });
 
 describe('getFlakyTests', () => {
+  it('queries the normalized test_results table', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getFlakyTests({ days: 7 });
+    const sql = client.query.mock.calls[0][0] as string;
+    expect(sql).toContain('FROM test_results');
+    expect(sql).not.toContain('jsonb_array_elements');
+  });
+
   it('returns flaky test results', async () => {
     const dbRow = {
       test_name: 'login test',
@@ -141,6 +151,16 @@ describe('getFlakyTests', () => {
 });
 
 describe('getErrorAnalysis', () => {
+  it('queries the normalized test_results table', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getErrorAnalysis({ days: 7 });
+    const sql = client.query.mock.calls[0][0] as string;
+    expect(sql).toContain('FROM test_results');
+    expect(sql).not.toContain('jsonb_array_elements');
+  });
+
   it('returns error analysis results', async () => {
     const dbRow = {
       error_message: 'Expected true to be false',
@@ -171,6 +191,16 @@ describe('getErrorAnalysis', () => {
 });
 
 describe('getDurationDistribution', () => {
+  it('queries the normalized test_results table', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getDurationDistribution({ days: 7 });
+    const sql = client.query.mock.calls[0][0] as string;
+    expect(sql).toContain('FROM test_results');
+    expect(sql).not.toContain('jsonb_array_elements');
+  });
+
   it('always returns all 5 buckets even when DB has no data', async () => {
     const client = makeClient([]);
     mockGetTimescalePool.mockReturnValue(makePool(client));

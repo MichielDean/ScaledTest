@@ -162,34 +162,20 @@ export async function getFlakyTests(filters: {
     const minRunsParam = p;
     baseValues.push(minRuns);
 
-    // NOTE: jsonb_array_elements does not benefit from the GIN index — it does a full
-    // JSONB expansion of every row in the time window. This is an acceptable trade-off
-    // for the flaky-test analytics query (infrequently run, smaller window, no hot path).
-    // TODO: migrate test data to a normalized `test_results` table to make this indexable.
-    // The timestamp range filter ($1) does benefit from the timestamp hypertable index.
+    // Uses the normalized test_results table — fully indexable, no JSONB expansion.
     const result = await client.query(
-      `WITH test_runs AS (
+      `WITH grouped AS (
         SELECT
-          t->>'name' AS test_name,
-          COALESCE(t->>'suite', 'unknown') AS suite,
-          t->>'status' AS status,
-          (t->>'duration')::numeric AS duration
-        FROM test_reports,
-          jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
-          ${accessWhere}
-          AND t->>'name' IS NOT NULL
-      ),
-      grouped AS (
-        SELECT
-          test_name,
-          suite,
+          name AS test_name,
+          COALESCE(suite, 'unknown') AS suite,
           COUNT(*) AS total_runs,
           SUM(CASE WHEN status = 'passed' THEN 1 ELSE 0 END) AS passed,
           SUM(CASE WHEN status = 'failed' THEN 1 ELSE 0 END) AS failed,
-          AVG(duration) AS avg_duration
-        FROM test_runs
-        GROUP BY test_name, suite
+          AVG(duration_ms) AS avg_duration
+        FROM test_results
+        WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+          ${accessWhere}
+        GROUP BY name, suite
         HAVING COUNT(*) >= $${minRunsParam}
       )
       SELECT * FROM grouped
@@ -262,22 +248,15 @@ export async function getErrorAnalysis(filters: {
     values.push(limit);
 
     const result = await client.query(
-      `WITH failures AS (
-        SELECT
-          COALESCE(t->>'message', 'No error message') AS error_message,
-          t->>'name' AS test_name
-        FROM test_reports,
-          jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
-          ${accessWhere}
-          AND t->>'status' = 'failed'
-          AND t->>'message' IS NOT NULL
-      )
-      SELECT
-        error_message,
+      `SELECT
+        COALESCE(message, 'No error message') AS error_message,
         COUNT(*) AS count,
-        array_agg(DISTINCT test_name) AS affected_tests
-      FROM failures
+        array_agg(DISTINCT name) AS affected_tests
+      FROM test_results
+      WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+        ${accessWhere}
+        AND status = 'failed'
+        AND message IS NOT NULL
       GROUP BY error_message
       ORDER BY count DESC
       LIMIT $${limitParam}`,
@@ -331,27 +310,21 @@ export async function getDurationDistribution(filters: {
     const accessWhere = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const result = await client.query(
-      `WITH test_durations AS (
-        SELECT (t->>'duration')::numeric AS duration
-        FROM test_reports,
-          jsonb_array_elements(test_data->'tests') AS t
-        WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
-          ${accessWhere}
-          AND t->>'duration' IS NOT NULL
-      )
-      SELECT
+      `SELECT
         CASE
-          WHEN duration < 100 THEN '<100ms'
-          WHEN duration < 500 THEN '100-500ms'
-          WHEN duration < 2000 THEN '500ms-2s'
-          WHEN duration < 10000 THEN '2s-10s'
+          WHEN duration_ms < 100 THEN '<100ms'
+          WHEN duration_ms < 500 THEN '100-500ms'
+          WHEN duration_ms < 2000 THEN '500ms-2s'
+          WHEN duration_ms < 10000 THEN '2s-10s'
           ELSE '>10s'
         END AS range,
         COUNT(*)::integer AS count,
-        ROUND(AVG(duration))::integer AS avg_duration
-      FROM test_durations
+        ROUND(AVG(duration_ms))::integer AS avg_duration
+      FROM test_results
+      WHERE created_at >= NOW() - ($1 * INTERVAL '1 day')
+        ${accessWhere}
       GROUP BY range
-      ORDER BY MIN(duration)`,
+      ORDER BY MIN(duration_ms)`,
       values
     );
 
