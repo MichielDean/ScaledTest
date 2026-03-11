@@ -118,6 +118,36 @@ func (h *Hub) BroadcastExecutionStatus(executionID, status string, details inter
 	})
 }
 
+// BroadcastTestResult streams an individual test result as it completes.
+func (h *Hub) BroadcastTestResult(executionID string, result interface{}) {
+	h.Broadcast(Message{
+		Type:        "execution.test_result",
+		ExecutionID: executionID,
+		Data:        result,
+		Timestamp:   time.Now(),
+	})
+}
+
+// BroadcastProgress streams live pass/fail/skip counters and ETA.
+func (h *Hub) BroadcastProgress(executionID string, progress interface{}) {
+	h.Broadcast(Message{
+		Type:        "execution.progress",
+		ExecutionID: executionID,
+		Data:        progress,
+		Timestamp:   time.Now(),
+	})
+}
+
+// BroadcastWorkerStatus streams worker health/status updates.
+func (h *Hub) BroadcastWorkerStatus(executionID string, worker interface{}) {
+	h.Broadcast(Message{
+		Type:        "execution.worker_status",
+		ExecutionID: executionID,
+		Data:        worker,
+		Timestamp:   time.Now(),
+	})
+}
+
 // ClientCount returns the number of connected clients.
 func (h *Hub) ClientCount() int {
 	h.mu.RLock()
