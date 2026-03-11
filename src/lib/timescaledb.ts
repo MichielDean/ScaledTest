@@ -184,6 +184,68 @@ export const ensureTestReportsTableExists = async (): Promise<void> => {
   }
 };
 
+/**
+ * Inserts individual test rows into the normalized test_results table.
+ * Called during report ingestion to keep the normalized table in sync.
+ * Deletes any prior rows for the same report_id before inserting (idempotent on re-submission).
+ */
+async function insertTestResults(
+  client: PoolClient,
+  params: {
+    reportId: string;
+    reportTimestamp: string;
+    uploadedBy: string | null;
+    userTeams: string[];
+    tests: CtrfSchema['results']['tests'];
+  }
+): Promise<void> {
+  const { reportId, reportTimestamp, uploadedBy, userTeams, tests } = params;
+
+  // Remove previous rows for this report (handles re-submissions via ON CONFLICT in parent)
+  await client.query('DELETE FROM test_results WHERE report_id = $1', [reportId]);
+
+  // Batch insert all tests in a single multi-row INSERT for performance
+  if (tests.length === 0) return;
+
+  const cols = 14; // number of columns per row
+  const placeholders: string[] = [];
+  const values: unknown[] = [];
+  const userTeamsJson = JSON.stringify(userTeams);
+
+  for (let i = 0; i < tests.length; i++) {
+    const t = tests[i];
+    if (!t.name) continue;
+    const base = i * cols;
+    placeholders.push(
+      `($${base + 1}, $${base + 2}, $${base + 3}, $${base + 4}, $${base + 5}, $${base + 6}, $${base + 7}, $${base + 8}, $${base + 9}, $${base + 10}, $${base + 11}, $${base + 12}, $${base + 13}, $${base + 14})`
+    );
+    values.push(
+      reportId, // report_id
+      reportTimestamp, // report_timestamp
+      uploadedBy, // uploaded_by
+      userTeamsJson, // user_teams
+      t.name, // name
+      t.status || 'other', // status
+      Math.round(t.duration ?? 0), // duration_ms
+      t.suite ?? null, // suite
+      t.message ?? null, // message
+      t.filePath ?? null, // file_path
+      t.retries ?? 0, // retries
+      t.flaky ?? false, // flaky
+      t.tags && t.tags.length > 0 ? t.tags : null, // tags
+      reportTimestamp // created_at
+    );
+  }
+
+  if (placeholders.length === 0) return;
+
+  await client.query(
+    `INSERT INTO test_results (report_id, report_timestamp, uploaded_by, user_teams, name, status, duration_ms, suite, message, file_path, retries, flaky, tags, created_at)
+     VALUES ${placeholders.join(', ')}`,
+    values
+  );
+}
+
 // Function to store a CTRF report in TimescaleDB
 export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<string> => {
   return trackQueryPerformance('storeCtrfReport', async () => {
@@ -285,6 +347,19 @@ export const storeCtrfReport = async (report: TimescaleCtrfReport): Promise<stri
       }
 
       const storedReportId = result.rows[0].report_id;
+
+      // Populate normalized test_results table for indexable analytics
+      const tests = report.results?.tests;
+      if (tests && tests.length > 0) {
+        await insertTestResults(client, {
+          reportId: report.reportId,
+          reportTimestamp: report.timestamp || new Date().toISOString(),
+          uploadedBy: report.metadata?.uploadedBy || null,
+          userTeams: report.metadata?.userTeams || [],
+          tests,
+        });
+      }
+
       logger.info(
         {
           reportId: storedReportId,

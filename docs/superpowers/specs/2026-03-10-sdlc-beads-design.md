@@ -1,4 +1,5 @@
 # SDLC Workflow with Beads — Design Spec
+
 **Date:** 2026-03-10
 **Status:** Approved
 
@@ -15,9 +16,9 @@ lands in main. We need a development pipeline that is structurally impossible to
 
 ## Bead Type Routing
 
-| Bead Type | Workflow |
-|-----------|----------|
-| `feature`, `bug` | Full SDLC molecule — 4 sequential stages |
+| Bead Type                   | Workflow                                                  |
+| --------------------------- | --------------------------------------------------------- |
+| `feature`, `bug`            | Full SDLC molecule — 4 sequential stages                  |
 | `task`, `chore`, `decision` | Lightweight — agent closes directly when done, no PR gate |
 
 Routing is determined by bead type at spawn time. No judgment call required from the agent.
@@ -46,6 +47,7 @@ into main. Nothing can be skipped structurally.
 ## Stage Definitions
 
 ### `.1 impl` — Implementation
+
 **Agent persona:** TDD-first implementer
 
 - Write failing tests before any production code (TDD) or scenarios first (BDD)
@@ -55,6 +57,7 @@ into main. Nothing can be skipped structurally.
 - **Closes when:** `make test` passes and implementation is complete
 
 ### `.2 review` — Agent Code Review
+
 **Agent persona:** Skeptical reviewer
 
 - Reads the full diff against main with fresh eyes
@@ -65,6 +68,7 @@ into main. Nothing can be skipped structurally.
 - **Rewinds when:** Issues require implementation-level rework
 
 ### `.3 qa` — Quality Pass
+
 **Agent persona:** Quality auditor
 
 - Runs the full test suite including integration and E2E (Playwright)
@@ -76,6 +80,7 @@ into main. Nothing can be skipped structurally.
 - **Rewinds when:** Coverage regressed or quality gaps require implementation rework
 
 ### `.4 pr` — PR + Merge Gate
+
 **Agent persona:** Integration agent
 
 - Creates PR against `main`
@@ -96,11 +101,13 @@ must be completed again** — review and QA cannot be skipped on the second pass
 ### Rewind Decision Criteria
 
 **Fix in-place (do NOT rewind):**
+
 - Naming inconsistency, minor comment, small refactor
 - Single missing null check
 - Formatting or style issue
 
 **Rewind (trigger `bd-sdlc-rewind.sh`):**
+
 - Logic error or incorrect algorithm
 - Security vulnerability
 - Missing test coverage for core paths
@@ -112,10 +119,10 @@ must be completed again** — review and QA cannot be skipped on the second pass
 `scripts/bd-sdlc-rewind.sh <stage-bead-id> "<reason>"` re-opens the correct beads
 based on which stage calls it:
 
-| Rewinding from | Beads re-opened |
-|---------------|-----------------|
-| `review:` (.2) | `.1` impl, `.2` review |
-| `qa:` (.3) | `.1` impl, `.2` review, `.3` qa |
+| Rewinding from | Beads re-opened                 |
+| -------------- | ------------------------------- |
+| `review:` (.2) | `.1` impl, `.2` review          |
+| `qa:` (.3)     | `.1` impl, `.2` review, `.3` qa |
 
 `bd ready` then surfaces `.1` again. The impl agent picks it up, fixes the issues,
 closes it — which unlocks `.2` (review) again, then `.3` (qa) again, then `.4` (pr).
@@ -136,11 +143,13 @@ impl → review ─── pass ───▶ qa ─── pass ───▶ pr �
 ## Scripts
 
 ### `scripts/bd-sdlc-spawn.sh`
+
 **Triggered by:** Agent — mandatory first action when picking up a `feature` or `bug` bead
 **Arguments:** `<parent-bead-id>`
 **Effect:** Creates 4 child beads with correct types, descriptions, dependencies, and `stage:` labels
 
 ### `scripts/bd-sdlc-rewind.sh`
+
 **Triggered by:** Review or QA agent when rewind decision is made
 **Arguments:** `<stage-bead-id> "<reason>"`
 **Effect:** Re-opens impl (and review/qa as appropriate), logs reason as a comment on the parent bead
@@ -152,16 +161,19 @@ impl → review ─── pass ───▶ qa ─── pass ───▶ pr �
 Three layers work together so no single layer is a single point of failure:
 
 ### 1. Structural (`bd` molecule dependencies)
+
 `bd ready` never surfaces `.2` while `.1` is open. Stages cannot be skipped regardless
 of agent intent. The rewind re-gates stages that were already passed.
 
 ### 2. Contextual (PRIME.md + `bd setup claude` hook)
+
 `bd setup claude` installs a SessionStart hook that runs `bd prime` at the start of
 every Claude Code session. PRIME.md contains the SDLC rules, stage checklists, and
 spawn/rewind script requirements. Every agent session starts with this context injected
 automatically (~1-2k tokens).
 
 ### 3. Hard gate (`gh:pr` gate on `.4`)
+
 The `.4` bead cannot close until GitHub confirms the PR merged into main. This is
 enforced at the database level by `bd` — no workaround available to the agent.
 
