@@ -1,5 +1,11 @@
 # Agent Instructions
 
+## Project Mission
+
+ScaledTest is an end-to-end testing platform for running tests at massive scale with unprecedented reporting capabilities. It serves both humans (visual dashboards, analytics) and machines (CI integration, quality gates, webhooks). All test reporting uses the CTRF (Common Test Results Format) standard.
+
+---
+
 This project uses **bd** (beads) for issue tracking. Run `bd onboard` to get started.
 
 ## Quick Reference
