@@ -29,6 +29,36 @@ func testToken() string {
 	return pair.AccessToken
 }
 
+// testCSRFToken fetches a CSRF token from the router and returns the token
+// value plus the cookie to attach to subsequent requests.
+func testCSRFToken(t *testing.T, router http.Handler) (string, *http.Cookie) {
+	t.Helper()
+	req := httptest.NewRequest("GET", "/auth/csrf-token", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+	if w.Code != http.StatusOK {
+		t.Fatalf("GET /auth/csrf-token status = %d, want 200", w.Code)
+	}
+	cookies := w.Result().Cookies()
+	var csrfCookie *http.Cookie
+	for _, c := range cookies {
+		if c.Name == "__csrf_token" {
+			csrfCookie = c
+			break
+		}
+	}
+	if csrfCookie == nil {
+		t.Fatal("csrf-token endpoint did not set __csrf_token cookie")
+	}
+	return csrfCookie.Value, csrfCookie
+}
+
+// addCSRF adds CSRF cookie and header to a request.
+func addCSRF(req *http.Request, token string, cookie *http.Cookie) {
+	req.AddCookie(cookie)
+	req.Header.Set("X-CSRF-Token", token)
+}
+
 func TestHealthEndpoint(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
@@ -148,12 +178,14 @@ func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
 func TestCTRFReportIngestion(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	token := testToken()
+	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":2,"passed":1,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"test1","status":"passed","duration":100},{"name":"test2","status":"failed","duration":200,"message":"oops"}]}}`
 
 	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
@@ -165,14 +197,62 @@ func TestCTRFReportIngestion(t *testing.T) {
 func TestCTRFReportInvalidPayload(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	token := testToken()
+	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{invalid json}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("invalid CTRF: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestCSRFTokenEndpoint(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, cookie := testCSRFToken(t, router)
+
+	if csrfToken == "" {
+		t.Error("CSRF token is empty")
+	}
+	if cookie.Value != csrfToken {
+		t.Error("cookie value doesn't match response token")
+	}
+	if cookie.HttpOnly {
+		t.Error("CSRF cookie should not be HttpOnly")
+	}
+}
+
+func TestCSRFBlocksMutationWithoutToken(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	token := testToken()
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("POST without CSRF: status = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestCSRFAllowsAPITokenWithoutCSRF(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+
+	// API tokens (sct_) should bypass CSRF — they'll fail auth (no DB) but not CSRF
+	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "sct_test-api-token")
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Should get 401 (api tokens not configured) not 403 (CSRF)
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("sct_ POST without CSRF: status = %d, want %d (body: %s)", w.Code, http.StatusUnauthorized, w.Body.String())
 	}
 }
