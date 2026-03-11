@@ -62,7 +62,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	reportsH := &handler.ReportsHandler{}
 	execH := &handler.ExecutionsHandler{DB: dbPool}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
-	qgH := &handler.QualityGatesHandler{}
+	qgH := &handler.QualityGatesHandler{DB: dbPool}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 
 	// Health check
