@@ -169,7 +169,9 @@ func TestSessionCascadeOnUserDelete(t *testing.T) {
 	}
 
 	var count int
-	tdb.Pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count)
+	if err = tdb.Pool.QueryRow(ctx, `SELECT count(*) FROM sessions WHERE user_id = $1`, userID).Scan(&count); err != nil {
+		t.Fatalf("count sessions: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("sessions remaining after user delete: %d, want 0", count)
 	}
@@ -384,24 +386,32 @@ func TestReportIngestion(t *testing.T) {
 
 	// Verify test results count
 	var resultCount int
-	tdb.Pool.QueryRow(ctx,
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE report_id = $1`, reportID,
-	).Scan(&resultCount)
+	).Scan(&resultCount); err != nil {
+		t.Fatalf("count test results: %v", err)
+	}
 	if resultCount != 5 {
 		t.Errorf("test results count = %d, want 5", resultCount)
 	}
 
 	// Verify status breakdown
 	var passedCount, failedCount, skippedCount int
-	tdb.Pool.QueryRow(ctx,
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE report_id = $1 AND status = 'passed'`, reportID,
-	).Scan(&passedCount)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&passedCount); err != nil {
+		t.Fatalf("count passed: %v", err)
+	}
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE report_id = $1 AND status = 'failed'`, reportID,
-	).Scan(&failedCount)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&failedCount); err != nil {
+		t.Fatalf("count failed: %v", err)
+	}
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE report_id = $1 AND status = 'skipped'`, reportID,
-	).Scan(&skippedCount)
+	).Scan(&skippedCount); err != nil {
+		t.Fatalf("count skipped: %v", err)
+	}
 
 	if passedCount != 3 {
 		t.Errorf("passed = %d, want 3", passedCount)
@@ -422,10 +432,12 @@ func TestReportLinkedToExecution(t *testing.T) {
 
 	// Create execution
 	var execID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_executions (team_id, command) VALUES ($1, $2) RETURNING id`,
 		teamID, "npm test",
-	).Scan(&execID)
+	).Scan(&execID); err != nil {
+		t.Fatalf("create execution: %v", err)
+	}
 
 	// Create report linked to execution
 	var reportID string
@@ -441,9 +453,11 @@ func TestReportLinkedToExecution(t *testing.T) {
 
 	// Verify link
 	var linkedExecID string
-	tdb.Pool.QueryRow(ctx,
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT execution_id FROM test_reports WHERE id = $1`, reportID,
-	).Scan(&linkedExecID)
+	).Scan(&linkedExecID); err != nil {
+		t.Fatalf("query linked execution: %v", err)
+	}
 	if linkedExecID != execID {
 		t.Errorf("execution_id = %q, want %q", linkedExecID, execID)
 	}
@@ -456,11 +470,13 @@ func TestResultStatusConstraint(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "Constraint Team")
 
 	var reportID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw)
 		 VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":1}`, `{}`,
-	).Scan(&reportID)
+	).Scan(&reportID); err != nil {
+		t.Fatalf("insert report: %v", err)
+	}
 
 	// Invalid test result status
 	_, err := tdb.Pool.Exec(ctx,
@@ -483,20 +499,26 @@ func TestTeamIsolationExecutions(t *testing.T) {
 
 	// Create executions in each team
 	var execA, execB string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_executions (team_id, command) VALUES ($1, $2) RETURNING id`,
 		teamA, "test-alpha",
-	).Scan(&execA)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&execA); err != nil {
+		t.Fatalf("insert exec A: %v", err)
+	}
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_executions (team_id, command) VALUES ($1, $2) RETURNING id`,
 		teamB, "test-beta",
-	).Scan(&execB)
+	).Scan(&execB); err != nil {
+		t.Fatalf("insert exec B: %v", err)
+	}
 
 	// Query filtered by team A — should only see team A's execution
 	var count int
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_executions WHERE team_id = $1`, teamA,
-	).Scan(&count)
+	).Scan(&count); err != nil {
+		t.Fatalf("count team A execs: %v", err)
+	}
 	if count != 1 {
 		t.Errorf("team A executions = %d, want 1", count)
 	}
@@ -520,28 +542,36 @@ func TestTeamIsolationReports(t *testing.T) {
 
 	// Insert reports for each team
 	for i := 0; i < 3; i++ {
-		tdb.Pool.Exec(ctx,
+		if _, err := tdb.Pool.Exec(ctx,
 			`INSERT INTO test_reports (team_id, tool_name, summary, raw)
 			 VALUES ($1, $2, $3, $4)`,
 			teamA, "jest", `{"tests":1}`, `{}`,
-		)
+		); err != nil {
+			t.Fatalf("insert report A[%d]: %v", i, err)
+		}
 	}
 	for i := 0; i < 2; i++ {
-		tdb.Pool.Exec(ctx,
+		if _, err := tdb.Pool.Exec(ctx,
 			`INSERT INTO test_reports (team_id, tool_name, summary, raw)
 			 VALUES ($1, $2, $3, $4)`,
 			teamB, "pytest", `{"tests":1}`, `{}`,
-		)
+		); err != nil {
+			t.Fatalf("insert report B[%d]: %v", i, err)
+		}
 	}
 
 	// Verify team-scoped counts
 	var countA, countB int
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_reports WHERE team_id = $1`, teamA,
-	).Scan(&countA)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&countA); err != nil {
+		t.Fatalf("count A: %v", err)
+	}
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_reports WHERE team_id = $1`, teamB,
-	).Scan(&countB)
+	).Scan(&countB); err != nil {
+		t.Fatalf("count B: %v", err)
+	}
 
 	if countA != 3 {
 		t.Errorf("team A reports = %d, want 3", countA)
@@ -560,42 +590,56 @@ func TestTeamIsolationTestResults(t *testing.T) {
 
 	// Create reports and results for each team
 	var reportA, reportB string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamA, "jest", `{"tests":2}`, `{}`,
-	).Scan(&reportA)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&reportA); err != nil {
+		t.Fatalf("insert report A: %v", err)
+	}
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamB, "pytest", `{"tests":1}`, `{}`,
-	).Scan(&reportB)
+	).Scan(&reportB); err != nil {
+		t.Fatalf("insert report B: %v", err)
+	}
 
-	tdb.Pool.Exec(ctx,
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms) VALUES ($1, $2, $3, $4, $5)`,
 		reportA, teamA, "alpha_test_1", "passed", 100,
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert result A1: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms) VALUES ($1, $2, $3, $4, $5)`,
 		reportA, teamA, "alpha_test_2", "failed", 200,
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert result A2: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms) VALUES ($1, $2, $3, $4, $5)`,
 		reportB, teamB, "beta_test_1", "passed", 50,
-	)
+	); err != nil {
+		t.Fatalf("insert result B1: %v", err)
+	}
 
 	// Team A should see only its results
 	var countA int
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE team_id = $1`, teamA,
-	).Scan(&countA)
+	).Scan(&countA); err != nil {
+		t.Fatalf("count A: %v", err)
+	}
 	if countA != 2 {
 		t.Errorf("team A results = %d, want 2", countA)
 	}
 
 	// Team B should see only its results
 	var countB int
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM test_results WHERE team_id = $1`, teamB,
-	).Scan(&countB)
+	).Scan(&countB); err != nil {
+		t.Fatalf("count B: %v", err)
+	}
 	if countB != 1 {
 		t.Errorf("team B results = %d, want 1", countB)
 	}
@@ -609,22 +653,30 @@ func TestTeamIsolationQualityGates(t *testing.T) {
 	teamB := tdb.CreateTeam(t, "QG Team B")
 
 	// Create quality gates for each team
-	tdb.Pool.Exec(ctx,
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO quality_gates (team_id, name, rules) VALUES ($1, $2, $3)`,
 		teamA, "Alpha Gate", `[{"type":"pass_rate","params":{"min":90}}]`,
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert gate A: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO quality_gates (team_id, name, rules) VALUES ($1, $2, $3)`,
 		teamB, "Beta Gate", `[{"type":"pass_rate","params":{"min":95}}]`,
-	)
+	); err != nil {
+		t.Fatalf("insert gate B: %v", err)
+	}
 
 	var countA, countB int
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM quality_gates WHERE team_id = $1`, teamA,
-	).Scan(&countA)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&countA); err != nil {
+		t.Fatalf("count A: %v", err)
+	}
+	if err := tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM quality_gates WHERE team_id = $1`, teamB,
-	).Scan(&countB)
+	).Scan(&countB); err != nil {
+		t.Fatalf("count B: %v", err)
+	}
 
 	if countA != 1 {
 		t.Errorf("team A quality gates = %d, want 1", countA)
@@ -649,11 +701,13 @@ func TestAnalyticsTrendQuery(t *testing.T) {
 		}
 		summaryJSON, _ := json.Marshal(summary)
 
-		tdb.Pool.Exec(ctx,
+		if _, err := tdb.Pool.Exec(ctx,
 			`INSERT INTO test_reports (team_id, tool_name, summary, raw, created_at)
 			 VALUES ($1, $2, $3, $4, now() - $5::interval)`,
 			teamID, "jest", summaryJSON, `{}`, time.Duration(i)*24*time.Hour,
-		)
+		); err != nil {
+			t.Fatalf("insert report[%d]: %v", i, err)
+		}
 	}
 
 	// Query: get reports ordered by time for trend analysis
@@ -671,7 +725,9 @@ func TestAnalyticsTrendQuery(t *testing.T) {
 	var count int
 	for rows.Next() {
 		var passed, failed string
-		rows.Scan(&passed, &failed)
+		if err := rows.Scan(&passed, &failed); err != nil {
+			t.Fatalf("scan trend row: %v", err)
+		}
 		count++
 	}
 	if count != 5 {
@@ -687,38 +743,50 @@ func TestAnalyticsFlakyTestDetection(t *testing.T) {
 
 	// Create two reports
 	var reportID1, reportID2 string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":2}`, `{}`,
-	).Scan(&reportID1)
-	tdb.Pool.QueryRow(ctx,
+	).Scan(&reportID1); err != nil {
+		t.Fatalf("insert report 1: %v", err)
+	}
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":2}`, `{}`,
-	).Scan(&reportID2)
+	).Scan(&reportID2); err != nil {
+		t.Fatalf("insert report 2: %v", err)
+	}
 
 	// Same test, different outcomes → flaky
-	tdb.Pool.Exec(ctx,
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		reportID1, teamID, "flaky_test", "passed", 100,
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert flaky passed: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		reportID2, teamID, "flaky_test", "failed", 150,
-	)
+	); err != nil {
+		t.Fatalf("insert flaky failed: %v", err)
+	}
 
 	// A stable test for comparison
-	tdb.Pool.Exec(ctx,
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		reportID1, teamID, "stable_test", "passed", 50,
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert stable 1: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms)
 		 VALUES ($1, $2, $3, $4, $5)`,
 		reportID2, teamID, "stable_test", "passed", 55,
-	)
+	); err != nil {
+		t.Fatalf("insert stable 2: %v", err)
+	}
 
 	// Query for flaky tests: tests with both passed and failed results
 	rows, err := tdb.Pool.Query(ctx,
@@ -737,7 +805,9 @@ func TestAnalyticsFlakyTestDetection(t *testing.T) {
 	for rows.Next() {
 		var name string
 		var statusCount int
-		rows.Scan(&name, &statusCount)
+		if err := rows.Scan(&name, &statusCount); err != nil {
+			t.Fatalf("scan flaky row: %v", err)
+		}
 		flakyTests = append(flakyTests, name)
 	}
 
@@ -753,19 +823,23 @@ func TestAnalyticsDurationDistribution(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "Duration Team")
 
 	var reportID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":4}`, `{}`,
-	).Scan(&reportID)
+	).Scan(&reportID); err != nil {
+		t.Fatalf("insert report: %v", err)
+	}
 
 	// Insert tests with varying durations
 	durations := []int64{10, 50, 100, 500, 1000, 5000}
 	for i, d := range durations {
-		tdb.Pool.Exec(ctx,
+		if _, err := tdb.Pool.Exec(ctx,
 			`INSERT INTO test_results (report_id, team_id, name, status, duration_ms)
 			 VALUES ($1, $2, $3, $4, $5)`,
 			reportID, teamID, fmt.Sprintf("test_%d", i), "passed", d,
-		)
+		); err != nil {
+			t.Fatalf("insert result[%d]: %v", i, err)
+		}
 	}
 
 	// Query duration statistics
@@ -839,19 +913,23 @@ func TestQualityGateEvaluation(t *testing.T) {
 
 	// Create quality gate
 	var gateID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO quality_gates (team_id, name, rules)
 		 VALUES ($1, $2, $3) RETURNING id`,
 		teamID, "Pass Rate Gate", `[{"type":"pass_rate","params":{"min":80}}]`,
-	).Scan(&gateID)
+	).Scan(&gateID); err != nil {
+		t.Fatalf("insert gate: %v", err)
+	}
 
 	// Create report
 	var reportID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw)
 		 VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":10,"passed":9,"failed":1}`, `{}`,
-	).Scan(&reportID)
+	).Scan(&reportID); err != nil {
+		t.Fatalf("insert report: %v", err)
+	}
 
 	// Record evaluation
 	details := `[{"rule":"pass_rate","passed":true,"actual":90,"threshold":80}]`
@@ -890,22 +968,30 @@ func TestTeamDeleteCascade(t *testing.T) {
 	tdb.AddUserToTeam(t, userID, teamID, "owner")
 
 	// Create resources under the team
-	tdb.Pool.Exec(ctx,
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_executions (team_id, command) VALUES ($1, $2)`, teamID, "test",
-	)
+	); err != nil {
+		t.Fatalf("insert execution: %v", err)
+	}
 	var reportID string
-	tdb.Pool.QueryRow(ctx,
+	if err := tdb.Pool.QueryRow(ctx,
 		`INSERT INTO test_reports (team_id, tool_name, summary, raw) VALUES ($1, $2, $3, $4) RETURNING id`,
 		teamID, "jest", `{"tests":1}`, `{}`,
-	).Scan(&reportID)
-	tdb.Pool.Exec(ctx,
+	).Scan(&reportID); err != nil {
+		t.Fatalf("insert report: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO test_results (report_id, team_id, name, status) VALUES ($1, $2, $3, $4)`,
 		reportID, teamID, "test1", "passed",
-	)
-	tdb.Pool.Exec(ctx,
+	); err != nil {
+		t.Fatalf("insert result: %v", err)
+	}
+	if _, err := tdb.Pool.Exec(ctx,
 		`INSERT INTO quality_gates (team_id, name, rules) VALUES ($1, $2, $3)`,
 		teamID, "Gate", `[]`,
-	)
+	); err != nil {
+		t.Fatalf("insert gate: %v", err)
+	}
 
 	// Delete team
 	_, err := tdb.Pool.Exec(ctx, `DELETE FROM teams WHERE id = $1`, teamID)
@@ -917,9 +1003,11 @@ func TestTeamDeleteCascade(t *testing.T) {
 	tables := []string{"test_executions", "test_reports", "test_results", "quality_gates", "user_teams"}
 	for _, table := range tables {
 		var count int
-		tdb.Pool.QueryRow(ctx,
+		if err := tdb.Pool.QueryRow(ctx,
 			fmt.Sprintf(`SELECT count(*) FROM %s WHERE team_id = $1`, table), teamID,
-		).Scan(&count)
+		).Scan(&count); err != nil {
+			t.Fatalf("count %s: %v", table, err)
+		}
 		if count != 0 {
 			t.Errorf("after team delete, %s has %d rows (want 0)", table, count)
 		}
@@ -971,9 +1059,11 @@ func TestWebhookCRUD(t *testing.T) {
 
 	// Verify no active webhooks
 	var count int
-	tdb.Pool.QueryRow(ctx,
+	if err = tdb.Pool.QueryRow(ctx,
 		`SELECT count(*) FROM webhooks WHERE team_id = $1 AND active = true`, teamID,
-	).Scan(&count)
+	).Scan(&count); err != nil {
+		t.Fatalf("count active webhooks: %v", err)
+	}
 	if count != 0 {
 		t.Errorf("active webhooks after deactivation = %d, want 0", count)
 	}

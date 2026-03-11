@@ -11,11 +11,18 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
+	"sync"
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/db"
+)
+
+var (
+	migrateOnce sync.Once
+	migrateErr  error
 )
 
 // TestDB wraps a pgxpool.Pool for integration testing.
@@ -26,6 +33,8 @@ type TestDB struct {
 
 // Setup connects to the test database and runs all migrations.
 // It skips the test if TEST_DATABASE_URL is not set.
+// Migrations are run once per package via sync.Once to avoid repeated work
+// and migration locking contention when tests run in parallel.
 func Setup(t *testing.T) *TestDB {
 	t.Helper()
 
@@ -46,10 +55,13 @@ func Setup(t *testing.T) *TestDB {
 		t.Fatalf("ping test database: %v", err)
 	}
 
-	// Run migrations
-	if err := db.MigrateUp(url); err != nil {
+	// Run migrations once per package
+	migrateOnce.Do(func() {
+		migrateErr = db.MigrateUp(url)
+	})
+	if migrateErr != nil {
 		pool.Close()
-		t.Fatalf("run migrations: %v", err)
+		t.Fatalf("run migrations: %v", migrateErr)
 	}
 
 	tdb := &TestDB{Pool: pool, URL: url}
@@ -65,31 +77,32 @@ func Setup(t *testing.T) *TestDB {
 	return tdb
 }
 
+// truncateTables is the list of application tables to clean between tests.
+var truncateTables = []string{
+	"quality_gate_evaluations",
+	"quality_gates",
+	"webhooks",
+	"test_results",
+	"test_reports",
+	"test_executions",
+	"api_tokens",
+	"user_teams",
+	"sessions",
+	"oauth_accounts",
+	"teams",
+	"users",
+}
+
 // Truncate removes all data from all application tables (preserving schema).
+// Uses TRUNCATE ... CASCADE for speed and to avoid FK-order issues.
 func (tdb *TestDB) Truncate(t *testing.T) {
 	t.Helper()
 
-	tables := []string{
-		"quality_gate_evaluations",
-		"quality_gates",
-		"webhooks",
-		"test_results",
-		"test_reports",
-		"test_executions",
-		"api_tokens",
-		"user_teams",
-		"sessions",
-		"oauth_accounts",
-		"teams",
-		"users",
-	}
-
 	ctx := context.Background()
-	for _, table := range tables {
-		_, err := tdb.Pool.Exec(ctx, fmt.Sprintf("DELETE FROM %s", table))
-		if err != nil {
-			t.Fatalf("truncate %s: %v", table, err)
-		}
+	stmt := fmt.Sprintf("TRUNCATE %s RESTART IDENTITY CASCADE", strings.Join(truncateTables, ", "))
+	_, err := tdb.Pool.Exec(ctx, stmt)
+	if err != nil {
+		t.Fatalf("truncate tables: %v", err)
 	}
 }
 

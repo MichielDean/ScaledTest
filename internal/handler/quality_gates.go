@@ -350,7 +350,11 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Store evaluation result
-	detailsJSON, _ := json.Marshal(evalResult.Results)
+	detailsJSON, err := json.Marshal(evalResult.Results)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to serialize evaluation results")
+		return
+	}
 	var eval model.QualityGateEvaluation
 	err = h.DB.QueryRow(r.Context(),
 		`INSERT INTO quality_gate_evaluations (gate_id, report_id, passed, details)

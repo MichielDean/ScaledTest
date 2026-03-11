@@ -92,8 +92,16 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Use a transaction so team + membership are atomic
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to begin transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
 	var team model.Team
-	err := h.DB.QueryRow(r.Context(),
+	err = tx.QueryRow(r.Context(),
 		`INSERT INTO teams (name) VALUES ($1) RETURNING id, name, created_at`,
 		req.Name).Scan(&team.ID, &team.Name, &team.CreatedAt)
 	if err != nil {
@@ -102,11 +110,16 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Add creator as owner
-	_, err = h.DB.Exec(r.Context(),
+	_, err = tx.Exec(r.Context(),
 		`INSERT INTO user_teams (user_id, team_id, role) VALUES ($1, $2, 'owner')`,
 		claims.UserID, team.ID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to add team membership")
+		return
+	}
+
+	if err := tx.Commit(r.Context()); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to commit team creation")
 		return
 	}
 
@@ -177,8 +190,12 @@ func (h *TeamsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 
 	// Only owners can delete teams
 	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
-	if err != nil {
+	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to check team membership")
 		return
 	}
 	if role != "owner" {
@@ -216,8 +233,12 @@ func (h *TeamsHandler) ListTokens(w http.ResponseWriter, r *http.Request) {
 
 	// Verify team membership
 	_, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
-	if err != nil {
+	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to check team membership")
 		return
 	}
 
@@ -275,8 +296,12 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 
 	// Only owners can create tokens
 	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
-	if err != nil {
+	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to check team membership")
 		return
 	}
 	if role != "owner" {
@@ -340,8 +365,12 @@ func (h *TeamsHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 
 	// Only owners can revoke tokens
 	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
-	if err != nil {
+	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to check team membership")
 		return
 	}
 	if role != "owner" {

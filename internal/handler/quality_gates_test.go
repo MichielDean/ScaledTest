@@ -13,28 +13,19 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 )
 
+var qgDefaultClaims = &auth.Claims{
+	UserID: "user-1",
+	Email:  "test@example.com",
+	Role:   "owner",
+	TeamID: "team-1",
+}
+
 func qgWithClaims(r *http.Request) *http.Request {
-	claims := &auth.Claims{
-		UserID: "user-1",
-		Email:  "test@example.com",
-		Role:   "owner",
-		TeamID: "team-1",
-	}
-	return r.WithContext(context.WithValue(r.Context(), auth.ClaimsContextKey, claims))
+	return testWithClaims(r, qgDefaultClaims)
 }
 
 func qgWithClaimsAndParam(r *http.Request, key, value string) *http.Request {
-	claims := &auth.Claims{
-		UserID: "user-1",
-		Email:  "test@example.com",
-		Role:   "owner",
-		TeamID: "team-1",
-	}
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add(key, value)
-	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
-	ctx = context.WithValue(ctx, auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
+	return testWithClaimsAndParam(r, qgDefaultClaims, key, value)
 }
 
 func TestQGList_Unauthorized(t *testing.T) {

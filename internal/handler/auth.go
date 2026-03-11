@@ -196,7 +196,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 	if time.Now().After(expiresAt) {
 		// Delete expired session
 		_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE id = $1", sessionID)
-		clearRefreshCookie(w)
+		clearRefreshCookie(w, r)
 		Error(w, http.StatusUnauthorized, "refresh token expired")
 		return
 	}
@@ -247,7 +247,7 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 
 	// Delete session by refresh token
 	_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE refresh_token = $1", cookie.Value)
-	clearRefreshCookie(w)
+	clearRefreshCookie(w, r)
 
 	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 }
@@ -279,7 +279,7 @@ func (h *AuthHandler) issueTokens(ctx context.Context, w http.ResponseWriter, r 
 		return nil, err
 	}
 
-	setRefreshCookie(w, pair.RefreshToken, h.JWT.RefreshDuration())
+	setRefreshCookie(w, r, pair.RefreshToken, h.JWT.RefreshDuration())
 
 	return &AuthResponse{
 		AccessToken: pair.AccessToken,
@@ -287,26 +287,35 @@ func (h *AuthHandler) issueTokens(ctx context.Context, w http.ResponseWriter, r 
 	}, nil
 }
 
-func setRefreshCookie(w http.ResponseWriter, token string, maxAge time.Duration) {
+func setRefreshCookie(w http.ResponseWriter, r *http.Request, token string, maxAge time.Duration) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookie,
 		Value:    token,
 		Path:     "/auth",
 		MaxAge:   int(maxAge.Seconds()),
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 	})
 }
 
-func clearRefreshCookie(w http.ResponseWriter) {
+func clearRefreshCookie(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     refreshTokenCookie,
 		Value:    "",
 		Path:     "/auth",
 		MaxAge:   -1,
 		HttpOnly: true,
-		Secure:   true,
+		Secure:   isSecureRequest(r),
 		SameSite: http.SameSiteStrictMode,
 	})
+}
+
+// isSecureRequest returns true if the request was made over HTTPS.
+// Checks TLS directly and the X-Forwarded-Proto header for proxied requests.
+func isSecureRequest(r *http.Request) bool {
+	if r.TLS != nil {
+		return true
+	}
+	return r.Header.Get("X-Forwarded-Proto") == "https"
 }

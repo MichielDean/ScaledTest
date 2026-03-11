@@ -12,17 +12,23 @@ import (
 )
 
 // tokenForTeam creates a JWT with the given user, role, and team.
-func tokenForTeam(userID, email, role, teamID string) string {
+func tokenForTeam(t *testing.T, userID, email, role, teamID string) string {
+	t.Helper()
+
 	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
-	pair, _ := mgr.GenerateTokenPair(userID, email, role, teamID)
+	pair, err := mgr.GenerateTokenPair(userID, email, role, teamID)
+	if err != nil {
+		t.Fatalf("failed to generate token pair: %v", err)
+	}
+
 	return pair.AccessToken
 }
 
 func TestTeamIsolation_DifferentTeamTokensAccepted(t *testing.T) {
 	router := NewRouter(testConfig())
 
-	teamAToken := tokenForTeam("user-a", "a@example.com", "owner", "team-alpha")
-	teamBToken := tokenForTeam("user-b", "b@example.com", "owner", "team-beta")
+	teamAToken := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
+	teamBToken := tokenForTeam(t, "user-b", "b@example.com", "owner", "team-beta")
 
 	// Both team tokens should be accepted by authenticated endpoints
 	endpoints := []string{
@@ -147,7 +153,7 @@ func TestTeamIsolation_AdminEndpointRequiresOwnerRole(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			token := tokenForTeam("user-x", "x@example.com", tc.role, tc.teamID)
+			token := tokenForTeam(t, "user-x", "x@example.com", tc.role, tc.teamID)
 			req := httptest.NewRequest("GET", "/api/v1/admin/users", nil)
 			req.Header.Set("Authorization", "Bearer "+token)
 			w := httptest.NewRecorder()
@@ -271,7 +277,7 @@ func TestTeamIsolation_TeamScopedEndpointResponses(t *testing.T) {
 	// When DB is wired, these should return only data for the requesting team.
 	router := NewRouter(testConfig())
 
-	teamAToken := tokenForTeam("user-a", "a@example.com", "owner", "team-alpha")
+	teamAToken := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 
 	type endpointCheck struct {
 		path    string
@@ -323,8 +329,8 @@ func TestTeamIsolation_CTRFIngestionAcceptsBothTeams(t *testing.T) {
 		token  string
 		teamID string
 	}{
-		{"team-alpha", tokenForTeam("user-a", "a@example.com", "maintainer", "team-alpha"), "team-alpha"},
-		{"team-beta", tokenForTeam("user-b", "b@example.com", "maintainer", "team-beta"), "team-beta"},
+		{"team-alpha", tokenForTeam(t, "user-a", "a@example.com", "maintainer", "team-alpha"), "team-alpha"},
+		{"team-beta", tokenForTeam(t, "user-b", "b@example.com", "maintainer", "team-beta"), "team-beta"},
 	}
 
 	for _, tc := range tokens {
@@ -370,7 +376,7 @@ func TestTeamIsolation_RoleScopingAcrossTeams(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			token := tokenForTeam("user-x", "x@example.com", tc.role, tc.teamID)
+			token := tokenForTeam(t, "user-x", "x@example.com", tc.role, tc.teamID)
 			req := httptest.NewRequest(tc.method, tc.endpoint, nil)
 			req.Header.Set("Authorization", "Bearer "+token)
 			w := httptest.NewRecorder()
@@ -388,7 +394,7 @@ func TestTeamIsolation_EmptyTeamIDAllowed(t *testing.T) {
 	// should still be accepted by the auth middleware.
 	router := NewRouter(testConfig())
 
-	token := tokenForTeam("user-new", "new@example.com", "owner", "")
+	token := tokenForTeam(t, "user-new", "new@example.com", "owner", "")
 
 	req := httptest.NewRequest("GET", "/api/v1/teams", nil)
 	req.Header.Set("Authorization", "Bearer "+token)
@@ -404,7 +410,7 @@ func TestTeamIsolation_TeamTokenURLParams(t *testing.T) {
 	// Verify team-scoped URL params are accepted (e.g., /teams/{teamID}).
 	router := NewRouter(testConfig())
 
-	tokenA := tokenForTeam("user-a", "a@example.com", "owner", "team-alpha")
+	tokenA := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 
 	// User from team-alpha requesting details of a specific team.
 	// Currently returns 501 (not implemented), confirming the route exists and
@@ -434,7 +440,7 @@ func TestTeamIsolation_TeamTokenSubresources(t *testing.T) {
 	// Verify team-scoped sub-resource routes (e.g., /teams/{teamID}/tokens).
 	router := NewRouter(testConfig())
 
-	tokenA := tokenForTeam("user-a", "a@example.com", "owner", "team-alpha")
+	tokenA := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 
 	// List tokens for own team - returns empty list (stub)
 	req := httptest.NewRequest("GET", "/api/v1/teams/team-alpha/tokens", nil)
