@@ -14,19 +14,36 @@
 
 ## Architecture
 
-### v1 (current main): Next.js monolith
+ScaledTest is a dual-stack platform (v1 legacy + v2 Go backend both on main):
+
+### v1 Legacy (Next.js monolith)
 - Next.js 15 + React 19 + TypeScript
 - Better Auth for authentication/RBAC
 - TimescaleDB for time-series test data
 - Jest (unit/component/integration) + Playwright (E2E)
 
-### v2 (feat/scaledtest-v2-rewrite): Go backend + React SPA
+### v2 (Go backend + React SPA — now on main)
 - Go backend: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
 - React 19 frontend: TanStack Router/Query, Zustand, Recharts
 - Single binary serves embedded SPA via go:embed
 - K8s Job management for distributed execution
-- Quality gate rule DSL
-- WebSocket hub for real-time updates
+- Quality gate rule DSL, WebSocket hub for real-time updates
+
+## Work Submission (CRITICAL for polecats)
+
+**NEVER create PRs directly with `gh pr create`.** All work goes through the Gas Town merge queue:
+
+```bash
+gt done --pre-verified    # Submit branch to MQ, notify witness, transition to idle
+```
+
+This ensures:
+- Bead/issue is automatically closed after merge
+- Refinery runs quality gates
+- Branch cleanup happens automatically
+- Work is tracked in the capability ledger
+
+If you create a PR manually, the bead will NOT be closed and the work is invisible to the system.
 
 ## Development Standards
 
