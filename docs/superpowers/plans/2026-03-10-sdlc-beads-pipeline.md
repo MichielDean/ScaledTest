@@ -8,6 +8,13 @@
 
 **Tech Stack:** bash, `bd` (beads) CLI v0.59.0, `gh` (GitHub CLI), `git`
 
+**Test commands (ScaledTest-specific):**
+- Unit + component (fast, what CI runs): `npm run test:ci`
+- Full suite (slower, run before PR): `npm run test`
+- Note: backend `.go` files are all proto-generated — no Go test suite exists
+
+**Branch convention:** `feature/<bead-id>-<slug>` or `fix/<bead-id>-<slug>` — created at start of impl stage, before any code changes.
+
 ---
 
 ## Chunk 1: Spawn Script
@@ -437,16 +444,19 @@ while [[ $ATTEMPT -lt $MAX_ATTEMPTS ]]; do
   # Check for CHANGES_REQUESTED reviews (Copilot or others)
   CHANGES_REQUESTED=$(echo "$PR_STATE" | grep -o '"state":"CHANGES_REQUESTED"' | wc -l | tr -d ' ')
   if [[ "$CHANGES_REQUESTED" -gt 0 ]]; then
-    echo "Review requested changes. Extracting comments..."
+    echo ""
+    echo "====== ACTION REQUIRED ======"
+    echo "GitHub review requested changes. Comments to address:"
+    echo ""
     gh pr view "$PR_NUMBER" --json reviews \
-      --jq '.reviews[] | select(.state=="CHANGES_REQUESTED") | "Reviewer: \(.author.login)\n\(.body)"'
+      --jq '.reviews[] | select(.state=="CHANGES_REQUESTED") | "── Reviewer: \(.author.login)\n\(.body)\n"'
     echo ""
-    echo "ACTION REQUIRED: Address the review comments above, push fixes, then this script"
-    echo "will automatically detect the update and continue polling."
-    echo "  Edit the relevant files, then:"
-    echo "  git add -A && git commit -m 'fix: address review comments' && git push"
-    echo ""
-    echo "Waiting 30s for you to push fixes..."
+    echo "Steps:"
+    echo "  1. Fix the issues listed above"
+    echo "  2. git add -A && git commit -m 'fix: address review comments' && git push"
+    echo "  3. Re-run: scripts/bd-sdlc-pr.sh $PR_BEAD_ID"
+    echo "=============================="
+    exit 2
   fi
 
   sleep 30
@@ -505,16 +515,22 @@ Open `AGENTS.md` and append the following block before the final line (`Use 'bd'
 ```markdown
 ---
 
-## SDLC Pipeline (Feature and Bug Beads)
+## SDLC Pipeline
 
-**When you pick up a `feature` or `bug` bead, your MANDATORY first action is:**
+### Step 0: What to do when you run `bd ready`
 
-```bash
-scripts/bd-sdlc-spawn.sh <bead-id>
-```
+Read the title of each bead `bd ready` returns and route yourself:
 
-Do this before any planning, exploration, or code changes. The script creates the
-pipeline and validates the bead type. Work only on what `bd ready` surfaces next.
+| Title looks like | Action |
+|-----------------|--------|
+| Plain description, type is `feature` or `bug` | Run `scripts/bd-sdlc-spawn.sh <bead-id>` FIRST, then `bd ready` again |
+| Starts with `impl:` | You are the **impl agent** — follow impl instructions below |
+| Starts with `review:` | You are the **review agent** — follow review instructions below |
+| Starts with `qa:` | You are the **qa agent** — follow qa instructions below |
+| Starts with `pr:` | You are the **pr agent** — follow pr instructions below |
+| Any `task`, `chore`, or `decision` | Work directly, close when done — no pipeline |
+
+**Never work on a `feature` or `bug` parent bead directly. Always spawn first.**
 
 ---
 
@@ -522,54 +538,78 @@ pipeline and validates the bead type. Work only on what `bd ready` surfaces next
 
 You are a **TDD-first implementer**.
 
-1. Understand the parent bead's description fully before writing a line of code.
-2. Write **failing tests first** — no production code until you have a red test.
-3. Implement the minimal code to make the tests pass.
-4. Run `make test` — it must be green before you close this stage.
-5. Fix any issues you notice in your own work before closing.
-6. Close: `bd close <impl-bead-id> --reason "Tests passing, implementation complete"`
+**Branch setup (before any code):**
+```bash
+# feature bead: feature/<parent-bead-id>-<short-slug>
+# bug bead:     fix/<parent-bead-id>-<short-slug>
+git checkout -b feature/ScaledTest-xxxx-short-description
+```
 
-**Never skip the red-green cycle. Never write production code without a test.**
+**Implementation loop:**
+1. Read the parent bead in full: `bd show <parent-bead-id>`
+2. Write a **failing test** for the smallest behaviour.
+3. Run `npm run test:ci` — confirm it fails.
+4. Write minimal production code to make it pass.
+5. Run `npm run test:ci` — confirm it passes.
+6. Repeat for each behaviour until the feature is complete.
+7. Final check: `npm run test:ci` must be fully green.
+
+**Close:** `bd close <impl-bead-id> --reason "Tests passing, implementation complete"`
+
+Hard rules:
+- No production code before a failing test exists.
+- `npm run test:ci` must be green — no failures allowed at close.
+- `git branch --show-current` must NOT be `main`.
 
 ---
 
 ### Stage: `review:` — Agent Code Review
 
-You are a **skeptical code reviewer**.
+You are a **skeptical code reviewer**. You are not the author.
 
-1. Run `git diff main` — read every changed line carefully.
-2. Check for: logic errors, security issues, missing error handling, edge cases,
-   unclear naming, dead code, inconsistency with surrounding patterns.
-3. **Fix minor issues in-place:** rename, small refactors, missing null checks — push and close.
-4. **Rewind for serious issues:** logic errors, security vulnerabilities, architectural
-   mismatches, or anything requiring more than 2-3 file changes:
-   ```bash
-   scripts/bd-sdlc-rewind.sh <review-bead-id> "<specific reason>"
-   ```
-5. Close: `bd close <review-bead-id> --reason "Review passed"`
+1. Read the full diff: `git diff main`
+2. Examine every changed line. Ask: *could this fail? is this secure? is this clear?*
+3. Check for: logic errors, off-by-one, missing error handling, injection risks,
+   hardcoded secrets, missing auth checks, unclear naming, dead code.
 
-**When in doubt, rewind. False positives cost one loop. False negatives cost a production incident.**
+**Fix in-place (close normally after):** typo, rename, single missing null check —
+changes touch 1-2 files and take under 10 minutes.
+
+**Rewind instead of closing:**
+```bash
+scripts/bd-sdlc-rewind.sh <review-bead-id> "<specific reason>"
+```
+Rewind when: logic error, security issue, architectural mismatch, rework touches
+more than 2-3 files.
+
+**Close:** `bd close <review-bead-id> --reason "Review passed"`
+
+Rule: When in doubt, rewind. False positives cost one loop. False negatives ship bugs.
 
 ---
 
 ### Stage: `qa:` — Quality Pass
 
-You are a **quality auditor**.
+You are a **quality auditor**. Find what the implementer missed.
 
-1. Run the full test suite: `make test`
-2. Run E2E tests: check `package.json` or `Makefile` for the Playwright command.
-3. Check test coverage — it must not have regressed from before your changes.
-4. Look for: missing error paths, hardcoded values, performance regressions,
-   tests that only test the happy path.
-5. **Fix minor gaps in-place:** add the missing test, fix the hardcoded value — push and close.
-6. **Rewind for systemic issues:** coverage regression, multiple missing test paths,
-   or issues that require implementation rework:
-   ```bash
-   scripts/bd-sdlc-rewind.sh <qa-bead-id> "<specific reason>"
-   ```
-7. Close: `bd close <qa-bead-id> --reason "QA passed, coverage acceptable"`
+1. Run: `npm run test` (full suite — unit, component, integration, system)
+2. Check coverage held on changed files.
+3. Look for: edge cases not tested, missing error path tests, happy-path-only tests,
+   hardcoded test values in production code.
 
-**Coverage regressions are always a rewind. No exceptions.**
+**Fix in-place (close normally after):** one missing edge-case test, a single
+hardcoded value — small, contained, fast.
+
+**Rewind instead of closing:**
+```bash
+scripts/bd-sdlc-rewind.sh <qa-bead-id> "<specific reason>"
+```
+Rewind when: `npm run test` has failures, coverage regressed, multiple test paths
+missing that require implementation changes.
+
+**Close:** `bd close <qa-bead-id> --reason "QA passed, coverage acceptable"`
+
+Rule: Coverage regression is always a rewind. No exceptions.
 
 ---
 
@@ -577,26 +617,31 @@ You are a **quality auditor**.
 
 You are an **integration agent**.
 
-1. Ensure you are on the correct feature branch (not `main`).
-2. Run the PR script — it handles everything:
-   ```bash
-   scripts/bd-sdlc-pr.sh <pr-bead-id> "<PR title>" "<PR body summary>"
-   ```
-3. If the script pauses asking you to address review comments: read the comments,
-   fix the issues in code, then push:
-   ```bash
-   git add -A && git commit -m "fix: address review comments" && git push
-   ```
-   The script will detect the push and continue.
-4. The script closes the bead automatically when the PR merges.
+**Before starting, verify:**
+```bash
+git branch --show-current   # Must NOT be main
+git status                  # Must be clean
+```
 
-**Do not close the pr bead manually. The script handles it.**
+**Run the PR script:**
+```bash
+scripts/bd-sdlc-pr.sh <pr-bead-id> "<PR title>" "<PR body>"
+```
+
+The script exits immediately with `ACTION REQUIRED` if Copilot left review comments.
+When that happens:
+1. Read the comments it printed
+2. Fix the issues in code
+3. Commit and push
+4. Re-run the same script command — it resumes where it left off
+
+**The script closes the bead on confirmed merge. Do not close manually.**
 
 ---
 
 ### Lightweight Beads (`task`, `chore`, `decision`)
 
-No pipeline. Work directly on the parent bead. Close when the work is committed and pushed.
+No pipeline. Work directly on the bead, close when committed and pushed.
 
 ```bash
 bd close <bead-id> --reason "Done — <brief summary>"
@@ -636,42 +681,58 @@ a compact reminder of the SDLC rules without requiring them to re-read AGENTS.md
 
 ```bash
 cat > PRIME.md << 'EOF'
-# ScaledTest SDLC — Session Start Checklist
+# ScaledTest SDLC — Session Start
 
-## What you are working on
+## Orient yourself first
 
-Check what's ready: `bd ready --json`
-
-## If you just picked up a `feature` or `bug` bead
-
-Run this FIRST — before anything else:
 ```bash
-scripts/bd-sdlc-spawn.sh <bead-id>
+bd ready --json          # What is unblocked and claimable right now?
+bd show --current        # What were you working on last session?
+git branch --show-current  # Are you on a feature branch or main?
 ```
 
-Then work only on what `bd ready` surfaces.
+## Route by bead title
 
-## Your current stage persona
+| `bd ready` shows | Do this |
+|-----------------|---------|
+| Feature/bug with plain title | `scripts/bd-sdlc-spawn.sh <id>`, then `bd ready` again |
+| `impl: ...` | You are the **impl agent** — write failing tests first, then code |
+| `review: ...` | You are the **review agent** — read `git diff main`, fix or rewind |
+| `qa: ...` | You are the **qa agent** — run `npm run test`, check coverage |
+| `pr: ...` | You are the **pr agent** — run `scripts/bd-sdlc-pr.sh` |
+| task / chore / decision | Work directly, close when done |
 
-| Title prefix | You are | Key rule |
-|-------------|---------|----------|
-| `impl:` | TDD implementer | Write failing test FIRST. `make test` must be green before close. |
-| `review:` | Skeptical reviewer | Read the full diff. Rewind for logic/security/arch issues. |
-| `qa:` | Quality auditor | Full suite + coverage check. Rewind if coverage drops. |
-| `pr:` | Integration agent | Run `scripts/bd-sdlc-pr.sh`. Do not close manually. |
+**Never work on a feature/bug parent bead directly. Always spawn first.**
 
-## Rewind (review or qa only)
+## Test commands
+
+| Command | When |
+|---------|------|
+| `npm run test:ci` | impl stage gate — must be green before closing impl |
+| `npm run test` | qa stage — full suite including integration + system |
+
+## Rewind (from review or qa only)
 
 ```bash
 scripts/bd-sdlc-rewind.sh <stage-bead-id> "<reason>"
 ```
+Rewind for: logic errors, security issues, coverage regression, architectural mismatch.
+Fix in-place for: typos, renames, single missing null check.
 
-## Landing the plane (mandatory before ending session)
+## Branch convention
 
-1. File issues for unfinished work
-2. Run quality gates if code changed
-3. `git pull --rebase && bd sync && git push`
-4. Confirm `git status` shows "up to date with origin"
+```bash
+feature/<parent-bead-id>-<slug>   # for feature beads
+fix/<parent-bead-id>-<slug>       # for bug beads
+```
+Create at the START of the impl stage. Never commit SDLC work to main directly.
+
+## Session end (mandatory)
+
+```bash
+git pull --rebase && bd sync && git push
+git status   # Must show "up to date with origin"
+```
 EOF
 ```
 
