@@ -11,6 +11,16 @@ export interface TestReportsResponse extends PaginatedResponse<TestReport> {
   total: number;
 }
 
+// Response from report ingestion endpoint
+export interface ReportIngestionResponse {
+  message: string;
+  tool: string;
+  tests: number;
+  source_format: string;
+  execution_id?: string;
+  warnings?: string[];
+}
+
 export interface DashboardFilters extends BaseFilters {
   status: string;
   tool: string;

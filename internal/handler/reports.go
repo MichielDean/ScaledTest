@@ -102,6 +102,7 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 }
 
 // Create handles POST /api/v1/reports — ingests a CTRF report.
+// Supports auto-detection and conversion from JUnit XML, Jest JSON, xUnit XML, and TAP.
 func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
 	if claims == nil {
@@ -115,26 +116,41 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	report, err := ctrf.Parse(body)
+	// Auto-detect format and convert to CTRF if needed
+	converted, err := ctrf.ConvertToCTRF(body)
 	if err != nil {
-		Error(w, http.StatusBadRequest, "invalid CTRF format: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid test report: "+err.Error())
 		return
 	}
 
-	if err := ctrf.Validate(report); err != nil {
-		Error(w, http.StatusBadRequest, "CTRF validation failed: "+err.Error())
+	report := converted.Report
+	var allWarnings []string
+	allWarnings = append(allWarnings, converted.Warnings...)
+
+	// Validate the CTRF report (strict)
+	validation := ctrf.ValidateDetailed(report)
+	if !validation.Valid() {
+		JSON(w, http.StatusBadRequest, map[string]interface{}{
+			"error":   "CTRF validation failed",
+			"details": validation.Errors,
+		})
 		return
 	}
+	allWarnings = append(allWarnings, validation.Warnings...)
 
 	if h.DB == nil {
 		// Fallback for no-DB mode: accept but don't persist
 		resp := map[string]interface{}{
-			"message": "report accepted",
-			"tool":    report.Results.Tool.Name,
-			"tests":   report.Results.Summary.Tests,
+			"message":       "report accepted",
+			"tool":          report.Results.Tool.Name,
+			"tests":         report.Results.Summary.Tests,
+			"source_format": string(converted.SourceFormat),
 		}
 		if executionID := r.URL.Query().Get("execution_id"); executionID != "" {
 			resp["execution_id"] = executionID
+		}
+		if len(allWarnings) > 0 {
+			resp["warnings"] = allWarnings
 		}
 		JSON(w, http.StatusCreated, resp)
 		return
@@ -236,14 +252,18 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	resp := map[string]interface{}{
-		"id":      reportID,
-		"message": "report accepted",
-		"tool":    report.Results.Tool.Name,
-		"tests":   report.Results.Summary.Tests,
-		"results": len(results),
+		"id":            reportID,
+		"message":       "report accepted",
+		"tool":          report.Results.Tool.Name,
+		"tests":         report.Results.Summary.Tests,
+		"results":       len(results),
+		"source_format": string(converted.SourceFormat),
 	}
 	if executionID != "" {
 		resp["execution_id"] = executionID
+	}
+	if len(allWarnings) > 0 {
+		resp["warnings"] = allWarnings
 	}
 
 	JSON(w, http.StatusCreated, resp)
