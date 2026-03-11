@@ -88,6 +88,7 @@ func NewRouter(cfg *config.Config) http.Handler {
 			r.Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
 			r.Delete("/{executionID}", execH.Cancel)
+			r.Put("/{executionID}/status", execH.UpdateStatus)
 		})
 
 		r.Route("/analytics", func(r chi.Router) {

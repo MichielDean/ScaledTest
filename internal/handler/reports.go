@@ -53,15 +53,23 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Read optional execution_id query parameter (sent by workers)
+	executionID := r.URL.Query().Get("execution_id")
+
 	// TODO: Store report + normalized results in DB
 	// reportID := uuid.New().String()
 	// results := ctrf.Normalize(report, reportID, claims.TeamID)
 
-	JSON(w, http.StatusCreated, map[string]interface{}{
+	resp := map[string]interface{}{
 		"message": "report accepted",
 		"tool":    report.Results.Tool.Name,
 		"tests":   report.Results.Summary.Tests,
-	})
+	}
+	if executionID != "" {
+		resp["execution_id"] = executionID
+	}
+
+	JSON(w, http.StatusCreated, resp)
 }
 
 // Get handles GET /api/v1/reports/{reportID}.
