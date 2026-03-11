@@ -545,6 +545,101 @@ export const searchCtrfReports = async (
 };
 
 /**
+ * Fetch a single CTRF report by its reportId.
+ * Returns null if not found or if the user doesn't have access.
+ */
+export const getCtrfReportById = async (
+  reportId: string,
+  uploadedBy: string,
+  userTeams: string[]
+): Promise<TimescaleCtrfReport | null> => {
+  return trackQueryPerformance('getCtrfReportById', async () => {
+    let client: PoolClient | null = null;
+    try {
+      const pool = getTimescalePool();
+      client = await pool.connect();
+
+      // Build access control condition
+      const conditions: string[] = ['report_id = $1'];
+      const values: (string | string[])[] = [reportId];
+
+      if (userTeams.length > 0) {
+        conditions.push(`(uploaded_by = $2 OR user_teams::jsonb ?| $3::text[])`);
+        values.push(uploadedBy, userTeams);
+      } else {
+        conditions.push(`uploaded_by = $2`);
+        values.push(uploadedBy);
+      }
+
+      const query = `
+        SELECT
+          report_id, report_format, spec_version, timestamp, stored_at,
+          generated_by, tool_name, tool_version, tool_url,
+          summary_tests, summary_passed, summary_failed, summary_skipped,
+          summary_pending, summary_other, summary_start, summary_stop,
+          environment_app_name, environment_app_version,
+          environment_build_name, environment_build_number,
+          environment_branch_name, environment_test_environment,
+          uploaded_by, user_teams, test_data, environment_data, extra_data
+        FROM test_reports
+        WHERE ${conditions.join(' AND ')}
+        LIMIT 1
+      `;
+
+      const result = await client.query(query, values);
+
+      if (result.rows.length === 0) return null;
+
+      const row = result.rows[0];
+      const testData =
+        typeof row.test_data === 'string' ? JSON.parse(row.test_data) : row.test_data;
+      const extraData =
+        typeof row.extra_data === 'string' ? JSON.parse(row.extra_data) : row.extra_data;
+
+      const originalEnvironment = testData?.environment || {};
+      const originalTool = testData?.tool || {};
+      const originalSummary = testData?.summary || {};
+
+      return {
+        reportId: row.report_id,
+        reportFormat: row.report_format,
+        specVersion: row.spec_version,
+        timestamp: row.timestamp,
+        storedAt: row.stored_at,
+        generatedBy: row.generated_by,
+        results: {
+          tool: originalTool,
+          summary: {
+            tests: originalSummary.tests ?? row.summary_tests,
+            passed: originalSummary.passed ?? row.summary_passed,
+            failed: originalSummary.failed ?? row.summary_failed,
+            skipped: originalSummary.skipped ?? row.summary_skipped,
+            pending: originalSummary.pending ?? row.summary_pending,
+            other: originalSummary.other ?? row.summary_other,
+            start: originalSummary.start ?? row.summary_start,
+            stop: originalSummary.stop ?? row.summary_stop,
+          },
+          environment: originalEnvironment,
+          tests: testData?.tests || [],
+        },
+        metadata: {
+          uploadedBy: row.uploaded_by,
+          userTeams:
+            typeof row.user_teams === 'string' ? JSON.parse(row.user_teams) : row.user_teams,
+          uploadedAt: row.stored_at,
+        },
+        extra: extraData,
+      };
+    } catch (error) {
+      logError(logger, 'Failed to get CTRF report by ID', error, { reportId });
+      throw error;
+    } finally {
+      if (client) client.release();
+    }
+  });
+};
+
+/**
  * Returns report IDs linked to a given execution.
  * Used by the execution detail endpoint (SCA-10) to include linkedReportIds
  * in the GET /api/v1/executions/:id response.
