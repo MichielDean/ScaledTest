@@ -6,6 +6,7 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { getErrorAnalysis } from '@/lib/analytics';
+import { getUserTeams } from '@/lib/teamManagement';
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
@@ -19,7 +20,9 @@ export default createBetterAuthApi({
     const limit = Math.min(parseInt(limitStr ?? '20', 10) || 20, 100);
 
     try {
-      const data = await getErrorAnalysis({ days, limit });
+      const userTeams = await getUserTeams(req.user.id);
+      const teamIds = userTeams.map(team => team.id).filter(Boolean);
+      const data = await getErrorAnalysis({ days, limit, userId: req.user.id, teamIds });
       return res.json({ success: true, data });
     } catch {
       return res.status(503).json({ success: false, error: 'Database unavailable' });
