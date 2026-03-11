@@ -135,6 +135,53 @@ func TestMiddlewareNoToken(t *testing.T) {
 	if w.Code != http.StatusUnauthorized {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
+	if ct := w.Header().Get("Content-Type"); ct != "application/json" {
+		t.Errorf("Content-Type = %q, want %q", ct, "application/json")
+	}
+}
+
+func TestMiddlewareQueryTokenBlockedForNonWebSocket(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
+
+	mw := Middleware(mgr, nil)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// Regular HTTP request with token in query param should be rejected
+	req := httptest.NewRequest("GET", "/test?token="+pair.AccessToken, nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("non-WS query token: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestMiddlewareQueryTokenAllowedForWebSocket(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
+
+	mw := Middleware(mgr, nil)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := GetClaims(r.Context())
+		if claims == nil || claims.UserID != "user-1" {
+			t.Error("expected valid claims for WS query token")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// WebSocket upgrade request with token in query param should be allowed
+	req := httptest.NewRequest("GET", "/ws?token="+pair.AccessToken, nil)
+	req.Header.Set("Upgrade", "websocket")
+	req.Header.Set("Connection", "Upgrade")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("WS query token: status = %d, want %d", w.Code, http.StatusOK)
+	}
 }
 
 func TestMiddlewareValidJWT(t *testing.T) {

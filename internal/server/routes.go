@@ -14,13 +14,19 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/config"
+	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // NewRouter creates the chi router with all middleware and route groups.
-func NewRouter(cfg *config.Config) http.Handler {
+// pool may be nil when running without a database (dev mode).
+func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
+	var dbPool *db.Pool
+	if len(pool) > 0 {
+		dbPool = pool[0]
+	}
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -52,12 +58,12 @@ func NewRouter(cfg *config.Config) http.Handler {
 	authMW := auth.Middleware(jwtMgr, nil)
 
 	// Handlers
-	authH := &handler.AuthHandler{JWT: jwtMgr}
-	reportsH := &handler.ReportsHandler{}
-	execH := &handler.ExecutionsHandler{}
-	analyticsH := &handler.AnalyticsHandler{}
-	qgH := &handler.QualityGatesHandler{}
-	teamsH := &handler.TeamsHandler{}
+	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	reportsH := &handler.ReportsHandler{DB: dbPool}
+	execH := &handler.ExecutionsHandler{DB: dbPool}
+	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
+	qgH := &handler.QualityGatesHandler{DB: dbPool}
+	teamsH := &handler.TeamsHandler{DB: dbPool}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {

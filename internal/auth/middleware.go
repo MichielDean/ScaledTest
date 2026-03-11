@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"strings"
 )
@@ -21,7 +22,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
 			if token == "" {
-				jsonError(w, http.StatusUnauthorized, "missing authorization")
+				jsonError(w, "missing authorization", http.StatusUnauthorized)
 				return
 			}
 
@@ -31,7 +32,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 			if strings.HasPrefix(token, "sct_") {
 				// API token — hash and look up
 				if tokenLookup == nil {
-					jsonError(w, http.StatusUnauthorized, "api tokens not configured")
+					jsonError(w, "api tokens not configured", http.StatusUnauthorized)
 					return
 				}
 				hash := HashAPIToken(token)
@@ -42,7 +43,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 			}
 
 			if err != nil {
-				jsonError(w, http.StatusUnauthorized, "invalid token")
+				jsonError(w, "invalid token", http.StatusUnauthorized)
 				return
 			}
 
@@ -63,11 +64,11 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := GetClaims(r.Context())
 			if claims == nil {
-				jsonError(w, http.StatusUnauthorized, "unauthorized")
+				jsonError(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
 			if !allowed[claims.Role] {
-				jsonError(w, http.StatusForbidden, "forbidden")
+				jsonError(w, "forbidden", http.StatusForbidden)
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -81,6 +82,13 @@ func GetClaims(ctx context.Context) *Claims {
 	return claims
 }
 
+// jsonError writes a JSON error response with the given status code.
+func jsonError(w http.ResponseWriter, msg string, code int) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(code)
+	json.NewEncoder(w).Encode(map[string]string{"error": msg})
+}
+
 func extractToken(r *http.Request) string {
 	// Check Authorization header: "Bearer <token>" or raw "sct_<token>"
 	authHeader := r.Header.Get("Authorization")
@@ -91,20 +99,14 @@ func extractToken(r *http.Request) string {
 		return authHeader
 	}
 
-	// Allow token in query param only for WebSocket endpoints to avoid
-	// leaking credentials in server logs for regular HTTP requests.
-	if strings.HasPrefix(r.URL.Path, "/ws/") {
+	// Check query param only for WebSocket upgrade requests, since
+	// WebSocket clients cannot set custom headers. Restricting this
+	// prevents token leakage via server logs and browser history.
+	if strings.EqualFold(r.Header.Get("Upgrade"), "websocket") {
 		if token := r.URL.Query().Get("token"); token != "" {
 			return token
 		}
 	}
 
 	return ""
-}
-
-// jsonError writes a JSON error response with the correct Content-Type header.
-func jsonError(w http.ResponseWriter, status int, msg string) {
-	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
-	w.Write([]byte(`{"error":"` + msg + `"}`))
 }
