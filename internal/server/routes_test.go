@@ -241,6 +241,110 @@ func TestCSRFBlocksMutationWithoutToken(t *testing.T) {
 	}
 }
 
+func TestAuthRateLimiting(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+
+	// Auth endpoints allow 10 requests per minute per IP.
+	// Send 11 requests — the 11th should be rate-limited.
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(`{"email":"a@b.com","password":"12345678"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "10.0.0.1:1234"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d was rate-limited too early", i+1)
+		}
+	}
+
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(`{"email":"a@b.com","password":"12345678"}`))
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "10.0.0.1:1234"
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("11th auth request: status = %d, want %d", w.Code, http.StatusTooManyRequests)
+	}
+	if ra := w.Header().Get("Retry-After"); ra == "" {
+		t.Error("rate-limited response missing Retry-After header")
+	}
+}
+
+func TestExecutionCreateRateLimiting(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	token := testToken()
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	// Execution creation allows 20 requests per minute per IP.
+	// Send 21 requests — the 21st should be rate-limited.
+	for i := 0; i < 20; i++ {
+		req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "10.0.0.2:1234"
+		addCSRF(req, csrfToken, csrfCookie)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d was rate-limited too early", i+1)
+		}
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "10.0.0.2:1234"
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("21st execution create request: status = %d, want %d", w.Code, http.StatusTooManyRequests)
+	}
+	if ra := w.Header().Get("Retry-After"); ra == "" {
+		t.Error("rate-limited response missing Retry-After header")
+	}
+}
+
+func TestReportUploadRateLimiting(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	token := testToken()
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+
+	// Report uploads allow 30 requests per minute per IP.
+	// Send 31 — the 31st should be rate-limited.
+	for i := 0; i < 30; i++ {
+		req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+		req.Header.Set("Authorization", "Bearer "+token)
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "10.0.0.3:1234"
+		addCSRF(req, csrfToken, csrfCookie)
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("request %d was rate-limited too early", i+1)
+		}
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+	req.RemoteAddr = "10.0.0.3:1234"
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("31st report upload request: status = %d, want %d", w.Code, http.StatusTooManyRequests)
+	}
+	if ra := w.Header().Get("Retry-After"); ra == "" {
+		t.Error("rate-limited response missing Retry-After header")
+	}
+}
+
 func TestCSRFAllowsAPITokenWithoutCSRF(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
