@@ -204,7 +204,10 @@ func TestAuthResponseShape(t *testing.T) {
 
 func TestRefreshCookieAttributes(t *testing.T) {
 	w := httptest.NewRecorder()
-	setRefreshCookie(w, "test-token", 7*24*time.Hour)
+	// Simulate HTTPS via X-Forwarded-Proto so Secure flag is set
+	req := httptest.NewRequest("POST", "/auth/refresh", nil)
+	req.Header.Set("X-Forwarded-Proto", "https")
+	setRefreshCookie(w, req, "test-token", 7*24*time.Hour)
 
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 {
@@ -222,7 +225,7 @@ func TestRefreshCookieAttributes(t *testing.T) {
 		t.Error("cookie should be HttpOnly")
 	}
 	if !c.Secure {
-		t.Error("cookie should be Secure")
+		t.Error("cookie should be Secure over HTTPS")
 	}
 	if c.SameSite != http.SameSiteStrictMode {
 		t.Errorf("cookie SameSite = %d, want %d", c.SameSite, http.SameSiteStrictMode)
@@ -232,9 +235,25 @@ func TestRefreshCookieAttributes(t *testing.T) {
 	}
 }
 
+func TestRefreshCookieNotSecureOverHTTP(t *testing.T) {
+	w := httptest.NewRecorder()
+	// Plain HTTP request — Secure should be false
+	req := httptest.NewRequest("POST", "/auth/refresh", nil)
+	setRefreshCookie(w, req, "test-token", 7*24*time.Hour)
+
+	cookies := w.Result().Cookies()
+	if len(cookies) != 1 {
+		t.Fatalf("expected 1 cookie, got %d", len(cookies))
+	}
+	if cookies[0].Secure {
+		t.Error("cookie should NOT be Secure over plain HTTP")
+	}
+}
+
 func TestClearRefreshCookie(t *testing.T) {
 	w := httptest.NewRecorder()
-	clearRefreshCookie(w)
+	req := httptest.NewRequest("POST", "/auth/logout", nil)
+	clearRefreshCookie(w, req)
 
 	cookies := w.Result().Cookies()
 	if len(cookies) != 1 {
