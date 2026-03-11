@@ -333,11 +333,14 @@ func TestTeamIsolation_CTRFIngestionAcceptsBothTeams(t *testing.T) {
 		{"team-beta", tokenForTeam(t, "user-b", "b@example.com", "maintainer", "team-beta"), "team-beta"},
 	}
 
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
 	for _, tc := range tokens {
 		t.Run(tc.name, func(t *testing.T) {
 			req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
 			req.Header.Set("Authorization", "Bearer "+tc.token)
 			req.Header.Set("Content-Type", "application/json")
+			addCSRF(req, csrfToken, csrfCookie)
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 

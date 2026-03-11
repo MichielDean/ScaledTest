@@ -39,7 +39,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	r.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{cfg.BaseURL, "http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
-		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Team-ID"},
+		AllowedHeaders:   []string{"Accept", "Authorization", "Content-Type", "X-Team-ID", "X-CSRF-Token"},
 		AllowCredentials: true,
 		MaxAge:           300,
 	}).Handler)
@@ -61,6 +61,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// WebSocket hub for real-time execution streaming
 	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")
 
+	// CSRF middleware — uses JWT secret as HMAC key for token signing
+	csrfMW := auth.CSRFMiddleware([]byte(cfg.JWTSecret))
+
 	// Handlers
 	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
 	reportsH := &handler.ReportsHandler{DB: dbPool}
@@ -79,6 +82,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		w.Write([]byte(`{"status":"ok"}`))
 	})
 
+	// CSRF token endpoint — SPA calls this to get a token before mutations
+	isSecure := strings.HasPrefix(cfg.BaseURL, "https://")
+	r.Get("/auth/csrf-token", func(w http.ResponseWriter, r *http.Request) {
+		token := auth.SetCSRFCookie(w, []byte(cfg.JWTSecret), isSecure)
+		w.Header().Set("Content-Type", "application/json")
+		w.Write([]byte(`{"csrf_token":"` + token + `"}`))
+	})
+
 	// Auth routes (public)
 	r.Route("/auth", func(r chi.Router) {
 		r.Post("/register", authH.Register)
@@ -89,9 +100,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Get("/google/callback", oauthNotConfigured("Google"))
 	})
 
-	// API v1 routes (authenticated)
+	// API v1 routes (authenticated + CSRF protected)
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
+		r.Use(csrfMW)
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
