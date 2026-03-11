@@ -1,5 +1,11 @@
 import { test, expect } from '@playwright/test'
 
+// Note: These tests use Playwright's recommended role/label selectors for
+// accessibility validation. The root-layout component also exposes stable
+// id attributes (e.g. #nav-dashboard, #btn-sign-out) for use in the
+// existing tests/ui framework's id-based selector pattern. Both approaches
+// coexist intentionally: role selectors verify a11y, id selectors enable
+// deterministic automation without coupling to visible text.
 test.describe('Navigation', () => {
   test('login page renders without errors', async ({ page }) => {
     await page.goto('/login')
