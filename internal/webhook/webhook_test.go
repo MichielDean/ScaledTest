@@ -2,7 +2,7 @@ package webhook
 
 import (
 	"context"
-	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -81,9 +81,11 @@ func TestSendSignatureVerification(t *testing.T) {
 
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		receivedSig = r.Header.Get("X-ScaledTest-Signature")
-		var buf [4096]byte
-		n, _ := r.Body.Read(buf[:])
-		receivedBody = buf[:n]
+		var err error
+		receivedBody, err = io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("failed to read body: %v", err)
+		}
 		w.WriteHeader(http.StatusOK)
 	}))
 	defer server.Close()
@@ -96,10 +98,8 @@ func TestSendSignatureVerification(t *testing.T) {
 
 	d.Send(context.Background(), server.URL, secret, payload)
 
-	// Verify the receiver can validate the signature
-	expectedPayload, _ := json.Marshal(payload)
-	if !Verify(expectedPayload, secret, receivedSig) {
-		t.Error("receiver could not verify signature")
+	// Verify the signature against the actual received bytes
+	if !Verify(receivedBody, secret, receivedSig) {
+		t.Error("receiver could not verify signature against actual received bytes")
 	}
-	_ = receivedBody
 }

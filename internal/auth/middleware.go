@@ -21,7 +21,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			token := extractToken(r)
 			if token == "" {
-				http.Error(w, `{"error":"missing authorization"}`, http.StatusUnauthorized)
+				jsonError(w, http.StatusUnauthorized, "missing authorization")
 				return
 			}
 
@@ -31,7 +31,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 			if strings.HasPrefix(token, "sct_") {
 				// API token — hash and look up
 				if tokenLookup == nil {
-					http.Error(w, `{"error":"api tokens not configured"}`, http.StatusUnauthorized)
+					jsonError(w, http.StatusUnauthorized, "api tokens not configured")
 					return
 				}
 				hash := HashAPIToken(token)
@@ -42,7 +42,7 @@ func Middleware(jwtMgr *JWTManager, tokenLookup func(tokenHash string) (*Claims,
 			}
 
 			if err != nil {
-				http.Error(w, `{"error":"invalid token"}`, http.StatusUnauthorized)
+				jsonError(w, http.StatusUnauthorized, "invalid token")
 				return
 			}
 
@@ -63,11 +63,11 @@ func RequireRole(roles ...string) func(http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims := GetClaims(r.Context())
 			if claims == nil {
-				http.Error(w, `{"error":"unauthorized"}`, http.StatusUnauthorized)
+				jsonError(w, http.StatusUnauthorized, "unauthorized")
 				return
 			}
 			if !allowed[claims.Role] {
-				http.Error(w, `{"error":"forbidden"}`, http.StatusForbidden)
+				jsonError(w, http.StatusForbidden, "forbidden")
 				return
 			}
 			next.ServeHTTP(w, r)
@@ -83,18 +83,28 @@ func GetClaims(ctx context.Context) *Claims {
 
 func extractToken(r *http.Request) string {
 	// Check Authorization header: "Bearer <token>" or raw "sct_<token>"
-	auth := r.Header.Get("Authorization")
-	if strings.HasPrefix(auth, "Bearer ") {
-		return strings.TrimPrefix(auth, "Bearer ")
+	authHeader := r.Header.Get("Authorization")
+	if strings.HasPrefix(authHeader, "Bearer ") {
+		return strings.TrimPrefix(authHeader, "Bearer ")
 	}
-	if strings.HasPrefix(auth, "sct_") {
-		return auth
+	if strings.HasPrefix(authHeader, "sct_") {
+		return authHeader
 	}
 
-	// Check query param (for WebSocket connections)
-	if token := r.URL.Query().Get("token"); token != "" {
-		return token
+	// Allow token in query param only for WebSocket endpoints to avoid
+	// leaking credentials in server logs for regular HTTP requests.
+	if strings.HasPrefix(r.URL.Path, "/ws/") {
+		if token := r.URL.Query().Get("token"); token != "" {
+			return token
+		}
 	}
 
 	return ""
+}
+
+// jsonError writes a JSON error response with the correct Content-Type header.
+func jsonError(w http.ResponseWriter, status int, msg string) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	w.Write([]byte(`{"error":"` + msg + `"}`))
 }
