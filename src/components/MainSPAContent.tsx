@@ -16,6 +16,7 @@ import { uiLogger as logger } from '../logging/logger';
 // Import all the view components
 import DashboardView from './views/DashboardView';
 import TestResultsView from './views/TestResultsView';
+import ReportDetailView from './views/ReportDetailView';
 import AnalyticsView from './views/AnalyticsView';
 import ProfileView from './views/ProfileView';
 import AdminUsersView from './views/AdminUsersView';
@@ -38,6 +39,15 @@ const viewConfigs: Record<SPAView, ViewConfig> = {
     title: 'Test Results',
     breadcrumbs: [{ label: 'Analytics', href: '#' }, { label: 'Test Results' }],
     component: TestResultsView,
+  },
+  'report-detail': {
+    title: 'Report Detail',
+    breadcrumbs: [
+      { label: 'Analytics', href: '#' },
+      { label: 'Test Results', href: '#' },
+      { label: 'Report Detail' },
+    ],
+    component: ReportDetailView,
   },
   'modern-analytics': {
     title: 'Modern Analytics',
