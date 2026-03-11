@@ -14,13 +14,18 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/config"
+	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // NewRouter creates the chi router with all middleware and route groups.
-func NewRouter(cfg *config.Config) http.Handler {
+func NewRouter(cfg *config.Config, opts ...RouterOption) http.Handler {
+	var ro routerOpts
+	for _, o := range opts {
+		o(&ro)
+	}
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -55,7 +60,7 @@ func NewRouter(cfg *config.Config) http.Handler {
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	reportsH := &handler.ReportsHandler{}
 	execH := &handler.ExecutionsHandler{}
-	analyticsH := &handler.AnalyticsHandler{}
+	analyticsH := handler.NewAnalyticsHandler(ro.pool)
 	qgH := &handler.QualityGatesHandler{}
 	teamsH := &handler.TeamsHandler{}
 
@@ -99,6 +104,7 @@ func NewRouter(cfg *config.Config) http.Handler {
 			r.Get("/flaky-tests", analyticsH.FlakyTests)
 			r.Get("/error-analysis", analyticsH.ErrorAnalysis)
 			r.Get("/duration-distribution", analyticsH.DurationDistribution)
+			r.Get("/health-score", analyticsH.HealthScore)
 		})
 
 		r.Route("/quality-gates", func(r chi.Router) {
@@ -156,6 +162,20 @@ func oauthNotConfigured(provider string) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		w.WriteHeader(http.StatusNotImplemented)
 		w.Write([]byte(msg))
+	}
+}
+
+type routerOpts struct {
+	pool *db.Pool
+}
+
+// RouterOption configures the router.
+type RouterOption func(*routerOpts)
+
+// WithPool sets the database pool for handlers that need it.
+func WithPool(pool *db.Pool) RouterOption {
+	return func(o *routerOpts) {
+		o.pool = pool
 	}
 }
 
