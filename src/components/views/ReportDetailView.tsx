@@ -69,7 +69,7 @@ const ReportDetailView: React.FC = () => {
       setError(null);
 
       try {
-        const response = await fetch(`/api/v1/reports/${reportId}`, {
+        const response = await fetch(`/api/v1/reports/${encodeURIComponent(reportId)}`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',
@@ -97,17 +97,19 @@ const ReportDetailView: React.FC = () => {
     fetchReport();
   }, [token, reportId]);
 
-  // Filtered tests
+  // Filtered tests — map with original index first to avoid O(n²) indexOf calls
   const filteredTests = useMemo(() => {
     if (!report?.results?.tests) return [];
-    return report.results.tests.filter(test => {
-      const matchesStatus = statusFilter === 'all' || test.status === statusFilter;
-      const matchesSearch =
-        !searchQuery ||
-        test.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (test.suite && test.suite.toLowerCase().includes(searchQuery.toLowerCase()));
-      return matchesStatus && matchesSearch;
-    });
+    return report.results.tests
+      .map((test, originalIndex) => ({ test, originalIndex }))
+      .filter(({ test }) => {
+        const matchesStatus = statusFilter === 'all' || test.status === statusFilter;
+        const matchesSearch =
+          !searchQuery ||
+          test.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          (test.suite && test.suite.toLowerCase().includes(searchQuery.toLowerCase()));
+        return matchesStatus && matchesSearch;
+      });
   }, [report, statusFilter, searchQuery]);
 
   // Toggle test expansion
@@ -440,9 +442,7 @@ const ReportDetailView: React.FC = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredTests.map((test, index) => {
-                    // Find original index for expansion tracking
-                    const originalIndex = report.results.tests.indexOf(test);
+                  {filteredTests.map(({ test, originalIndex }) => {
                     const isExpanded = expandedTests.has(originalIndex);
                     const hasDetails =
                       test.message ||
@@ -456,8 +456,21 @@ const ReportDetailView: React.FC = () => {
                     return (
                       <React.Fragment key={originalIndex}>
                         <TableRow
-                          className={`cursor-pointer hover:bg-muted/50 ${isExpanded ? 'bg-muted/30' : ''}`}
-                          onClick={() => toggleTest(originalIndex)}
+                          className={`hover:bg-muted/50 ${isExpanded ? 'bg-muted/30' : ''} ${hasDetails ? 'cursor-pointer' : ''}`}
+                          onClick={() => hasDetails && toggleTest(originalIndex)}
+                          role={hasDetails ? 'button' : undefined}
+                          tabIndex={hasDetails ? 0 : undefined}
+                          aria-expanded={hasDetails ? isExpanded : undefined}
+                          onKeyDown={
+                            hasDetails
+                              ? e => {
+                                  if (e.key === 'Enter' || e.key === ' ') {
+                                    e.preventDefault();
+                                    toggleTest(originalIndex);
+                                  }
+                                }
+                              : undefined
+                          }
                         >
                           <TableCell className="w-8">
                             {hasDetails ? (
@@ -524,6 +537,8 @@ interface TestDetailPanelProps {
   test: TestResult;
 }
 
+const isSafeUrl = (url: string): boolean => /^https?:\/\//i.test(url);
+
 const TestDetailPanel: React.FC<TestDetailPanelProps> = ({ test }) => {
   return (
     <div className="p-4 space-y-4">
@@ -570,7 +585,7 @@ const TestDetailPanel: React.FC<TestDetailPanelProps> = ({ test }) => {
               alt="Test failure screenshot"
               className="rounded-md border max-w-full max-h-96 object-contain"
             />
-          ) : (
+          ) : isSafeUrl(test.screenshot) ? (
             <a
               href={test.screenshot}
               target="_blank"
@@ -579,6 +594,8 @@ const TestDetailPanel: React.FC<TestDetailPanelProps> = ({ test }) => {
             >
               {test.screenshot}
             </a>
+          ) : (
+            <span className="text-sm text-muted-foreground font-mono">{test.screenshot}</span>
           )}
         </div>
       )}
@@ -646,14 +663,18 @@ const TestDetailPanel: React.FC<TestDetailPanelProps> = ({ test }) => {
             {test.attachments.map((att, i) => (
               <div key={i} className="flex items-center gap-2 text-sm">
                 <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                <a
-                  href={att.path}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-blue-600 hover:underline"
-                >
-                  {att.name}
-                </a>
+                {isSafeUrl(att.path) ? (
+                  <a
+                    href={att.path}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-blue-600 hover:underline"
+                  >
+                    {att.name}
+                  </a>
+                ) : (
+                  <span className="text-muted-foreground">{att.name}</span>
+                )}
                 <span className="text-muted-foreground text-xs">({att.contentType})</span>
               </div>
             ))}

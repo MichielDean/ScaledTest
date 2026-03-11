@@ -71,17 +71,19 @@ export const SPANavigationProvider: React.FC<SPANavigationProviderProps> = ({
         setParamsHistory([params]);
       }
     }
-  }, [router.query.view, currentView]);
+  }, [router.query.view, router.query.reportId, currentView]);
 
   const navigateTo = (view: SPAView, params: SPAViewParams = {}) => {
+    // Avoid duplicate history entries when navigating to the same view with same params
+    if (view === currentView && JSON.stringify(params) === JSON.stringify(viewParams)) return;
     setCurrentView(view);
     setViewParams(params);
     setViewHistory(prev => [...prev, view]);
     setParamsHistory(prev => [...prev, params]);
-    // Update URL without causing a page reload
-    const queryParts = [`view=${view}`];
-    Object.entries(params).forEach(([k, v]) => queryParts.push(`${k}=${v}`));
-    router.replace(`/dashboard?${queryParts.join('&')}`, undefined, { shallow: true });
+    // Update URL without causing a page reload; use router query object for correct encoding
+    router.replace({ pathname: '/dashboard', query: { view, ...params } }, undefined, {
+      shallow: true,
+    });
   };
 
   const goBack = () => {
@@ -94,6 +96,12 @@ export const SPANavigationProvider: React.FC<SPANavigationProviderProps> = ({
       setParamsHistory(newParamsHistory);
       setCurrentView(previousView);
       setViewParams(previousParams);
+      // Sync URL so refresh/bookmark reflects the navigated-back view
+      router.replace(
+        { pathname: '/dashboard', query: { view: previousView, ...previousParams } },
+        undefined,
+        { shallow: true }
+      );
     }
   };
 
