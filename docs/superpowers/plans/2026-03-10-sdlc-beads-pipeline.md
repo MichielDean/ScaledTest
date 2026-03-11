@@ -9,6 +9,7 @@
 **Tech Stack:** bash, `bd` (beads) CLI v0.59.0, `gh` (GitHub CLI), `git`
 
 **Test commands (ScaledTest-specific):**
+
 - Unit + component (fast, what CI runs): `npm run test:ci`
 - Full suite (slower, run before PR): `npm run test`
 - Note: backend `.go` files are all proto-generated — no Go test suite exists
@@ -22,6 +23,7 @@
 ### Task 1: Write `scripts/bd-sdlc-spawn.sh`
 
 **Files:**
+
 - Create: `scripts/bd-sdlc-spawn.sh`
 
 This script takes a parent bead ID, validates it is a `feature` or `bug`, creates 4 sequential
@@ -167,6 +169,7 @@ git commit -m "feat(sdlc): add bd-sdlc-spawn.sh to create SDLC pipeline for feat
 ### Task 2: Write `scripts/bd-sdlc-rewind.sh`
 
 **Files:**
+
 - Create: `scripts/bd-sdlc-rewind.sh`
 
 This script re-opens the correct stage beads when review or QA decides the work needs
@@ -177,8 +180,8 @@ full pipeline re-runs from that point.
 Rewind table:
 | Called from stage | Re-opens |
 |-------------------|----------|
-| review (.N)       | impl (.N-1), review (.N) itself |
-| qa (.N)           | impl (.N-2), review (.N-1), qa (.N) itself |
+| review (.N) | impl (.N-1), review (.N) itself |
+| qa (.N) | impl (.N-2), review (.N-1), qa (.N) itself |
 
 The script detects which stage it was called from by reading the bead's `stage:` label.
 
@@ -359,6 +362,7 @@ git commit -m "feat(sdlc): add bd-sdlc-rewind.sh to rewind pipeline from review 
 ### Task 3: Write `scripts/bd-sdlc-pr.sh`
 
 **Files:**
+
 - Create: `scripts/bd-sdlc-pr.sh`
 
 The pr agent calls this script instead of manually orchestrating the PR lifecycle.
@@ -503,6 +507,7 @@ git commit -m "feat(sdlc): add bd-sdlc-pr.sh to manage PR lifecycle with auto-me
 ### Task 4: Update AGENTS.md with SDLC workflow section
 
 **Files:**
+
 - Modify: `AGENTS.md`
 
 Add a dedicated SDLC section that gives agents clear, unambiguous instructions for
@@ -512,7 +517,7 @@ each stage. The spawn script call is documented as a hard prerequisite — no ex
 
 Open `AGENTS.md` and append the following block before the final line (`Use 'bd' for task tracking`):
 
-```markdown
+````markdown
 ---
 
 ## SDLC Pipeline
@@ -539,13 +544,16 @@ Read the title of each bead `bd ready` returns and route yourself:
 You are a **TDD-first implementer**.
 
 **Branch setup (before any code):**
+
 ```bash
 # feature bead: feature/<parent-bead-id>-<short-slug>
 # bug bead:     fix/<parent-bead-id>-<short-slug>
 git checkout -b feature/ScaledTest-xxxx-short-description
 ```
+````
 
 **Implementation loop:**
+
 1. Read the parent bead in full: `bd show <parent-bead-id>`
 2. Write a **failing test** for the smallest behaviour.
 3. Run `npm run test:ci` — confirm it fails.
@@ -557,6 +565,7 @@ git checkout -b feature/ScaledTest-xxxx-short-description
 **Close:** `bd close <impl-bead-id> --reason "Tests passing, implementation complete"`
 
 Hard rules:
+
 - No production code before a failing test exists.
 - `npm run test:ci` must be green — no failures allowed at close.
 - `git branch --show-current` must NOT be `main`.
@@ -568,7 +577,7 @@ Hard rules:
 You are a **skeptical code reviewer**. You are not the author.
 
 1. Read the full diff: `git diff main`
-2. Examine every changed line. Ask: *could this fail? is this secure? is this clear?*
+2. Examine every changed line. Ask: _could this fail? is this secure? is this clear?_
 3. Check for: logic errors, off-by-one, missing error handling, injection risks,
    hardcoded secrets, missing auth checks, unclear naming, dead code.
 
@@ -576,9 +585,11 @@ You are a **skeptical code reviewer**. You are not the author.
 changes touch 1-2 files and take under 10 minutes.
 
 **Rewind instead of closing:**
+
 ```bash
 scripts/bd-sdlc-rewind.sh <review-bead-id> "<specific reason>"
 ```
+
 Rewind when: logic error, security issue, architectural mismatch, rework touches
 more than 2-3 files.
 
@@ -601,9 +612,11 @@ You are a **quality auditor**. Find what the implementer missed.
 hardcoded value — small, contained, fast.
 
 **Rewind instead of closing:**
+
 ```bash
 scripts/bd-sdlc-rewind.sh <qa-bead-id> "<specific reason>"
 ```
+
 Rewind when: `npm run test` has failures, coverage regressed, multiple test paths
 missing that require implementation changes.
 
@@ -618,18 +631,21 @@ Rule: Coverage regression is always a rewind. No exceptions.
 You are an **integration agent**.
 
 **Before starting, verify:**
+
 ```bash
 git branch --show-current   # Must NOT be main
 git status                  # Must be clean
 ```
 
 **Run the PR script:**
+
 ```bash
 scripts/bd-sdlc-pr.sh <pr-bead-id> "<PR title>" "<PR body>"
 ```
 
 The script exits immediately with `ACTION REQUIRED` if Copilot left review comments.
 When that happens:
+
 1. Read the comments it printed
 2. Fix the issues in code
 3. Commit and push
@@ -646,7 +662,8 @@ No pipeline. Work directly on the bead, close when committed and pushed.
 ```bash
 bd close <bead-id> --reason "Done — <brief summary>"
 ```
-```
+
+````
 
 - [ ] **Step 4.2: Verify AGENTS.md is well-formed**
 
@@ -654,7 +671,7 @@ bd close <bead-id> --reason "Done — <brief summary>"
 # Check it has all 4 stage sections
 grep -c "### Stage:" AGENTS.md
 # Expected: 4
-```
+````
 
 - [ ] **Step 4.3: Commit**
 
@@ -670,6 +687,7 @@ git commit -m "docs(sdlc): add SDLC pipeline agent instructions to AGENTS.md"
 ### Task 5: Create PRIME.md and install the Claude Code SessionStart hook
 
 **Files:**
+
 - Create: `PRIME.md`
 - Modify: `.claude/settings.json` (via `bd setup claude`)
 
@@ -679,7 +697,7 @@ a compact reminder of the SDLC rules without requiring them to re-read AGENTS.md
 
 - [ ] **Step 5.1: Create PRIME.md**
 
-```bash
+````bash
 cat > PRIME.md << 'EOF'
 # ScaledTest SDLC — Session Start
 
@@ -689,33 +707,34 @@ cat > PRIME.md << 'EOF'
 bd ready --json          # What is unblocked and claimable right now?
 bd show --current        # What were you working on last session?
 git branch --show-current  # Are you on a feature branch or main?
-```
+````
 
 ## Route by bead title
 
-| `bd ready` shows | Do this |
-|-----------------|---------|
-| Feature/bug with plain title | `scripts/bd-sdlc-spawn.sh <id>`, then `bd ready` again |
-| `impl: ...` | You are the **impl agent** — write failing tests first, then code |
-| `review: ...` | You are the **review agent** — read `git diff main`, fix or rewind |
-| `qa: ...` | You are the **qa agent** — run `npm run test`, check coverage |
-| `pr: ...` | You are the **pr agent** — run `scripts/bd-sdlc-pr.sh` |
-| task / chore / decision | Work directly, close when done |
+| `bd ready` shows             | Do this                                                            |
+| ---------------------------- | ------------------------------------------------------------------ |
+| Feature/bug with plain title | `scripts/bd-sdlc-spawn.sh <id>`, then `bd ready` again             |
+| `impl: ...`                  | You are the **impl agent** — write failing tests first, then code  |
+| `review: ...`                | You are the **review agent** — read `git diff main`, fix or rewind |
+| `qa: ...`                    | You are the **qa agent** — run `npm run test`, check coverage      |
+| `pr: ...`                    | You are the **pr agent** — run `scripts/bd-sdlc-pr.sh`             |
+| task / chore / decision      | Work directly, close when done                                     |
 
 **Never work on a feature/bug parent bead directly. Always spawn first.**
 
 ## Test commands
 
-| Command | When |
-|---------|------|
-| `npm run test:ci` | impl stage gate — must be green before closing impl |
-| `npm run test` | qa stage — full suite including integration + system |
+| Command           | When                                                 |
+| ----------------- | ---------------------------------------------------- |
+| `npm run test:ci` | impl stage gate — must be green before closing impl  |
+| `npm run test`    | qa stage — full suite including integration + system |
 
 ## Rewind (from review or qa only)
 
 ```bash
 scripts/bd-sdlc-rewind.sh <stage-bead-id> "<reason>"
 ```
+
 Rewind for: logic errors, security issues, coverage regression, architectural mismatch.
 Fix in-place for: typos, renames, single missing null check.
 
@@ -725,6 +744,7 @@ Fix in-place for: typos, renames, single missing null check.
 feature/<parent-bead-id>-<slug>   # for feature beads
 fix/<parent-bead-id>-<slug>       # for bug beads
 ```
+
 Create at the START of the impl stage. Never commit SDLC work to main directly.
 
 ## Session end (mandatory)
@@ -733,17 +753,20 @@ Create at the START of the impl stage. Never commit SDLC work to main directly.
 git pull --rebase && bd sync && git push
 git status   # Must show "up to date with origin"
 ```
+
 EOF
-```
+
+````
 
 - [ ] **Step 5.2: Install the Claude Code SessionStart hook**
 
 ```bash
 bd setup claude --project 2>&1
 # Expected: installs hook that runs 'bd prime' at session start
-```
+````
 
 If `--project` is not available, use global:
+
 ```bash
 bd setup claude 2>&1
 ```
@@ -861,14 +884,14 @@ git commit --allow-empty -m "chore(sdlc): pipeline validation complete — SDLC 
 
 ## Summary of Files Created/Modified
 
-| File | Action | Purpose |
-|------|--------|---------|
-| `scripts/bd-sdlc-spawn.sh` | Create | Spawns 4-stage SDLC molecule for feature/bug beads |
-| `scripts/bd-sdlc-rewind.sh` | Create | Rewinds pipeline from review or qa back to impl |
-| `scripts/bd-sdlc-pr.sh` | Create | Manages PR lifecycle: create, auto-merge, Copilot resolution |
-| `AGENTS.md` | Modify | Per-stage agent personas and SDLC workflow rules |
-| `PRIME.md` | Create | Compact session-start reminder injected by bd prime hook |
-| `.claude/settings.json` | Modify (via bd) | SessionStart hook to run bd prime automatically |
+| File                        | Action          | Purpose                                                      |
+| --------------------------- | --------------- | ------------------------------------------------------------ |
+| `scripts/bd-sdlc-spawn.sh`  | Create          | Spawns 4-stage SDLC molecule for feature/bug beads           |
+| `scripts/bd-sdlc-rewind.sh` | Create          | Rewinds pipeline from review or qa back to impl              |
+| `scripts/bd-sdlc-pr.sh`     | Create          | Manages PR lifecycle: create, auto-merge, Copilot resolution |
+| `AGENTS.md`                 | Modify          | Per-stage agent personas and SDLC workflow rules             |
+| `PRIME.md`                  | Create          | Compact session-start reminder injected by bd prime hook     |
+| `.claude/settings.json`     | Modify (via bd) | SessionStart hook to run bd prime automatically              |
 
 ## Quick Reference for Agents
 

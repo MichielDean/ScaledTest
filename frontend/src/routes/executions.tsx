@@ -1,32 +1,32 @@
-import { useEffect, useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
-import { api } from '../lib/api'
-import { queryKeys } from '../lib/query-keys'
-import { useWebSocket } from '../hooks/use-websocket'
+import { useEffect, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../lib/api';
+import { queryKeys } from '../lib/query-keys';
+import { useWebSocket } from '../hooks/use-websocket';
 import {
   useExecutionStore,
   type TestResultEvent,
   type ExecutionProgress,
   type WorkerStatus,
-} from '../stores/execution-store'
+} from '../stores/execution-store';
 
 // ---------------------------------------------------------------------------
 // Types
 // ---------------------------------------------------------------------------
 
 interface Execution {
-  id: string
-  command: string
-  status: string
-  created_at: string
-  started_at?: string
-  finished_at?: string
-  error_msg?: string
+  id: string;
+  command: string;
+  status: string;
+  created_at: string;
+  started_at?: string;
+  finished_at?: string;
+  error_msg?: string;
 }
 
 interface ExecutionsResponse {
-  executions: Execution[]
-  total: number
+  executions: Execution[];
+  total: number;
 }
 
 // ---------------------------------------------------------------------------
@@ -34,15 +34,15 @@ interface ExecutionsResponse {
 // ---------------------------------------------------------------------------
 
 export function ExecutionsPage() {
-  const [selectedExecution, setSelectedExecution] = useState<string | null>(null)
+  const [selectedExecution, setSelectedExecution] = useState<string | null>(null);
 
   const executionsQuery = useQuery({
     queryKey: queryKeys.executions.all,
     queryFn: () => api.getExecutions() as Promise<ExecutionsResponse>,
     refetchInterval: 10000,
-  })
+  });
 
-  const executions = executionsQuery.data?.executions ?? []
+  const executions = executionsQuery.data?.executions ?? [];
 
   return (
     <div className="p-6 space-y-6">
@@ -71,7 +71,7 @@ export function ExecutionsPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -84,17 +84,17 @@ function ExecutionList({
   selected,
   onSelect,
 }: {
-  executions: Execution[]
-  loading: boolean
-  selected: string | null
-  onSelect: (id: string) => void
+  executions: Execution[];
+  loading: boolean;
+  selected: string | null;
+  onSelect: (id: string) => void;
 }) {
   if (loading) {
     return (
       <div className="rounded-lg border bg-card p-6">
         <p className="text-muted-foreground">Loading executions...</p>
       </div>
-    )
+    );
   }
 
   if (executions.length === 0) {
@@ -102,12 +102,12 @@ function ExecutionList({
       <div className="rounded-lg border bg-card p-6">
         <p className="text-muted-foreground">No executions yet.</p>
       </div>
-    )
+    );
   }
 
   return (
     <div className="rounded-lg border bg-card divide-y">
-      {executions.map((exec) => (
+      {executions.map(exec => (
         <button
           key={exec.id}
           onClick={() => onSelect(exec.id)}
@@ -116,18 +116,14 @@ function ExecutionList({
           }`}
         >
           <div className="flex items-center justify-between">
-            <span className="font-mono text-xs truncate max-w-[180px]">
-              {exec.command}
-            </span>
+            <span className="font-mono text-xs truncate max-w-[180px]">{exec.command}</span>
             <StatusBadge status={exec.status} />
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {formatDate(exec.created_at)}
-          </p>
+          <p className="text-xs text-muted-foreground mt-1">{formatDate(exec.created_at)}</p>
         </button>
       ))}
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -135,36 +131,36 @@ function ExecutionList({
 // ---------------------------------------------------------------------------
 
 function ExecutionDetail({ executionId }: { executionId: string }) {
-  const { lastMessage, isConnected } = useWebSocket(executionId)
-  const store = useExecutionStore()
+  const { lastMessage, isConnected } = useWebSocket(executionId);
+  const store = useExecutionStore();
 
   // Reset store when switching executions
   useEffect(() => {
-    store.reset()
-    return () => store.reset()
-  }, [executionId]) // eslint-disable-line react-hooks/exhaustive-deps
+    store.reset();
+    return () => store.reset();
+  }, [executionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Process WebSocket messages
   useEffect(() => {
-    if (!lastMessage) return
+    if (!lastMessage) return;
 
-    const { type, data } = lastMessage
+    const { type, data } = lastMessage;
 
     switch (type) {
       case 'execution.progress':
-        store.setProgress(data as ExecutionProgress)
-        break
+        store.setProgress(data as ExecutionProgress);
+        break;
       case 'execution.test_result':
-        store.addTestResult(data as TestResultEvent)
-        break
+        store.addTestResult(data as TestResultEvent);
+        break;
       case 'execution.worker_status':
-        store.updateWorker(data as WorkerStatus)
-        break
+        store.updateWorker(data as WorkerStatus);
+        break;
       case 'execution.status':
-        store.setExecutionStatus((data as { status: string }).status)
-        break
+        store.setExecutionStatus((data as { status: string }).status);
+        break;
     }
-  }, [lastMessage]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lastMessage]); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="space-y-4">
@@ -188,7 +184,7 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
       {/* Live test result feed */}
       <TestResultFeed results={store.testResults} />
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -196,7 +192,7 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
 // ---------------------------------------------------------------------------
 
 function ProgressPanel({ progress }: { progress: ExecutionProgress }) {
-  const pct = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0
+  const pct = progress.total > 0 ? (progress.completed / progress.total) * 100 : 0;
 
   return (
     <div className="rounded-lg border bg-card p-4 space-y-3">
@@ -256,7 +252,7 @@ function ProgressPanel({ progress }: { progress: ExecutionProgress }) {
         </p>
       )}
     </div>
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -264,13 +260,13 @@ function ProgressPanel({ progress }: { progress: ExecutionProgress }) {
 // ---------------------------------------------------------------------------
 
 function WorkerPanel({ workers }: { workers: Map<string, WorkerStatus> }) {
-  const workerList = Array.from(workers.values())
+  const workerList = Array.from(workers.values());
 
   return (
     <div className="rounded-lg border bg-card p-4">
       <h3 className="text-sm font-medium mb-3">Workers ({workerList.length})</h3>
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-        {workerList.map((w) => (
+        {workerList.map(w => (
           <div
             key={w.worker_id}
             className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50"
@@ -284,7 +280,7 @@ function WorkerPanel({ workers }: { workers: Map<string, WorkerStatus> }) {
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 function WorkerStatusDot({ status }: { status: string }) {
@@ -294,10 +290,10 @@ function WorkerStatusDot({ status }: { status: string }) {
     idle: 'bg-gray-400',
     completed: 'bg-green-500',
     failed: 'bg-red-500',
-  }
+  };
   return (
     <span className={`inline-block w-2 h-2 rounded-full ${colors[status] ?? 'bg-gray-400'}`} />
-  )
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -306,18 +302,14 @@ function WorkerStatusDot({ status }: { status: string }) {
 
 function TestResultFeed({ results }: { results: TestResultEvent[] }) {
   // Show most recent results at top, limit to last 100
-  const visible = results.slice(-100).reverse()
+  const visible = results.slice(-100).reverse();
 
   return (
     <div className="rounded-lg border bg-card p-4">
-      <h3 className="text-sm font-medium mb-3">
-        Live Results ({results.length})
-      </h3>
+      <h3 className="text-sm font-medium mb-3">Live Results ({results.length})</h3>
 
       {visible.length === 0 ? (
-        <p className="text-xs text-muted-foreground">
-          Waiting for test results...
-        </p>
+        <p className="text-xs text-muted-foreground">Waiting for test results...</p>
       ) : (
         <div className="max-h-80 overflow-y-auto space-y-1">
           {visible.map((r, i) => (
@@ -329,32 +321,28 @@ function TestResultFeed({ results }: { results: TestResultEvent[] }) {
               <span className="font-mono truncate flex-1" title={r.name}>
                 {r.name}
               </span>
-              <span className="text-muted-foreground whitespace-nowrap">
-                {r.duration_ms}ms
-              </span>
+              <span className="text-muted-foreground whitespace-nowrap">{r.duration_ms}ms</span>
               {r.worker_id && (
-                <span className="text-muted-foreground font-mono text-[10px]">
-                  {r.worker_id}
-                </span>
+                <span className="text-muted-foreground font-mono text-[10px]">{r.worker_id}</span>
               )}
             </div>
           ))}
         </div>
       )}
     </div>
-  )
+  );
 }
 
 function TestStatusIcon({ status }: { status: string }) {
   switch (status) {
     case 'passed':
-      return <span className="text-green-600 w-4 text-center">&#10003;</span>
+      return <span className="text-green-600 w-4 text-center">&#10003;</span>;
     case 'failed':
-      return <span className="text-red-600 w-4 text-center">&#10007;</span>
+      return <span className="text-red-600 w-4 text-center">&#10007;</span>;
     case 'skipped':
-      return <span className="text-yellow-600 w-4 text-center">&#8212;</span>
+      return <span className="text-yellow-600 w-4 text-center">&#8212;</span>;
     default:
-      return <span className="text-gray-400 w-4 text-center">&#9679;</span>
+      return <span className="text-gray-400 w-4 text-center">&#9679;</span>;
   }
 }
 
@@ -369,13 +357,13 @@ function StatusBadge({ status }: { status: string }) {
     failed: 'bg-red-100 text-red-800',
     cancelled: 'bg-yellow-100 text-yellow-800',
     pending: 'bg-gray-100 text-gray-800',
-  }
-  const cls = colorMap[status.toLowerCase()] ?? 'bg-gray-100 text-gray-800'
+  };
+  const cls = colorMap[status.toLowerCase()] ?? 'bg-gray-100 text-gray-800';
   return (
     <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
       {status}
     </span>
-  )
+  );
 }
 
 function formatDate(iso: string): string {
@@ -385,15 +373,15 @@ function formatDate(iso: string): string {
       day: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
-    })
+    });
   } catch {
-    return iso
+    return iso;
   }
 }
 
 function formatETA(seconds: number): string {
-  if (seconds < 60) return `${Math.round(seconds)}s`
-  const mins = Math.floor(seconds / 60)
-  const secs = Math.round(seconds % 60)
-  return `${mins}m ${secs}s`
+  if (seconds < 60) return `${Math.round(seconds)}s`;
+  const mins = Math.floor(seconds / 60);
+  const secs = Math.round(seconds % 60);
+  return `${mins}m ${secs}s`;
 }

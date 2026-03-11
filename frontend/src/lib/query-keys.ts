@@ -25,4 +25,4 @@ export const queryKeys = {
   admin: {
     users: () => ['admin', 'users'] as const,
   },
-} as const
+} as const;
