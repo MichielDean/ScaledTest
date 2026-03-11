@@ -234,3 +234,68 @@ func TestNullString(t *testing.T) {
 		t.Errorf("nullString(\"hello\") = %v, want &\"hello\"", got)
 	}
 }
+
+func TestCompareReports_Unauthorized(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=a&head=b", nil)
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Compare without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestCompareReports_MissingParams(t *testing.T) {
+	h := &ReportsHandler{}
+	tests := []struct {
+		query string
+	}{
+		{"?base=a"},
+		{"?head=b"},
+		{""},
+	}
+	for _, tt := range tests {
+		w := httptest.NewRecorder()
+		r := httptest.NewRequest("GET", "/api/v1/reports/compare"+tt.query, nil)
+		r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+		h.Compare(w, r)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Compare(%s): got %d, want %d", tt.query, w.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestCompareReports_SameID(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=abc&head=abc", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Compare with same IDs: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	var body map[string]string
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["error"] == "" {
+		t.Error("expected error message in response")
+	}
+}
+
+func TestCompareReports_NoDB(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=a&head=b", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Compare without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
