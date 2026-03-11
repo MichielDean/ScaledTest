@@ -20,6 +20,11 @@ jest.mock('../../src/lib/analytics', () => ({
   getDurationDistribution: jest.fn(),
 }));
 
+// Mock team management
+jest.mock('../../src/lib/teamManagement', () => ({
+  getUserTeams: jest.fn().mockResolvedValue([{ id: 'team-1' }, { id: 'team-2' }]),
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -149,7 +154,9 @@ describe('GET /api/v1/analytics/trends', () => {
 
     await handler(req, res);
 
-    expect(mockGetTestTrends).toHaveBeenCalledWith(expect.objectContaining({ days: 7 }));
+    expect(mockGetTestTrends).toHaveBeenCalledWith(
+      expect.objectContaining({ days: 7, userId: 'user-1', teamIds: ['team-1', 'team-2'] })
+    );
   });
 
   it('returns 503 on DB error', async () => {
@@ -239,7 +246,9 @@ describe('GET /api/v1/analytics/error-analysis', () => {
 
     await handler(req, res);
 
-    expect(mockGetErrorAnalysis).toHaveBeenCalledWith(expect.objectContaining({ limit: 100 }));
+    expect(mockGetErrorAnalysis).toHaveBeenCalledWith(
+      expect.objectContaining({ limit: 100, userId: 'user-1', teamIds: ['team-1', 'team-2'] })
+    );
   });
 
   it('returns 503 on DB error', async () => {

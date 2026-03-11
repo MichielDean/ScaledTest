@@ -50,10 +50,10 @@ export async function getTestTrends(filters: {
   tool?: string;
   environment?: string;
   teamIds?: string[];
-  uploadedBy?: string;
+  userId?: string;
 }): Promise<TrendPoint[]> {
   const days = validateDays(filters.days);
-  const { tool, environment } = filters;
+  const { tool, environment, userId, teamIds } = filters;
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
@@ -64,6 +64,17 @@ export async function getTestTrends(filters: {
     const conditions: string[] = [`timestamp >= NOW() - ($1 * INTERVAL '1 day')`];
     const values: unknown[] = [days];
     let p = 2;
+
+    if (userId) {
+      if (teamIds && teamIds.length > 0) {
+        conditions.push(`(uploaded_by = $${p} OR user_teams::jsonb ?| $${p + 1}::text[])`);
+        values.push(userId, teamIds);
+        p += 2;
+      } else {
+        conditions.push(`uploaded_by = $${p++}`);
+        values.push(userId);
+      }
+    }
 
     if (tool) {
       conditions.push(`tool_name = $${p++}`);
@@ -121,13 +132,35 @@ export async function getFlakyTests(filters: {
   days?: number;
   minRuns?: number;
   tool?: string;
+  teamIds?: string[];
+  userId?: string;
 }): Promise<FlakyTestResult[]> {
   const days = validateDays(filters.days);
   const minRuns = Math.max(1, Math.floor(filters.minRuns ?? 3));
+  const { userId, teamIds } = filters;
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
+
+    const accessConditions: string[] = [];
+    const baseValues: unknown[] = [days];
+    let p = 2;
+
+    if (userId) {
+      if (teamIds && teamIds.length > 0) {
+        accessConditions.push(`(uploaded_by = $${p} OR user_teams::jsonb ?| $${p + 1}::text[])`);
+        baseValues.push(userId, teamIds);
+        p += 2;
+      } else {
+        accessConditions.push(`uploaded_by = $${p++}`);
+        baseValues.push(userId);
+      }
+    }
+
+    const accessWhere = accessConditions.length > 0 ? `AND ${accessConditions.join(' AND ')}` : '';
+    const minRunsParam = p;
+    baseValues.push(minRuns);
 
     // NOTE: jsonb_array_elements does not benefit from the GIN index — it does a full
     // JSONB expansion of every row in the time window. This is an acceptable trade-off
@@ -144,6 +177,7 @@ export async function getFlakyTests(filters: {
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
         WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
+          ${accessWhere}
           AND t->>'name' IS NOT NULL
       ),
       grouped AS (
@@ -156,13 +190,13 @@ export async function getFlakyTests(filters: {
           AVG(duration) AS avg_duration
         FROM test_runs
         GROUP BY test_name, suite
-        HAVING COUNT(*) >= $2
+        HAVING COUNT(*) >= $${minRunsParam}
       )
       SELECT * FROM grouped
       WHERE passed > 0 AND failed > 0
       ORDER BY (failed::float / total_runs) DESC
       LIMIT 50`,
-      [days, minRuns]
+      baseValues
     );
 
     return result.rows.map(row => {
@@ -197,13 +231,35 @@ export async function getFlakyTests(filters: {
 export async function getErrorAnalysis(filters: {
   days?: number;
   limit?: number;
+  teamIds?: string[];
+  userId?: string;
 }): Promise<ErrorAnalysisResult[]> {
   const days = validateDays(filters.days);
   const limit = Math.min(Math.max(1, Math.floor(filters.limit ?? 20)), 100);
+  const { userId, teamIds } = filters;
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
+
+    const conditions: string[] = [];
+    const values: unknown[] = [days];
+    let p = 2;
+
+    if (userId) {
+      if (teamIds && teamIds.length > 0) {
+        conditions.push(`(uploaded_by = $${p} OR user_teams::jsonb ?| $${p + 1}::text[])`);
+        values.push(userId, teamIds);
+        p += 2;
+      } else {
+        conditions.push(`uploaded_by = $${p++}`);
+        values.push(userId);
+      }
+    }
+
+    const accessWhere = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
+    const limitParam = p;
+    values.push(limit);
 
     const result = await client.query(
       `WITH failures AS (
@@ -213,6 +269,7 @@ export async function getErrorAnalysis(filters: {
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
         WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
+          ${accessWhere}
           AND t->>'status' = 'failed'
           AND t->>'message' IS NOT NULL
       )
@@ -223,8 +280,8 @@ export async function getErrorAnalysis(filters: {
       FROM failures
       GROUP BY error_message
       ORDER BY count DESC
-      LIMIT $2`,
-      [days, limit]
+      LIMIT $${limitParam}`,
+      values
     );
 
     return result.rows.map(row => {
@@ -246,12 +303,32 @@ export async function getErrorAnalysis(filters: {
 export async function getDurationDistribution(filters: {
   days?: number;
   tool?: string;
+  teamIds?: string[];
+  userId?: string;
 }): Promise<DurationBucket[]> {
   const days = validateDays(filters.days);
+  const { userId, teamIds } = filters;
   let client: PoolClient | null = null;
   try {
     const pool = getTimescalePool();
     client = await pool.connect();
+
+    const conditions: string[] = [];
+    const values: unknown[] = [days];
+    let p = 2;
+
+    if (userId) {
+      if (teamIds && teamIds.length > 0) {
+        conditions.push(`(uploaded_by = $${p} OR user_teams::jsonb ?| $${p + 1}::text[])`);
+        values.push(userId, teamIds);
+        p += 2;
+      } else {
+        conditions.push(`uploaded_by = $${p++}`);
+        values.push(userId);
+      }
+    }
+
+    const accessWhere = conditions.length > 0 ? `AND ${conditions.join(' AND ')}` : '';
 
     const result = await client.query(
       `WITH test_durations AS (
@@ -259,6 +336,7 @@ export async function getDurationDistribution(filters: {
         FROM test_reports,
           jsonb_array_elements(test_data->'tests') AS t
         WHERE timestamp >= NOW() - ($1 * INTERVAL '1 day')
+          ${accessWhere}
           AND t->>'duration' IS NOT NULL
       )
       SELECT
@@ -274,7 +352,7 @@ export async function getDurationDistribution(filters: {
       FROM test_durations
       GROUP BY range
       ORDER BY MIN(duration)`,
-      [days]
+      values
     );
 
     // Ensure all buckets are always present even if DB has no data for some
