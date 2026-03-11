@@ -13,34 +13,6 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 )
 
-func withClaims(r *http.Request, claims *auth.Claims) *http.Request {
-	ctx := context.WithValue(r.Context(), auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
-}
-
-func withChiURLParam(r *http.Request, key, value string) *http.Request {
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add(key, value)
-	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-}
-
-func withClaimsAndParam(r *http.Request, claims *auth.Claims, key, value string) *http.Request {
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add(key, value)
-	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
-	ctx = context.WithValue(ctx, auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
-}
-
-func withClaimsAndParams(r *http.Request, claims *auth.Claims, params map[string]string) *http.Request {
-	rctx := chi.NewRouteContext()
-	for k, v := range params {
-		rctx.URLParams.Add(k, v)
-	}
-	ctx := context.WithValue(r.Context(), chi.RouteCtxKey, rctx)
-	ctx = context.WithValue(ctx, auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
-}
 
 var testClaims = &auth.Claims{
 	UserID: "user-1",
@@ -62,7 +34,7 @@ func TestListTeams_Unauthorized(t *testing.T) {
 func TestListTeams_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams", nil)
-	req = withClaims(req, testClaims)
+	req = testWithClaims(req, testClaims)
 	w := httptest.NewRecorder()
 	h.List(w, req)
 	if w.Code != http.StatusOK {
@@ -91,7 +63,7 @@ func TestCreateTeam_InvalidRequest(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("POST", "/api/v1/teams", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = withClaims(req, testClaims)
+	req = testWithClaims(req, testClaims)
 	w := httptest.NewRecorder()
 	h.Create(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -103,7 +75,7 @@ func TestCreateTeam_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("POST", "/api/v1/teams", strings.NewReader(`{"name":"test-team"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = withClaims(req, testClaims)
+	req = testWithClaims(req, testClaims)
 	w := httptest.NewRecorder()
 	h.Create(w, req)
 	if w.Code != http.StatusNotImplemented {
@@ -114,7 +86,7 @@ func TestCreateTeam_NoDB(t *testing.T) {
 func TestGetTeam_Unauthorized(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams/team-1", nil)
-	req = withChiURLParam(req, "teamID", "team-1")
+	req = testWithChiParam(req, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.Get(w, req)
 	if w.Code != http.StatusUnauthorized {
@@ -125,7 +97,7 @@ func TestGetTeam_Unauthorized(t *testing.T) {
 func TestGetTeam_MissingID(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams/", nil)
-	req = withClaims(req, testClaims)
+	req = testWithClaims(req, testClaims)
 	w := httptest.NewRecorder()
 	h.Get(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -136,7 +108,7 @@ func TestGetTeam_MissingID(t *testing.T) {
 func TestGetTeam_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams/team-1", nil)
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.Get(w, req)
 	if w.Code != http.StatusNotImplemented {
@@ -147,7 +119,7 @@ func TestGetTeam_NoDB(t *testing.T) {
 func TestDeleteTeam_Unauthorized(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1", nil)
-	req = withChiURLParam(req, "teamID", "team-1")
+	req = testWithChiParam(req, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.Delete(w, req)
 	if w.Code != http.StatusUnauthorized {
@@ -158,7 +130,7 @@ func TestDeleteTeam_Unauthorized(t *testing.T) {
 func TestDeleteTeam_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1", nil)
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.Delete(w, req)
 	if w.Code != http.StatusNotImplemented {
@@ -169,7 +141,7 @@ func TestDeleteTeam_NoDB(t *testing.T) {
 func TestListTokens_Unauthorized(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/tokens", nil)
-	req = withChiURLParam(req, "teamID", "team-1")
+	req = testWithChiParam(req, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.ListTokens(w, req)
 	if w.Code != http.StatusUnauthorized {
@@ -180,7 +152,7 @@ func TestListTokens_Unauthorized(t *testing.T) {
 func TestListTokens_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/tokens", nil)
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.ListTokens(w, req)
 	if w.Code != http.StatusOK {
@@ -198,7 +170,7 @@ func TestCreateToken_Unauthorized(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/tokens", strings.NewReader(`{"name":"ci"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = withChiURLParam(req, "teamID", "team-1")
+	req = testWithChiParam(req, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.CreateToken(w, req)
 	if w.Code != http.StatusUnauthorized {
@@ -210,7 +182,7 @@ func TestCreateToken_InvalidRequest(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/tokens", strings.NewReader(`{}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.CreateToken(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -222,7 +194,7 @@ func TestCreateToken_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/tokens", strings.NewReader(`{"name":"ci"}`))
 	req.Header.Set("Content-Type", "application/json")
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.CreateToken(w, req)
 	if w.Code != http.StatusNotImplemented {
@@ -247,7 +219,7 @@ func TestDeleteToken_Unauthorized(t *testing.T) {
 func TestDeleteToken_MissingTokenID(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/tokens/", nil)
-	req = withClaimsAndParam(req, testClaims, "teamID", "team-1")
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
 	w := httptest.NewRecorder()
 	h.DeleteToken(w, req)
 	if w.Code != http.StatusBadRequest {
@@ -258,7 +230,7 @@ func TestDeleteToken_MissingTokenID(t *testing.T) {
 func TestDeleteToken_NoDB(t *testing.T) {
 	h := &TeamsHandler{}
 	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/tokens/tok-1", nil)
-	req = withClaimsAndParams(req, testClaims, map[string]string{"teamID": "team-1", "tokenID": "tok-1"})
+	req = testWithClaimsAndParams(req, testClaims, map[string]string{"teamID": "team-1", "tokenID": "tok-1"})
 	w := httptest.NewRecorder()
 	h.DeleteToken(w, req)
 	if w.Code != http.StatusNotImplemented {

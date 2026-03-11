@@ -1,31 +1,18 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 	"time"
-
-	"github.com/scaledtest/scaledtest/internal/auth"
 )
 
-func withClaims(r *http.Request, teamID string) *http.Request {
-	claims := &auth.Claims{
-		UserID: "user-1",
-		Email:  "test@example.com",
-		Role:   "owner",
-		TeamID: teamID,
-	}
-	ctx := context.WithValue(r.Context(), auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
-}
 
 func TestAnalyticsTrendsNoDB(t *testing.T) {
 	h := &AnalyticsHandler{DB: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/trends", nil)
-	req = withClaims(req, "team-1")
+	req = testWithClaimsTeamOnly(req, "team-1")
 	w := httptest.NewRecorder()
 
 	h.Trends(w, req)
@@ -39,7 +26,7 @@ func TestAnalyticsFlakyTestsNoDB(t *testing.T) {
 	h := &AnalyticsHandler{DB: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/flaky-tests", nil)
-	req = withClaims(req, "team-1")
+	req = testWithClaimsTeamOnly(req, "team-1")
 	w := httptest.NewRecorder()
 
 	h.FlakyTests(w, req)
@@ -53,7 +40,7 @@ func TestAnalyticsErrorAnalysisNoDB(t *testing.T) {
 	h := &AnalyticsHandler{DB: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/error-analysis", nil)
-	req = withClaims(req, "team-1")
+	req = testWithClaimsTeamOnly(req, "team-1")
 	w := httptest.NewRecorder()
 
 	h.ErrorAnalysis(w, req)
@@ -67,7 +54,7 @@ func TestAnalyticsDurationDistributionNoDB(t *testing.T) {
 	h := &AnalyticsHandler{DB: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/duration-distribution", nil)
-	req = withClaims(req, "team-1")
+	req = testWithClaimsTeamOnly(req, "team-1")
 	w := httptest.NewRecorder()
 
 	h.DurationDistribution(w, req)

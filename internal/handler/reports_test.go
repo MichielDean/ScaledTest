@@ -1,35 +1,13 @@
 package handler
 
 import (
-	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
-
-	"github.com/go-chi/chi/v5"
-
-	"github.com/scaledtest/scaledtest/internal/auth"
 )
 
-// withClaims creates a request with auth claims in context.
-func withClaims(r *http.Request, userID, teamID, role string) *http.Request {
-	claims := &auth.Claims{
-		UserID: userID,
-		TeamID: teamID,
-		Role:   role,
-	}
-	ctx := context.WithValue(r.Context(), auth.ClaimsContextKey, claims)
-	return r.WithContext(ctx)
-}
-
-// withChiParam adds a chi URL parameter to a request.
-func withChiParam(r *http.Request, key, value string) *http.Request {
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add(key, value)
-	return r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
-}
 
 func TestListReports_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
@@ -47,7 +25,7 @@ func TestListReports_NoDB(t *testing.T) {
 	h := &ReportsHandler{DB: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports", nil)
-	r = withClaims(r, "user-1", "team-1", "owner")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
 	h.List(w, r)
 
@@ -72,7 +50,7 @@ func TestCreateReport_InvalidJSON(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{invalid}`))
-	r = withClaims(r, "user-1", "team-1", "owner")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
 	h.Create(w, r)
 
@@ -86,7 +64,7 @@ func TestCreateReport_InvalidCTRF(t *testing.T) {
 	w := httptest.NewRecorder()
 	// Valid JSON but invalid CTRF (missing tool name)
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{"results":{"tool":{},"summary":{"tests":1},"tests":[{"name":"t","status":"passed"}]}}`))
-	r = withClaims(r, "user-1", "team-1", "owner")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
 	h.Create(w, r)
 
@@ -100,7 +78,7 @@ func TestCreateReport_NoDB_Fallback(t *testing.T) {
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":2,"passed":1,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"test1","status":"passed","duration":100},{"name":"test2","status":"failed","duration":200,"message":"oops"}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
-	r = withClaims(r, "user-1", "team-1", "owner")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
 	h.Create(w, r)
 
@@ -125,7 +103,7 @@ func TestCreateReport_NoDB_WithExecutionID(t *testing.T) {
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"mocha"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":50}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports?execution_id=exec-123", strings.NewReader(report))
-	r = withClaims(r, "user-1", "team-1", "owner")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
 	h.Create(w, r)
 
@@ -144,7 +122,7 @@ func TestGetReport_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/abc", nil)
-	r = withChiParam(r, "reportID", "abc")
+	r = testWithChiParam(r, "reportID", "abc")
 
 	h.Get(w, r)
 
@@ -157,8 +135,8 @@ func TestGetReport_MissingID(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/", nil)
-	r = withClaims(r, "user-1", "team-1", "owner")
-	r = withChiParam(r, "reportID", "")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "")
 
 	h.Get(w, r)
 
@@ -171,8 +149,8 @@ func TestGetReport_NoDB(t *testing.T) {
 	h := &ReportsHandler{DB: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/abc", nil)
-	r = withClaims(r, "user-1", "team-1", "owner")
-	r = withChiParam(r, "reportID", "abc")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
 
 	h.Get(w, r)
 
@@ -185,7 +163,7 @@ func TestDeleteReport_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("DELETE", "/api/v1/reports/abc", nil)
-	r = withChiParam(r, "reportID", "abc")
+	r = testWithChiParam(r, "reportID", "abc")
 
 	h.Delete(w, r)
 
@@ -198,8 +176,8 @@ func TestDeleteReport_MissingID(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("DELETE", "/api/v1/reports/", nil)
-	r = withClaims(r, "user-1", "team-1", "owner")
-	r = withChiParam(r, "reportID", "")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "")
 
 	h.Delete(w, r)
 
@@ -212,8 +190,8 @@ func TestDeleteReport_NoDB(t *testing.T) {
 	h := &ReportsHandler{DB: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("DELETE", "/api/v1/reports/abc", nil)
-	r = withClaims(r, "user-1", "team-1", "owner")
-	r = withChiParam(r, "reportID", "abc")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
 
 	h.Delete(w, r)
 
