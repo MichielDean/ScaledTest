@@ -22,12 +22,12 @@ spec:
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           args: ["-migrate-up"]
           env:
-            - name: ST_DATABASE_URL
-              value: "postgres://{{ .Values.database.user }}:$(ST_DB_PASSWORD)@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}?sslmode=disable"
             - name: ST_DB_PASSWORD
               valueFrom:
                 secretKeyRef:
                   name: {{ .Values.database.existingSecret }}
                   key: {{ .Values.database.secretKey }}
+            - name: ST_DATABASE_URL
+              value: "postgres://{{ .Values.database.user }}:$(ST_DB_PASSWORD)@{{ .Values.database.host }}:{{ .Values.database.port }}/{{ .Values.database.name }}?sslmode=disable"
   backoffLimit: 3
 {{- end }}
