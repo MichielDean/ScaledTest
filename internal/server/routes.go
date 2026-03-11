@@ -58,6 +58,7 @@ func NewRouter(cfg *config.Config) http.Handler {
 	analyticsH := &handler.AnalyticsHandler{}
 	qgH := &handler.QualityGatesHandler{}
 	teamsH := &handler.TeamsHandler{}
+	quarantineH := &handler.QuarantineHandler{}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -119,6 +120,12 @@ func NewRouter(cfg *config.Config) http.Handler {
 				r.Get("/", teamsH.ListTokens)
 				r.Post("/", teamsH.CreateToken)
 				r.Delete("/{tokenID}", teamsH.DeleteToken)
+			})
+			r.Route("/{teamID}/quarantine", func(r chi.Router) {
+				r.Get("/", quarantineH.List)
+				r.Post("/", quarantineH.Create)
+				r.Get("/stats", quarantineH.Stats)
+				r.Delete("/{quarantineID}", quarantineH.Delete)
 			})
 		})
 
