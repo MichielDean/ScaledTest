@@ -61,7 +61,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	reportsH := &handler.ReportsHandler{}
 	execH := &handler.ExecutionsHandler{DB: dbPool}
-	analyticsH := &handler.AnalyticsHandler{}
+	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
 	qgH := &handler.QualityGatesHandler{}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 
