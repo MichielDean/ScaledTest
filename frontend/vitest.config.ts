@@ -1,7 +1,7 @@
-import { defineConfig } from 'vitest/config'
-import react from '@vitejs/plugin-react'
-import type { PluginOption } from 'vite'
-import path from 'path'
+import { defineConfig } from 'vitest/config';
+import react from '@vitejs/plugin-react';
+import type { PluginOption } from 'vite';
+import path from 'path';
 
 export default defineConfig({
   plugins: [react() as PluginOption[]],
@@ -15,4 +15,4 @@ export default defineConfig({
     globals: true,
     setupFiles: ['./src/test-setup.ts'],
   },
-})
+});

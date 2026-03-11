@@ -11,7 +11,7 @@ service:
 
 ingress:
   enabled: false
-  className: ""
+  className: ''
   annotations: {}
   hosts:
     - host: scaledtest.local
@@ -37,7 +37,7 @@ database:
   secretKey: password
 
 auth:
-  jwtSecret: ""
+  jwtSecret: ''
   existingSecret: scaledtest-auth
   jwtSecretKey: jwt-secret
 
@@ -49,7 +49,7 @@ rbac:
 
 serviceAccount:
   create: true
-  name: ""
+  name: ''
   annotations: {}
 
 namespace: default

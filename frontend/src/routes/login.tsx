@@ -1,26 +1,26 @@
-import { useState } from 'react'
-import { Link } from '@tanstack/react-router'
-import { useAuth } from '../hooks/use-auth'
+import { useState } from 'react';
+import { Link } from '@tanstack/react-router';
+import { useAuth } from '../hooks/use-auth';
 
 export function LoginPage() {
-  const [email, setEmail] = useState('')
-  const [password, setPassword] = useState('')
-  const [error, setError] = useState('')
-  const [loading, setLoading] = useState(false)
-  const { login } = useAuth()
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [error, setError] = useState('');
+  const [loading, setLoading] = useState(false);
+  const { login } = useAuth();
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault()
-    setError('')
-    setLoading(true)
+    e.preventDefault();
+    setError('');
+    setLoading(true);
     try {
-      await login(email, password)
+      await login(email, password);
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Login failed')
+      setError(err instanceof Error ? err.message : 'Login failed');
     } finally {
-      setLoading(false)
+      setLoading(false);
     }
-  }
+  };
 
   return (
     <div className="flex min-h-screen items-center justify-center">
@@ -36,23 +36,27 @@ export function LoginPage() {
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium">Email</label>
+            <label htmlFor="email" className="block text-sm font-medium">
+              Email
+            </label>
             <input
               id="email"
               type="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={e => setEmail(e.target.value)}
               className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
               required
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium">Password</label>
+            <label htmlFor="password" className="block text-sm font-medium">
+              Password
+            </label>
             <input
               id="password"
               type="password"
               value={password}
-              onChange={(e) => setPassword(e.target.value)}
+              onChange={e => setPassword(e.target.value)}
               className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
               required
             />
@@ -66,24 +70,34 @@ export function LoginPage() {
           </button>
         </form>
         <div className="relative">
-          <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+          <div className="absolute inset-0 flex items-center">
+            <span className="w-full border-t" />
+          </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
           </div>
         </div>
         <div className="grid grid-cols-2 gap-3">
-          <a href="/auth/github" className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <a
+            href="/auth/github"
+            className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
             GitHub
           </a>
-          <a href="/auth/google" className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent">
+          <a
+            href="/auth/google"
+            className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+          >
             Google
           </a>
         </div>
         <p className="text-center text-sm text-muted-foreground">
           Don't have an account?{' '}
-          <Link to="/register" className="text-primary hover:underline">Sign up</Link>
+          <Link to="/register" className="text-primary hover:underline">
+            Sign up
+          </Link>
         </p>
       </div>
     </div>
-  )
+  );
 }

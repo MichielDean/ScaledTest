@@ -17,12 +17,14 @@
 ScaledTest is a dual-stack platform (v1 legacy + v2 Go backend both on main):
 
 ### v1 Legacy (Next.js monolith)
+
 - Next.js 15 + React 19 + TypeScript
 - Better Auth for authentication/RBAC
 - TimescaleDB for time-series test data
 - Jest (unit/component/integration) + Playwright (E2E)
 
 ### v2 (Go backend + React SPA — now on main)
+
 - Go backend: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
 - React 19 frontend: TanStack Router/Query, Zustand, Recharts
 - Single binary serves embedded SPA via go:embed
@@ -38,6 +40,7 @@ gt done --pre-verified    # Submit branch to MQ, notify witness, transition to i
 ```
 
 This ensures:
+
 - Bead/issue is automatically closed after merge
 - Refinery runs quality gates
 - Branch cleanup happens automatically
