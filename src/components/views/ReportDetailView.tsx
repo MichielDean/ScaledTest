@@ -47,7 +47,9 @@ type TestResult = TestReport['results']['tests'][0];
 const ReportDetailView: React.FC = () => {
   const { token } = useAuth();
   const { viewParams, navigateTo, goBack, canGoBack } = useSPANavigation();
-  const reportId = viewParams.reportId;
+  const rawReportId = viewParams.reportId;
+  // Validate reportId to prevent SSRF via path traversal
+  const reportId = rawReportId && /^[a-zA-Z0-9_-]+$/.test(rawReportId) ? rawReportId : undefined;
 
   const [report, setReport] = useState<TestReport | null>(null);
   const [loading, setLoading] = useState(true);
