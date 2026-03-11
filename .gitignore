@@ -1,5 +1,5 @@
 # dependencies
-/node_modules
+node_modules
 /.pnp
 .pnp.js
 
@@ -37,7 +37,14 @@ yarn-error.log*
 next-env.d.ts
 
 # compiled outputs
-/dist
+dist
+!internal/spa/dist/
+!internal/spa/dist/placeholder
+/bin/
+
+# Go build artifacts
+/tmp/
+*.exe
 
 # temporary/build artifacts
 temp/
