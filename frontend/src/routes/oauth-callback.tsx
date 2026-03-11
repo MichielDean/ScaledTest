@@ -18,22 +18,20 @@ export function OAuthCallbackPage() {
     }
 
     if (token) {
-      // The backend redirects here with a token after OAuth.
-      // We need to decode minimal user info from the JWT or fetch /auth/me.
-      fetch('/auth/me', {
-        headers: { Authorization: `Bearer ${token}` },
-      })
-        .then((res) => {
-          if (!res.ok) throw new Error('Failed to get user info')
-          return res.json()
-        })
-        .then((data) => {
-          setAuth(data.user, token)
-          navigate({ to: '/' })
-        })
-        .catch(() => {
-          setError('OAuth login failed')
-        })
+      // Decode user info directly from the JWT payload (no /auth/me round-trip needed).
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]))
+        const user = {
+          id: payload.sub,
+          email: payload.email,
+          display_name: payload.display_name || payload.email,
+          role: payload.role || 'member',
+        }
+        setAuth(user, token)
+        navigate({ to: '/' })
+      } catch {
+        setError('OAuth login failed: invalid token')
+      }
     } else {
       setError('No authentication token received')
     }

@@ -33,8 +33,12 @@ export function useWebSocket(executionId?: string) {
       }
     }
     ws.onmessage = (event) => {
-      const msg = JSON.parse(event.data) as WSMessage
-      setLastMessage(msg)
+      try {
+        const msg = JSON.parse(event.data) as WSMessage
+        setLastMessage(msg)
+      } catch {
+        // Ignore malformed messages
+      }
     }
 
     wsRef.current = ws
