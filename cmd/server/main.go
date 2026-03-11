@@ -62,8 +62,7 @@ func main() {
 		log.Fatal().Msg("ST_JWT_SECRET must be at least 32 characters in production")
 	}
 
-	router := server.NewRouter(cfg)
-	_ = pool // Will be passed to handlers in future tasks
+	router := server.NewRouter(cfg, pool)
 
 	srv := &http.Server{
 		Addr:         fmt.Sprintf(":%d", cfg.Port),
