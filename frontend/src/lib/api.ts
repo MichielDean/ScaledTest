@@ -129,6 +129,10 @@ export const api = {
   submitReport: (data: unknown) =>
     fetchAPI('/api/v1/reports', { method: 'POST', body: JSON.stringify(data) }),
   getReport: (id: string) => fetchAPI(`/api/v1/reports/${id}`),
+  compareReports: (base: string, head: string) =>
+    fetchAPI(
+      `/api/v1/reports/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`
+    ),
 
   // Executions
   getExecutions: () => fetchAPI<{ executions: unknown[]; total: number }>('/api/v1/executions'),
