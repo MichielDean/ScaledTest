@@ -1,5 +1,5 @@
 import * as React from 'react';
-import { BarChart3, Building2, FileText, Home, Play, Settings, TestTube } from 'lucide-react';
+import { BarChart3, Building2, Home, Play, Settings } from 'lucide-react';
 
 import { NavMain } from '@/components/nav-main-spa';
 import { NavProjects } from '@/components/nav-projects';
@@ -15,10 +15,12 @@ import {
 import { useAuth } from '../hooks/useAuth';
 import { hasWriteAccess } from '../lib/roles';
 import { useSPANavigation } from '../contexts/SPANavigationContext';
+import { useTeams } from '../contexts/TeamContext';
 
 export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>) {
   const { user: userProfile, logout } = useAuth();
   const { navigateTo, currentView } = useSPANavigation();
+  const { userTeams, setSelectedTeamIds } = useTeams();
 
   // SPA navigation structure with click handlers instead of URLs
   const navMain = [
@@ -95,24 +97,18 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
       : []),
   ];
 
-  // User teams as projects
-  const teams = [
-    {
-      name: 'Development',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: Building2,
-    },
-    {
-      name: 'QA Testing',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: TestTube,
-    },
-    {
-      name: 'Reports',
-      url: '#', // Placeholder URL to satisfy the interface
-      icon: FileText,
-    },
-  ];
+  // Map userTeams from context to the shape NavProjects and TeamSwitcher expect
+  const teams = userTeams.map(team => ({
+    name: team.name,
+    url: '#',
+    icon: Building2,
+  }));
+
+  const switcherTeams = userTeams.map(team => ({
+    name: team.name,
+    logo: Building2,
+    plan: team.description ?? '',
+  }));
 
   const user = {
     name: userProfile?.name || 'User',
@@ -124,7 +120,13 @@ export function AppSidebarSPA({ ...props }: React.ComponentProps<typeof Sidebar>
     <aside aria-label="Main navigation sidebar">
       <Sidebar collapsible="icon" {...props}>
         <SidebarHeader>
-          <TeamSwitcher teams={[]} />
+          <TeamSwitcher
+            teams={switcherTeams}
+            onTeamChange={team => {
+              const matched = userTeams.find(t => t.name === team.name);
+              if (matched) setSelectedTeamIds([matched.id]);
+            }}
+          />
         </SidebarHeader>
         <SidebarContent>
           <NavMain items={navMain} />
