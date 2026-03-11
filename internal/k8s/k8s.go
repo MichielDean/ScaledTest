@@ -128,6 +128,79 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 	return created, nil
 }
 
+// WorkerPoolConfig defines the parameters for creating a parallel worker pool.
+type WorkerPoolConfig struct {
+	ExecutionID string            // Parent execution ID
+	Image       string            // Worker container image
+	Workers     []WorkerJobConfig // Per-worker configurations
+	WorkerToken string            // Auth token for workers
+	APIBaseURL  string            // Base URL of the ScaledTest API
+	EnvVars     map[string]string // Shared environment variables
+}
+
+// WorkerJobConfig defines per-worker job configuration.
+type WorkerJobConfig struct {
+	WorkerIndex int      // 0-based index
+	Command     string   // Worker-specific test command
+	TestFiles   []string // Test files assigned to this worker
+}
+
+// CreateWorkerPool creates N Kubernetes Jobs for parallel test execution.
+// Returns the created job names indexed by worker index.
+func (c *Client) CreateWorkerPool(ctx context.Context, cfg WorkerPoolConfig) (map[int]string, error) {
+	jobNames := make(map[int]string, len(cfg.Workers))
+
+	for _, w := range cfg.Workers {
+		jobName := fmt.Sprintf("st-%s-w%d", cfg.ExecutionID[:8], w.WorkerIndex)
+
+		jobCfg := JobConfig{
+			Name:        jobName,
+			Image:       cfg.Image,
+			Command:     w.Command,
+			EnvVars:     cfg.EnvVars,
+			WorkerToken: cfg.WorkerToken,
+			APIBaseURL:  cfg.APIBaseURL,
+			ExecutionID: cfg.ExecutionID,
+		}
+
+		// Add worker-specific env vars
+		if jobCfg.EnvVars == nil {
+			jobCfg.EnvVars = make(map[string]string)
+		}
+		jobCfg.EnvVars["ST_WORKER_INDEX"] = fmt.Sprintf("%d", w.WorkerIndex)
+		jobCfg.EnvVars["ST_PARALLELISM"] = fmt.Sprintf("%d", len(cfg.Workers))
+
+		_, err := c.CreateJob(ctx, jobCfg)
+		if err != nil {
+			// Clean up already-created jobs on failure
+			for _, name := range jobNames {
+				_ = c.DeleteJob(ctx, name)
+			}
+			return nil, fmt.Errorf("create worker %d job: %w", w.WorkerIndex, err)
+		}
+
+		jobNames[w.WorkerIndex] = jobName
+		log.Info().
+			Str("job", jobName).
+			Int("worker_index", w.WorkerIndex).
+			Str("execution_id", cfg.ExecutionID).
+			Msg("worker job created")
+	}
+
+	return jobNames, nil
+}
+
+// DeleteWorkerPool deletes all K8s Jobs for a parallel execution.
+func (c *Client) DeleteWorkerPool(ctx context.Context, jobNames []string) error {
+	var firstErr error
+	for _, name := range jobNames {
+		if err := c.DeleteJob(ctx, name); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	return firstErr
+}
+
 // DeleteJob deletes a Kubernetes Job and its pods (for cancellation).
 func (c *Client) DeleteJob(ctx context.Context, jobName string) error {
 	propagation := metav1.DeletePropagationForeground

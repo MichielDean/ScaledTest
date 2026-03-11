@@ -28,29 +28,48 @@ func main() {
 	executionID := requireEnv("ST_EXECUTION_ID")
 	command := requireEnv("ST_COMMAND")
 
+	// Parallel execution support
+	workerIndex := os.Getenv("ST_WORKER_INDEX")
+	parallelism := os.Getenv("ST_PARALLELISM")
+
 	log.Info().
 		Str("execution_id", executionID).
 		Str("command", command).
+		Str("worker_index", workerIndex).
+		Str("parallelism", parallelism).
 		Msg("worker starting")
 
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Report status: running
-	reportStatus(apiURL, workerToken, executionID, "running", "")
+	// Report status: running (use worker-specific endpoint for parallel executions)
+	if workerIndex != "" {
+		reportWorkerStatus(apiURL, workerToken, executionID, workerIndex, "running", "")
+	} else {
+		reportStatus(apiURL, workerToken, executionID, "running", "")
+	}
 
 	// Execute the test command
 	exitCode, output, err := runCommand(ctx, command)
 
+	// Select the appropriate status reporter
+	statusReporter := func(status, errMsg string) {
+		if workerIndex != "" {
+			reportWorkerStatus(apiURL, workerToken, executionID, workerIndex, status, errMsg)
+		} else {
+			reportStatus(apiURL, workerToken, executionID, status, errMsg)
+		}
+	}
+
 	if ctx.Err() != nil {
 		log.Warn().Msg("worker cancelled")
-		reportStatus(apiURL, workerToken, executionID, "cancelled", "execution cancelled")
+		statusReporter("cancelled", "execution cancelled")
 		os.Exit(130)
 	}
 
 	if err != nil {
 		log.Error().Err(err).Int("exit_code", exitCode).Msg("command failed")
-		reportStatus(apiURL, workerToken, executionID, "failed", fmt.Sprintf("exit code %d: %s", exitCode, err.Error()))
+		statusReporter("failed", fmt.Sprintf("exit code %d: %s", exitCode, err.Error()))
 		os.Exit(1)
 	}
 
@@ -71,7 +90,7 @@ func main() {
 
 	_ = output // Could be logged or sent as execution output
 
-	reportStatus(apiURL, workerToken, executionID, "completed", "")
+	statusReporter("completed", "")
 	log.Info().Msg("worker done")
 }
 
@@ -150,6 +169,31 @@ func submitReport(apiURL, token, executionID, reportFile string) error {
 
 	log.Info().Str("execution_id", executionID).Msg("report submitted")
 	return nil
+}
+
+func reportWorkerStatus(apiURL, token, executionID, workerIndex, status, errorMsg string) {
+	payload := map[string]string{
+		"status":    status,
+		"error_msg": errorMsg,
+	}
+	data, _ := json.Marshal(payload)
+
+	url := fmt.Sprintf("%s/api/v1/executions/%s/workers/%s/status", apiURL, executionID, workerIndex)
+	req, err := http.NewRequest("PUT", url, bytes.NewReader(data))
+	if err != nil {
+		log.Error().Err(err).Msg("failed to create worker status request")
+		return
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Header.Set("Content-Type", "application/json")
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to report worker status")
+		return
+	}
+	resp.Body.Close()
 }
 
 func reportStatus(apiURL, token, executionID, status, errorMsg string) {
