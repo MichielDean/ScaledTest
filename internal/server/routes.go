@@ -14,13 +14,14 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/config"
+	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // NewRouter creates the chi router with all middleware and route groups.
-func NewRouter(cfg *config.Config) http.Handler {
+func NewRouter(cfg *config.Config, pool *db.Pool) http.Handler {
 	r := chi.NewRouter()
 
 	// Global middleware
@@ -52,7 +53,7 @@ func NewRouter(cfg *config.Config) http.Handler {
 	authMW := auth.Middleware(jwtMgr, nil)
 
 	// Handlers
-	authH := &handler.AuthHandler{JWT: jwtMgr}
+	authH := &handler.AuthHandler{JWT: jwtMgr, DB: pool}
 	reportsH := &handler.ReportsHandler{}
 	execH := &handler.ExecutionsHandler{}
 	analyticsH := &handler.AnalyticsHandler{}
