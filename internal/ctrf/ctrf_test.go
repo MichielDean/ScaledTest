@@ -135,6 +135,72 @@ func TestSummaryJSON(t *testing.T) {
 	}
 }
 
+func TestValidateDetailed(t *testing.T) {
+	report, _ := Parse([]byte(sampleReport))
+	result := ValidateDetailed(report)
+	if !result.Valid() {
+		t.Errorf("ValidateDetailed() returned errors: %v", result.Errors)
+	}
+}
+
+func TestValidateDetailedWarnings(t *testing.T) {
+	// Summary count mismatch: summary says 5 tests but only 1 actual test
+	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":5,"passed":5,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t","status":"passed","duration":10}]}}`
+	report, _ := Parse([]byte(data))
+	result := ValidateDetailed(report)
+	if !result.Valid() {
+		t.Errorf("should be valid (warnings only): %v", result.Errors)
+	}
+	if len(result.Warnings) == 0 {
+		t.Error("expected warnings for summary mismatch")
+	}
+}
+
+func TestValidateDetailedStopBeforeStart(t *testing.T) {
+	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"start":2000,"stop":1000},"tests":[{"name":"t","status":"passed"}]}}`
+	report, _ := Parse([]byte(data))
+	result := ValidateDetailed(report)
+	hasTimestampWarning := false
+	for _, w := range result.Warnings {
+		if w == "summary.stop is before summary.start" {
+			hasTimestampWarning = true
+		}
+	}
+	if !hasTimestampWarning {
+		t.Error("expected timestamp warning")
+	}
+}
+
+func TestValidateDetailedUnknownSpecVersion(t *testing.T) {
+	data := `{"specVersion":"99.99.99","results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1},"tests":[{"name":"t","status":"passed"}]}}`
+	report, _ := Parse([]byte(data))
+	result := ValidateDetailed(report)
+	if !result.Valid() {
+		t.Errorf("unknown spec version should produce warning, not error: %v", result.Errors)
+	}
+	hasVersionWarning := false
+	for _, w := range result.Warnings {
+		if len(w) > 0 {
+			hasVersionWarning = true
+		}
+	}
+	if !hasVersionWarning {
+		t.Error("expected spec version warning")
+	}
+}
+
+func TestValidateDetailedMultipleErrors(t *testing.T) {
+	data := `{"results":{"tool":{"name":""},"summary":{"tests":0},"tests":[]}}`
+	report, _ := Parse([]byte(data))
+	result := ValidateDetailed(report)
+	if result.Valid() {
+		t.Error("expected validation errors")
+	}
+	if len(result.Errors) < 2 {
+		t.Errorf("expected multiple errors, got %d: %v", len(result.Errors), result.Errors)
+	}
+}
+
 func TestNormalizeWithTags(t *testing.T) {
 	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[
 		{"name":"tagged test","status":"passed","duration":10,"tags":["smoke","regression"],"flaky":true,"retry":2}
