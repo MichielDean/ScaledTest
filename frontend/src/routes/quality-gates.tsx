@@ -4,17 +4,17 @@ import { api } from '../lib/api'
 import { queryKeys } from '../lib/query-keys'
 
 const RULE_TYPES = [
-  { value: 'pass_rate', label: 'Pass Rate (%)', placeholder: '95' },
-  { value: 'zero_failures', label: 'Zero Failures', placeholder: '0' },
-  { value: 'no_new_failures', label: 'No New Failures', placeholder: '0' },
-  { value: 'max_duration', label: 'Max Duration (ms)', placeholder: '30000' },
-  { value: 'max_flaky_count', label: 'Max Flaky Count', placeholder: '5' },
-  { value: 'min_test_count', label: 'Min Test Count', placeholder: '10' },
+  { value: 'pass_rate', label: 'Pass Rate (%)', placeholder: '95', hasThreshold: true },
+  { value: 'zero_failures', label: 'Zero Failures', placeholder: '0', hasThreshold: false },
+  { value: 'no_new_failures', label: 'No New Failures', placeholder: '0', hasThreshold: false },
+  { value: 'max_duration', label: 'Max Duration (ms)', placeholder: '30000', hasThreshold: true },
+  { value: 'max_flaky_count', label: 'Max Flaky Count', placeholder: '5', hasThreshold: true },
+  { value: 'min_test_count', label: 'Min Test Count', placeholder: '10', hasThreshold: true },
 ] as const
 
 type RuleType = (typeof RULE_TYPES)[number]['value']
 
-interface Rule {
+interface RuleForm {
   type: RuleType
   threshold: number
 }
@@ -22,25 +22,37 @@ interface Rule {
 interface QualityGate {
   id: string
   name: string
+  description: string
   team_id: string
-  rules: Rule[]
+  rules: unknown
+  active: boolean
   created_at: string
   updated_at: string
 }
 
+interface RuleResult {
+  type: string
+  passed: boolean
+  threshold: unknown
+  actual: unknown
+  message: string
+}
+
 interface EvaluationResult {
   id: string
-  quality_gate_id: string
+  gate_id: string
+  report_id: string
   passed: boolean
-  details: Record<string, unknown>
+  details: { passed: boolean; results: RuleResult[] }
   created_at: string
 }
 
 export function QualityGatesPage() {
   const queryClient = useQueryClient()
   const [showForm, setShowForm] = useState(false)
-  const [evaluatingId, setEvaluatingId] = useState<string | null>(null)
-  const [evaluationResults, setEvaluationResults] = useState<Record<string, EvaluationResult>>({})
+  const [editingGate, setEditingGate] = useState<QualityGate | null>(null)
+  const [expandedGate, setExpandedGate] = useState<string | null>(null)
+  const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.qualityGates.all,
@@ -49,28 +61,46 @@ export function QualityGatesPage() {
 
   const qualityGates = (data?.quality_gates ?? []) as QualityGate[]
 
-  const evaluateMutation = useMutation({
-    mutationFn: (id: string) => api.evaluateQualityGate(id) as Promise<EvaluationResult>,
-    onSuccess: (result, id) => {
-      setEvaluationResults((prev) => ({ ...prev, [id]: result }))
-      setEvaluatingId(null)
-    },
-    onError: () => {
-      setEvaluatingId(null)
+  const deleteMutation = useMutation({
+    mutationFn: (id: string) => api.deleteQualityGate(id),
+    onSuccess: () => {
+      setConfirmDelete(null)
+      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all })
     },
   })
 
-  function handleEvaluate(id: string) {
-    setEvaluatingId(id)
-    evaluateMutation.mutate(id)
+  function handleEdit(gate: QualityGate) {
+    setEditingGate(gate)
+    setShowForm(true)
+  }
+
+  function handleFormClose() {
+    setShowForm(false)
+    setEditingGate(null)
+  }
+
+  function handleFormSuccess() {
+    handleFormClose()
+    void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all })
   }
 
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Quality Gates</h1>
+        <div>
+          <h1 className="text-2xl font-bold">Quality Gates</h1>
+          <p className="text-sm text-muted-foreground mt-1">
+            Define pass/fail criteria for your test executions
+          </p>
+        </div>
         <button
-          onClick={() => setShowForm((v) => !v)}
+          onClick={() => {
+            if (showForm) {
+              handleFormClose()
+            } else {
+              setShowForm(true)
+            }
+          }}
           className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
         >
           {showForm ? 'Cancel' : 'New Quality Gate'}
@@ -78,94 +108,315 @@ export function QualityGatesPage() {
       </div>
 
       {showForm && (
-        <CreateQualityGateForm
-          onCreated={() => {
-            setShowForm(false)
-            void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all })
-          }}
+        <QualityGateForm
+          gate={editingGate}
+          onSuccess={handleFormSuccess}
+          onCancel={handleFormClose}
         />
       )}
 
-      {isLoading && <p className="text-gray-500">Loading quality gates...</p>}
+      {isLoading && (
+        <div className="space-y-3">
+          {[1, 2, 3].map((i) => (
+            <div key={i} className="rounded-lg border bg-card p-5 animate-pulse">
+              <div className="h-5 w-48 bg-muted rounded mb-2" />
+              <div className="h-4 w-72 bg-muted rounded" />
+            </div>
+          ))}
+        </div>
+      )}
 
       {error && (
-        <p className="text-red-600">Failed to load quality gates: {(error as Error).message}</p>
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          Failed to load quality gates: {(error as Error).message}
+        </div>
       )}
 
       {!isLoading && !error && qualityGates.length === 0 && (
-        <p className="text-gray-500">No quality gates yet. Create one to get started.</p>
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center">
+          <div className="text-4xl mb-3">&#x1F6E1;</div>
+          <h3 className="font-semibold text-lg mb-1">No quality gates yet</h3>
+          <p className="text-muted-foreground text-sm">
+            Create a quality gate to define pass/fail criteria for your test results.
+          </p>
+        </div>
       )}
 
       {qualityGates.length > 0 && (
         <div className="space-y-3">
-          {qualityGates.map((gate) => {
-            const evaluation = evaluationResults[gate.id]
-            const isEvaluating = evaluatingId === gate.id
-            return (
-              <div
-                key={gate.id}
-                className="rounded-lg border bg-card p-5 flex items-center justify-between gap-4"
+          {qualityGates.map((gate) => (
+            <GateCard
+              key={gate.id}
+              gate={gate}
+              isExpanded={expandedGate === gate.id}
+              onToggleExpand={() =>
+                setExpandedGate((prev) => (prev === gate.id ? null : gate.id))
+              }
+              onEdit={() => handleEdit(gate)}
+              onDelete={() => setConfirmDelete(gate.id)}
+              isDeleting={confirmDelete === gate.id}
+              onConfirmDelete={() => deleteMutation.mutate(gate.id)}
+              onCancelDelete={() => setConfirmDelete(null)}
+              deleteIsPending={deleteMutation.isPending}
+            />
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}
+
+function GateCard({
+  gate,
+  isExpanded,
+  onToggleExpand,
+  onEdit,
+  onDelete,
+  isDeleting,
+  onConfirmDelete,
+  onCancelDelete,
+  deleteIsPending,
+}: {
+  gate: QualityGate
+  isExpanded: boolean
+  onToggleExpand: () => void
+  onEdit: () => void
+  onDelete: () => void
+  isDeleting: boolean
+  onConfirmDelete: () => void
+  onCancelDelete: () => void
+  deleteIsPending: boolean
+}) {
+  const [evaluatingId, setEvaluatingId] = useState<string | null>(null)
+  const [lastEvaluation, setLastEvaluation] = useState<EvaluationResult | null>(null)
+
+  const evaluateMutation = useMutation({
+    mutationFn: (id: string) => api.evaluateQualityGate(id) as Promise<EvaluationResult>,
+    onSuccess: (result) => {
+      setLastEvaluation(result)
+      setEvaluatingId(null)
+    },
+    onError: () => {
+      setEvaluatingId(null)
+    },
+  })
+
+  const rules = parseRules(gate.rules)
+
+  return (
+    <div className="rounded-lg border bg-card overflow-hidden">
+      <div className="p-5">
+        <div className="flex items-start justify-between gap-4">
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-2">
+              <h3 className="font-semibold text-lg truncate">{gate.name}</h3>
+              <span
+                className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                  gate.active
+                    ? 'bg-green-100 text-green-700'
+                    : 'bg-gray-100 text-gray-500'
+                }`}
               >
-                <div className="min-w-0 flex-1">
-                  <h3 className="font-semibold text-lg truncate">{gate.name}</h3>
-                  <p className="text-sm text-gray-500 mt-1">
-                    {gate.rules.length} {gate.rules.length === 1 ? 'rule' : 'rules'}
-                    {' \u2014 '}
-                    {gate.rules.map((r) => ruleLabelShort(r.type)).join(', ')}
-                  </p>
-                  {evaluation && (
-                    <span
-                      className={`mt-2 inline-block rounded-full px-3 py-0.5 text-xs font-medium ${
-                        evaluation.passed
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-red-100 text-red-800'
-                      }`}
-                    >
-                      {evaluation.passed ? 'Passed' : 'Failed'}
-                    </span>
-                  )}
-                </div>
+                {gate.active ? 'Active' : 'Inactive'}
+              </span>
+              {lastEvaluation && <PassFailBadge passed={lastEvaluation.passed} />}
+            </div>
+            {gate.description && (
+              <p className="text-sm text-muted-foreground mt-1">{gate.description}</p>
+            )}
+            <div className="flex flex-wrap gap-2 mt-3">
+              {rules.map((rule, i) => (
+                <RuleChip key={i} type={rule.type} threshold={rule.threshold} />
+              ))}
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => {
+                setEvaluatingId(gate.id)
+                evaluateMutation.mutate(gate.id)
+              }}
+              disabled={evaluatingId === gate.id}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {evaluatingId === gate.id ? 'Evaluating...' : 'Evaluate'}
+            </button>
+            <button
+              onClick={onEdit}
+              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+            >
+              Edit
+            </button>
+            {isDeleting ? (
+              <div className="flex items-center gap-1">
                 <button
-                  onClick={() => handleEvaluate(gate.id)}
-                  disabled={isEvaluating}
-                  className="shrink-0 rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                  onClick={onConfirmDelete}
+                  disabled={deleteIsPending}
+                  className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
                 >
-                  {isEvaluating ? 'Evaluating...' : 'Evaluate'}
+                  {deleteIsPending ? 'Deleting...' : 'Confirm'}
+                </button>
+                <button
+                  onClick={onCancelDelete}
+                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                >
+                  Cancel
                 </button>
               </div>
-            )
-          })}
+            ) : (
+              <button
+                onClick={onDelete}
+                className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+              >
+                Delete
+              </button>
+            )}
+          </div>
         </div>
-      )}
 
-      {Object.keys(evaluationResults).length > 0 && (
-        <div className="space-y-3">
-          <h2 className="text-lg font-semibold">Evaluation Results</h2>
-          {Object.entries(evaluationResults).map(([gateId, result]) => {
-            const gate = qualityGates.find((g) => g.id === gateId)
-            return (
-              <div key={result.id} className="rounded-lg border bg-card p-4">
-                <div className="flex items-center gap-3 mb-2">
-                  <span
-                    className={`inline-block h-3 w-3 rounded-full ${
-                      result.passed ? 'bg-green-500' : 'bg-red-500'
-                    }`}
-                  />
-                  <span className="font-medium">{gate?.name ?? gateId}</span>
-                  <span className="text-xs text-gray-500">
-                    {new Date(result.created_at).toLocaleString()}
-                  </span>
-                </div>
-                {result.details && (
-                  <pre className="text-xs bg-gray-50 rounded p-3 overflow-x-auto text-gray-700">
-                    {JSON.stringify(result.details, null, 2)}
-                  </pre>
-                )}
-              </div>
-            )
-          })}
+        {lastEvaluation && lastEvaluation.details?.results && (
+          <div className="mt-4">
+            <EvaluationResultsDisplay evaluation={lastEvaluation} />
+          </div>
+        )}
+
+        <button
+          onClick={onToggleExpand}
+          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+        >
+          {isExpanded ? 'Hide History' : 'View History'}
+        </button>
+      </div>
+
+      {isExpanded && (
+        <div className="border-t bg-gray-50 p-5">
+          <EvaluationHistory gateId={gate.id} />
         </div>
       )}
+    </div>
+  )
+}
+
+function PassFailBadge({ passed }: { passed: boolean }) {
+  return (
+    <span
+      className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
+        passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+      }`}
+    >
+      <span
+        className={`inline-block h-1.5 w-1.5 rounded-full ${
+          passed ? 'bg-green-500' : 'bg-red-500'
+        }`}
+      />
+      {passed ? 'Passed' : 'Failed'}
+    </span>
+  )
+}
+
+function RuleChip({ type, threshold }: { type: string; threshold?: number }) {
+  const ruleInfo = RULE_TYPES.find((r) => r.value === type)
+  const label = ruleInfo?.label ?? type
+  const hasThreshold = ruleInfo?.hasThreshold ?? false
+
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-gray-600">
+      <span className="font-medium">{label}</span>
+      {hasThreshold && threshold !== undefined && (
+        <span className="text-gray-400">
+          {type === 'pass_rate' ? `${threshold}%` : String(threshold)}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function EvaluationResultsDisplay({ evaluation }: { evaluation: EvaluationResult }) {
+  const results = evaluation.details?.results ?? []
+
+  return (
+    <div className="rounded-md border bg-white overflow-hidden">
+      <div className="px-4 py-2 border-b bg-gray-50 flex items-center justify-between">
+        <span className="text-sm font-medium">Evaluation Results</span>
+        <span className="text-xs text-muted-foreground">
+          {new Date(evaluation.created_at).toLocaleString()}
+        </span>
+      </div>
+      <div className="divide-y">
+        {results.map((result, i) => (
+          <div key={i} className="px-4 py-2.5 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <span
+                className={`inline-block h-2 w-2 rounded-full ${
+                  result.passed ? 'bg-green-500' : 'bg-red-500'
+                }`}
+              />
+              <span className="text-sm font-medium">{ruleLabelShort(result.type)}</span>
+            </div>
+            <div className="flex items-center gap-4 text-sm">
+              <span className="text-muted-foreground">{result.message}</span>
+              <span
+                className={`font-medium ${result.passed ? 'text-green-600' : 'text-red-600'}`}
+              >
+                {result.passed ? 'PASS' : 'FAIL'}
+              </span>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+function EvaluationHistory({ gateId }: { gateId: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.qualityGates.evaluations(gateId),
+    queryFn: () => api.getQualityGateEvaluations(gateId),
+  })
+
+  const evaluations = (data?.evaluations ?? []) as EvaluationResult[]
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading evaluation history...</p>
+  }
+
+  if (error) {
+    return (
+      <p className="text-sm text-red-600">
+        Failed to load history: {(error as Error).message}
+      </p>
+    )
+  }
+
+  if (evaluations.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No evaluations yet. Click "Evaluate" to run this gate against the latest report.
+      </p>
+    )
+  }
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-semibold">Evaluation History</h4>
+      <div className="space-y-2">
+        {evaluations.map((evaluation) => (
+          <div
+            key={evaluation.id}
+            className="rounded-md border bg-white p-3 flex items-center justify-between"
+          >
+            <div className="flex items-center gap-3">
+              <PassFailBadge passed={evaluation.passed} />
+              <span className="text-xs text-muted-foreground">
+                Report: {evaluation.report_id.slice(0, 8)}...
+              </span>
+            </div>
+            <span className="text-xs text-muted-foreground">
+              {new Date(evaluation.created_at).toLocaleString()}
+            </span>
+          </div>
+        ))}
+      </div>
     </div>
   )
 }
@@ -175,20 +426,71 @@ function ruleLabelShort(type: string): string {
   return found ? found.label : type
 }
 
-function CreateQualityGateForm({ onCreated }: { onCreated: () => void }) {
-  const [name, setName] = useState('')
-  const [rules, setRules] = useState<Rule[]>([{ type: 'pass_rate', threshold: 95 }])
+function parseRules(rules: unknown): RuleForm[] {
+  if (!rules) return []
+  if (Array.isArray(rules)) {
+    return rules.map((r) => ({
+      type: r.type ?? 'pass_rate',
+      threshold: r.threshold ?? r.params?.threshold ?? r.params?.threshold_ms ?? 0,
+    }))
+  }
+  try {
+    const parsed = typeof rules === 'string' ? JSON.parse(rules) : rules
+    if (Array.isArray(parsed)) {
+      return parsed.map((r: Record<string, unknown>) => ({
+        type: (r.type as RuleType) ?? 'pass_rate',
+        threshold: (r.threshold as number) ?? (r.params as Record<string, number>)?.threshold ?? (r.params as Record<string, number>)?.threshold_ms ?? 0,
+      }))
+    }
+  } catch {
+    // ignore parse errors
+  }
+  return []
+}
+
+function rulesToDSL(rules: RuleForm[]): unknown[] {
+  return rules.map((r) => {
+    const ruleInfo = RULE_TYPES.find((rt) => rt.value === r.type)
+    if (!ruleInfo?.hasThreshold) {
+      return { type: r.type }
+    }
+    const paramKey = r.type === 'max_duration' ? 'threshold_ms' : 'threshold'
+    return { type: r.type, params: { [paramKey]: r.threshold } }
+  })
+}
+
+function QualityGateForm({
+  gate,
+  onSuccess,
+  onCancel,
+}: {
+  gate: QualityGate | null
+  onSuccess: () => void
+  onCancel: () => void
+}) {
+  const existingRules = gate ? parseRules(gate.rules) : [{ type: 'pass_rate' as RuleType, threshold: 95 }]
+
+  const [name, setName] = useState(gate?.name ?? '')
+  const [description, setDescription] = useState(gate?.description ?? '')
+  const [rules, setRules] = useState<RuleForm[]>(existingRules)
+  const [active, setActive] = useState(gate?.active ?? true)
   const [formError, setFormError] = useState<string | null>(null)
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; rules: Rule[] }) => api.createQualityGate(data),
-    onSuccess: () => {
-      onCreated()
-    },
-    onError: (err: Error) => {
-      setFormError(err.message)
-    },
+    mutationFn: (data: { name: string; description: string; rules: unknown[] }) =>
+      api.createQualityGate(data),
+    onSuccess: () => onSuccess(),
+    onError: (err: Error) => setFormError(err.message),
   })
+
+  const updateMutation = useMutation({
+    mutationFn: (data: { name: string; description: string; rules: unknown[]; active: boolean }) =>
+      api.updateQualityGate(gate!.id, data),
+    onSuccess: () => onSuccess(),
+    onError: (err: Error) => setFormError(err.message),
+  })
+
+  const isPending = createMutation.isPending || updateMutation.isPending
 
   function addRule() {
     setRules((prev) => [...prev, { type: 'pass_rate', threshold: 0 }])
@@ -222,26 +524,72 @@ function CreateQualityGateForm({ onCreated }: { onCreated: () => void }) {
       return
     }
 
-    createMutation.mutate({ name: trimmedName, rules })
+    const payload = {
+      name: trimmedName,
+      description: description.trim(),
+      rules: rulesToDSL(rules),
+      active,
+    }
+
+    if (gate) {
+      updateMutation.mutate(payload)
+    } else {
+      createMutation.mutate(payload)
+    }
   }
 
   return (
     <form onSubmit={handleSubmit} className="rounded-lg border bg-card p-5 space-y-4">
-      <h2 className="font-semibold text-lg">Create Quality Gate</h2>
+      <h2 className="font-semibold text-lg">
+        {gate ? 'Edit Quality Gate' : 'Create Quality Gate'}
+      </h2>
 
-      <div>
-        <label htmlFor="qg-name" className="block text-sm font-medium text-gray-700 mb-1">
-          Name
-        </label>
-        <input
-          id="qg-name"
-          type="text"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          placeholder="e.g. Release Readiness"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-        />
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="qg-name" className="block text-sm font-medium text-gray-700 mb-1">
+            Name
+          </label>
+          <input
+            id="qg-name"
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="e.g. Release Readiness"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
+        <div>
+          <label
+            htmlFor="qg-description"
+            className="block text-sm font-medium text-gray-700 mb-1"
+          >
+            Description
+          </label>
+          <input
+            id="qg-description"
+            type="text"
+            value={description}
+            onChange={(e) => setDescription(e.target.value)}
+            placeholder="e.g. Must pass before deploying to production"
+            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          />
+        </div>
       </div>
+
+      {gate && (
+        <div className="flex items-center gap-2">
+          <input
+            id="qg-active"
+            type="checkbox"
+            checked={active}
+            onChange={(e) => setActive(e.target.checked)}
+            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+          />
+          <label htmlFor="qg-active" className="text-sm text-gray-700">
+            Active
+          </label>
+        </div>
+      )}
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
@@ -255,47 +603,67 @@ function CreateQualityGateForm({ onCreated }: { onCreated: () => void }) {
           </button>
         </div>
 
-        {rules.map((rule, index) => (
-          <div key={index} className="flex items-center gap-3">
-            <select
-              value={rule.type}
-              onChange={(e) => updateRule(index, 'type', e.target.value)}
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            >
-              {RULE_TYPES.map((rt) => (
-                <option key={rt.value} value={rt.value}>
-                  {rt.label}
-                </option>
-              ))}
-            </select>
-            <input
-              type="number"
-              value={rule.threshold}
-              onChange={(e) => updateRule(index, 'threshold', e.target.value)}
-              placeholder={RULE_TYPES.find((rt) => rt.value === rule.type)?.placeholder ?? '0'}
-              className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
-            />
-            <button
-              type="button"
-              onClick={() => removeRule(index)}
-              disabled={rules.length <= 1}
-              className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium"
-            >
-              Remove
-            </button>
-          </div>
-        ))}
+        {rules.map((rule, index) => {
+          const ruleInfo = RULE_TYPES.find((rt) => rt.value === rule.type)
+          return (
+            <div key={index} className="flex items-center gap-3">
+              <select
+                value={rule.type}
+                onChange={(e) => updateRule(index, 'type', e.target.value)}
+                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+              >
+                {RULE_TYPES.map((rt) => (
+                  <option key={rt.value} value={rt.value}>
+                    {rt.label}
+                  </option>
+                ))}
+              </select>
+              {ruleInfo?.hasThreshold && (
+                <input
+                  type="number"
+                  value={rule.threshold}
+                  onChange={(e) => updateRule(index, 'threshold', e.target.value)}
+                  placeholder={ruleInfo.placeholder}
+                  className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                />
+              )}
+              <button
+                type="button"
+                onClick={() => removeRule(index)}
+                disabled={rules.length <= 1}
+                className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium"
+              >
+                Remove
+              </button>
+            </div>
+          )
+        })}
       </div>
 
       {formError && <p className="text-sm text-red-600">{formError}</p>}
 
-      <button
-        type="submit"
-        disabled={createMutation.isPending}
-        className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-      >
-        {createMutation.isPending ? 'Creating...' : 'Create Quality Gate'}
-      </button>
+      <div className="flex items-center gap-3">
+        <button
+          type="submit"
+          disabled={isPending}
+          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+        >
+          {isPending
+            ? gate
+              ? 'Saving...'
+              : 'Creating...'
+            : gate
+              ? 'Save Changes'
+              : 'Create Quality Gate'}
+        </button>
+        <button
+          type="button"
+          onClick={onCancel}
+          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+        >
+          Cancel
+        </button>
+      </div>
     </form>
   )
 }
