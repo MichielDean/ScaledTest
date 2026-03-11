@@ -8,10 +8,11 @@ export const queryKeys = {
     detail: (id: string) => ['executions', id] as const,
   },
   analytics: {
-    trends: ['analytics', 'trends'] as const,
-    flakyTests: ['analytics', 'flaky-tests'] as const,
-    errorAnalysis: ['analytics', 'error-analysis'] as const,
-    durationDistribution: ['analytics', 'duration-distribution'] as const,
+    trends: (days?: number, groupBy?: string) => ['analytics', 'trends', days, groupBy] as const,
+    flakyTests: (days?: number) => ['analytics', 'flaky-tests', days] as const,
+    errorAnalysis: (days?: number) => ['analytics', 'error-analysis', days] as const,
+    durationDistribution: (days?: number) => ['analytics', 'duration-distribution', days] as const,
+    healthScore: (days?: number) => ['analytics', 'health-score', days] as const,
   },
   qualityGates: {
     all: ['quality-gates'] as const,
@@ -24,4 +25,4 @@ export const queryKeys = {
   admin: {
     users: () => ['admin', 'users'] as const,
   },
-} as const
+} as const;
