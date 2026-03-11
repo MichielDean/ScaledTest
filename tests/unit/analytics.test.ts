@@ -75,6 +75,31 @@ describe('getTestTrends', () => {
     expect(sql).toContain('tool_name');
   });
 
+  it('applies team-scoping filter when userId and teamIds are provided', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getTestTrends({ userId: 'user-1', teamIds: ['team-a', 'team-b'] });
+    const sql = client.query.mock.calls[0][0] as string;
+    const params = client.query.mock.calls[0][1] as unknown[];
+    expect(sql).toContain('uploaded_by');
+    expect(sql).toContain('user_teams');
+    expect(params).toContain('user-1');
+    expect(params).toContainEqual(['team-a', 'team-b']);
+  });
+
+  it('applies uploaded_by filter when userId provided without teamIds', async () => {
+    const client = makeClient([]);
+    mockGetTimescalePool.mockReturnValue(makePool(client));
+
+    await getTestTrends({ userId: 'user-1' });
+    const sql = client.query.mock.calls[0][0] as string;
+    const params = client.query.mock.calls[0][1] as unknown[];
+    expect(sql).toContain('uploaded_by');
+    expect(sql).not.toContain('user_teams');
+    expect(params).toContain('user-1');
+  });
+
   it('throws and releases client on DB error', async () => {
     const release = jest.fn();
     const query = jest.fn().mockRejectedValue(new Error('DB down'));
