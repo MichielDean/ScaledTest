@@ -33,7 +33,7 @@
 - **TDD**: Write failing tests first, then implementation
 - **CTRF compliance**: All test result handling must conform to CTRF spec
 - **Team scoping**: All data queries must be team-scoped (no cross-team data leaks)
-- **API consistency**: JSON error responses with {error, code, details?} format
+- **API consistency**: v1 uses `{ success: false, error: string }` (optionally `message`/`data`); v2 target contract is `{ error, code, details? }` for all new APIs
 - **Type safety**: No `as any` without justification. Strict TypeScript.
 
 ## Test Commands
