@@ -14,11 +14,13 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
-	DB *db.Pool
+	DB  *db.Pool
+	Hub *ws.Hub // WebSocket hub for real-time broadcasting (optional)
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -290,6 +292,13 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	// Broadcast status change via WebSocket
+	if h.Hub != nil {
+		h.Hub.BroadcastExecutionStatus(executionID, req.Status, map[string]interface{}{
+			"error_msg": req.ErrorMsg,
+		})
+	}
+
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"id":     executionID,
 		"status": req.Status,
@@ -315,3 +324,130 @@ func getExecution(ctx context.Context, pool *db.Pool, id, teamID string) (*model
 	return &e, nil
 }
 
+// ProgressRequest is the request body for reporting test progress.
+type ProgressRequest struct {
+	Passed       int     `json:"passed"`
+	Failed       int     `json:"failed"`
+	Skipped      int     `json:"skipped"`
+	Total        int     `json:"total" validate:"required,min=1"`
+	DurationMs   int64   `json:"duration_ms"`
+	EstimatedETA float64 `json:"estimated_eta_seconds,omitempty"`
+}
+
+// ReportProgress handles POST /api/v1/executions/{executionID}/progress.
+// Called by workers to stream live test counters.
+func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Request) {
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return
+	}
+
+	var req ProgressRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Broadcast progress via WebSocket
+	if h.Hub != nil {
+		h.Hub.BroadcastProgress(executionID, map[string]interface{}{
+			"passed":                req.Passed,
+			"failed":                req.Failed,
+			"skipped":               req.Skipped,
+			"total":                 req.Total,
+			"completed":             req.Passed + req.Failed + req.Skipped,
+			"duration_ms":           req.DurationMs,
+			"estimated_eta_seconds": req.EstimatedETA,
+		})
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"execution_id": executionID,
+		"received":     true,
+	})
+}
+
+// TestResultEvent is the request body for streaming individual test results.
+type TestResultEvent struct {
+	Name       string `json:"name" validate:"required"`
+	Status     string `json:"status" validate:"required,oneof=passed failed skipped pending other"`
+	DurationMs int64  `json:"duration_ms"`
+	Message    string `json:"message,omitempty"`
+	Suite      string `json:"suite,omitempty"`
+	WorkerID   string `json:"worker_id,omitempty"`
+}
+
+// ReportTestResult handles POST /api/v1/executions/{executionID}/test-result.
+// Called by workers to stream individual test results as they complete.
+func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Request) {
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return
+	}
+
+	var req TestResultEvent
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Broadcast individual test result via WebSocket
+	if h.Hub != nil {
+		h.Hub.BroadcastTestResult(executionID, map[string]interface{}{
+			"name":        req.Name,
+			"status":      req.Status,
+			"duration_ms": req.DurationMs,
+			"message":     req.Message,
+			"suite":       req.Suite,
+			"worker_id":   req.WorkerID,
+		})
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"execution_id": executionID,
+		"received":     true,
+	})
+}
+
+// WorkerStatusEvent is the request body for worker health updates.
+type WorkerStatusEvent struct {
+	WorkerID string `json:"worker_id" validate:"required"`
+	Status   string `json:"status" validate:"required,oneof=starting running idle completed failed"`
+	Message  string `json:"message,omitempty"`
+	Tests    int    `json:"tests_assigned,omitempty"`
+	Progress int    `json:"tests_completed,omitempty"`
+}
+
+// ReportWorkerStatus handles POST /api/v1/executions/{executionID}/worker-status.
+// Called by workers to report their health and progress.
+func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Request) {
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return
+	}
+
+	var req WorkerStatusEvent
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Broadcast worker status via WebSocket
+	if h.Hub != nil {
+		h.Hub.BroadcastWorkerStatus(executionID, map[string]interface{}{
+			"worker_id":       req.WorkerID,
+			"status":          req.Status,
+			"message":         req.Message,
+			"tests_assigned":  req.Tests,
+			"tests_completed": req.Progress,
+		})
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"execution_id": executionID,
+		"received":     true,
+	})
+}
