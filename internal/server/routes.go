@@ -1,7 +1,9 @@
 package server
 
 import (
+	"fmt"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -14,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/config"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
+	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // NewRouter creates the chi router with all middleware and route groups.
@@ -68,8 +71,8 @@ func NewRouter(cfg *config.Config) http.Handler {
 		r.Post("/login", authH.Login)
 		r.Post("/refresh", authH.Refresh)
 		r.Post("/logout", authH.Logout)
-		r.Get("/github/callback", notImplemented)
-		r.Get("/google/callback", notImplemented)
+		r.Get("/github/callback", oauthNotConfigured("GitHub"))
+		r.Get("/google/callback", oauthNotConfigured("Google"))
 	})
 
 	// API v1 routes (authenticated)
@@ -127,8 +130,9 @@ func NewRouter(cfg *config.Config) http.Handler {
 		r.Get("/openapi.json", notImplemented)
 	})
 
-	// WebSocket
-	r.Get("/ws/executions", notImplemented)
+	// WebSocket — mount the execution hub for real-time status updates
+	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")
+	r.Get("/ws/executions", wsHub.HandleConnect)
 
 	// SPA fallback — serves embedded React app
 	spa.Mount(r)
@@ -140,6 +144,19 @@ func notImplemented(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusNotImplemented)
 	w.Write([]byte(`{"error":"not implemented"}`))
+}
+
+// oauthNotConfigured returns a handler that describes the missing OAuth provider
+// configuration, rather than returning a generic "not implemented" message.
+func oauthNotConfigured(provider string) http.HandlerFunc {
+	upper := strings.ToUpper(provider)
+	msg := fmt.Sprintf(`{"error":"%s OAuth is not configured. Set ST_%s_CLIENT_ID and ST_%s_CLIENT_SECRET environment variables."}`,
+		provider, upper, upper)
+	return func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusNotImplemented)
+		w.Write([]byte(msg))
+	}
 }
 
 func zerologMiddleware(next http.Handler) http.Handler {
