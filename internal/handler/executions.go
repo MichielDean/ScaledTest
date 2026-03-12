@@ -15,13 +15,15 @@ import (
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
+	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
-	DB  *db.Pool
-	Hub *ws.Hub // WebSocket hub for real-time broadcasting (optional)
+	DB         *db.Pool
+	Hub        *ws.Hub            // WebSocket hub for real-time broadcasting (optional)
+	AuditStore *store.AuditStore  // optional; nil means no audit logging
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -149,6 +151,18 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       claims.TeamID,
+			Action:       "execution.created",
+			ResourceType: "execution",
+			ResourceID:   id,
+			Metadata:     map[string]interface{}{"command": req.Command},
+		})
+	}
+
 	JSON(w, http.StatusCreated, map[string]interface{}{
 		"id":      id,
 		"status":  "pending",
@@ -220,6 +234,17 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	if tag.RowsAffected() == 0 {
 		Error(w, http.StatusNotFound, "execution not found or not cancellable")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       claims.TeamID,
+			Action:       "execution.cancelled",
+			ResourceType: "execution",
+			ResourceID:   executionID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
@@ -305,6 +330,27 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 	if h.Hub != nil {
 		h.Hub.BroadcastExecutionStatus(executionID, req.Status, map[string]interface{}{
 			"error_msg": req.ErrorMsg,
+		})
+	}
+
+	// Audit terminal state transitions (completed/failed).
+	if h.AuditStore != nil && (req.Status == "completed" || req.Status == "failed") {
+		meta := map[string]interface{}{"status": req.Status}
+		if req.ErrorMsg != "" {
+			meta["error_msg"] = req.ErrorMsg
+		}
+		action := "execution.completed"
+		if req.Status == "failed" {
+			action = "execution.failed"
+		}
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       claims.TeamID,
+			Action:       action,
+			ResourceType: "execution",
+			ResourceID:   executionID,
+			Metadata:     meta,
 		})
 	}
 
