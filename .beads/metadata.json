@@ -1,8 +1,0 @@
-{
-  "database": "dolt",
-  "backend": "dolt",
-  "dolt_mode": "server",
-  "dolt_server_user": "root",
-  "dolt_database": "ScaledTest",
-  "project_id": "04500767-f9b6-4a66-994a-9d9b6a139077"
-}
