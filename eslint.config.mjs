@@ -18,6 +18,10 @@ export default [
       "**/temp/**",
       "**/next-env.d.ts", // Generated Next.js types file
       "**/.worktrees/**", // Git worktrees — not part of this project's source
+      "frontend/src/**/__tests__/**", // Frontend test files use vitest globals, not eslint
+      "frontend/src/**/*.test.ts", // Frontend test files use vitest globals
+      "frontend/src/**/*.test.tsx",
+      "frontend/src/test-setup.ts",
     ],
   },
   
