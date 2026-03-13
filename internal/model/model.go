@@ -205,12 +205,12 @@ type Shard struct {
 
 // Webhook represents a webhook subscription.
 type Webhook struct {
-	ID        string    `json:"id"`
-	TeamID    string    `json:"team_id"`
-	URL       string    `json:"url"`
-	Events    []string  `json:"events"`
-	Secret    string    `json:"-"`
-	Active    bool      `json:"active"`
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
+	ID         string    `json:"id"`
+	TeamID     string    `json:"team_id"`
+	URL        string    `json:"url"`
+	Events     []string  `json:"events"`
+	SecretHash string    `json:"-"`
+	Enabled    bool      `json:"enabled"`
+	CreatedAt  time.Time `json:"created_at"`
+	UpdatedAt  time.Time `json:"updated_at"`
 }

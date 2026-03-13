@@ -85,6 +85,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore}
+	var whStore *store.WebhookStore
+	if dbPool != nil {
+		whStore = store.NewWebhookStore(dbPool)
+	}
+	whH := &handler.WebhooksHandler{Store: whStore}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -161,6 +166,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Get("/", teamsH.ListTokens)
 				r.Post("/", teamsH.CreateToken)
 				r.Delete("/{tokenID}", teamsH.DeleteToken)
+			})
+			r.Route("/{teamID}/webhooks", func(r chi.Router) {
+				r.Get("/", whH.List)
+				r.Post("/", whH.Create)
+				r.Get("/{webhookID}", whH.Get)
+				r.Put("/{webhookID}", whH.Update)
+				r.Delete("/{webhookID}", whH.Delete)
 			})
 		})
 

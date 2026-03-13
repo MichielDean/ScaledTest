@@ -1,0 +1,307 @@
+package handler
+
+import (
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/hex"
+	"fmt"
+	"net/http"
+
+	"github.com/go-chi/chi/v5"
+
+	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/sanitize"
+	"github.com/scaledtest/scaledtest/internal/store"
+)
+
+// Supported webhook event types.
+var validWebhookEvents = map[string]bool{
+	"report.submitted":    true,
+	"gate.failed":         true,
+	"execution.completed": true,
+	"execution.failed":    true,
+}
+
+// WebhooksHandler handles webhook CRUD endpoints.
+type WebhooksHandler struct {
+	Store *store.WebhookStore
+}
+
+// CreateWebhookRequest is the request body for creating a webhook.
+type CreateWebhookRequest struct {
+	URL    string   `json:"url" validate:"required,url"`
+	Events []string `json:"events" validate:"required,min=1"`
+}
+
+// UpdateWebhookRequest is the request body for updating a webhook.
+type UpdateWebhookRequest struct {
+	URL     string   `json:"url" validate:"required,url"`
+	Events  []string `json:"events" validate:"required,min=1"`
+	Enabled *bool    `json:"enabled"`
+}
+
+// validateWebhookEvents checks that all events are supported.
+func validateWebhookEvents(events []string) error {
+	if len(events) == 0 {
+		return fmt.Errorf("events array must not be empty")
+	}
+	for i, event := range events {
+		if !validWebhookEvents[event] {
+			return fmt.Errorf("events[%d]: unsupported event %q (supported: report.submitted, gate.failed, execution.completed, execution.failed)", i, event)
+		}
+	}
+	return nil
+}
+
+// generateWebhookSecret generates a random webhook secret and returns
+// the plaintext secret and its SHA-256 hash.
+func generateWebhookSecret() (plaintext, hash string, err error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", "", fmt.Errorf("generate secret: %w", err)
+	}
+	plaintext = "whsec_" + hex.EncodeToString(b)
+	h := sha256.Sum256([]byte(plaintext))
+	hash = hex.EncodeToString(h[:])
+	return plaintext, hash, nil
+}
+
+// webhookTeamID extracts the teamID URL parameter and verifies team access.
+func webhookTeamID(w http.ResponseWriter, r *http.Request, claims *auth.Claims) (string, bool) {
+	teamID := chi.URLParam(r, "teamID")
+	if teamID == "" {
+		Error(w, http.StatusBadRequest, "missing team ID")
+		return "", false
+	}
+	if claims.TeamID != teamID {
+		Error(w, http.StatusForbidden, "team access denied")
+		return "", false
+	}
+	return teamID, true
+}
+
+// webhookRequireMaintainer checks maintainer or owner role for write operations.
+func webhookRequireMaintainer(w http.ResponseWriter, claims *auth.Claims) bool {
+	if claims.Role != "maintainer" && claims.Role != "owner" {
+		Error(w, http.StatusForbidden, "maintainer or owner role required")
+		return false
+	}
+	return true
+}
+
+// List handles GET /api/v1/teams/:teamID/webhooks.
+func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if h.Store == nil {
+		JSON(w, http.StatusOK, map[string]interface{}{
+			"webhooks": []interface{}{},
+			"total":    0,
+		})
+		return
+	}
+
+	webhooks, err := h.Store.List(r.Context(), teamID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to list webhooks")
+		return
+	}
+
+	result := make([]interface{}, len(webhooks))
+	for i := range webhooks {
+		result[i] = webhooks[i]
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"webhooks": result,
+		"total":    len(result),
+	})
+}
+
+// Create handles POST /api/v1/teams/:teamID/webhooks.
+func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if !webhookRequireMaintainer(w, claims) {
+		return
+	}
+
+	var req CreateWebhookRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if err := validateWebhookEvents(req.Events); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	// Generate secret server-side
+	secret, secretHash, err := generateWebhookSecret()
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to generate secret")
+		return
+	}
+
+	if h.Store == nil {
+		Error(w, http.StatusNotImplemented, "create webhook requires database connection")
+		return
+	}
+
+	req.URL = sanitize.String(req.URL)
+
+	webhook, err := h.Store.Create(r.Context(), teamID, req.URL, secretHash, req.Events)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to create webhook")
+		return
+	}
+
+	// Return the plaintext secret once — it won't be shown again
+	JSON(w, http.StatusCreated, map[string]interface{}{
+		"webhook": webhook,
+		"secret":  secret,
+	})
+}
+
+// Get handles GET /api/v1/teams/:teamID/webhooks/:webhookID.
+func (h *WebhooksHandler) Get(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	if h.Store == nil {
+		Error(w, http.StatusNotImplemented, "get webhook requires database connection")
+		return
+	}
+
+	webhook, err := h.Store.Get(r.Context(), teamID, webhookID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+
+	JSON(w, http.StatusOK, webhook)
+}
+
+// Update handles PUT /api/v1/teams/:teamID/webhooks/:webhookID.
+func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if !webhookRequireMaintainer(w, claims) {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	var req UpdateWebhookRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if err := validateWebhookEvents(req.Events); err != nil {
+		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if h.Store == nil {
+		Error(w, http.StatusNotImplemented, "update webhook requires database connection")
+		return
+	}
+
+	req.URL = sanitize.String(req.URL)
+
+	enabled := true
+	if req.Enabled != nil {
+		enabled = *req.Enabled
+	}
+
+	webhook, err := h.Store.Update(r.Context(), teamID, webhookID, req.URL, req.Events, enabled)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to update webhook")
+		return
+	}
+
+	JSON(w, http.StatusOK, webhook)
+}
+
+// Delete handles DELETE /api/v1/teams/:teamID/webhooks/:webhookID.
+func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if !webhookRequireMaintainer(w, claims) {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	if h.Store == nil {
+		Error(w, http.StatusNotImplemented, "delete webhook requires database connection")
+		return
+	}
+
+	if err := h.Store.Delete(r.Context(), teamID, webhookID); err != nil {
+		Error(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "webhook deleted"})
+}
