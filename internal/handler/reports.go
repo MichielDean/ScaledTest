@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -22,11 +23,18 @@ import (
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
+// qualityGateEvaluator is the subset of store.QualityGateStore used by the
+// reports handler for auto-evaluation on report submission.
+type qualityGateEvaluator interface {
+	ListEnabled(ctx context.Context, teamID string) ([]model.QualityGate, error)
+	CreateEvaluation(ctx context.Context, gateID, reportID string, passed bool, details json.RawMessage) (*model.QualityGateEvaluation, error)
+}
+
 // ReportsHandler handles CTRF report endpoints.
 type ReportsHandler struct {
 	DB               *db.Pool
 	AuditStore       *store.AuditStore
-	QualityGateStore *store.QualityGateStore
+	QualityGateStore qualityGateEvaluator
 	Webhooks         *webhook.Notifier
 }
 
