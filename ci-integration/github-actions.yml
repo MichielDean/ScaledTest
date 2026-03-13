@@ -1,0 +1,139 @@
+# ScaledTest CI Integration — GitHub Actions Example
+#
+# This workflow demonstrates the full ScaledTest CI integration:
+#   1. Run tests and produce a CTRF report
+#   2. Upload the CTRF report to ScaledTest
+#   3. Evaluate a quality gate and fail the build if it doesn't pass
+#
+# Prerequisites:
+#   - SCALEDTEST_URL secret: your ScaledTest instance URL
+#   - SCALEDTEST_API_TOKEN secret: an API token (sct_...)
+#   - SCALEDTEST_TEAM_ID secret: your team ID
+#   - SCALEDTEST_GATE_ID secret: quality gate ID to evaluate
+#   - A test runner configured to output CTRF JSON (e.g., jest-ctrf-json-reporter)
+#
+# Copy this file to .github/workflows/ci.yml in your repository and adjust
+# the test command and report path to match your project.
+
+name: CI with ScaledTest
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test-and-report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: "npm"
+
+      - name: Install dependencies
+        run: npm ci
+
+      # ── Step 1: Run tests ──────────────────────────────────────────────
+      # Configure your test runner to produce a CTRF JSON report.
+      # For Jest, add jest-ctrf-json-reporter to your Jest config:
+      #   reporters: ["default", ["jest-ctrf-json-reporter", {}]]
+      - name: Run tests
+        run: npm test
+
+      # ── Step 2: Upload CTRF report to ScaledTest ──────────────────────
+      - name: Upload CTRF report
+        if: always()
+        id: upload
+        env:
+          SCALEDTEST_URL: ${{ secrets.SCALEDTEST_URL }}
+          SCALEDTEST_API_TOKEN: ${{ secrets.SCALEDTEST_API_TOKEN }}
+        run: |
+          if [ ! -f ctrf-report.json ]; then
+            echo "::warning::No CTRF report found at ctrf-report.json — skipping upload"
+            echo "uploaded=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "$SCALEDTEST_URL/api/v1/reports" \
+            -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d @ctrf-report.json)
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "ScaledTest upload response:"
+          echo "$body" | jq . 2>/dev/null || echo "$body"
+
+          if [ "$http_code" -ne 201 ]; then
+            echo "::error::CTRF report upload failed (HTTP $http_code)"
+            echo "uploaded=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+
+          report_id=$(echo "$body" | jq -r '.id // empty')
+          echo "report_id=$report_id" >> "$GITHUB_OUTPUT"
+          echo "uploaded=true" >> "$GITHUB_OUTPUT"
+
+          # Write summary
+          tests=$(echo "$body" | jq -r '.summary.tests // "N/A"')
+          passed=$(echo "$body" | jq -r '.summary.passed // "N/A"')
+          failed=$(echo "$body" | jq -r '.summary.failed // "N/A"')
+          skipped=$(echo "$body" | jq -r '.summary.skipped // "N/A"')
+
+          echo "### ScaledTest Report" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Metric  | Count    |" >> "$GITHUB_STEP_SUMMARY"
+          echo "|---------|----------|" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Tests   | $tests   |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Passed  | $passed  |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Failed  | $failed  |" >> "$GITHUB_STEP_SUMMARY"
+          echo "| Skipped | $skipped |" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Step 3: Evaluate quality gate ─────────────────────────────────
+      # Quality gates enforce pass-rate thresholds, failure limits, etc.
+      # Configure gates in the ScaledTest UI under your team settings.
+      - name: Check quality gate
+        if: always() && steps.upload.outputs.uploaded == 'true'
+        env:
+          SCALEDTEST_URL: ${{ secrets.SCALEDTEST_URL }}
+          SCALEDTEST_API_TOKEN: ${{ secrets.SCALEDTEST_API_TOKEN }}
+          SCALEDTEST_TEAM_ID: ${{ secrets.SCALEDTEST_TEAM_ID }}
+          SCALEDTEST_GATE_ID: ${{ secrets.SCALEDTEST_GATE_ID }}
+        run: |
+          response=$(curl -s -w "\n%{http_code}" -X POST \
+            "$SCALEDTEST_URL/api/v1/teams/$SCALEDTEST_TEAM_ID/quality-gates/$SCALEDTEST_GATE_ID/evaluate" \
+            -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+            -H "Content-Type: application/json")
+
+          http_code=$(echo "$response" | tail -1)
+          body=$(echo "$response" | sed '$d')
+
+          echo "Quality gate evaluation:"
+          echo "$body" | jq . 2>/dev/null || echo "$body"
+
+          passed=$(echo "$body" | jq -r '.passed // false')
+
+          if [ "$passed" != "true" ]; then
+            echo "::error::Quality gate did not pass"
+            echo "### Quality Gate: FAILED" >> "$GITHUB_STEP_SUMMARY"
+            exit 1
+          fi
+
+          echo "### Quality Gate: PASSED" >> "$GITHUB_STEP_SUMMARY"
+
+      # ── Step 4: Archive report artifact ───────────────────────────────
+      - name: Upload test artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrf-report
+          path: ctrf-report.json
+          if-no-files-found: ignore
