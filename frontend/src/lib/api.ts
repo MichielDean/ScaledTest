@@ -56,7 +56,7 @@ async function refreshToken(): Promise<void> {
   return refreshPromise;
 }
 
-async function fetchAPI<T>(path: string, options: RequestInit = {}, retry = true): Promise<T> {
+async function fetchAPI<T>(path: string, options: globalThis.RequestInit = {}, retry = true): Promise<T> {
   const token = useAuthStore.getState().accessToken;
 
   const headers: Record<string, string> = {

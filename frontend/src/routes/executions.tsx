@@ -138,7 +138,7 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
   useEffect(() => {
     store.reset();
     return () => store.reset();
-  }, [executionId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [executionId]); // eslint-disable-line
 
   // Process WebSocket messages
   useEffect(() => {
@@ -160,7 +160,7 @@ function ExecutionDetail({ executionId }: { executionId: string }) {
         store.setExecutionStatus((data as { status: string }).status);
         break;
     }
-  }, [lastMessage]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [lastMessage]); // eslint-disable-line
 
   return (
     <div className="space-y-4">
