@@ -57,7 +57,11 @@ export interface CreateExecutionInput {
 export interface ExecutionFilters {
   status?: ExecutionStatus;
   teamId?: string;
+  /** Filter by multiple team IDs (OR). When set, teamId is ignored. */
+  teamIds?: string[];
   requestedBy?: string;
+  /** Filter by team membership OR personal ownership (team_id IN teamIds OR requested_by = userId). */
+  accessUserId?: string;
   dateFrom?: string;
   dateTo?: string;
   page?: number;
@@ -177,7 +181,17 @@ export async function listExecutions(
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    const { page = 1, size = 20, status, teamId, requestedBy, dateFrom, dateTo } = filters;
+    const {
+      page = 1,
+      size = 20,
+      status,
+      teamId,
+      teamIds,
+      requestedBy,
+      accessUserId,
+      dateFrom,
+      dateTo,
+    } = filters;
     // Sanitize page/size defensively — callers outside the API layer may pass unclamped values
     const normalizedPage = page > 0 ? page : 1;
     const normalizedSize = size > 0 ? size : 20;
@@ -192,10 +206,23 @@ export async function listExecutions(
       conditions.push(`status = $${p++}`);
       values.push(status);
     }
-    if (teamId) {
+
+    // Team-scoped access: show executions from user's teams OR ones they personally requested
+    if (accessUserId && teamIds && teamIds.length > 0) {
+      conditions.push(`(team_id = ANY($${p++}) OR requested_by = $${p++})`);
+      values.push(teamIds, accessUserId);
+    } else if (accessUserId) {
+      // User has no teams — only show their own executions
+      conditions.push(`requested_by = $${p++}`);
+      values.push(accessUserId);
+    } else if (teamIds && teamIds.length > 0) {
+      conditions.push(`team_id = ANY($${p++})`);
+      values.push(teamIds);
+    } else if (teamId) {
       conditions.push(`team_id = $${p++}`);
       values.push(teamId);
     }
+
     if (requestedBy) {
       conditions.push(`requested_by = $${p++}`);
       values.push(requestedBy);

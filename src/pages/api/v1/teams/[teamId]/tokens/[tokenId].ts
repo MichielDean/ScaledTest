@@ -10,6 +10,7 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { revokeApiToken } from '@/lib/apiTokens';
+import { getUserTeams } from '@/lib/teamManagement';
 import { isValidUuid } from '@/lib/validation';
 import { apiLogger as logger } from '@/logging/logger';
 
@@ -23,6 +24,13 @@ async function handleDelete(req: BetterAuthenticatedRequest, res: NextApiRespons
 
   if (!isValidUuid(tokenId)) {
     res.status(400).json({ success: false, error: 'Invalid tokenId — must be a UUID' });
+    return;
+  }
+
+  // Verify user is a member of this team before allowing token revocation
+  const teams = await getUserTeams(req.user.id);
+  if (!teams.some(t => t.id === teamId)) {
+    res.status(403).json({ success: false, error: 'You do not have access to this team' });
     return;
   }
 
