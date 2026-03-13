@@ -163,9 +163,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/executions", func(r chi.Router) {
 			r.Get("/", execH.List)
-			r.With(httprate.LimitByIP(20, 1*time.Minute)).Post("/", execH.Create)
+			r.With(auth.RequireRole("maintainer", "owner"), httprate.LimitByIP(20, 1*time.Minute)).Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
-			r.Delete("/{executionID}", execH.Cancel)
+			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{executionID}", execH.Cancel)
 			r.Put("/{executionID}/status", execH.UpdateStatus)
 			r.Post("/{executionID}/progress", execH.ReportProgress)
 			r.Post("/{executionID}/test-result", execH.ReportTestResult)

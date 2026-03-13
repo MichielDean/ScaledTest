@@ -423,6 +423,80 @@ func TestMaintainerCanCreateReport(t *testing.T) {
 	}
 }
 
+func TestReadonlyCannotCreateExecution(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("readonly POST /api/v1/executions: status = %d, want %d (body: %s)", w.Code, http.StatusForbidden, w.Body.String())
+	}
+}
+
+func TestReadonlyCannotCancelExecution(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("DELETE", "/api/v1/executions/some-exec-id", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("readonly DELETE /api/v1/executions/{id}: status = %d, want %d (body: %s)", w.Code, http.StatusForbidden, w.Body.String())
+	}
+}
+
+func TestMaintainerCanCreateExecution(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-m", "maint@example.com", "maintainer", "team-1")
+
+	req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Without DB, should get 503 or 400 — but NOT 403
+	if w.Code == http.StatusForbidden {
+		t.Errorf("maintainer POST /api/v1/executions: got 403 forbidden, maintainer should be allowed (body: %s)", w.Body.String())
+	}
+}
+
+func TestReadonlyCanListExecutions(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("GET", "/api/v1/executions", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Readonly can LIST — should get 503 (no DB), not 403
+	if w.Code == http.StatusForbidden {
+		t.Errorf("readonly GET /api/v1/executions: got 403, readonly should be able to list")
+	}
+}
+
 func TestReadonlyCanListReports(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
