@@ -56,10 +56,36 @@ jobs:
         working-directory: frontend
         run: npx vite build
 
+  jest-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run Jest unit and component tests
+        run: npm run test:ci
+
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: jest-test-results
+          path: ctrf-report.json
+          if-no-files-found: ignore
+
   go-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    needs: [go-test, frontend-build]
+    needs: [go-test, frontend-build, jest-tests]
     steps:
       - uses: actions/checkout@v4
 
