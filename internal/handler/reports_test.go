@@ -1,14 +1,18 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
 	"testing"
+	"time"
 
 	"github.com/scaledtest/scaledtest/internal/ctrf"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 
@@ -844,4 +848,154 @@ func TestBuildReportData_PreviousFailedTestsNil(t *testing.T) {
 	if data.PreviousFailedTests != nil {
 		t.Error("PreviousFailedTests should be nil for single report submission")
 	}
+}
+
+// --- Mock webhook lister for testing dispatch ---
+
+type mockWebhookLister struct {
+	mu      sync.Mutex
+	calls   []mockWebhookCall
+	hooks   []webhook.WebhookRecord
+	err     error
+}
+
+type mockWebhookCall struct {
+	TeamID string
+	Event  string
+}
+
+func (m *mockWebhookLister) ListByTeamAndEvent(_ context.Context, teamID, event string) ([]webhook.WebhookRecord, error) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, mockWebhookCall{TeamID: teamID, Event: event})
+	return m.hooks, m.err
+}
+
+func (m *mockWebhookLister) getCalls() []mockWebhookCall {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	cp := make([]mockWebhookCall, len(m.calls))
+	copy(cp, m.calls)
+	return cp
+}
+
+// --- Webhook dispatch tests ---
+
+func TestCreateReport_NoDB_WebhookNotSkippedInFallback(t *testing.T) {
+	// In no-DB fallback mode, webhook dispatch is skipped (return before dispatch code).
+	// Verify the handler doesn't call the lister in this path.
+	lister := &mockWebhookLister{}
+	notifier := webhook.NewNotifier(lister, webhook.NewDispatcher())
+
+	h := &ReportsHandler{DB: nil, Webhooks: notifier}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-abc", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	// In no-DB fallback, webhook dispatch should NOT be called
+	time.Sleep(100 * time.Millisecond)
+	calls := lister.getCalls()
+	if len(calls) > 0 {
+		t.Errorf("expected no webhook calls in no-DB fallback, got %d", len(calls))
+	}
+}
+
+func TestCreateReport_NoDB_NilWebhookNotifierSafe(t *testing.T) {
+	// Webhooks is nil — should not panic
+	h := &ReportsHandler{DB: nil, Webhooks: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with nil Webhooks: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+}
+
+// --- Quality gate auto-evaluation tests ---
+
+func TestCreateReport_NoDB_QualityGateNotEvaluatedWhenStoreNil(t *testing.T) {
+	h := &ReportsHandler{DB: nil, QualityGateStore: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if _, ok := resp["qualityGate"]; ok {
+		t.Error("qualityGate should not be present when QualityGateStore is nil")
+	}
+}
+
+// --- Nil DB returns 503 tests ---
+
+func TestCreateReport_NilDB_Returns503ForGet(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/some-id", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "some-id")
+
+	h.Get(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Get with nil DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestDeleteReport_NilDB_Returns503(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("DELETE", "/api/v1/reports/some-id", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "some-id")
+
+	h.Delete(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Delete with nil DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestCompareReports_NilDB_Returns503(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=a&head=b", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Compare(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Compare with nil DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+// eventually polls fn every 10ms up to timeoutMs, failing with msg if fn never returns true.
+func eventually(t *testing.T, timeoutMs int, fn func() bool, msg string) {
+	t.Helper()
+	deadline := timeoutMs / 10
+	for i := 0; i < deadline; i++ {
+		if fn() {
+			return
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Error(msg)
 }

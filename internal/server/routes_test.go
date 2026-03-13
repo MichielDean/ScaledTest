@@ -360,3 +360,80 @@ func TestCSRFAllowsAPITokenWithoutCSRF(t *testing.T) {
 		t.Errorf("sct_ POST without CSRF: status = %d, want %d (body: %s)", w.Code, http.StatusUnauthorized, w.Body.String())
 	}
 }
+
+func TestReadonlyCannotCreateReport(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	// Create a token with readonly role
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("readonly POST /api/v1/reports: status = %d, want %d (body: %s)", w.Code, http.StatusForbidden, w.Body.String())
+	}
+}
+
+func TestReadonlyCannotDeleteReport(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("DELETE", "/api/v1/reports/some-report-id", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("readonly DELETE /api/v1/reports/{id}: status = %d, want %d (body: %s)", w.Code, http.StatusForbidden, w.Body.String())
+	}
+}
+
+func TestMaintainerCanCreateReport(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-m", "maint@example.com", "maintainer", "team-1")
+
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Without DB, should get 201 (no-DB fallback), not 403
+	if w.Code != http.StatusCreated {
+		t.Errorf("maintainer POST /api/v1/reports: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+}
+
+func TestReadonlyCanListReports(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+
+	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("GET", "/api/v1/reports", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	// Readonly can LIST — should get 503 (no DB), not 403
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("readonly GET /api/v1/reports: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
