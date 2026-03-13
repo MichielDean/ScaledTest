@@ -22,6 +22,7 @@ export default [
       "frontend/src/**/*.test.ts", // Frontend test files use vitest globals
       "frontend/src/**/*.test.tsx",
       "frontend/src/test-setup.ts",
+      "sdk/**", // SDK has its own toolchain (vitest + tsconfig)
     ],
   },
   
