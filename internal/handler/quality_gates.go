@@ -9,6 +9,8 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
 )
@@ -38,6 +40,7 @@ type QualityGateRule struct {
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
 	Store *store.QualityGateStore
+	DB    *db.Pool
 }
 
 // CreateQualityGateRequest is the request body for creating a quality gate.
@@ -311,6 +314,11 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]string{"message": "quality gate deleted"})
 }
 
+// EvaluateRequest is the request body for evaluating a quality gate against a report.
+type EvaluateRequest struct {
+	ReportID string `json:"report_id" validate:"required"`
+}
+
 // Evaluate handles POST /api/v1/teams/:teamID/quality-gates/:gateID/evaluate.
 func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
@@ -330,8 +338,18 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil {
+	if h.Store == nil || h.DB == nil {
 		Error(w, http.StatusNotImplemented, "evaluate requires database connection")
+		return
+	}
+
+	var req EvaluateRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+	if req.ReportID == "" {
+		Error(w, http.StatusBadRequest, "report_id is required")
 		return
 	}
 
@@ -342,9 +360,110 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// TODO: Load actual report data from DB. For now return a stub evaluation.
-	_ = gate
-	Error(w, http.StatusNotImplemented, "evaluate requires report data from database")
+	// Load report summary from DB
+	var summaryJSON json.RawMessage
+	err = h.DB.QueryRow(r.Context(),
+		`SELECT summary FROM test_reports WHERE id = $1 AND team_id = $2`,
+		req.ReportID, teamID).Scan(&summaryJSON)
+	if err != nil {
+		Error(w, http.StatusNotFound, "report not found")
+		return
+	}
+
+	var summary struct {
+		Tests   int `json:"tests"`
+		Passed  int `json:"passed"`
+		Failed  int `json:"failed"`
+		Skipped int `json:"skipped"`
+	}
+	if err := json.Unmarshal(summaryJSON, &summary); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to parse report summary")
+		return
+	}
+
+	// Load test results for duration and flaky data
+	rows, err := h.DB.Query(r.Context(),
+		`SELECT name, status, duration_ms, flaky, suite, file_path
+		 FROM test_results WHERE report_id = $1 AND team_id = $2`,
+		req.ReportID, teamID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to query test results")
+		return
+	}
+	defer rows.Close()
+
+	var totalDurationMs int64
+	currentFailed := make(map[string]bool)
+	var flakyTests []struct {
+		name, suite, filePath string
+	}
+
+	for rows.Next() {
+		var name, status, suite, filePath string
+		var durationMs int64
+		var flaky bool
+		if err := rows.Scan(&name, &status, &durationMs, &flaky, &suite, &filePath); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to scan test result")
+			return
+		}
+		totalDurationMs += durationMs
+		if status == "failed" {
+			currentFailed[name] = true
+		}
+		if flaky {
+			flakyTests = append(flakyTests, struct {
+				name, suite, filePath string
+			}{name, suite, filePath})
+		}
+	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to iterate test results")
+		return
+	}
+
+	// Build report data for evaluation
+	data := &quality.ReportData{
+		TotalTests:         summary.Tests,
+		PassedTests:        summary.Passed,
+		FailedTests:        summary.Failed,
+		SkippedTests:       summary.Skipped,
+		TotalDurationMs:    totalDurationMs,
+		CurrentFailedTests: currentFailed,
+	}
+
+	evalResult, err := quality.Evaluate(gate.Rules, data)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to evaluate gate: "+err.Error())
+		return
+	}
+
+	// Store evaluation result
+	detailsJSON, _ := json.Marshal(evalResult.Results)
+	eval, err := h.Store.CreateEvaluation(r.Context(), gateID, req.ReportID, evalResult.Passed, detailsJSON)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to store evaluation")
+		return
+	}
+
+	// Build response
+	rules := make([]QualityGateRuleResult, len(evalResult.Results))
+	for i, rr := range evalResult.Results {
+		rules[i] = QualityGateRuleResult{
+			Metric:    string(rr.Type),
+			Threshold: rr.Threshold,
+			Actual:    rr.Actual,
+			Passed:    rr.Passed,
+			Message:   rr.Message,
+		}
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"id":        eval.ID,
+		"gate_id":   gateID,
+		"report_id": req.ReportID,
+		"passed":    evalResult.Passed,
+		"rules":     rules,
+	})
 }
 
 // ListEvaluations handles GET /api/v1/teams/:teamID/quality-gates/:gateID/evaluations.

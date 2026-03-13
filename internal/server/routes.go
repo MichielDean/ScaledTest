@@ -70,14 +70,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if dbPool != nil {
 		auditStore = store.NewAuditStore(dbPool)
 	}
-	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore}
-	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore}
-	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
 	var qgStore *store.QualityGateStore
 	if dbPool != nil {
 		qgStore = store.NewQualityGateStore(dbPool)
 	}
-	qgH := &handler.QualityGatesHandler{Store: qgStore}
+	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore}
+	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore}
+	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
+	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 	var durStore *store.DurationStore
 	if dbPool != nil {
