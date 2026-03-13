@@ -9,13 +9,14 @@ import { AuthAdminApi, authAdminApi } from '../../../lib/auth';
  */
 const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
   try {
-    // Parse pagination parameters
-    const page = parseInt(req.query.page as string) || 1;
-    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100); // Max 100 users per page
+    // Parse and validate pagination parameters
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const pageSize = Math.min(parseInt(req.query.size as string) || 100, 100);
     const offset = (page - 1) * pageSize;
-    const search = req.query.search as string;
+    // Truncate search input to prevent excessive ILIKE query cost
+    const search = (req.query.search as string)?.slice(0, 200);
 
-    reqLogger.info({ page, pageSize, offset, search }, 'Fetching users with direct database query');
+    reqLogger.info({ page, pageSize, offset, hasSearch: !!search }, 'Fetching users');
 
     // Direct database query for user listing
     const { Pool } = await import('pg');
@@ -69,12 +70,10 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       {
         page,
         pageSize,
-        offset,
-        search,
         totalUsers: total,
         returnedUsers: users.length,
       },
-      'User list retrieved via direct database query'
+      'User list retrieved'
     );
 
     const response = {
@@ -108,7 +107,11 @@ const handleDelete: BetterAuthMethodHandler = async (req, res, reqLogger) => {
       return res.status(400).json({ error: 'Invalid or missing User ID' });
     }
 
-    // Centralized verification helper will use auth admin API only
+    // Prevent self-deletion — an admin accidentally removing their own account
+    // would lock them out of the system
+    if (userId === req.user.id) {
+      return res.status(400).json({ error: 'Cannot delete your own account' });
+    }
 
     // Prefer using Better Auth admin API for deletion
     const adminApiDel: AuthAdminApi | null = authAdminApi;

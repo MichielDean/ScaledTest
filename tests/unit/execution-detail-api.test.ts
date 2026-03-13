@@ -24,17 +24,26 @@ jest.mock('../../src/lib/auth', () => ({
 }));
 
 // Mock executions module — spread jest.requireActual so untouched exports use real implementations.
-// Only getExecutionDetail is overridden; everything else falls through to the actual module.
+// Only getExecutionDetail, getExecution, cancelExecution are overridden.
 const mockGetExecutionDetail = jest.fn();
+const mockGetExecution = jest.fn();
 const mockCancelExecution = jest.fn();
 jest.mock('../../src/lib/executions', () => {
   const actual = jest.requireActual('../../src/lib/executions');
   return {
     ...actual,
     getExecutionDetail: mockGetExecutionDetail,
+    getExecution: mockGetExecution,
     cancelExecution: mockCancelExecution,
   };
 });
+
+// Mock teamManagement for team-scoped access checks
+const mockGetUserTeams = jest.fn().mockResolvedValue([]);
+jest.mock('../../src/lib/teamManagement', () => ({
+  ...jest.requireActual('../../src/lib/teamManagement'),
+  getUserTeams: mockGetUserTeams,
+}));
 
 // Mock kubernetes so API handler can call deleteKubernetesJob without a real cluster
 const mockDeleteKubernetesJob = jest.fn().mockResolvedValue(undefined);
@@ -384,7 +393,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('returns 404 when execution not found on DELETE', async () => {
     setupAuthUser('owner');
-    mockCancelExecution.mockResolvedValue(null);
+    mockGetExecution.mockResolvedValue(null);
     const { req, res, mockStatus, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
 
     await handler(req, res);
@@ -397,6 +406,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('returns 409 when execution is in a terminal status (completed/failed/cancelled)', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     mockCancelExecution.mockRejectedValue(
       new Error('Cannot cancel execution in status: completed')
     );
@@ -417,6 +427,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('returns 200 with cancelled execution data for owner', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     const cancelledExecution = { id: VALID_UUID, status: 'cancelled' };
     mockCancelExecution.mockResolvedValue(cancelledExecution);
     const { req, res, mockJson } = makeReqRes('DELETE', { id: VALID_UUID });
@@ -430,6 +441,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('returns 503 on unexpected DB error during DELETE', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     mockCancelExecution.mockRejectedValue(new Error('Connection pool exhausted'));
     const { req, res, mockStatus } = makeReqRes('DELETE', { id: VALID_UUID });
 
@@ -442,6 +454,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('uses first element when id is array (Next.js multi-value param handling)', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     const cancelledExecution = { id: VALID_UUID, status: 'cancelled' };
     mockCancelExecution.mockResolvedValue(cancelledExecution);
 
@@ -471,6 +484,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('calls deleteKubernetesJob when cancelled execution has a kubernetesJobName', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     const cancelledExecution = {
       id: VALID_UUID,
       status: 'cancelled',
@@ -488,6 +502,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('does NOT call deleteKubernetesJob when kubernetesJobName is null', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     const cancelledExecution = {
       id: VALID_UUID,
       status: 'cancelled',
@@ -504,6 +519,7 @@ describe('DELETE /api/v1/executions/:id', () => {
 
   it('still returns 200 with cancelled execution when deleteKubernetesJob throws (best-effort)', async () => {
     setupAuthUser('owner');
+    mockGetExecution.mockResolvedValue(fakeExecutionDetail);
     const cancelledExecution = {
       id: VALID_UUID,
       status: 'cancelled',

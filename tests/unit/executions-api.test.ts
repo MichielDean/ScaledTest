@@ -20,6 +20,13 @@ jest.mock('../../src/lib/executions', () => ({
   cancelExecution: jest.fn(),
 }));
 
+// Mock teamManagement for team-scoped access checks
+const mockGetUserTeams = jest.fn().mockResolvedValue([]);
+jest.mock('../../src/lib/teamManagement', () => ({
+  ...jest.requireActual('../../src/lib/teamManagement'),
+  getUserTeams: mockGetUserTeams,
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
