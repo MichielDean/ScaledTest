@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/config"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
+	"github.com/scaledtest/scaledtest/internal/k8s"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/ws"
@@ -78,8 +79,25 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if dbPool != nil {
 		qgStore = store.NewQualityGateStore(dbPool)
 	}
+	// K8s client for launching test execution jobs (optional — graceful degradation)
+	var k8sClient *k8s.Client
+	k8sC, k8sErr := k8s.NewClient(cfg.K8sNamespace, cfg.K8sInCluster, cfg.K8sKubeconfig)
+	if k8sErr != nil {
+		log.Warn().Err(k8sErr).Msg("k8s client not available — job launch disabled")
+	} else {
+		k8sClient = k8sC
+	}
+
 	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore}
-	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore}
+	execH := &handler.ExecutionsHandler{
+		DB:          dbPool,
+		Hub:         wsHub,
+		AuditStore:  auditStore,
+		K8s:         k8sClient,
+		WorkerImage: cfg.WorkerImage,
+		WorkerToken: cfg.WorkerToken,
+		APIBaseURL:  cfg.BaseURL,
+	}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
 	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
