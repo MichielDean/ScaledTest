@@ -1,301 +1,170 @@
-# ScaledTest: Next.js Test Management Platform
+# ScaledTest
 
-A comprehensive platform for test result management and reporting built with Next.js, featuring Better Auth authentication and TimescaleDB storage.
+Scale out end-to-end testing with unparalleled reporting and capabilities.
 
-## Core Features (Updated January 2025)
+## Architecture
 
-- **Modern Tech Stack**: Built with Next.js 14+ and TypeScript
-- **Single Page Application (SPA) Navigation**: Default seamless, stateful navigation without page reloads
-- **Interactive Test Results Dashboard**: Visualize and monitor test results in real-time
-- **Role-Based Access Control (RBAC)**: Powered by Better Auth authentication
-- **Test Report Generation**: Generate standardized CTRF test reports
-- **TimescaleDB Integration**: High-performance time-series data storage and analytics
-- **Comprehensive Testing Suite**: Unit, integration, and system tests with Jest and Playwright
+ScaledTest is a dual-stack platform with v1 (legacy) and v2 (active development) on the same `main` branch.
 
-## Prerequisites
+### v2 — Go backend + React SPA (active)
 
-- Node.js (v18+)
-- Docker and Docker Compose
-- Git
+The v2 stack is the active development target:
 
-## Quick Start (Docker Compose)
+- **Go backend**: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
+- **React 19 frontend**: TanStack Router/Query, Zustand, Recharts
+- **Single binary**: serves the embedded SPA via `go:embed`
+- **K8s Job management**: distributed test execution across parallel workers
+- **Quality gates**: rule DSL for pass-rate thresholds and failure limits
+- **WebSocket hub**: real-time execution status streaming
+- **OAuth 2.0**: GitHub and Google login (plus email/password)
 
-The fastest way to get ScaledTest running locally:
+### v1 — Next.js monolith (legacy)
 
-```bash
-git clone <repository-url>
-cd <repository-directory>
-docker compose up
-```
+- Next.js 15 + React 19 + TypeScript
+- Better Auth for authentication/RBAC
+- TimescaleDB for time-series test data
+- Jest + Playwright test suites
 
-This starts TimescaleDB and the ScaledTest app with migrations applied automatically.
-The app is available at `http://localhost:3000` and TimescaleDB at `localhost:5432`.
+v1 remains on `main` and is functional. New feature work targets v2.
 
-To rebuild after code changes:
+## Quick Start (v2)
 
-```bash
-docker compose up --build
-```
+### Prerequisites
 
-To reset the database:
+- Go 1.23+
+- Node.js 22+
+- PostgreSQL 16+
+
+### Development
 
 ```bash
-docker compose down -v
-docker compose up
+# Start both Go API (with hot-reload) and React dev server
+make dev
+
+# Or run them separately
+make dev-api        # Go server with air
+make dev-frontend   # React dev server (Vite)
 ```
 
-## Quick Start (Manual)
+The API runs on `http://localhost:8080` and the frontend dev server on `http://localhost:5173`.
 
-1. Clone the repository:
+### Configuration
+
+Set environment variables with the `ST_` prefix:
 
 ```bash
-git clone <repository-url>
-cd <repository-directory>
+export ST_DATABASE_URL=postgres://user:pass@localhost:5432/scaledtest
+export ST_JWT_SECRET=your-secret-key-at-least-32-characters-long
+export ST_BASE_URL=http://localhost:8080
+
+# Optional: OAuth providers
+export ST_OAUTH_GITHUB_CLIENT_ID=...
+export ST_OAUTH_GITHUB_CLIENT_SECRET=...
+export ST_OAUTH_GOOGLE_CLIENT_ID=...
+export ST_OAUTH_GOOGLE_CLIENT_SECRET=...
 ```
 
-2. Install dependencies:
+### Database Migrations
 
 ```bash
-npm install
+make migrate-up     # Apply all migrations
+make migrate-down   # Rollback last migration
 ```
 
-3. Create a `.env.local` file with the following:
-
-```
-# Required Better Auth configuration
-BETTER_AUTH_SECRET=your-secret-key-here-should-be-at-least-32-characters-long
-BETTER_AUTH_URL=http://localhost:3000
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-# Required Database configuration
-DATABASE_URL=postgresql://scaledtest:password@localhost:5432/auth
-
-# TimescaleDB Configuration
-TIMESCALEDB_HOST=localhost
-TIMESCALEDB_PORT=5432
-TIMESCALEDB_DATABASE=scaledtest
-TIMESCALEDB_USERNAME=scaledtest
-TIMESCALEDB_PASSWORD=password
-```
-
-## Development Workflow
-
-### Starting the Application
-
-The easiest way to start the application with all its dependencies:
+### Build
 
 ```bash
-npm run dev
+make build          # Builds frontend + Go binary → bin/scaledtest
+make run            # Run the built binary
+make docker         # Build Docker image
 ```
 
-This command will:
+## API
 
-1. Start Docker containers for TimescaleDB
-2. Run database migrations
-3. Start the Next.js development server with Turbopack
+All API endpoints live under `/api/v1` and require a Bearer token (`Authorization: Bearer sct_...` or a JWT access token).
 
-### Running Tests
-
-ScaledTest uses Jest with multiple test projects for comprehensive testing:
+### Authentication
 
 ```bash
-# Run all tests
-npm test
+# Register
+POST /auth/register  { "email", "password", "display_name" }
 
-# Run specific test types
-npm run test:unit           # Unit tests only
-npm run test:components     # React component tests only
-npm run test:integration    # Integration tests only
-npm run test:system         # System and UI tests (includes Playwright)
+# Login → returns { access_token, expires_at, user }
+POST /auth/login     { "email", "password" }
+
+# OAuth (if configured)
+GET /auth/github     # Redirects to GitHub
+GET /auth/google     # Redirects to Google
 ```
 
-#### Advanced Jest CLI Usage
-
-You can use Jest CLI options directly for more granular control:
+### CTRF Report Submission
 
 ```bash
-# Run specific projects
-npx jest --selectProjects Unit
-npx jest --selectProjects Integration System
-
-# Filter tests by name pattern
-npx jest --testNamePattern="auth"                    # Tests containing "auth"
-npx jest --testNamePattern="should validate"         # Tests starting with "should validate"
-
-# Filter tests by file path pattern
-npx jest --testPathPattern="components"              # Tests in components directory
-npx jest --testPathPattern="auth.*test"              # Auth-related test files
-
-# Combine project selection with filtering
-npx jest --selectProjects Unit --testNamePattern="validation"
-
-# Run tests in watch mode
-npx jest --watch                                     # Watch changed files
-npx jest --watchAll                                  # Watch all files
-
-# Debug and verbose output
-npx jest --verbose                                   # Show individual test results
-npx jest --detectOpenHandles                        # Debug async handle issues
-npx jest --runInBand                                # Run tests serially (good for debugging)
-
-# Coverage reporting
-npx jest --coverage                                  # Generate coverage reports
-npx jest --coverage --collectCoverageFrom="src/**/*.{ts,tsx}"
+curl -X POST https://your-instance/api/v1/reports \
+  -H "Authorization: Bearer sct_your_token" \
+  -H "Content-Type: application/json" \
+  -d @ctrf-report.json
 ```
 
-#### Test Project Structure
+Response:
+```json
+{
+  "id": "report-uuid",
+  "message": "report accepted",
+  "summary": { "tests": 150, "passed": 145, "failed": 3, "skipped": 2 }
+}
+```
 
-- **Unit** (`tests/unit/`): Fast, isolated unit tests for individual functions and modules
-- **Components** (`tests/components/`): React Testing Library tests for UI components
-- **Integration** (`tests/integration/`): API and service integration tests
-- **System** (`tests/system/` and `tests/ui/`): End-to-end tests with Playwright
+### Key Endpoints
 
-#### Environment Variables for Testing
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/reports` | Upload CTRF report |
+| `GET` | `/api/v1/reports` | List reports |
+| `POST` | `/api/v1/executions` | Create test execution |
+| `GET` | `/api/v1/executions` | List executions |
+| `PUT` | `/api/v1/executions/{id}/status` | Update execution status |
+| `GET` | `/api/v1/analytics/trends` | Pass-rate trends |
+| `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
+| `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
+| `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
+| `GET` | `/api/v1/teams` | List teams |
+| `GET` | `/ws/executions` | WebSocket for live updates |
 
-Ensure these environment variables are set for complete test coverage:
+## Testing
+
+### Go tests (v2)
 
 ```bash
-# Required for integration and system tests
-DATABASE_URL=postgresql://scaledtest:password@localhost:5432/scaledtest
-BETTER_AUTH_SECRET=your-secret-key-here-should-be-at-least-32-characters-long
-NEXT_PUBLIC_BASE_URL=http://localhost:3000
-
-TIMESCALEDB_HOST=localhost
-TIMESCALEDB_PORT=5432
-TIMESCALEDB_DATABASE=scaledtest
-TIMESCALEDB_USERNAME=scaledtest
-TIMESCALEDB_PASSWORD=password
-
-# Optional: Control test execution
-JEST_TIMEOUT=60000                                   # Test timeout in milliseconds
-MAX_WORKERS=50%                                      # Control parallel test execution
+make test               # All Go tests with race detector
+make test-short         # Without race detector
+make test-integration   # Store integration tests (requires TEST_DATABASE_URL)
+make lint               # golangci-lint
 ```
 
-### Database Setup and Migrations
-
-ScaledTest uses separate databases for different concerns:
-
-- **auth database**: Better Auth authentication
-- **scaledtest database**: Test results with TimescaleDB
+### Frontend tests (v2)
 
 ```bash
-# Run all migrations (both databases)
-npm run migrate:all
+make frontend-test      # React component/unit tests
 ```
 
-**Key Benefits:**
-
-- **Separate database isolation** for auth and analytics
-- **Version-controlled schema changes** with rollback capability
-- **TypeScript migrations** for type safety
-- **Production-ready** with proper error handling and logging
-- **TimescaleDB optimizations** built into migrations
-
-For detailed information about the migration system, see [MIGRATIONS.md](MIGRATIONS.md).
-
-#### Migration Commands
+### v1 Jest/Playwright tests
 
 ```bash
-# Run all migrations (recommended)
-npm run migrate:all
-
-# Run specific database migrations
-npm run migrate:auth           # Auth database only
-npm run migrate:scaledtest     # ScaledTest database only
-
-# Rollback migrations
-npm run migrate:down:auth      # Rollback auth database
-npm run migrate:down:scaledtest # Rollback scaledtest database
+npm test                # All v1 tests
+npm run test:unit       # Unit tests
+npm run test:components # Component tests
+npm run test:integration # Integration tests
+npm run test:system     # System + Playwright E2E
 ```
-
-### Code Formatting
-
-```bash
-# Format all code with Prettier
-npm run format
-```
-
-## Authentication System
-
-ScaledTest uses Better Auth for authentication with:
-
-- **Email/Password Authentication**: Secure login through Better Auth
-- **Role-Based Access**: Three progressive access levels
-- **Session Management**: Secure session handling with automatic refresh
 
 ## User Roles
 
-ScaledTest implements three permission levels:
-
-1. **Read-only User**
-   - Can view test results and dashboards
-   - Cannot modify any data
-
-2. **Maintainer User**
-   - Read permissions plus ability to upload test results
-   - Can edit test metadata and tags
-
-3. **Owner User**
-   - Full administrative access
-   - User management capabilities
-   - System configuration access
-
-## Test Results Dashboard
-
-The Test Results Dashboard provides:
-
-- Filterable view of test executions
-- Performance trend analysis
-- CTRF-compliant report generation
-- Test result comparison features
-
-## Environment Configuration
-
-For detailed environment configuration, see the [Environment Configuration Guide](docs/ENVIRONMENT.md).
-
-### Production Configuration
-
-In production environments, configure these secure settings:
-
-```
-BETTER_AUTH_SECRET=your-secure-secret-key-at-least-32-characters-long
-BETTER_AUTH_URL=https://your-app-url
-NEXT_PUBLIC_BASE_URL=https://your-app-url
-DATABASE_URL=postgresql://username:password@host:port/database
-TIMESCALEDB_HOST=your-timescaledb-host
-TIMESCALEDB_DATABASE=your-database-name
-TIMESCALEDB_USERNAME=your-database-username
-TIMESCALEDB_PASSWORD=your-secure-database-password
-```
-
-## Component Architecture
-
-ScaledTest consists of two main components:
-
-1. **Next.js Application**: Frontend, API endpoints, and authentication
-2. **TimescaleDB**: Time-series data storage and analytics
-3. **TimescaleDB**: High-performance time-series data storage
-
-## Test Users
-
-The system automatically creates these test users for development and testing:
-
-1. **Read-only User**
-   - Username: `readonly@example.com`
-   - Password: `ReadOnly123!`
-   - Role: readonly
-
-2. **Maintainer User**
-   - Username: `maintainer@example.com`
-   - Password: `Maintainer123!`
-   - Roles: readonly, maintainer
-
-3. **Owner User**
-   - Username: `owner@example.com`
-   - Password: `Owner123!`
-   - Roles: readonly, maintainer, owner
-
-**Security Note**: These test users are intended for development and testing environments only. In production, create proper user accounts through the Better Auth system with secure passwords following your organization's password policy.
+| Role | Permissions |
+|------|-------------|
+| `member` | View reports, dashboards, analytics |
+| `maintainer` | Upload reports, create executions, manage webhooks |
+| `owner` | All of the above + user management, admin endpoints, audit log |
 
 ## CI Integration
 
@@ -313,91 +182,29 @@ ScaledTest integrates with CI pipelines to collect test results and enforce qual
 - [GitHub Actions integration](docs/ci-integration/github-actions.md)
 - [GitLab CI integration](docs/ci-integration/gitlab-ci.md)
 
-## Building for Production
+## Project Structure
 
-```bash
-npm run build
 ```
-
-## Dependency Management
-
-Keep dependencies current with:
-
-```bash
-npm run update-deps
+cmd/
+  server/             # v2 Go server entrypoint
+  worker/             # v2 worker binary for distributed execution
+internal/
+  auth/               # JWT, RBAC, OAuth, CSRF
+  config/             # Environment-based configuration
+  db/                 # Database pool, migrations
+  handler/            # HTTP handlers (reports, executions, teams, admin, etc.)
+  server/             # Router and middleware setup
+  store/              # Data access (audit, webhooks, quality gates)
+  webhook/            # Outbound webhook dispatch
+  ws/                 # WebSocket hub for real-time updates
+  k8s/                # Kubernetes job management
+frontend/             # React 19 SPA (TanStack Router, Vite)
+sdk/                  # @scaledtest/sdk TypeScript client
+e2e/                  # Playwright E2E tests (v2 API)
+src/                  # v1 Next.js application
+tests/                # v1 Jest test suites
+ci-integration/       # Example CI workflow files
 ```
-
-## Technologies
-
-- **Frontend**: Next.js 14+, TypeScript, React
-- **Authentication**: Better Auth with email/password authentication
-- **Data Storage**: TimescaleDB (PostgreSQL with time-series extensions)
-- **Testing**: Jest, Playwright
-- **Infrastructure**: Docker, Docker Compose
-- **CI/CD**: GitHub Actions
-- **Report Format**: CTRF (Common Test Result Format)
-- **Module System**: ES2024/ESM with TypeScript
-- **Test Runner**: Jest with custom ES module reporters
-
-## Testing & Quality Assurance
-
-ScaledTest includes comprehensive testing capabilities with automated CTRF (Common Test Report Format) reporting:
-
-### Test Architecture
-
-- **Unit Tests**: Fast, isolated tests for business logic and utility functions
-- **Component Tests**: React Testing Library tests for UI components and user interactions
-- **Integration Tests**: API endpoints, database interactions, and service integration
-- **System Tests**: End-to-end workflows using Playwright for complete user journeys
-
-### Running Tests
-
-```bash
-# Run all test suites
-npm test
-
-# Run specific test types
-npm run test:unit           # Unit tests only
-npm run test:components     # React component tests only
-npm run test:integration    # API and service integration tests
-npm run test:system         # End-to-end and UI tests (Playwright)
-
-# Advanced filtering with Jest CLI
-npx jest --selectProjects Unit Integration          # Multiple projects
-npx jest --testNamePattern="auth"                   # Filter by test name
-npx jest --testPathPattern="components"             # Filter by file path
-npx jest --watch                                    # Watch mode for development
-npx jest --coverage                                 # Generate coverage reports
-```
-
-### Test Reports & CTRF Integration
-
-Tests automatically generate CTRF-compliant reports with:
-
-- **Standardized Format**: Industry-standard Common Test Report Format
-- **Rich Metadata**: Environment info, timing, failure details, and log capture
-- **API Integration**: Automated submission to test management APIs
-- **CI/CD Ready**: Seamless integration with continuous integration pipelines
-
-```bash
-# Send test results to API endpoints
-npm run send-test-results
-```
-
-### Continuous Integration
-
-The project includes ready-to-use CI/CD configurations:
-
-- **GitHub Actions**: Automated testing on pull requests and main branch
-- **Docker Support**: Containerized test execution for consistent environments
-- **Parallel Execution**: Optimized test running with configurable worker processes
-- **Failure Reporting**: Detailed test failure analysis and artifact collection
-
-For detailed CTRF configuration and CI/CD setup, see the [CTRF Reporting Guide](docs/CTRF_REPORTING.md).
-
-## Contributing
-
-See our [contributing guide](docs/CONTRIBUTING.md) for how to contribute to the project.
 
 ## License
 
