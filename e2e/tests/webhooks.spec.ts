@@ -67,9 +67,7 @@ test.describe('Webhooks', () => {
       expect(listRes.ok()).toBeTruthy();
       const listData = await listRes.json();
       expect(listData.webhooks.length).toBeGreaterThan(0);
-      expect(listData.webhooks.some((w: { id: string }) => w.id === webhook.webhook.id)).toBe(
-        true,
-      );
+      expect(listData.webhooks.some((w: { id: string }) => w.id === webhook.webhook.id)).toBe(true);
 
       // Submit a report to trigger the webhook
       const submitRes = await request.post('/api/v1/reports', {
@@ -148,10 +146,9 @@ test.describe('Webhooks', () => {
     expect(deleteRes.ok()).toBeTruthy();
 
     // Verify deleted
-    const getAfterDelete = await request.get(
-      `/api/v1/teams/${teamId}/webhooks/${webhook.id}`,
-      { headers },
-    );
+    const getAfterDelete = await request.get(`/api/v1/teams/${teamId}/webhooks/${webhook.id}`, {
+      headers,
+    });
     expect(getAfterDelete.ok()).toBe(false);
   });
 });

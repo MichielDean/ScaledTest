@@ -46,7 +46,7 @@ test.describe('Quality Gates', () => {
     // Evaluate the quality gate against the submitted report
     const evalRes = await request.post(
       `/api/v1/teams/${teamId}/quality-gates/${gate.id}/evaluate`,
-      { headers, data: { report_id: reportResult.id } },
+      { headers, data: { report_id: reportResult.id } }
     );
     expect(evalRes.ok(), `Evaluate failed: ${evalRes.status()}`).toBeTruthy();
     const evaluation = await evalRes.json();
@@ -56,7 +56,7 @@ test.describe('Quality Gates', () => {
     // Verify evaluation appears in history
     const historyRes = await request.get(
       `/api/v1/teams/${teamId}/quality-gates/${gate.id}/evaluations`,
-      { headers },
+      { headers }
     );
     expect(historyRes.ok()).toBeTruthy();
     const history = await historyRes.json();
@@ -92,7 +92,7 @@ test.describe('Quality Gates', () => {
     // Evaluate — should fail
     const evalRes = await request.post(
       `/api/v1/teams/${teamId}/quality-gates/${gate.id}/evaluate`,
-      { headers, data: { report_id: report.id } },
+      { headers, data: { report_id: report.id } }
     );
     expect(evalRes.ok()).toBeTruthy();
     const evaluation = await evalRes.json();
