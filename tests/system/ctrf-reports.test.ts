@@ -73,7 +73,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const ctrfReport = generateCtrfReport();
 
-      const response = await api.post('/api/test-reports').send(ctrfReport).expect(201);
+      const response = await api.post('/api/v1/reports').send(ctrfReport).expect(201);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -96,7 +96,7 @@ describe('CTRF Reports API System Tests', () => {
       const minimalReport = generateMinimalCtrfReport();
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(minimalReport)
         .expect(201);
@@ -122,7 +122,7 @@ describe('CTRF Reports API System Tests', () => {
       delete reportWithoutMeta.timestamp;
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(reportWithoutMeta)
         .expect(201);
@@ -188,7 +188,7 @@ describe('CTRF Reports API System Tests', () => {
       });
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(multiStatusReport)
         .expect(201);
@@ -287,7 +287,7 @@ describe('CTRF Reports API System Tests', () => {
       });
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(richReport)
         .expect(201);
@@ -353,7 +353,7 @@ describe('CTRF Reports API System Tests', () => {
 
       for (const report of reports) {
         const response = await api
-          .post('/api/test-reports')
+          .post('/api/v1/reports')
 
           .send(report)
           .expect(201);
@@ -362,7 +362,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should retrieve all reports without filters', async () => {
-      const response = await api.get('/api/test-reports').expect(200);
+      const response = await api.get('/api/v1/reports').expect(200);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -382,7 +382,7 @@ describe('CTRF Reports API System Tests', () => {
 
     it('should filter reports by test status', async () => {
       const response = await api
-        .get('/api/test-reports?status=failed')
+        .get('/api/v1/reports?status=failed')
 
         .expect(200);
 
@@ -396,7 +396,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should filter reports by tool name', async () => {
-      const response = await api.get('/api/test-reports?tool=Jest').expect(200);
+      const response = await api.get('/api/v1/reports?tool=Jest').expect(200);
 
       expect(response.body).toMatchObject({
         success: true,
@@ -411,7 +411,7 @@ describe('CTRF Reports API System Tests', () => {
 
     it('should filter reports by environment', async () => {
       const response = await api
-        .get('/api/test-reports?environment=CI')
+        .get('/api/v1/reports?environment=CI')
 
         .expect(200);
 
@@ -443,11 +443,11 @@ describe('CTRF Reports API System Tests', () => {
       expect(report1.timestamp).not.toBe(report2.timestamp);
       expect(report1.results.tool.name).not.toBe(report2.results.tool.name);
 
-      await api.post('/api/test-reports').send(report1).expect(201);
-      await api.post('/api/test-reports').send(report2).expect(201);
+      await api.post('/api/v1/reports').send(report1).expect(201);
+      await api.post('/api/v1/reports').send(report2).expect(201);
 
       const page1Response = await api
-        .get('/api/test-reports?page=1&size=1')
+        .get('/api/v1/reports?page=1&size=1')
 
         .expect(200);
 
@@ -455,7 +455,7 @@ describe('CTRF Reports API System Tests', () => {
       expect(page1Response.body.total).toBeGreaterThanOrEqual(2);
 
       const page2Response = await api
-        .get('/api/test-reports?page=2&size=1')
+        .get('/api/v1/reports?page=2&size=1')
 
         .expect(200);
 
@@ -468,14 +468,14 @@ describe('CTRF Reports API System Tests', () => {
       expect(page2Response.body.data[0].timestamp).not.toBe(page1Response.body.data[0].timestamp);
     });
     it('should respect maximum page size limit', async () => {
-      const response = await api.get('/api/test-reports?size=200').expect(200);
+      const response = await api.get('/api/v1/reports?size=200').expect(200);
 
       expect(response.body.data.length).toBeLessThanOrEqual(100);
     });
 
     it('should combine multiple filters', async () => {
       const response = await api
-        .get('/api/test-reports?tool=Jest&environment=CI')
+        .get('/api/v1/reports?tool=Jest&environment=CI')
 
         .expect(200);
 
@@ -498,7 +498,7 @@ describe('CTRF Reports API System Tests', () => {
       const invalidReport = generateInvalidCtrfReport();
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(invalidReport)
         .expect(400);
@@ -519,7 +519,7 @@ describe('CTRF Reports API System Tests', () => {
       };
 
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(incompleteReport)
         .expect(400);
@@ -531,7 +531,7 @@ describe('CTRF Reports API System Tests', () => {
     });
 
     it('should reject unsupported HTTP methods', async () => {
-      const response = await api.delete('/api/test-reports').expect(405);
+      const response = await api.delete('/api/v1/reports').expect(405);
 
       expect(response.body).toMatchObject({
         success: false,
@@ -544,7 +544,7 @@ describe('CTRF Reports API System Tests', () => {
 
       // Use a non-authenticated agent
       const unauthenticatedAgent = supertest(API_URL);
-      await unauthenticatedAgent.post('/api/test-reports').send(ctrfReport).expect(401);
+      await unauthenticatedAgent.post('/api/v1/reports').send(ctrfReport).expect(401);
     });
   });
 
@@ -554,7 +554,7 @@ describe('CTRF Reports API System Tests', () => {
 
       const startTime = Date.now();
       const response = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(largeReport)
         .expect(201);
@@ -574,7 +574,7 @@ describe('CTRF Reports API System Tests', () => {
     it('should handle concurrent report submissions', async () => {
       const reports = Array.from({ length: 5 }, () => generateCtrfReport());
 
-      const promises = reports.map(report => api.post('/api/test-reports').send(report));
+      const promises = reports.map(report => api.post('/api/v1/reports').send(report));
 
       const responses = await Promise.all(promises);
 
@@ -644,14 +644,14 @@ describe('CTRF Reports API System Tests', () => {
       });
 
       const storeResponse = await api
-        .post('/api/test-reports')
+        .post('/api/v1/reports')
 
         .send(originalReport)
         .expect(201);
 
       const reportId = storeResponse.body.id;
 
-      const retrieveResponse = await api.get('/api/test-reports').expect(200);
+      const retrieveResponse = await api.get('/api/v1/reports').expect(200);
 
       const storedReport = retrieveResponse.body.data.find(
         (r: StoredReport) => r.reportId === reportId

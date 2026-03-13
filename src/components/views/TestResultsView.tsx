@@ -83,7 +83,7 @@ const TestResultsView: React.FC = () => {
         if (filters.tool) queryParams.append('tool', filters.tool);
         if (filters.environment) queryParams.append('environment', filters.environment);
 
-        const response = await fetch(`/api/test-reports?${queryParams.toString()}`, {
+        const response = await fetch(`/api/v1/reports?${queryParams.toString()}`, {
           headers: {
             Authorization: `Bearer ${token}`,
             'Content-Type': 'application/json',

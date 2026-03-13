@@ -144,7 +144,7 @@ export const TeamProvider: React.FC<TeamProviderProps> = ({ children }) => {
     }
 
     try {
-      const response = await axios.get('/api/teams', {
+      const response = await axios.get('/api/v1/teams', {
         headers: { Authorization: `Bearer ${token}` },
       });
 

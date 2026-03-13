@@ -95,7 +95,7 @@ export const BetterAuthProvider: React.FC<BetterAuthProviderProps> = ({ children
 
     const fetchTeams = async () => {
       try {
-        const response = await fetch('/api/user-teams', { credentials: 'include' });
+        const response = await fetch('/api/v1/user-teams', { credentials: 'include' });
         if (!response.ok) {
           logger.warn({ status: response.status }, 'Failed to fetch user teams');
           return;
