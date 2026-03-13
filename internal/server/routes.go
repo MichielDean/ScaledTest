@@ -120,7 +120,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
-	adminH := &handler.AdminHandler{AuditStore: auditStore}
+	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
 	whH := &handler.WebhooksHandler{Store: whStore}
 
 	// Health check
@@ -217,7 +217,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(auth.RequireRole("owner"))
-			r.Get("/users", handler.AdminListUsers)
+			r.Get("/users", adminH.ListUsers)
 			r.Get("/audit-log", adminH.ListAuditLog)
 		})
 
