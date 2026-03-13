@@ -1,7 +1,6 @@
 package server
 
 import (
-	"fmt"
 	"net/http"
 	"strings"
 	"time"
@@ -103,7 +102,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		whNotifier = webhook.NewNotifier(whStore, webhook.NewDispatcher())
 	}
 
+	// HTTPS detection
+	isSecure := strings.HasPrefix(cfg.BaseURL, "https://")
+
+	// OAuth configs
+	oauthCfgs := auth.NewOAuthConfigs(cfg.BaseURL, cfg.OAuthGitHubClientID, cfg.OAuthGitHubClientSecret, cfg.OAuthGoogleClientID, cfg.OAuthGoogleClientSecret)
+
 	// Handlers
+	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
 	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
 	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
 	execH := &handler.ExecutionsHandler{
@@ -130,7 +136,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	})
 
 	// CSRF token endpoint — SPA calls this to get a token before mutations
-	isSecure := strings.HasPrefix(cfg.BaseURL, "https://")
 	r.Get("/auth/csrf-token", func(w http.ResponseWriter, r *http.Request) {
 		token := auth.SetCSRFCookie(w, []byte(cfg.JWTSecret), isSecure)
 		w.Header().Set("Content-Type", "application/json")
@@ -144,8 +149,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Post("/login", authH.Login)
 		r.Post("/refresh", authH.Refresh)
 		r.Post("/logout", authH.Logout)
-		r.Get("/github/callback", oauthNotConfigured("GitHub"))
-		r.Get("/google/callback", oauthNotConfigured("Google"))
+		r.Get("/github", oauthH.GitHubLogin)
+		r.Get("/github/callback", oauthH.GitHubCallback)
+		r.Get("/google", oauthH.GoogleLogin)
+		r.Get("/google/callback", oauthH.GoogleCallback)
 	})
 
 	// API v1 routes (authenticated + CSRF protected)
@@ -239,18 +246,6 @@ func notImplemented(w http.ResponseWriter, r *http.Request) {
 	w.Write([]byte(`{"error":"not implemented"}`))
 }
 
-// oauthNotConfigured returns a handler that describes the missing OAuth provider
-// configuration, rather than returning a generic "not implemented" message.
-func oauthNotConfigured(provider string) http.HandlerFunc {
-	upper := strings.ToUpper(provider)
-	msg := fmt.Sprintf(`{"error":"%s OAuth is not configured. Set ST_%s_CLIENT_ID and ST_%s_CLIENT_SECRET environment variables."}`,
-		provider, upper, upper)
-	return func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusNotImplemented)
-		w.Write([]byte(msg))
-	}
-}
 
 func zerologMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
