@@ -18,6 +18,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
@@ -68,8 +69,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// CSRF middleware — uses JWT secret as HMAC key for token signing
 	csrfMW := auth.CSRFMiddleware([]byte(cfg.JWTSecret))
 
-	// Handlers
-	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	// Stores
 	var auditStore *store.AuditStore
 	if dbPool != nil {
 		auditStore = store.NewAuditStore(dbPool)
@@ -78,21 +78,30 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if dbPool != nil {
 		qgStore = store.NewQualityGateStore(dbPool)
 	}
-	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore}
-	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore}
-	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
-	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
-	teamsH := &handler.TeamsHandler{DB: dbPool}
-	var durStore *store.DurationStore
-	if dbPool != nil {
-		durStore = store.NewDurationStore(dbPool)
-	}
-	shardH := &handler.ShardingHandler{DurationStore: durStore}
-	adminH := &handler.AdminHandler{AuditStore: auditStore}
 	var whStore *store.WebhookStore
 	if dbPool != nil {
 		whStore = store.NewWebhookStore(dbPool)
 	}
+	var durStore *store.DurationStore
+	if dbPool != nil {
+		durStore = store.NewDurationStore(dbPool)
+	}
+
+	// Webhook dispatcher: fires outbound webhooks on events
+	var whNotifier *webhook.Notifier
+	if whStore != nil {
+		whNotifier = webhook.NewNotifier(whStore, webhook.NewDispatcher())
+	}
+
+	// Handlers
+	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
+	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore, Webhooks: whNotifier}
+	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
+	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
+	teamsH := &handler.TeamsHandler{DB: dbPool}
+	shardH := &handler.ShardingHandler{DurationStore: durStore}
+	adminH := &handler.AdminHandler{AuditStore: auditStore}
 	whH := &handler.WebhooksHandler{Store: whStore}
 
 	// Health check
