@@ -31,6 +31,38 @@ jobs:
       - name: Go test
         run: go test ./... -v
 
+  go-integration-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    continue-on-error: true
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: scaledtest_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Run store integration tests
+        env:
+          TEST_DATABASE_URL: postgres://test:test@localhost:5432/scaledtest_test?sslmode=disable
+        run: make test-integration
+
   frontend-build:
     runs-on: ubuntu-latest
     timeout-minutes: 10
