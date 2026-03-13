@@ -124,7 +124,7 @@ func (s *AuditStore) List(ctx context.Context, f AuditListFilter) ([]model.Audit
 
 	query := `SELECT id, actor_id, actor_email, team_id, action, resource_type, resource_id, metadata, created_at
 	          FROM audit_logs` + where +
-		" ORDER BY created_at DESC" +
+		" ORDER BY created_at DESC, id DESC" +
 		" LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	args = append(args, f.Limit, f.Offset)
 

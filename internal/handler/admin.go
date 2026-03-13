@@ -4,6 +4,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/google/uuid"
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
@@ -25,9 +26,16 @@ func (h *AdminHandler) ListAuditLog(w http.ResponseWriter, r *http.Request) {
 	f := store.AuditListFilter{
 		Action:       r.URL.Query().Get("action"),
 		ResourceType: r.URL.Query().Get("resource_type"),
-		ActorID:      r.URL.Query().Get("actor_id"),
 		Limit:        limit,
 		Offset:       offset,
+	}
+
+	if actorID := r.URL.Query().Get("actor_id"); actorID != "" {
+		if _, err := uuid.Parse(actorID); err != nil {
+			Error(w, http.StatusBadRequest, "actor_id must be a valid UUID")
+			return
+		}
+		f.ActorID = actorID
 	}
 
 	if since := r.URL.Query().Get("since"); since != "" {
