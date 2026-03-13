@@ -7,6 +7,7 @@ import { OAuthCallbackPage } from './oauth-callback';
 import { ExecutionsPage } from './executions';
 import { QualityGatesPage } from './quality-gates';
 import { WebhooksPage } from './webhooks';
+import { ShardingPage } from './sharding';
 import { AdminPage } from './admin';
 import { ReportsComparePage } from './reports-compare';
 import { AnalyticsPage } from './analytics';
@@ -90,6 +91,13 @@ const webhooksRoute = createRoute({
   component: WebhooksPage,
 });
 
+const shardingRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/sharding',
+  beforeLoad: requireAuth,
+  component: ShardingPage,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
@@ -108,5 +116,6 @@ export const routeTree = rootRoute.addChildren([
   analyticsRoute,
   qualityGatesRoute,
   webhooksRoute,
+  shardingRoute,
   adminRoute,
 ]);

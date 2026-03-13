@@ -26,6 +26,10 @@ export const queryKeys = {
   webhooks: {
     all: (teamId: string) => ['webhooks', teamId] as const,
   },
+  sharding: {
+    durations: ['sharding', 'durations'] as const,
+    plan: ['sharding', 'plan'] as const,
+  },
   admin: {
     users: () => ['admin', 'users'] as const,
   },

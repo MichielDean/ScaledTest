@@ -55,6 +55,13 @@ export function RootLayout() {
               >
                 Webhooks
               </Link>
+              <Link
+                to="/sharding"
+                id="nav-sharding"
+                className="text-muted-foreground hover:text-foreground [&.active]:text-foreground"
+              >
+                Sharding
+              </Link>
               {user?.role === 'owner' && (
                 <Link
                   to="/admin"
