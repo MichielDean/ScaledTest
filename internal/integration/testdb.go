@@ -79,6 +79,7 @@ func Setup(t *testing.T) *TestDB {
 
 // truncateTables is the list of application tables to clean between tests.
 var truncateTables = []string{
+	"audit_logs",
 	"quality_gate_evaluations",
 	"quality_gates",
 	"webhooks",

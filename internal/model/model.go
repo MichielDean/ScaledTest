@@ -164,6 +164,19 @@ type TestDurationHistory struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
+// AuditLog records a user action for compliance and observability.
+type AuditLog struct {
+	ID           string          `json:"id"`
+	ActorID      string          `json:"actor_id"`
+	ActorEmail   string          `json:"actor_email"`
+	TeamID       *string         `json:"team_id,omitempty"`
+	Action       string          `json:"action"`
+	ResourceType *string         `json:"resource_type,omitempty"`
+	ResourceID   *string         `json:"resource_id,omitempty"`
+	Metadata     json.RawMessage `json:"metadata,omitempty"`
+	CreatedAt    time.Time       `json:"created_at"`
+}
+
 // ShardAssignment represents a test assigned to a specific worker shard.
 type ShardAssignment struct {
 	WorkerID       string `json:"worker_id"`

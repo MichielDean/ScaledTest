@@ -66,8 +66,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// Handlers
 	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
-	reportsH := &handler.ReportsHandler{DB: dbPool}
-	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub}
+	var auditStore *store.AuditStore
+	if dbPool != nil {
+		auditStore = store.NewAuditStore(dbPool)
+	}
+	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore}
+	execH := &handler.ExecutionsHandler{DB: dbPool, Hub: wsHub, AuditStore: auditStore}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
 	var qgStore *store.QualityGateStore
 	if dbPool != nil {
@@ -80,6 +84,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		durStore = store.NewDurationStore(dbPool)
 	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
+	adminH := &handler.AdminHandler{AuditStore: auditStore}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -169,6 +174,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Route("/admin", func(r chi.Router) {
 			r.Use(auth.RequireRole("owner"))
 			r.Get("/users", handler.AdminListUsers)
+			r.Get("/audit-log", adminH.ListAuditLog)
 		})
 
 		r.Get("/openapi.json", notImplemented)

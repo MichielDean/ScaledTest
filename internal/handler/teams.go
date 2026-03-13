@@ -408,10 +408,4 @@ func (h *TeamsHandler) getUserTeamRole(ctx context.Context, userID, teamID strin
 	return role, err
 }
 
-// AdminListUsers handles GET /api/v1/admin/users.
-func AdminListUsers(w http.ResponseWriter, r *http.Request) {
-	JSON(w, http.StatusOK, map[string]interface{}{
-		"users": []interface{}{},
-	})
-}
 
