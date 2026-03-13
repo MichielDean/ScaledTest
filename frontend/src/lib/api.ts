@@ -193,6 +193,17 @@ export const api = {
   deleteWebhook: (teamId: string, webhookId: string) =>
     fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, { method: 'DELETE' }),
 
+  // Sharding
+  getShardDurations: () =>
+    fetchAPI<{ durations: unknown[]; total: number }>('/api/v1/sharding/durations'),
+  createShardPlan: (data: {
+    test_names: string[];
+    num_workers: number;
+    strategy?: string;
+  }) => fetchAPI<unknown>('/api/v1/sharding/plan', { method: 'POST', body: JSON.stringify(data) }),
+  rebalanceShards: (data: unknown) =>
+    fetchAPI<unknown>('/api/v1/sharding/rebalance', { method: 'POST', body: JSON.stringify(data) }),
+
   // Admin
   adminListUsers: () => fetchAPI('/api/v1/admin/users'),
 };
