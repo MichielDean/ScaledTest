@@ -90,7 +90,7 @@ const CreateExecutionModal: React.FC<CreateExecutionModalProps> = ({
           headers: token ? { Authorization: `Bearer ${token}` } : {},
         });
         if (res.ok) {
-          // /api/v1/teams re-exports from /api/teams which returns { data: Team[] }
+          // /api/v1/teams returns { data: Team[] }
           const json = (await res.json()) as {
             success?: boolean;
             data?: Team[];

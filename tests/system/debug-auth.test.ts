@@ -43,7 +43,7 @@ describe('Authentication Debug', () => {
     );
 
     // Step 3: Test the actual API endpoint
-    const apiResponse = await agent.post('/api/test-reports').send({
+    const apiResponse = await agent.post('/api/v1/reports').send({
       reportFormat: 'CTRF',
       specVersion: '1.0.0',
       results: {

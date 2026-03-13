@@ -52,7 +52,7 @@ const AdminTeamsView: React.FC = () => {
         throw new Error('No authentication token available');
       }
 
-      const response = await axios.get('/api/teams', {
+      const response = await axios.get('/api/v1/teams', {
         headers: {
           Authorization: `Bearer ${token}`,
         },

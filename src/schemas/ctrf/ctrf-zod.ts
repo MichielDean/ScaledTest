@@ -1,7 +1,7 @@
 /**
  * Shared Zod validation schema for CTRF reports.
  *
- * Both the legacy `/api/test-reports` handler and the worker result callback endpoint
+ * Both the `/api/v1/reports` handler and the worker result callback endpoint
  * (`/api/v1/executions/:id/results`) must validate the same CTRF payload structure.
  * Centralising the schema here prevents the two copies from drifting out of sync.
  *

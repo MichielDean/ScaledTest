@@ -175,7 +175,7 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
     // Get the API base URL from environment
     const apiBaseUrl =
       process.env.NEXT_PUBLIC_API_URL || process.env.API_BASE_URL || 'http://localhost:3000';
-    const apiUrl = `${apiBaseUrl}/api/test-reports`;
+    const apiUrl = `${apiBaseUrl}/api/v1/reports`;
 
     scriptLogger.info({ apiUrl }, 'Sending test results to API');
 
@@ -247,7 +247,7 @@ async function sendTestResults(customReportData: CtrfSchema | null = null): Prom
           'Make sure your application server is running',
           'Verify the API_BASE_URL or NEXT_PUBLIC_API_URL environment variable',
           'Check Better Auth credentials (TEST_API_USERNAME, TEST_API_PASSWORD)',
-          'Ensure the /api/test-reports endpoint is accessible',
+          'Ensure the /api/v1/reports endpoint is accessible',
           'Verify Better Auth is configured correctly (BETTER_AUTH_SECRET, BETTER_AUTH_URL)',
           'Check that the test user exists and has the correct role',
         ],
