@@ -167,8 +167,8 @@ func TestTeamIsolation_AdminEndpointRequiresOwnerRole(t *testing.T) {
 		teamID     string
 		wantStatus int
 	}{
-		{"owner team-A can access admin", "owner", "team-alpha", http.StatusOK},
-		{"owner team-B can access admin", "owner", "team-beta", http.StatusOK},
+		{"owner team-A can access admin", "owner", "team-alpha", http.StatusServiceUnavailable},
+		{"owner team-B can access admin", "owner", "team-beta", http.StatusServiceUnavailable},
 		{"maintainer denied admin", "maintainer", "team-alpha", http.StatusForbidden},
 		{"readonly denied admin", "readonly", "team-beta", http.StatusForbidden},
 	}
@@ -388,7 +388,7 @@ func TestTeamIsolation_RoleScopingAcrossTeams(t *testing.T) {
 		wantStatus int
 	}{
 		// Admin endpoint - role-gated
-		{"owner team-A admin", "owner", "team-alpha", "/api/v1/admin/users", "GET", http.StatusOK},
+		{"owner team-A admin", "owner", "team-alpha", "/api/v1/admin/users", "GET", http.StatusServiceUnavailable},
 		{"readonly team-A admin", "readonly", "team-alpha", "/api/v1/admin/users", "GET", http.StatusForbidden},
 		{"maintainer team-B admin", "maintainer", "team-beta", "/api/v1/admin/users", "GET", http.StatusForbidden},
 

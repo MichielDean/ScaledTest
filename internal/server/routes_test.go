@@ -143,7 +143,7 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 		{"GET", "/api/v1/analytics/duration-distribution", http.StatusServiceUnavailable}, // no DB configured
 		{"GET", "/api/v1/teams/team-1/quality-gates", http.StatusOK},
 		{"GET", "/api/v1/teams", http.StatusOK},
-		{"GET", "/api/v1/admin/users", http.StatusOK}, // owner role
+		{"GET", "/api/v1/admin/users", http.StatusServiceUnavailable}, // no DB configured
 	}
 
 	for _, ep := range endpoints {
