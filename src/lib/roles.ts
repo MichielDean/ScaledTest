@@ -1,15 +1,10 @@
 /**
  * Canonical role and permission definitions for ScaledTest.
  *
- * This is the single source of truth. Both src/types/roles.ts and
- * src/lib/permissions.ts now re-export from here.
+ * This is the single source of truth for roles and permissions.
  */
 
 import { roleNames, type RoleName } from '@/lib/auth-shared';
-
-// ---------------------------------------------------------------------------
-// From src/types/roles.ts
-// ---------------------------------------------------------------------------
 
 export enum UserRole {
   READONLY = 'readonly',
@@ -58,10 +53,6 @@ export function getRoleDisplayName(role: UserRole): string {
       return 'Unknown';
   }
 }
-
-// ---------------------------------------------------------------------------
-// From src/lib/permissions.ts
-// ---------------------------------------------------------------------------
 
 export const Permissions = {
   READ_CONTENT: 'read_content',
