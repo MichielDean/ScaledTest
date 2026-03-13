@@ -111,7 +111,7 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 		{"GET", "/api/v1/reports"},
 		{"GET", "/api/v1/executions"},
 		{"GET", "/api/v1/analytics/trends"},
-		{"GET", "/api/v1/quality-gates"},
+		{"GET", "/api/v1/teams/team-1/quality-gates"},
 		{"GET", "/api/v1/teams"},
 	}
 
@@ -141,7 +141,7 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 		{"GET", "/api/v1/analytics/flaky-tests", http.StatusServiceUnavailable},           // no DB configured
 		{"GET", "/api/v1/analytics/error-analysis", http.StatusServiceUnavailable},        // no DB configured
 		{"GET", "/api/v1/analytics/duration-distribution", http.StatusServiceUnavailable}, // no DB configured
-		{"GET", "/api/v1/quality-gates", http.StatusOK},
+		{"GET", "/api/v1/teams/team-1/quality-gates", http.StatusOK},
 		{"GET", "/api/v1/teams", http.StatusOK},
 		{"GET", "/api/v1/admin/users", http.StatusOK}, // owner role
 	}
