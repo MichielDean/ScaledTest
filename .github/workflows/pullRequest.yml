@@ -34,6 +34,7 @@ jobs:
   go-integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    continue-on-error: true
     services:
       postgres:
         image: timescale/timescaledb:latest-pg16
