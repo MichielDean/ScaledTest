@@ -35,6 +35,10 @@ test:
 test-short:
 	go test ./...
 
+## test-integration: Run store integration tests (requires TEST_DATABASE_URL)
+test-integration:
+	go test -tags=integration -v -race ./internal/store/... ./internal/integration/...
+
 ## lint: Run golangci-lint
 lint:
 	@which golangci-lint > /dev/null 2>&1 || go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
