@@ -12,6 +12,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"time"
 
@@ -122,6 +123,16 @@ func findCTRFReport() string {
 	return ""
 }
 
+// setAuthHeader sets the Authorization header appropriate for the token type.
+// sct_ API tokens are sent raw; JWTs are wrapped in "Bearer ".
+func setAuthHeader(req *http.Request, token string) {
+	if strings.HasPrefix(token, "sct_") {
+		req.Header.Set("Authorization", token)
+	} else {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
 func submitReport(apiURL, token, executionID, reportFile string) error {
 	data, err := os.ReadFile(reportFile)
 	if err != nil {
@@ -133,7 +144,7 @@ func submitReport(apiURL, token, executionID, reportFile string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	setAuthHeader(req, token)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 30 * time.Second}
@@ -165,7 +176,7 @@ func reportStatus(apiURL, token, executionID, status, errorMsg string) {
 		log.Error().Err(err).Msg("failed to create status request")
 		return
 	}
-	req.Header.Set("Authorization", "Bearer "+token)
+	setAuthHeader(req, token)
 	req.Header.Set("Content-Type", "application/json")
 
 	client := &http.Client{Timeout: 10 * time.Second}
