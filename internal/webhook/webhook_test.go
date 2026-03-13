@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -165,4 +166,162 @@ func TestNotifierListerError(t *testing.T) {
 	n.Notify("team-1", EventGateFailed, nil)
 
 	time.Sleep(100 * time.Millisecond)
+}
+
+func TestSendRetryOn5xx(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusInternalServerError)
+	}))
+	defer server.Close()
+
+	d := &Dispatcher{
+		client:     &http.Client{Timeout: 5 * time.Second},
+		maxRetries: 2,
+	}
+	payload := Payload{Event: EventReportSubmitted, Data: nil}
+
+	_, err := d.Send(context.Background(), server.URL, "secret", payload)
+	if err == nil {
+		t.Error("expected error after retries exhausted on 5xx")
+	}
+	if got := attempts.Load(); got != 2 {
+		t.Errorf("expected 2 attempts, got %d", got)
+	}
+}
+
+func TestSendRetryEventualSuccess(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := attempts.Add(1)
+		if n < 2 {
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	d := &Dispatcher{
+		client:     &http.Client{Timeout: 5 * time.Second},
+		maxRetries: 3,
+	}
+	payload := Payload{Event: EventReportSubmitted, Data: nil}
+
+	delivery, err := d.Send(context.Background(), server.URL, "secret", payload)
+	if err != nil {
+		t.Fatalf("Send() error: %v", err)
+	}
+	if delivery.StatusCode != http.StatusOK {
+		t.Errorf("StatusCode = %d, want %d", delivery.StatusCode, http.StatusOK)
+	}
+	if delivery.Attempt != 2 {
+		t.Errorf("Attempt = %d, want 2", delivery.Attempt)
+	}
+}
+
+func TestSendContextTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		time.Sleep(2 * time.Second)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	d := &Dispatcher{
+		client:     &http.Client{Timeout: 30 * time.Second},
+		maxRetries: 1,
+	}
+	payload := Payload{Event: EventReportSubmitted, Data: nil}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := d.Send(ctx, server.URL, "secret", payload)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Error("expected error from context cancellation")
+	}
+	// Should return quickly when context is cancelled, not wait for server.
+	if elapsed > 1*time.Second {
+		t.Errorf("expected fast return on context timeout, took %v", elapsed)
+	}
+}
+
+func TestSendContextCancelledDuringBackoff(t *testing.T) {
+	var attempts atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.WriteHeader(http.StatusBadGateway)
+	}))
+	defer server.Close()
+
+	d := &Dispatcher{
+		client:     &http.Client{Timeout: 5 * time.Second},
+		maxRetries: 3,
+	}
+	payload := Payload{Event: EventReportSubmitted, Data: nil}
+
+	// Context that expires during the first backoff wait (1s backoff).
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	_, err := d.Send(ctx, server.URL, "secret", payload)
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Error("expected error from context cancellation during backoff")
+	}
+	if elapsed > 2*time.Second {
+		t.Errorf("expected quick cancellation during backoff, took %v", elapsed)
+	}
+	if got := attempts.Load(); got < 1 {
+		t.Errorf("expected at least 1 attempt before cancellation, got %d", got)
+	}
+}
+
+func TestSendInvalidURL(t *testing.T) {
+	d := NewDispatcher()
+	payload := Payload{Event: EventReportSubmitted, Data: nil}
+
+	_, err := d.Send(context.Background(), "://invalid", "secret", payload)
+	if err == nil {
+		t.Error("expected error for invalid URL")
+	}
+}
+
+func TestVerifyHMACSHA256Format(t *testing.T) {
+	payload := []byte(`{"event":"test","data":null}`)
+	secret := "webhook-secret-key"
+
+	sig := Sign(payload, secret)
+
+	// Signature must have sha256= prefix.
+	if !strings.HasPrefix(sig, "sha256=") {
+		t.Errorf("signature %q missing sha256= prefix", sig)
+	}
+
+	// Hex-encoded SHA-256 is 64 characters after the prefix.
+	hexPart := sig[len("sha256="):]
+	if len(hexPart) != 64 {
+		t.Errorf("hex portion length = %d, want 64", len(hexPart))
+	}
+
+	// Verify rejects wrong signature.
+	if Verify(payload, secret, "sha256=0000000000000000000000000000000000000000000000000000000000000000") {
+		t.Error("Verify() should reject incorrect signature")
+	}
+
+	// Verify rejects empty signature.
+	if Verify(payload, secret, "") {
+		t.Error("Verify() should reject empty signature")
+	}
+
+	// Verify rejects wrong prefix format.
+	if Verify(payload, secret, "md5="+hexPart) {
+		t.Error("Verify() should reject wrong prefix")
+	}
 }
