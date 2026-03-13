@@ -19,18 +19,20 @@ import (
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
 	DB          *db.Pool
-	Hub         *ws.Hub            // WebSocket hub for real-time broadcasting (optional)
-	AuditStore  *store.AuditStore  // optional; nil means no audit logging
-	K8s         *k8s.Client        // optional; nil means K8s job launch is disabled
-	WorkerImage string             // default container image for test workers
-	WorkerToken string             // auth token workers use to report back
-	APIBaseURL  string             // base URL workers use to call the API
+	Hub         *ws.Hub              // WebSocket hub for real-time broadcasting (optional)
+	AuditStore  *store.AuditStore    // optional; nil means no audit logging
+	K8s         *k8s.Client          // optional; nil means K8s job launch is disabled
+	WorkerImage string               // default container image for test workers
+	WorkerToken string               // auth token workers use to report back
+	APIBaseURL  string               // base URL workers use to call the API
+	Webhooks    *webhook.Notifier    // optional; nil means no webhook dispatch
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -389,6 +391,22 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 			ResourceID:   executionID,
 			Metadata:     meta,
 		})
+	}
+
+	// Fire webhooks for terminal execution states.
+	if req.Status == "completed" || req.Status == "failed" {
+		eventType := webhook.EventExecutionCompleted
+		if req.Status == "failed" {
+			eventType = webhook.EventExecutionFailed
+		}
+		data := map[string]interface{}{
+			"execution_id": executionID,
+			"status":       req.Status,
+		}
+		if req.ErrorMsg != "" {
+			data["error_msg"] = req.ErrorMsg
+		}
+		h.Webhooks.Notify(claims.TeamID, eventType, data)
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
