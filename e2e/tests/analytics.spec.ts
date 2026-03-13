@@ -2,10 +2,7 @@ import { test, expect } from '@playwright/test';
 import { loginViaAPI, loginViaUI, authHeaders, buildCtrfReport } from './helpers';
 
 test.describe('Analytics', () => {
-  test('analytics page shows data sections after report submissions', async ({
-    page,
-    request,
-  }) => {
+  test('analytics page shows data sections after report submissions', async ({ page, request }) => {
     const session = await loginViaAPI(request);
 
     // Submit several reports so analytics has data to display

@@ -42,7 +42,7 @@ export function tokenHeaders(apiToken: string): Record<string, string> {
 /** Get an existing team or create one. Returns team ID. */
 export async function getOrCreateTeam(
   request: APIRequestContext,
-  session: AuthSession,
+  session: AuthSession
 ): Promise<string> {
   const listRes = await request.get('/api/v1/teams', {
     headers: authHeaders(session),
@@ -66,7 +66,7 @@ export async function getOrCreateTeam(
 export async function createAPIToken(
   request: APIRequestContext,
   session: AuthSession,
-  teamId: string,
+  teamId: string
 ): Promise<string> {
   const res = await request.post(`/api/v1/teams/${teamId}/tokens`, {
     headers: authHeaders(session),
