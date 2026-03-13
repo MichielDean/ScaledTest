@@ -43,7 +43,6 @@ jest.mock('../../src/logging/logger', () => ({
 jest.mock('../../src/components/ui/select', () => ({
   Select: ({
     children,
-    onValueChange,
     value,
   }: {
     children: React.ReactNode;
@@ -64,7 +63,7 @@ jest.mock('../../src/components/ui/select', () => ({
 jest.mock('../../src/components/ui/collapsible', () => ({
   Collapsible: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'collapsible' }, children),
-  CollapsibleTrigger: ({ children, asChild }: { children: React.ReactNode; asChild?: boolean }) =>
+  CollapsibleTrigger: ({ children }: { children: React.ReactNode; asChild?: boolean }) =>
     React.createElement('div', { 'data-testid': 'collapsible-trigger' }, children),
   CollapsibleContent: ({ children }: { children: React.ReactNode }) =>
     React.createElement('div', { 'data-testid': 'collapsible-content' }, children),
