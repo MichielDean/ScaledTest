@@ -142,7 +142,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.Get("/duration-distribution", analyticsH.DurationDistribution)
 		})
 
-		r.Route("/quality-gates", func(r chi.Router) {
+		r.Route("/teams/{teamID}/quality-gates", func(r chi.Router) {
 			r.Get("/", qgH.List)
 			r.Post("/", qgH.Create)
 			r.Get("/{gateID}", qgH.Get)

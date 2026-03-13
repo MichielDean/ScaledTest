@@ -133,7 +133,7 @@ type QualityGate struct {
 	Name        string          `json:"name"`
 	Description string          `json:"description,omitempty"`
 	Rules       json.RawMessage `json:"rules"`
-	Active      bool            `json:"active"`
+	Enabled     bool            `json:"enabled"`
 	CreatedAt   time.Time       `json:"created_at"`
 	UpdatedAt   time.Time       `json:"updated_at"`
 }
