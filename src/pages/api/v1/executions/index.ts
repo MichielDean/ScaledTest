@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { createExecution, listExecutions, type ExecutionStatus } from '@/lib/executions';
+import { getUserTeams } from '@/lib/teamManagement';
 import { sanitizeString, sanitizeStringRecord } from '@/lib/sanitize';
 
 // Regex: docker image names — no shell injection
@@ -45,21 +46,43 @@ export default createBetterAuthApi({
     const size = Math.min(Math.max(1, parseInt(sizeStr ?? '20', 10) || 20), 100);
 
     try {
-      const { executions, total } = await listExecutions({
-        page,
-        size,
-        status: status as ExecutionStatus | undefined,
-        teamId,
-        requestedBy,
-        dateFrom,
-        dateTo,
-      });
+      // Enforce team-scoping: user can only see executions for their own teams
+      const userTeams = await getUserTeams(req.user.id);
+      const userTeamIds = new Set(userTeams.map(t => t.id));
+
+      // If caller provided a teamId filter, verify they belong to that team
+      if (teamId && !userTeamIds.has(teamId)) {
+        return res.status(403).json({ success: false, error: 'Access denied to this team' });
+      }
+
+      // Fetch executions filtered to user's teams
+      // If no teamId filter, we need to fetch per-team and aggregate
+      // For simplicity, fetch all and filter (listExecutions supports teamId)
+      const results = teamId
+        ? await listExecutions({
+            page,
+            size,
+            status: status as ExecutionStatus | undefined,
+            teamId,
+            requestedBy,
+            dateFrom,
+            dateTo,
+          })
+        : await listExecutions({
+            page,
+            size,
+            status: status as ExecutionStatus | undefined,
+            teamIds: Array.from(userTeamIds),
+            requestedBy,
+            dateFrom,
+            dateTo,
+          });
 
       return res.json({
         success: true,
-        data: executions,
-        total,
-        pagination: { page, size, total },
+        data: results.executions,
+        total: results.total,
+        pagination: { page, size, total: results.total },
       });
     } catch {
       return res.status(503).json({ success: false, error: 'Database unavailable' });

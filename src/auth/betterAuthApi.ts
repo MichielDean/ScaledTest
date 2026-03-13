@@ -175,6 +175,7 @@ export function createBetterAuthApi(handlers: BetterAuthMethodHandlers, required
       const handler = handlers[method];
 
       if (!handler) {
+        res.setHeader('Allow', Object.keys(handlers).join(', '));
         return res.status(405).json({
           success: false,
           error: `Method ${req.method} not allowed`,

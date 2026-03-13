@@ -157,11 +157,10 @@ async function handlePost(
       });
     }
 
-    // Handle other errors
+    // Handle other errors — do not leak internal error details to clients
     return res.status(500).json({
       success: false,
       error: 'Failed to store CTRF report',
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -303,11 +302,10 @@ async function handleGet(
       }
     }
 
-    // Handle other non-database errors
+    // Handle other non-database errors — do not leak internal error details to clients
     return res.status(500).json({
       success: false,
       error: 'Failed to retrieve CTRF reports',
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }

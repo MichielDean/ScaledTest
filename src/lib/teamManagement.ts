@@ -15,9 +15,8 @@ import { getRequiredEnvVar } from '../environment/env';
  * Provides team-related functionality for users using PostgreSQL backend
  */
 
-// Singleton database pool instances
+// Singleton database pool instance
 let dbPool: Pool | null = null;
-let authDbPool: Pool | null = null; // kept for backward-compat type, but no longer used for auth lookups
 
 /**
  * Get or create the singleton database connection pool for the main application (scaledtest)
@@ -194,11 +193,6 @@ export async function shutdownTeamManagementPool(): Promise<void> {
   if (dbPool) {
     promises.push(dbPool.end());
     dbPool = null;
-  }
-
-  if (authDbPool) {
-    promises.push(authDbPool.end());
-    authDbPool = null;
   }
 
   await Promise.all(promises);

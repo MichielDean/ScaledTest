@@ -57,6 +57,8 @@ export interface CreateExecutionInput {
 export interface ExecutionFilters {
   status?: ExecutionStatus;
   teamId?: string;
+  /** Filter to executions belonging to any of the given team IDs. */
+  teamIds?: string[];
   requestedBy?: string;
   dateFrom?: string;
   dateTo?: string;
@@ -177,7 +179,7 @@ export async function listExecutions(
     const pool = getTimescalePool();
     client = await pool.connect();
 
-    const { page = 1, size = 20, status, teamId, requestedBy, dateFrom, dateTo } = filters;
+    const { page = 1, size = 20, status, teamId, teamIds, requestedBy, dateFrom, dateTo } = filters;
     // Sanitize page/size defensively — callers outside the API layer may pass unclamped values
     const normalizedPage = page > 0 ? page : 1;
     const normalizedSize = size > 0 ? size : 20;
@@ -195,6 +197,9 @@ export async function listExecutions(
     if (teamId) {
       conditions.push(`team_id = $${p++}`);
       values.push(teamId);
+    } else if (teamIds && teamIds.length > 0) {
+      conditions.push(`team_id = ANY($${p++}::uuid[])`);
+      values.push(teamIds);
     }
     if (requestedBy) {
       conditions.push(`requested_by = $${p++}`);

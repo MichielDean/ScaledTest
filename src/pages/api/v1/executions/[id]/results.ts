@@ -18,6 +18,7 @@
  * - Returns { success: true, reportId }
  */
 import type { NextApiRequest, NextApiResponse } from 'next';
+import { timingSafeEqual } from 'crypto';
 import { getRequestLogger, logError } from '@/logging/logger';
 import { storeCtrfReport, type TimescaleCtrfReport } from '@/lib/timescaledb';
 import { getExecution, recordExecutionResult } from '@/lib/executions';
@@ -48,7 +49,12 @@ export default async function handler(
   const authHeader = req.headers.authorization ?? '';
   const providedToken = authHeader.startsWith('Bearer ') ? authHeader.slice(7) : '';
 
-  if (!providedToken || !workerToken || providedToken !== workerToken) {
+  if (
+    !providedToken ||
+    !workerToken ||
+    providedToken.length !== workerToken.length ||
+    !timingSafeEqual(Buffer.from(providedToken), Buffer.from(workerToken))
+  ) {
     return res.status(401).json({ success: false, error: 'Invalid or missing worker token' });
   }
 

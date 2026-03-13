@@ -13,6 +13,7 @@ import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { getExecutionDetail, cancelExecution } from '@/lib/executions';
+import { getUserTeams } from '@/lib/teamManagement';
 import { deleteKubernetesJob } from '@/lib/kubernetes';
 import { isValidUuid } from '@/lib/validation';
 import { apiLogger as logger, logError } from '@/logging/logger';
@@ -34,6 +35,16 @@ export default createBetterAuthApi({
       if (!detail) {
         return res.status(404).json({ success: false, error: 'Execution not found' });
       }
+
+      // Enforce team-scoping: user can only view executions for their own teams
+      if (detail.teamId) {
+        const userTeams = await getUserTeams(req.user.id);
+        const userTeamIds = new Set(userTeams.map(t => t.id));
+        if (!userTeamIds.has(detail.teamId)) {
+          return res.status(404).json({ success: false, error: 'Execution not found' });
+        }
+      }
+
       return res.json({ success: true, data: detail });
     } catch {
       return res.status(503).json({ success: false, error: 'Database unavailable' });

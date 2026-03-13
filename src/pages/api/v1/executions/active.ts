@@ -11,12 +11,13 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { getTimescalePool } from '@/lib/timescaledb';
+import { getUserTeams } from '@/lib/teamManagement';
 import { apiLogger as logger } from '@/logging/logger';
 
 /** RFC 4122 UUID v1–v5 format check */
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
-async function fetchActiveExecutionCount(teamId?: string): Promise<number> {
+async function fetchActiveExecutionCount(teamIds: string[], teamId?: string): Promise<number> {
   const pool = getTimescalePool();
 
   if (teamId !== undefined) {
@@ -31,11 +32,14 @@ async function fetchActiveExecutionCount(teamId?: string): Promise<number> {
     return parseInt(result.rows[0]?.count ?? '0', 10) || 0;
   }
 
-  // No team filter — count active executions across all teams
+  // No team filter — count active executions scoped to user's teams
+  if (teamIds.length === 0) return 0;
   const result = await pool.query<{ count: string }>(
     `SELECT COUNT(*) AS count
        FROM test_executions
-      WHERE status IN ('queued', 'running')`
+      WHERE status IN ('queued', 'running')
+        AND team_id = ANY($1::uuid[])`,
+    [teamIds]
   );
   return parseInt(result.rows[0]?.count ?? '0', 10) || 0;
 }
@@ -57,7 +61,16 @@ export default createBetterAuthApi({
     }
 
     try {
-      const activeExecutions = await fetchActiveExecutionCount(teamId);
+      // Enforce team-scoping: user can only see active counts for their own teams
+      const userTeams = await getUserTeams(req.user.id);
+      const userTeamIds = userTeams.map(t => t.id);
+
+      // If caller provided a teamId, verify they belong to that team
+      if (teamId && !userTeamIds.includes(teamId)) {
+        return res.status(403).json({ success: false, error: 'Access denied to this team' });
+      }
+
+      const activeExecutions = await fetchActiveExecutionCount(userTeamIds, teamId);
       return res.json({ success: true, data: { activeExecutions } });
     } catch (err) {
       logger.error({ err }, 'Failed to fetch active execution count from DB');
