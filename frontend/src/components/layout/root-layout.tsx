@@ -48,6 +48,13 @@ export function RootLayout() {
               >
                 Quality Gates
               </Link>
+              <Link
+                to="/webhooks"
+                id="nav-webhooks"
+                className="text-muted-foreground hover:text-foreground [&.active]:text-foreground"
+              >
+                Webhooks
+              </Link>
               {user?.role === 'owner' && (
                 <Link
                   to="/admin"

@@ -23,6 +23,9 @@ export const queryKeys = {
     all: ['teams'] as const,
     list: () => ['teams'] as const,
   },
+  webhooks: {
+    all: (teamId: string) => ['webhooks', teamId] as const,
+  },
   admin: {
     users: () => ['admin', 'users'] as const,
   },
