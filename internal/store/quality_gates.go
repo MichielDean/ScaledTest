@@ -23,7 +23,7 @@ func NewQualityGateStore(pool *pgxpool.Pool) *QualityGateStore {
 // List returns all quality gates for a team.
 func (s *QualityGateStore) List(ctx context.Context, teamID string) ([]model.QualityGate, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, team_id, name, description, rules, active, created_at, updated_at
+		`SELECT id, team_id, name, description, rules, enabled, created_at, updated_at
 		 FROM quality_gates WHERE team_id = $1 ORDER BY created_at DESC`, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("query quality gates: %w", err)
@@ -34,7 +34,7 @@ func (s *QualityGateStore) List(ctx context.Context, teamID string) ([]model.Qua
 	for rows.Next() {
 		var g model.QualityGate
 		var desc *string
-		if err := rows.Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Active, &g.CreatedAt, &g.UpdatedAt); err != nil {
+		if err := rows.Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Enabled, &g.CreatedAt, &g.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan quality gate: %w", err)
 		}
 		if desc != nil {
@@ -50,9 +50,9 @@ func (s *QualityGateStore) Get(ctx context.Context, teamID, gateID string) (*mod
 	var g model.QualityGate
 	var desc *string
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, team_id, name, description, rules, active, created_at, updated_at
+		`SELECT id, team_id, name, description, rules, enabled, created_at, updated_at
 		 FROM quality_gates WHERE id = $1 AND team_id = $2`, gateID, teamID).
-		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Active, &g.CreatedAt, &g.UpdatedAt)
+		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Enabled, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get quality gate: %w", err)
 	}
@@ -69,9 +69,9 @@ func (s *QualityGateStore) Create(ctx context.Context, teamID, name, description
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO quality_gates (team_id, name, description, rules)
 		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, team_id, name, description, rules, active, created_at, updated_at`,
+		 RETURNING id, team_id, name, description, rules, enabled, created_at, updated_at`,
 		teamID, name, description, rules).
-		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Active, &g.CreatedAt, &g.UpdatedAt)
+		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Enabled, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create quality gate: %w", err)
 	}
@@ -82,15 +82,15 @@ func (s *QualityGateStore) Create(ctx context.Context, teamID, name, description
 }
 
 // Update modifies an existing quality gate.
-func (s *QualityGateStore) Update(ctx context.Context, teamID, gateID, name, description string, rules json.RawMessage, active bool) (*model.QualityGate, error) {
+func (s *QualityGateStore) Update(ctx context.Context, teamID, gateID, name, description string, rules json.RawMessage, enabled bool) (*model.QualityGate, error) {
 	var g model.QualityGate
 	var desc *string
 	err := s.pool.QueryRow(ctx,
-		`UPDATE quality_gates SET name = $3, description = $4, rules = $5, active = $6, updated_at = now()
+		`UPDATE quality_gates SET name = $3, description = $4, rules = $5, enabled = $6, updated_at = now()
 		 WHERE id = $1 AND team_id = $2
-		 RETURNING id, team_id, name, description, rules, active, created_at, updated_at`,
-		gateID, teamID, name, description, rules, active).
-		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Active, &g.CreatedAt, &g.UpdatedAt)
+		 RETURNING id, team_id, name, description, rules, enabled, created_at, updated_at`,
+		gateID, teamID, name, description, rules, enabled).
+		Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Enabled, &g.CreatedAt, &g.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("update quality gate: %w", err)
 	}

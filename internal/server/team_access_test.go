@@ -31,14 +31,13 @@ func TestTeamIsolation_DifferentTeamTokensAccepted(t *testing.T) {
 	teamBToken := tokenForTeam(t, "user-b", "b@example.com", "owner", "team-beta")
 
 	// Both team tokens should be accepted by authenticated endpoints
-	endpoints := []string{
+	nonTeamEndpoints := []string{
 		"/api/v1/reports",
 		"/api/v1/executions",
-		"/api/v1/quality-gates",
 		"/api/v1/teams",
 	}
 
-	for _, ep := range endpoints {
+	for _, ep := range nonTeamEndpoints {
 		for _, tc := range []struct {
 			name  string
 			token string
@@ -59,6 +58,29 @@ func TestTeamIsolation_DifferentTeamTokensAccepted(t *testing.T) {
 				}
 			})
 		}
+	}
+
+	// Team-scoped quality gates endpoints — each token accesses its own team's URL
+	for _, tc := range []struct {
+		name   string
+		token  string
+		teamID string
+	}{
+		{"team-alpha", teamAToken, "team-alpha"},
+		{"team-beta", teamBToken, "team-beta"},
+	} {
+		ep := "/api/v1/teams/" + tc.teamID + "/quality-gates"
+		t.Run(tc.name+"_"+ep, func(t *testing.T) {
+			req := httptest.NewRequest("GET", ep, nil)
+			req.Header.Set("Authorization", "Bearer "+tc.token)
+			w := httptest.NewRecorder()
+			router.ServeHTTP(w, req)
+
+			if w.Code != http.StatusOK && w.Code != http.StatusServiceUnavailable {
+				t.Errorf("%s %s: status = %d, want 200 or 503 (body: %s)",
+					tc.name, ep, w.Code, w.Body.String())
+			}
+		})
 	}
 }
 
@@ -176,7 +198,7 @@ func TestTeamIsolation_NoTokenReturnsUnauthorized(t *testing.T) {
 		"/api/v1/analytics/flaky-tests",
 		"/api/v1/analytics/error-analysis",
 		"/api/v1/analytics/duration-distribution",
-		"/api/v1/quality-gates",
+		"/api/v1/teams/any-team/quality-gates",
 		"/api/v1/teams",
 		"/api/v1/admin/users",
 	}
@@ -287,7 +309,7 @@ func TestTeamIsolation_TeamScopedEndpointResponses(t *testing.T) {
 	endpoints := []endpointCheck{
 		{"/api/v1/reports", "reports"},
 		{"/api/v1/executions", "executions"},
-		{"/api/v1/quality-gates", "quality_gates"},
+		{"/api/v1/teams/team-alpha/quality-gates", "quality_gates"},
 		{"/api/v1/teams", "teams"},
 	}
 
