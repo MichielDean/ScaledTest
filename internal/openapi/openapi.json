@@ -1,0 +1,2064 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "ScaledTest API",
+    "description": "ScaledTest scales out end-to-end testing with unparalleled reporting and capabilities. This API provides CTRF report ingestion, distributed test execution, quality gate evaluation, webhook notifications, and analytics.",
+    "version": "1.0.0",
+    "license": { "name": "MIT" }
+  },
+  "servers": [{ "url": "http://localhost:8080", "description": "Local development" }],
+  "security": [{ "bearerAuth": [] }],
+  "paths": {
+    "/health": {
+      "get": {
+        "operationId": "getHealth",
+        "summary": "Health check",
+        "tags": ["Health"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Server is healthy",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "status": { "type": "string", "example": "ok" } },
+                  "required": ["status"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/csrf-token": {
+      "get": {
+        "operationId": "getCSRFToken",
+        "summary": "Get CSRF token",
+        "description": "Returns a signed CSRF token. The SPA must include this token in the X-CSRF-Token header on mutation requests.",
+        "tags": ["Auth"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "CSRF token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "csrf_token": { "type": "string" } },
+                  "required": ["csrf_token"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/auth/register": {
+      "post": {
+        "operationId": "register",
+        "summary": "Register a new user",
+        "tags": ["Auth"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/RegisterRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "User created",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "409": {
+            "description": "Email already registered",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Error" } }
+            }
+          }
+        }
+      }
+    },
+    "/auth/login": {
+      "post": {
+        "operationId": "login",
+        "summary": "Authenticate user",
+        "tags": ["Auth"],
+        "security": [],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/LoginRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Login successful",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/refresh": {
+      "post": {
+        "operationId": "refreshToken",
+        "summary": "Refresh access token",
+        "description": "Uses the httpOnly refresh_token cookie to issue a new access token.",
+        "tags": ["Auth"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Token refreshed",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/AuthResponse" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/auth/logout": {
+      "post": {
+        "operationId": "logout",
+        "summary": "Logout and invalidate session",
+        "tags": ["Auth"],
+        "security": [],
+        "responses": {
+          "200": {
+            "description": "Logged out",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/reports": {
+      "get": {
+        "operationId": "listReports",
+        "summary": "List test reports",
+        "tags": ["Reports"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" },
+          {
+            "name": "since",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Filter reports created after this time"
+          },
+          {
+            "name": "until",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Filter reports created before this time"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of reports",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "reports": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TestReport" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["reports", "total"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "operationId": "createReport",
+        "summary": "Submit a CTRF test report",
+        "description": "Ingests a CTRF-formatted test report. Requires maintainer or owner role.",
+        "tags": ["Reports"],
+        "parameters": [
+          {
+            "name": "execution_id",
+            "in": "query",
+            "schema": { "type": "string", "format": "uuid" },
+            "description": "Link report to an execution"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "description": "CTRF report JSON (max 10MB)",
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CTRFReport" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Report accepted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "message": { "type": "string", "example": "report accepted" },
+                    "tool": { "type": "string" },
+                    "tests": { "type": "integer" },
+                    "results": { "type": "integer" },
+                    "execution_id": { "type": "string", "format": "uuid" },
+                    "qualityGate": { "$ref": "#/components/schemas/QualityGateResult" }
+                  },
+                  "required": ["id", "message", "tool", "tests", "results"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/reports/compare": {
+      "get": {
+        "operationId": "compareReports",
+        "summary": "Compare two reports",
+        "tags": ["Reports"],
+        "parameters": [
+          {
+            "name": "base",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          },
+          {
+            "name": "head",
+            "in": "query",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report comparison",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "base": { "$ref": "#/components/schemas/TestReport" },
+                    "head": { "$ref": "#/components/schemas/TestReport" },
+                    "diff": { "$ref": "#/components/schemas/ReportDiff" }
+                  },
+                  "required": ["base", "head", "diff"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/v1/reports/{reportID}": {
+      "get": {
+        "operationId": "getReport",
+        "summary": "Get a single report",
+        "tags": ["Reports"],
+        "parameters": [
+          {
+            "name": "reportID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TestReport" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteReport",
+        "summary": "Delete a report",
+        "tags": ["Reports"],
+        "parameters": [
+          {
+            "name": "reportID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Report deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "id": { "type": "string" }, "deleted": { "type": "boolean" } },
+                  "required": ["id", "deleted"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/executions": {
+      "get": {
+        "operationId": "listExecutions",
+        "summary": "List test executions",
+        "tags": ["Executions"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of executions",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "executions": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TestExecution" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["executions", "total"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createExecution",
+        "summary": "Create a test execution",
+        "description": "Launches a distributed test execution. Requires maintainer or owner role.",
+        "tags": ["Executions"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateExecutionRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Execution created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "status": { "type": "string", "example": "pending" },
+                    "command": { "type": "string" }
+                  },
+                  "required": ["id", "status", "command"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/executions/{executionID}": {
+      "get": {
+        "operationId": "getExecution",
+        "summary": "Get execution details",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/TestExecution" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "cancelExecution",
+        "summary": "Cancel an execution",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Execution cancelled",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "id": { "type": "string" }, "status": { "type": "string" } },
+                  "required": ["id", "status"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/executions/{executionID}/status": {
+      "put": {
+        "operationId": "updateExecutionStatus",
+        "summary": "Update execution status",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": {
+                    "type": "string",
+                    "enum": ["running", "completed", "failed", "cancelled"]
+                  },
+                  "error_msg": { "type": "string" }
+                },
+                "required": ["status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status updated",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "id": { "type": "string" }, "status": { "type": "string" } },
+                  "required": ["id", "status"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/executions/{executionID}/progress": {
+      "post": {
+        "operationId": "reportProgress",
+        "summary": "Report execution progress",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "passed": { "type": "integer" },
+                  "failed": { "type": "integer" },
+                  "skipped": { "type": "integer" },
+                  "total": { "type": "integer", "minimum": 1 },
+                  "duration_ms": { "type": "integer" },
+                  "estimated_eta_seconds": { "type": "number" }
+                },
+                "required": ["passed", "failed", "skipped", "total"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Progress received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "execution_id": { "type": "string" },
+                    "received": { "type": "boolean" }
+                  },
+                  "required": ["execution_id", "received"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/executions/{executionID}/test-result": {
+      "post": {
+        "operationId": "reportTestResult",
+        "summary": "Report individual test result",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "status": {
+                    "type": "string",
+                    "enum": ["passed", "failed", "skipped", "pending", "other"]
+                  },
+                  "duration_ms": { "type": "integer" },
+                  "message": { "type": "string" },
+                  "suite": { "type": "string" },
+                  "worker_id": { "type": "string" }
+                },
+                "required": ["name", "status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Result received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "execution_id": { "type": "string" },
+                    "received": { "type": "boolean" }
+                  },
+                  "required": ["execution_id", "received"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/executions/{executionID}/worker-status": {
+      "post": {
+        "operationId": "reportWorkerStatus",
+        "summary": "Report worker status",
+        "tags": ["Executions"],
+        "parameters": [
+          {
+            "name": "executionID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "worker_id": { "type": "string" },
+                  "status": {
+                    "type": "string",
+                    "enum": ["starting", "running", "idle", "completed", "failed"]
+                  },
+                  "message": { "type": "string" },
+                  "tests_assigned": { "type": "integer" },
+                  "tests_completed": { "type": "integer" }
+                },
+                "required": ["worker_id", "status"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Status received",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "execution_id": { "type": "string" },
+                    "received": { "type": "boolean" }
+                  },
+                  "required": ["execution_id", "received"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/trends": {
+      "get": {
+        "operationId": "getAnalyticsTrends",
+        "summary": "Pass rate trends over time",
+        "tags": ["Analytics"],
+        "parameters": [
+          {
+            "name": "start",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "Start time (default: 30 days ago)"
+          },
+          {
+            "name": "end",
+            "in": "query",
+            "schema": { "type": "string", "format": "date-time" },
+            "description": "End time (default: now)"
+          },
+          {
+            "name": "group_by",
+            "in": "query",
+            "schema": { "type": "string", "enum": ["day", "week", "month"], "default": "day" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Trend data",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "trends": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "date": { "type": "string", "format": "date-time" },
+                          "total": { "type": "integer" },
+                          "passed": { "type": "integer" },
+                          "failed": { "type": "integer" },
+                          "skipped": { "type": "integer" },
+                          "pass_rate": { "type": "number" }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["trends"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/flaky-tests": {
+      "get": {
+        "operationId": "getFlakyTests",
+        "summary": "Flaky test detection",
+        "tags": ["Analytics"],
+        "parameters": [
+          { "name": "window_days", "in": "query", "schema": { "type": "integer", "default": 7 } },
+          { "name": "min_runs", "in": "query", "schema": { "type": "integer", "default": 5 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Flaky tests",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "flaky_tests": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "name": { "type": "string" },
+                          "suite": { "type": "string" },
+                          "file_path": { "type": "string" },
+                          "flip_count": { "type": "integer" },
+                          "total_runs": { "type": "integer" },
+                          "flip_rate": { "type": "number" },
+                          "last_status": { "type": "string" }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["flaky_tests"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/error-analysis": {
+      "get": {
+        "operationId": "getErrorAnalysis",
+        "summary": "Error clustering and frequency",
+        "tags": ["Analytics"],
+        "parameters": [
+          { "name": "start", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20 } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Error clusters",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "errors": {
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "message": { "type": "string" },
+                          "count": { "type": "integer" },
+                          "test_names": { "type": "array", "items": { "type": "string" } },
+                          "first_seen": { "type": "string", "format": "date-time" },
+                          "last_seen": { "type": "string", "format": "date-time" }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["errors"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/analytics/duration-distribution": {
+      "get": {
+        "operationId": "getDurationDistribution",
+        "summary": "Test duration statistics",
+        "tags": ["Analytics"],
+        "parameters": [
+          { "name": "start", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "end", "in": "query", "schema": { "type": "string", "format": "date-time" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Duration distribution",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "distribution": {
+                      "type": "object",
+                      "properties": {
+                        "mean_ms": { "type": "number" },
+                        "median_ms": { "type": "number" },
+                        "p95_ms": { "type": "number" },
+                        "p99_ms": { "type": "number" },
+                        "min_ms": { "type": "integer" },
+                        "max_ms": { "type": "integer" },
+                        "distribution": {
+                          "type": "array",
+                          "items": {
+                            "type": "object",
+                            "properties": {
+                              "range_label": { "type": "string" },
+                              "min_ms": { "type": "integer" },
+                              "max_ms": { "type": "integer" },
+                              "count": { "type": "integer" }
+                            }
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "required": ["distribution"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams": {
+      "get": {
+        "operationId": "listTeams",
+        "summary": "List teams for current user",
+        "tags": ["Teams"],
+        "responses": {
+          "200": {
+            "description": "List of teams",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "teams": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TeamWithRole" }
+                    }
+                  },
+                  "required": ["teams"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createTeam",
+        "summary": "Create a team",
+        "tags": ["Teams"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string", "minLength": 1 } },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Team created",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Team" } } }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}": {
+      "get": {
+        "operationId": "getTeam",
+        "summary": "Get team details",
+        "tags": ["Teams"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "responses": {
+          "200": {
+            "description": "Team details",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "team": { "$ref": "#/components/schemas/Team" },
+                    "role": { "type": "string" }
+                  },
+                  "required": ["team", "role"]
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteTeam",
+        "summary": "Delete a team",
+        "tags": ["Teams"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "responses": {
+          "200": {
+            "description": "Team deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/tokens": {
+      "get": {
+        "operationId": "listTokens",
+        "summary": "List API tokens for a team",
+        "tags": ["Teams"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "responses": {
+          "200": {
+            "description": "List of tokens",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "tokens": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/APIToken" }
+                    }
+                  },
+                  "required": ["tokens"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createToken",
+        "summary": "Create an API token",
+        "description": "Creates a team-scoped API token. The full token value is returned only once.",
+        "tags": ["Teams"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "name": { "type": "string", "minLength": 1 } },
+                "required": ["name"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Token created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "token": {
+                      "type": "string",
+                      "description": "Full token value (shown only once)"
+                    },
+                    "id": { "type": "string", "format": "uuid" },
+                    "name": { "type": "string" },
+                    "prefix": { "type": "string" },
+                    "created_at": { "type": "string", "format": "date-time" }
+                  },
+                  "required": ["token", "id", "name", "prefix", "created_at"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/tokens/{tokenID}": {
+      "delete": {
+        "operationId": "deleteToken",
+        "summary": "Revoke an API token",
+        "tags": ["Teams"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          {
+            "name": "tokenID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Token revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/quality-gates": {
+      "get": {
+        "operationId": "listQualityGates",
+        "summary": "List quality gates",
+        "tags": ["Quality Gates"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "responses": {
+          "200": {
+            "description": "List of quality gates",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "quality_gates": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/QualityGate" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["quality_gates", "total"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createQualityGate",
+        "summary": "Create a quality gate",
+        "tags": ["Quality Gates"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateQualityGateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Gate created",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/QualityGate" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/quality-gates/{gateID}": {
+      "get": {
+        "operationId": "getQualityGate",
+        "summary": "Get a quality gate",
+        "tags": ["Quality Gates"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/GateID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gate details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/QualityGate" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "operationId": "updateQualityGate",
+        "summary": "Update a quality gate",
+        "tags": ["Quality Gates"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/GateID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateQualityGateRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Gate updated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/QualityGate" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteQualityGate",
+        "summary": "Delete a quality gate",
+        "tags": ["Quality Gates"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/GateID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Gate deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate": {
+      "post": {
+        "operationId": "evaluateQualityGate",
+        "summary": "Evaluate a quality gate against a report",
+        "tags": ["Quality Gates"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/GateID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": { "report_id": { "type": "string", "format": "uuid" } },
+                "required": ["report_id"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Evaluation result",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/QualityGateEvaluation" }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations": {
+      "get": {
+        "operationId": "listQualityGateEvaluations",
+        "summary": "List evaluation history for a gate",
+        "tags": ["Quality Gates"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/GateID" },
+          {
+            "name": "limit",
+            "in": "query",
+            "schema": { "type": "integer", "default": 20, "maximum": 100 }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Evaluation history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "evaluations": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/QualityGateEvaluation" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["evaluations", "total"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/webhooks": {
+      "get": {
+        "operationId": "listWebhooks",
+        "summary": "List webhooks",
+        "tags": ["Webhooks"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "responses": {
+          "200": {
+            "description": "List of webhooks",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhooks": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Webhook" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["webhooks", "total"]
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createWebhook",
+        "summary": "Create a webhook",
+        "description": "Creates a webhook. The plaintext secret is returned only once.",
+        "tags": ["Webhooks"],
+        "parameters": [{ "$ref": "#/components/parameters/TeamID" }],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateWebhookRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Webhook created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "webhook": { "$ref": "#/components/schemas/Webhook" },
+                    "secret": {
+                      "type": "string",
+                      "description": "Plaintext secret (shown only once)"
+                    }
+                  },
+                  "required": ["webhook", "secret"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/webhooks/{webhookID}": {
+      "get": {
+        "operationId": "getWebhook",
+        "summary": "Get a webhook",
+        "tags": ["Webhooks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/WebhookID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook details",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Webhook" } }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      },
+      "put": {
+        "operationId": "updateWebhook",
+        "summary": "Update a webhook",
+        "tags": ["Webhooks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/WebhookID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateWebhookRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Webhook updated",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Webhook" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      },
+      "delete": {
+        "operationId": "deleteWebhook",
+        "summary": "Delete a webhook",
+        "tags": ["Webhooks"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          { "$ref": "#/components/parameters/WebhookID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Webhook deleted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/sharding/plan": {
+      "post": {
+        "operationId": "createShardPlan",
+        "summary": "Create a test sharding plan",
+        "tags": ["Sharding"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "test_names": { "type": "array", "items": { "type": "string" }, "minItems": 1 },
+                  "num_workers": { "type": "integer", "minimum": 1 },
+                  "strategy": {
+                    "type": "string",
+                    "enum": ["duration_balanced", "round_robin", "suite_grouped"]
+                  },
+                  "execution_id": { "type": "string", "format": "uuid" },
+                  "dependencies": {
+                    "type": "object",
+                    "additionalProperties": { "type": "array", "items": { "type": "string" } }
+                  }
+                },
+                "required": ["test_names", "num_workers"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Shard plan",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ShardPlan" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sharding/rebalance": {
+      "post": {
+        "operationId": "rebalanceShards",
+        "summary": "Rebalance shards after worker failure",
+        "tags": ["Sharding"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "execution_id": { "type": "string", "format": "uuid" },
+                  "failed_worker_id": { "type": "string" },
+                  "current_plan": { "$ref": "#/components/schemas/ShardPlan" },
+                  "completed_tests": { "type": "array", "items": { "type": "string" } }
+                },
+                "required": ["execution_id", "failed_worker_id", "current_plan"]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated plan",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/ShardPlan" } }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sharding/durations": {
+      "get": {
+        "operationId": "listDurations",
+        "summary": "List historical test durations",
+        "tags": ["Sharding"],
+        "parameters": [
+          {
+            "name": "suite",
+            "in": "query",
+            "schema": { "type": "string" },
+            "description": "Filter by suite"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Duration history",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "durations": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/TestDurationHistory" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["durations", "total"]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/sharding/durations/{testName}": {
+      "get": {
+        "operationId": "getDuration",
+        "summary": "Get duration history for a test",
+        "tags": ["Sharding"],
+        "parameters": [
+          { "name": "testName", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Duration history",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/TestDurationHistory" }
+              }
+            }
+          },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/admin/users": {
+      "get": {
+        "operationId": "adminListUsers",
+        "summary": "List all users (owner only)",
+        "tags": ["Admin"],
+        "parameters": [
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of users",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "users": { "type": "array", "items": { "$ref": "#/components/schemas/User" } },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["users", "total"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/admin/audit-log": {
+      "get": {
+        "operationId": "adminListAuditLog",
+        "summary": "List audit log entries (owner only)",
+        "tags": ["Admin"],
+        "parameters": [
+          { "name": "action", "in": "query", "schema": { "type": "string" } },
+          { "name": "resource_type", "in": "query", "schema": { "type": "string" } },
+          { "name": "actor_id", "in": "query", "schema": { "type": "string", "format": "uuid" } },
+          { "name": "since", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "name": "until", "in": "query", "schema": { "type": "string", "format": "date-time" } },
+          { "$ref": "#/components/parameters/Limit" },
+          { "$ref": "#/components/parameters/Offset" }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audit log entries",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "audit_log": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/AuditLogEntry" }
+                    },
+                    "total": { "type": "integer" }
+                  },
+                  "required": ["audit_log", "total"]
+                }
+              }
+            }
+          },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT or sct_ API token",
+        "description": "JWT access token (from /auth/login) or API token (sct_ prefix from team token creation)"
+      }
+    },
+    "parameters": {
+      "Limit": {
+        "name": "limit",
+        "in": "query",
+        "schema": { "type": "integer", "default": 50, "maximum": 100 }
+      },
+      "Offset": { "name": "offset", "in": "query", "schema": { "type": "integer", "default": 0 } },
+      "TeamID": {
+        "name": "teamID",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "GateID": {
+        "name": "gateID",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      },
+      "WebhookID": {
+        "name": "webhookID",
+        "in": "path",
+        "required": true,
+        "schema": { "type": "string", "format": "uuid" }
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "Bad request",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unauthorized": {
+        "description": "Missing or invalid authentication",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Forbidden": {
+        "description": "Insufficient permissions",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "NotFound": {
+        "description": "Resource not found",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": { "error": { "type": "string" } },
+        "required": ["error"]
+      },
+      "RegisterRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string", "minLength": 8 },
+          "display_name": { "type": "string", "minLength": 1 }
+        },
+        "required": ["email", "password", "display_name"]
+      },
+      "LoginRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "password": { "type": "string" }
+        },
+        "required": ["email", "password"]
+      },
+      "AuthResponse": {
+        "type": "object",
+        "properties": {
+          "user": { "$ref": "#/components/schemas/User" },
+          "access_token": { "type": "string" },
+          "expires_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["user", "access_token", "expires_at"]
+      },
+      "User": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "display_name": { "type": "string" },
+          "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "email", "display_name", "role"]
+      },
+      "TestReport": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "execution_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "tool_name": { "type": "string" },
+          "tool_version": { "type": "string" },
+          "passed": { "type": "integer" },
+          "failed": { "type": "integer" },
+          "skipped": { "type": "integer" },
+          "pending": { "type": "integer" },
+          "environment": { "type": "object" },
+          "summary": { "type": "object" },
+          "tests": { "type": "array", "items": { "$ref": "#/components/schemas/TestResult" } },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "created_at"]
+      },
+      "TestResult": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "status": {
+            "type": "string",
+            "enum": ["passed", "failed", "skipped", "pending", "other"]
+          },
+          "duration": { "type": "integer", "description": "Duration in milliseconds" },
+          "message": { "type": "string" },
+          "trace": { "type": "string" },
+          "file_path": { "type": "string" },
+          "suite": { "type": "string" },
+          "tags": { "type": "array", "items": { "type": "string" } },
+          "retry": { "type": "integer" },
+          "flaky": { "type": "boolean" }
+        },
+        "required": ["name", "status"]
+      },
+      "CTRFReport": {
+        "type": "object",
+        "description": "Common Test Results Format report",
+        "properties": {
+          "results": {
+            "type": "object",
+            "properties": {
+              "tool": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "version": { "type": "string" }
+                },
+                "required": ["name"]
+              },
+              "summary": {
+                "type": "object",
+                "properties": {
+                  "tests": { "type": "integer" },
+                  "passed": { "type": "integer" },
+                  "failed": { "type": "integer" },
+                  "skipped": { "type": "integer" },
+                  "pending": { "type": "integer" },
+                  "other": { "type": "integer" },
+                  "start": { "type": "integer", "description": "Unix timestamp ms" },
+                  "stop": { "type": "integer", "description": "Unix timestamp ms" }
+                },
+                "required": [
+                  "tests",
+                  "passed",
+                  "failed",
+                  "skipped",
+                  "pending",
+                  "other",
+                  "start",
+                  "stop"
+                ]
+              },
+              "tests": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": { "type": "string" },
+                    "status": {
+                      "type": "string",
+                      "enum": ["passed", "failed", "skipped", "pending", "other"]
+                    },
+                    "duration": { "type": "integer" },
+                    "message": { "type": "string" },
+                    "trace": { "type": "string" },
+                    "suite": { "type": "string" },
+                    "filePath": { "type": "string" },
+                    "tags": { "type": "array", "items": { "type": "string" } }
+                  },
+                  "required": ["name", "status", "duration"]
+                }
+              },
+              "environment": { "type": "object" }
+            },
+            "required": ["tool", "summary", "tests"]
+          }
+        },
+        "required": ["results"]
+      },
+      "ReportDiff": {
+        "type": "object",
+        "properties": {
+          "new_failures": { "type": "array", "items": { "$ref": "#/components/schemas/TestDiff" } },
+          "fixed": { "type": "array", "items": { "$ref": "#/components/schemas/TestDiff" } },
+          "duration_regressions": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/TestDiff" }
+          },
+          "summary": {
+            "type": "object",
+            "properties": {
+              "base_tests": { "type": "integer" },
+              "head_tests": { "type": "integer" },
+              "new_failures": { "type": "integer" },
+              "fixed": { "type": "integer" },
+              "duration_regressions": { "type": "integer" }
+            }
+          }
+        }
+      },
+      "TestDiff": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "suite": { "type": "string" },
+          "file_path": { "type": "string" },
+          "base_status": { "type": "string" },
+          "head_status": { "type": "string" },
+          "base_duration_ms": { "type": "integer" },
+          "head_duration_ms": { "type": "integer" },
+          "duration_delta_ms": { "type": "integer" },
+          "duration_delta_pct": { "type": "number" },
+          "message": { "type": "string" }
+        },
+        "required": ["name"]
+      },
+      "QualityGateResult": {
+        "type": "object",
+        "properties": {
+          "passed": { "type": "boolean" },
+          "gates": { "type": "array", "items": { "type": "object" } }
+        }
+      },
+      "TestExecution": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "status": {
+            "type": "string",
+            "enum": ["pending", "running", "completed", "failed", "cancelled"]
+          },
+          "command": { "type": "string" },
+          "config": { "type": "object" },
+          "report_id": { "type": "string", "format": "uuid" },
+          "k8s_job_name": { "type": "string" },
+          "k8s_pod_name": { "type": "string" },
+          "error_msg": { "type": "string" },
+          "started_at": { "type": "string", "format": "date-time" },
+          "finished_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "status", "command", "created_at", "updated_at"]
+      },
+      "CreateExecutionRequest": {
+        "type": "object",
+        "properties": {
+          "command": { "type": "string" },
+          "image": { "type": "string", "description": "Docker image for worker" },
+          "env_vars": { "type": "object", "additionalProperties": { "type": "string" } }
+        },
+        "required": ["command"]
+      },
+      "Team": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "name", "created_at"]
+      },
+      "TeamWithRole": {
+        "allOf": [
+          { "$ref": "#/components/schemas/Team" },
+          {
+            "type": "object",
+            "properties": {
+              "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] }
+            },
+            "required": ["role"]
+          }
+        ]
+      },
+      "APIToken": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "user_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "prefix": { "type": "string" },
+          "last_used_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "user_id", "name", "prefix", "created_at"]
+      },
+      "QualityGate": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "rules": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/QualityGateRule" }
+          },
+          "enabled": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "name", "rules", "enabled", "created_at", "updated_at"]
+      },
+      "QualityGateRule": {
+        "type": "object",
+        "properties": {
+          "metric": {
+            "type": "string",
+            "enum": ["pass_rate", "failed_count", "flaky_count", "duration_p95"]
+          },
+          "operator": { "type": "string", "enum": ["gte", "lte", "eq"] },
+          "threshold": { "type": "number" }
+        },
+        "required": ["metric", "operator", "threshold"]
+      },
+      "CreateQualityGateRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "rules": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/QualityGateRule" },
+            "minItems": 1
+          }
+        },
+        "required": ["name", "rules"]
+      },
+      "UpdateQualityGateRequest": {
+        "type": "object",
+        "properties": {
+          "name": { "type": "string" },
+          "description": { "type": "string" },
+          "rules": {
+            "type": "array",
+            "items": { "$ref": "#/components/schemas/QualityGateRule" },
+            "minItems": 1
+          },
+          "enabled": { "type": "boolean" }
+        },
+        "required": ["name", "rules"]
+      },
+      "QualityGateEvaluation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "gate_id": { "type": "string", "format": "uuid" },
+          "report_id": { "type": "string", "format": "uuid" },
+          "passed": { "type": "boolean" },
+          "details": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "gate_id", "report_id", "passed", "created_at"]
+      },
+      "Webhook": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "url": { "type": "string", "format": "uri" },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["report.submitted", "gate.failed", "execution.completed", "execution.failed"]
+            }
+          },
+          "enabled": { "type": "boolean" },
+          "created_at": { "type": "string", "format": "date-time" },
+          "updated_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "url", "events", "enabled", "created_at", "updated_at"]
+      },
+      "CreateWebhookRequest": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["report.submitted", "gate.failed", "execution.completed", "execution.failed"]
+            },
+            "minItems": 1
+          }
+        },
+        "required": ["url", "events"]
+      },
+      "UpdateWebhookRequest": {
+        "type": "object",
+        "properties": {
+          "url": { "type": "string", "format": "uri" },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "enum": ["report.submitted", "gate.failed", "execution.completed", "execution.failed"]
+            },
+            "minItems": 1
+          },
+          "enabled": { "type": "boolean" }
+        },
+        "required": ["url", "events"]
+      },
+      "ShardPlan": {
+        "type": "object",
+        "properties": {
+          "execution_id": { "type": "string" },
+          "total_workers": { "type": "integer" },
+          "strategy": { "type": "string" },
+          "shards": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "worker_id": { "type": "string" },
+                "test_names": { "type": "array", "items": { "type": "string" } },
+                "est_duration_ms": { "type": "integer" },
+                "test_count": { "type": "integer" }
+              }
+            }
+          },
+          "est_total_ms": { "type": "integer" },
+          "est_wall_clock_ms": { "type": "integer" }
+        }
+      },
+      "TestDurationHistory": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "test_name": { "type": "string" },
+          "suite": { "type": "string" },
+          "avg_duration_ms": { "type": "integer" },
+          "p95_duration_ms": { "type": "integer" },
+          "min_duration_ms": { "type": "integer" },
+          "max_duration_ms": { "type": "integer" },
+          "run_count": { "type": "integer" },
+          "last_status": { "type": "string" },
+          "updated_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        }
+      },
+      "AuditLogEntry": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "actor_id": { "type": "string", "format": "uuid" },
+          "actor_email": { "type": "string" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "action": { "type": "string" },
+          "resource_type": { "type": "string" },
+          "resource_id": { "type": "string" },
+          "metadata": { "type": "object" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "actor_id", "actor_email", "action", "created_at"]
+      }
+    }
+  },
+  "tags": [
+    { "name": "Health", "description": "Server health checks" },
+    { "name": "Auth", "description": "Authentication and session management" },
+    { "name": "Reports", "description": "CTRF test report ingestion and retrieval" },
+    { "name": "Executions", "description": "Distributed test execution management" },
+    { "name": "Analytics", "description": "Test analytics and trend analysis" },
+    { "name": "Teams", "description": "Team and API token management" },
+    { "name": "Quality Gates", "description": "Quality gate rules and evaluation" },
+    { "name": "Webhooks", "description": "Webhook configuration and event delivery" },
+    { "name": "Sharding", "description": "Test sharding and load balancing" },
+    { "name": "Admin", "description": "Administrative operations (owner only)" }
+  ]
+}

@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/k8s"
+	"github.com/scaledtest/scaledtest/internal/openapi"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/webhook"
@@ -228,7 +229,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.Get("/audit-log", adminH.ListAuditLog)
 		})
 
-		r.Get("/openapi.json", notImplemented)
+		r.Get("/openapi.json", openapi.Handler())
 	})
 
 	// WebSocket — mount the execution hub for real-time status updates
