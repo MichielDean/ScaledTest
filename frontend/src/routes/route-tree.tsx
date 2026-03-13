@@ -6,6 +6,7 @@ import { RegisterPage } from './register';
 import { OAuthCallbackPage } from './oauth-callback';
 import { ExecutionsPage } from './executions';
 import { QualityGatesPage } from './quality-gates';
+import { WebhooksPage } from './webhooks';
 import { AdminPage } from './admin';
 import { ReportsComparePage } from './reports-compare';
 import { AnalyticsPage } from './analytics';
@@ -82,6 +83,13 @@ const qualityGatesRoute = createRoute({
   component: QualityGatesPage,
 });
 
+const webhooksRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/webhooks',
+  beforeLoad: requireAuth,
+  component: WebhooksPage,
+});
+
 const adminRoute = createRoute({
   getParentRoute: () => rootRoute,
   path: '/admin',
@@ -99,5 +107,6 @@ export const routeTree = rootRoute.addChildren([
   executionsRoute,
   analyticsRoute,
   qualityGatesRoute,
+  webhooksRoute,
   adminRoute,
 ]);
