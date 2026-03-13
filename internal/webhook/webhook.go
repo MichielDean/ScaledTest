@@ -18,9 +18,10 @@ import (
 type EventType string
 
 const (
-	EventReportCreated        EventType = "report.created"
-	EventExecutionCompleted   EventType = "execution.completed"
-	EventQualityGateEvaluated EventType = "quality_gate.evaluated"
+	EventReportSubmitted    EventType = "report.submitted"
+	EventGateFailed         EventType = "gate.failed"
+	EventExecutionCompleted EventType = "execution.completed"
+	EventExecutionFailed    EventType = "execution.failed"
 )
 
 // Payload is the webhook delivery payload.
@@ -146,4 +147,76 @@ func Sign(payload []byte, secret string) string {
 func Verify(payload []byte, secret, signature string) bool {
 	expected := Sign(payload, secret)
 	return hmac.Equal([]byte(expected), []byte(signature))
+}
+
+// WebhookLister retrieves webhooks matching a team and event type.
+type WebhookLister interface {
+	ListByTeamAndEvent(ctx context.Context, teamID string, event string) ([]WebhookRecord, error)
+}
+
+// WebhookRecord is the minimal webhook data needed for dispatch.
+type WebhookRecord struct {
+	ID         string
+	URL        string
+	SecretHash string
+}
+
+// Notifier looks up matching webhooks and dispatches payloads asynchronously.
+type Notifier struct {
+	lister     WebhookLister
+	dispatcher *Dispatcher
+}
+
+// NewNotifier creates a Notifier. Returns nil if lister or dispatcher is nil.
+func NewNotifier(lister WebhookLister, dispatcher *Dispatcher) *Notifier {
+	if lister == nil || dispatcher == nil {
+		return nil
+	}
+	return &Notifier{lister: lister, dispatcher: dispatcher}
+}
+
+// Notify fires webhooks for the given event asynchronously (fire-and-forget).
+// Safe to call on a nil Notifier.
+func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
+	if n == nil {
+		return
+	}
+
+	go func() {
+		// Use a background context so delivery outlives the HTTP request.
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+
+		hooks, err := n.lister.ListByTeamAndEvent(ctx, teamID, string(event))
+		if err != nil {
+			log.Error().Err(err).
+				Str("team_id", teamID).
+				Str("event", string(event)).
+				Msg("webhook: failed to list matching webhooks")
+			return
+		}
+
+		payload := Payload{
+			Event:     event,
+			Timestamp: time.Now(),
+			Data:      data,
+		}
+
+		for _, hook := range hooks {
+			h := hook // capture
+			// Each delivery gets its own timeout context.
+			dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
+			go func() {
+				defer dCancel()
+				_, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+				if err != nil {
+					log.Warn().Err(err).
+						Str("webhook_id", h.ID).
+						Str("url", h.URL).
+						Str("event", string(event)).
+						Msg("webhook: delivery failed")
+				}
+			}()
+		}
+	}()
 }
