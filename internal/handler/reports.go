@@ -15,11 +15,13 @@ import (
 	"github.com/scaledtest/scaledtest/internal/ctrf"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // ReportsHandler handles CTRF report endpoints.
 type ReportsHandler struct {
-	DB *db.Pool
+	DB         *db.Pool
+	AuditStore *store.AuditStore
 }
 
 // List handles GET /api/v1/reports.
@@ -246,6 +248,25 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		resp["execution_id"] = executionID
 	}
 
+	if h.AuditStore != nil {
+		meta := map[string]interface{}{
+			"tool":  report.Results.Tool.Name,
+			"tests": report.Results.Summary.Tests,
+		}
+		if executionID != "" {
+			meta["execution_id"] = executionID
+		}
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       claims.TeamID,
+			Action:       "report.submitted",
+			ResourceType: "report",
+			ResourceID:   reportID,
+			Metadata:     meta,
+		})
+	}
+
 	JSON(w, http.StatusCreated, resp)
 }
 
@@ -318,6 +339,17 @@ func (h *ReportsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if tag.RowsAffected() == 0 {
 		Error(w, http.StatusNotFound, "report not found")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       claims.TeamID,
+			Action:       "report.deleted",
+			ResourceType: "report",
+			ResourceID:   reportID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{

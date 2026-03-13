@@ -76,3 +76,6 @@ ecosystem.config.js.bak
 .claude/
 .logs/
 __pycache__/
+
+# Gas Town (added by gt)
+state.json
