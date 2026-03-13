@@ -235,20 +235,24 @@ export class ScaledTestClient {
     return this.request('GET', '/api/v1/analytics/duration-distribution');
   }
 
-  // Quality Gates
-  async getQualityGates(): Promise<{ quality_gates: QualityGate[]; total: number }> {
-    return this.request('GET', '/api/v1/quality-gates');
+  // Quality Gates (nested under /teams/{teamID})
+  async getQualityGates(teamId: string): Promise<{ quality_gates: QualityGate[]; total: number }> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`);
   }
 
   async createQualityGate(
+    teamId: string,
     name: string,
     rules: Array<{ type: string; threshold: number }>
   ): Promise<QualityGate> {
-    return this.request('POST', '/api/v1/quality-gates', { name, rules });
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, { name, rules });
   }
 
-  async evaluateQualityGate(id: string): Promise<QualityGateEvaluation> {
-    return this.request('POST', `/api/v1/quality-gates/${encodeURIComponent(id)}/evaluate`);
+  async evaluateQualityGate(teamId: string, id: string): Promise<QualityGateEvaluation> {
+    return this.request(
+      'POST',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}/evaluate`
+    );
   }
 
   // Teams
