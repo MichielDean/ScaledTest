@@ -173,6 +173,26 @@ export const api = {
   createTeam: (name: string) =>
     fetchAPI('/api/v1/teams', { method: 'POST', body: JSON.stringify({ name }) }),
 
+  // Webhooks
+  getWebhooks: (teamId: string) =>
+    fetchAPI<{ webhooks: unknown[]; total: number }>(`/api/v1/teams/${teamId}/webhooks`),
+  createWebhook: (teamId: string, data: { url: string; events: string[] }) =>
+    fetchAPI<{ webhook: unknown; secret: string }>(`/api/v1/teams/${teamId}/webhooks`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    }),
+  updateWebhook: (
+    teamId: string,
+    webhookId: string,
+    data: { url: string; events: string[]; enabled: boolean }
+  ) =>
+    fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    }),
+  deleteWebhook: (teamId: string, webhookId: string) =>
+    fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, { method: 'DELETE' }),
+
   // Admin
   adminListUsers: () => fetchAPI('/api/v1/admin/users'),
 };
