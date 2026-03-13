@@ -34,9 +34,10 @@ func CSRFMiddleware(hmacKey []byte) func(http.Handler) http.Handler {
 				return
 			}
 
-			// Skip CSRF for API token auth — these tokens are never
+			// Skip CSRF for any request carrying an explicit Authorization
+			// header (Bearer JWT or sct_ API token). These are never
 			// auto-attached by browsers, so CSRF is not a threat.
-			if isAPITokenRequest(r) {
+			if hasExplicitAuth(r) {
 				next.ServeHTTP(w, r)
 				return
 			}
@@ -93,8 +94,8 @@ func isSafeMethod(method string) bool {
 	return false
 }
 
-func isAPITokenRequest(r *http.Request) bool {
-	return strings.HasPrefix(r.Header.Get("Authorization"), "sct_")
+func hasExplicitAuth(r *http.Request) bool {
+	return r.Header.Get("Authorization") != ""
 }
 
 // generateSignedToken creates a random token with an HMAC signature appended.
