@@ -53,22 +53,24 @@ export default async function handler(req: NextApiRequest, res: NextApiResponse)
 
   const status = !connected ? 'unhealthy' : !timescaleInstalled ? 'degraded' : 'healthy';
 
-  const data = {
-    status,
-    database: {
+  // Log full diagnostics server-side for operators
+  logger.info(
+    {
+      status,
       connected,
-      ...(dbError ? { error: dbError } : {}),
+      timescaleInstalled,
+      timescaleVersion,
       pool: poolStats,
-      timescaledb: {
-        installed: timescaleInstalled,
-        version: timescaleVersion,
-      },
+      ...(dbError ? { dbError } : {}),
     },
-  };
+    'Health check completed'
+  );
 
+  // Return only status to unauthenticated clients — do not leak pool stats,
+  // DB version, or error messages that aid reconnaissance.
   if (status === 'unhealthy') {
-    return res.status(503).json({ success: false, data });
+    return res.status(503).json({ success: false, data: { status } });
   }
 
-  return res.json({ success: true, data });
+  return res.json({ success: true, data: { status } });
 }

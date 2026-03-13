@@ -83,18 +83,6 @@ describe('GET /api/v1/health', () => {
       success: true,
       data: {
         status: 'healthy',
-        database: {
-          connected: true,
-          pool: {
-            total: 10,
-            idle: 5,
-            waiting: 0,
-          },
-          timescaledb: {
-            installed: true,
-            version: '2.11.1',
-          },
-        },
       },
     });
   });
@@ -111,18 +99,6 @@ describe('GET /api/v1/health', () => {
       success: true,
       data: {
         status: 'degraded',
-        database: {
-          connected: true,
-          pool: {
-            total: 10,
-            idle: 5,
-            waiting: 0,
-          },
-          timescaledb: {
-            installed: false,
-            version: null,
-          },
-        },
       },
     });
   });
@@ -138,19 +114,6 @@ describe('GET /api/v1/health', () => {
       success: false,
       data: {
         status: 'unhealthy',
-        database: {
-          connected: false,
-          error: 'Connection refused',
-          pool: {
-            total: 10,
-            idle: 5,
-            waiting: 0,
-          },
-          timescaledb: {
-            installed: false,
-            version: null,
-          },
-        },
       },
     });
   });
@@ -176,17 +139,12 @@ describe('GET /api/v1/health', () => {
 
     expect(mockClientRelease).toHaveBeenCalled();
     // Should still return degraded since DB connected but extension check failed
-    expect(mockJson).toHaveBeenCalledWith(
-      expect.objectContaining({
-        success: true,
-        data: expect.objectContaining({
-          status: 'degraded',
-          database: expect.objectContaining({
-            connected: true,
-            timescaledb: { installed: false, version: null },
-          }),
-        }),
-      })
-    );
+    // Response only includes status (no internal DB details exposed)
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: {
+        status: 'degraded',
+      },
+    });
   });
 });

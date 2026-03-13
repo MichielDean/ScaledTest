@@ -58,6 +58,20 @@ jest.mock('@/lib/apiTokens', () => {
   };
 });
 
+// Mock teamManagement for team membership checks.
+// Maintainer is a member of TEAM_ID; readonly user is not.
+const TEAM_ID_FOR_MOCK = 'e448a171-c510-46a8-bf0a-dc3a99b404b7';
+const mockGetUserTeams = jest.fn().mockImplementation((userId: string) => {
+  if (userId === 'user-maintainer') {
+    return Promise.resolve([{ id: TEAM_ID_FOR_MOCK, name: 'Test Team' }]);
+  }
+  return Promise.resolve([]);
+});
+jest.mock('@/lib/teamManagement', () => ({
+  ...jest.requireActual('@/lib/teamManagement'),
+  getUserTeams: (...args: unknown[]) => mockGetUserTeams(...args),
+}));
+
 // ── Imports ───────────────────────────────────────────────────────────────────
 
 import { auth } from '@/lib/auth';

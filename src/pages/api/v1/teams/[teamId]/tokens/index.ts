@@ -32,8 +32,21 @@ import {
   createApiToken,
   listApiTokens,
 } from '@/lib/apiTokens';
+import { getUserTeams } from '@/lib/teamManagement';
 import { isValidUuid } from '@/lib/validation';
 import { apiLogger as logger } from '@/logging/logger';
+
+/** Maximum token expiration: 1 year from now */
+const MAX_EXPIRATION_MS = 365 * 24 * 60 * 60 * 1000;
+
+/**
+ * Verify the authenticated user is a member of the given team.
+ * Returns true if the user belongs to the team, false otherwise.
+ */
+async function verifyTeamMembership(userId: string, teamId: string): Promise<boolean> {
+  const teams = await getUserTeams(userId);
+  return teams.some(t => t.id === teamId);
+}
 
 // ── POST handler ──────────────────────────────────────────────────────────────
 
@@ -42,6 +55,12 @@ async function handlePost(req: BetterAuthenticatedRequest, res: NextApiResponse)
 
   if (!isValidUuid(teamId)) {
     res.status(400).json({ success: false, error: 'Invalid teamId — must be a UUID' });
+    return;
+  }
+
+  // Verify user is a member of this team before allowing token operations
+  if (!(await verifyTeamMembership(req.user.id, teamId))) {
+    res.status(403).json({ success: false, error: 'You do not have access to this team' });
     return;
   }
 
@@ -64,6 +83,13 @@ async function handlePost(req: BetterAuthenticatedRequest, res: NextApiResponse)
     }
     if (parsed <= new Date()) {
       res.status(400).json({ success: false, error: 'expiresAt must be in the future' });
+      return;
+    }
+    if (parsed.getTime() > Date.now() + MAX_EXPIRATION_MS) {
+      res.status(400).json({
+        success: false,
+        error: 'expiresAt cannot be more than 1 year in the future',
+      });
       return;
     }
     expiresAt = parsed;
@@ -106,6 +132,12 @@ async function handleGet(req: BetterAuthenticatedRequest, res: NextApiResponse):
 
   if (!isValidUuid(teamId)) {
     res.status(400).json({ success: false, error: 'Invalid teamId — must be a UUID' });
+    return;
+  }
+
+  // Verify user is a member of this team before listing tokens
+  if (!(await verifyTeamMembership(req.user.id, teamId))) {
+    res.status(403).json({ success: false, error: 'You do not have access to this team' });
     return;
   }
 

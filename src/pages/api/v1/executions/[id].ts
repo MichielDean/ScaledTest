@@ -12,10 +12,28 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
-import { getExecutionDetail, cancelExecution } from '@/lib/executions';
+import { getExecutionDetail, getExecution, cancelExecution } from '@/lib/executions';
 import { deleteKubernetesJob } from '@/lib/kubernetes';
+import { getUserTeams } from '@/lib/teamManagement';
 import { isValidUuid } from '@/lib/validation';
 import { apiLogger as logger, logError } from '@/logging/logger';
+
+/**
+ * Verify the authenticated user has access to the given execution.
+ * Access is granted if:
+ *   - The execution has no teamId (legacy/unscoped execution), OR
+ *   - The user is the one who requested the execution, OR
+ *   - The user belongs to the execution's team
+ */
+async function userCanAccessExecution(
+  userId: string,
+  execution: { teamId: string | null; requestedBy: string | null }
+): Promise<boolean> {
+  if (!execution.teamId) return true;
+  if (execution.requestedBy === userId) return true;
+  const teams = await getUserTeams(userId);
+  return teams.some(t => t.id === execution.teamId);
+}
 
 export default createBetterAuthApi({
   GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
@@ -34,6 +52,12 @@ export default createBetterAuthApi({
       if (!detail) {
         return res.status(404).json({ success: false, error: 'Execution not found' });
       }
+
+      // Team-scoped access: verify user belongs to the execution's team
+      if (!(await userCanAccessExecution(req.user.id, detail))) {
+        return res.status(404).json({ success: false, error: 'Execution not found' });
+      }
+
       return res.json({ success: true, data: detail });
     } catch {
       return res.status(503).json({ success: false, error: 'Database unavailable' });
@@ -56,6 +80,15 @@ export default createBetterAuthApi({
     }
 
     try {
+      // Pre-fetch to verify team-scoped access before cancellation
+      const existing = await getExecution(id);
+      if (!existing) {
+        return res.status(404).json({ success: false, error: 'Execution not found' });
+      }
+      if (!(await userCanAccessExecution(req.user.id, existing))) {
+        return res.status(404).json({ success: false, error: 'Execution not found' });
+      }
+
       const execution = await cancelExecution(id);
       if (execution === null) {
         return res.status(404).json({ success: false, error: 'Execution not found' });

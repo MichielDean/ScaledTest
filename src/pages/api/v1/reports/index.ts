@@ -157,11 +157,10 @@ async function handlePost(
       });
     }
 
-    // Handle other errors
+    // Handle other errors — do not leak internal error details to clients
     return res.status(500).json({
       success: false,
       error: 'Failed to store CTRF report',
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
@@ -174,8 +173,8 @@ async function handleGet(
 ) {
   try {
     const { page = '1', size = '20', status, tool, environment } = req.query;
-    const pageNum = parseInt(page as string, 10);
-    const pageSize = Math.min(parseInt(size as string, 10), 100); // Limit max page size
+    const pageNum = Math.max(1, parseInt(page as string, 10) || 1);
+    const pageSize = Math.min(Math.max(1, parseInt(size as string, 10) || 20), 100);
 
     // Get user's teams for filtering
     if (!req.user?.id) {
@@ -303,11 +302,10 @@ async function handleGet(
       }
     }
 
-    // Handle other non-database errors
+    // Handle other non-database errors — do not leak internal error details to clients
     return res.status(500).json({
       success: false,
       error: 'Failed to retrieve CTRF reports',
-      details: error instanceof Error ? error.message : String(error),
     });
   }
 }
