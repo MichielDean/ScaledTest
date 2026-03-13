@@ -56,7 +56,7 @@ const CreateTeamModal: React.FC<CreateTeamModalProps> = ({ isOpen, onClose, onTe
     try {
       setIsLoading(true);
 
-      const response = await fetch('/api/teams', {
+      const response = await fetch('/api/v1/teams', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',

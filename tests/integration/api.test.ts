@@ -97,7 +97,7 @@ Object.defineProperty(global, 'crypto', {
   },
 });
 
-import ctrfReportsHandler from '../../src/pages/api/test-reports';
+import ctrfReportsHandler from '../../src/pages/api/v1/reports/index';
 import executionDetailHandler from '../../src/pages/api/v1/executions/[id]';
 
 const mockReq = (

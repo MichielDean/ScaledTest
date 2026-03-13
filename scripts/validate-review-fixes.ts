@@ -22,7 +22,7 @@ async function validateResolvedComments() {
     }
 
     // 2. Check z.record validation pattern
-    const testReportsPath = join(process.cwd(), 'src/pages/api/test-reports.ts');
+    const testReportsPath = join(process.cwd(), 'src/pages/api/v1/reports/index.ts');
     const testReportsContent = await fs.readFile(testReportsPath, 'utf-8');
 
     if (testReportsContent.includes('z.record(z.string(), z.unknown())')) {

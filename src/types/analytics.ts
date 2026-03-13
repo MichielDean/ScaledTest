@@ -1,7 +1,7 @@
 /**
  * Analytics API types
  *
- * Shared types for the /api/analytics endpoint and its consumers.
+ * Shared types for the analytics API and its consumers.
  * Used by both the API route and the front-end components.
  */
 
