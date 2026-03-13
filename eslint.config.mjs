@@ -23,6 +23,7 @@ export default [
       "frontend/src/**/*.test.tsx",
       "frontend/src/test-setup.ts",
       "sdk/**", // SDK has its own toolchain (vitest + tsconfig)
+      "e2e/**", // E2E tests use Playwright's own toolchain
     ],
   },
   
