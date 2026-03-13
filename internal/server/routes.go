@@ -55,8 +55,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessDur, refreshDur)
 
-	// Auth middleware (nil tokenLookup until DB is wired)
-	authMW := auth.Middleware(jwtMgr, nil)
+	// Auth middleware with API token lookup
+	var tokenLookup func(string) (*auth.Claims, error)
+	if dbPool != nil {
+		tokenLookup = store.NewAPITokenStore(dbPool).TokenLookupFunc()
+	}
+	authMW := auth.Middleware(jwtMgr, tokenLookup)
 
 	// WebSocket hub for real-time execution streaming
 	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")

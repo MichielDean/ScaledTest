@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // --- User CRUD ---
@@ -880,7 +881,7 @@ func TestAPITokenCRUD(t *testing.T) {
 	_, err = tdb.Pool.Exec(ctx,
 		`INSERT INTO api_tokens (team_id, user_id, name, token_hash, prefix)
 		 VALUES ($1, $2, $3, $4, $5)`,
-		teamID, userID, "CI Token", result.Hash, result.Prefix,
+		teamID, userID, "CI Token", result.TokenHash, result.Prefix,
 	)
 	if err != nil {
 		t.Fatalf("insert API token: %v", err)
@@ -900,6 +901,60 @@ func TestAPITokenCRUD(t *testing.T) {
 	}
 	if foundUserID != userID {
 		t.Errorf("token user_id = %q, want %q", foundUserID, userID)
+	}
+}
+
+// --- API Token Store Lookup ---
+
+func TestAPITokenStoreLookup(t *testing.T) {
+	tdb := Setup(t)
+	ctx := context.Background()
+
+	userID := tdb.CreateUser(t, "storeuser@example.com", "hash", "StoreUser", "maintainer")
+	teamID := tdb.CreateTeam(t, "Store Team")
+	tdb.AddUserToTeam(t, userID, teamID, "owner")
+
+	// Generate and store token
+	result, err := auth.GenerateAPIToken()
+	if err != nil {
+		t.Fatalf("generate API token: %v", err)
+	}
+	_, err = tdb.Pool.Exec(ctx,
+		`INSERT INTO api_tokens (team_id, user_id, name, token_hash, prefix)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		teamID, userID, "CI Token", result.TokenHash, result.Prefix,
+	)
+	if err != nil {
+		t.Fatalf("insert API token: %v", err)
+	}
+
+	// Use the store to look up
+	tokenStore := store.NewAPITokenStore(tdb.Pool)
+	claims, err := tokenStore.Lookup(ctx, auth.HashAPIToken(result.Token))
+	if err != nil {
+		t.Fatalf("store lookup: %v", err)
+	}
+
+	if claims.UserID != userID {
+		t.Errorf("claims.UserID = %q, want %q", claims.UserID, userID)
+	}
+	if claims.Email != "storeuser@example.com" {
+		t.Errorf("claims.Email = %q, want %q", claims.Email, "storeuser@example.com")
+	}
+	if claims.Role != "owner" {
+		t.Errorf("claims.Role = %q, want %q (should use user_teams role)", claims.Role, "owner")
+	}
+	if claims.TeamID != teamID {
+		t.Errorf("claims.TeamID = %q, want %q", claims.TeamID, teamID)
+	}
+
+	// Verify last_used_at was updated (give the goroutine a moment)
+	// Not asserting timing here — just that the lookup returned correct data
+
+	// Verify unknown token returns error
+	_, err = tokenStore.Lookup(ctx, "nonexistent-hash")
+	if err == nil {
+		t.Error("expected error for unknown token hash")
 	}
 }
 
