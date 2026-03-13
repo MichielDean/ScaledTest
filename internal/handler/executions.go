@@ -11,8 +11,11 @@ import (
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
+	"github.com/rs/zerolog/log"
+
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/k8s"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -21,9 +24,13 @@ import (
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
-	DB         *db.Pool
-	Hub        *ws.Hub            // WebSocket hub for real-time broadcasting (optional)
-	AuditStore *store.AuditStore  // optional; nil means no audit logging
+	DB          *db.Pool
+	Hub         *ws.Hub            // WebSocket hub for real-time broadcasting (optional)
+	AuditStore  *store.AuditStore  // optional; nil means no audit logging
+	K8s         *k8s.Client        // optional; nil means K8s job launch is disabled
+	WorkerImage string             // default container image for test workers
+	WorkerToken string             // auth token workers use to report back
+	APIBaseURL  string             // base URL workers use to call the API
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -149,6 +156,36 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create execution")
 		return
+	}
+
+	// Launch K8s job if client is configured
+	if h.K8s != nil {
+		image := req.Image
+		if image == "" {
+			image = h.WorkerImage
+		}
+		jobName := "st-exec-" + id
+		jobCfg := k8s.JobConfig{
+			Name:        jobName,
+			Image:       image,
+			Command:     req.Command,
+			EnvVars:     req.EnvVars,
+			WorkerToken: h.WorkerToken,
+			APIBaseURL:  h.APIBaseURL,
+			ExecutionID: id,
+		}
+		if _, err := h.K8s.CreateJob(r.Context(), jobCfg); err != nil {
+			log.Error().Err(err).Str("execution_id", id).Msg("failed to launch k8s job")
+			h.DB.Exec(r.Context(),
+				`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+				"job launch failed: "+err.Error(), time.Now(), id)
+			Error(w, http.StatusInternalServerError, "execution created but job launch failed")
+			return
+		}
+		// Store K8s job name on the execution record
+		h.DB.Exec(r.Context(),
+			`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
+			jobName, time.Now(), id)
 	}
 
 	if h.AuditStore != nil {
