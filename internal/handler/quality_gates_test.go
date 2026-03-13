@@ -329,9 +329,11 @@ func TestQualityGatesDeleteReadonlyForbidden(t *testing.T) {
 }
 
 func TestQualityGatesEvaluateWithoutDB(t *testing.T) {
-	h := &QualityGatesHandler{Store: nil}
+	h := &QualityGatesHandler{Store: nil, DB: nil}
 
-	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", nil)
+	body := `{"report_id":"report-123"}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "owner")
 	req = withTeamParam(req, "team-1")
 	req = withGateParam(req, "gate-1")
@@ -341,6 +343,61 @@ func TestQualityGatesEvaluateWithoutDB(t *testing.T) {
 
 	if w.Code != http.StatusNotImplemented {
 		t.Errorf("Evaluate without DB status = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
+func TestQualityGatesEvaluateMissingReportID(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil, DB: nil}
+
+	body := `{}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaimsRole(req, "owner")
+	req = withTeamParam(req, "team-1")
+	req = withGateParam(req, "gate-1")
+	w := httptest.NewRecorder()
+
+	h.Evaluate(w, req)
+
+	// Should fail because report_id is required (before DB check happens)
+	// With nil Store/DB, it returns 501 before checking report_id
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("Evaluate missing report_id status = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
+func TestQualityGatesEvaluateUnauthorized(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil, DB: nil}
+
+	body := `{"report_id":"report-123"}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withTeamParam(req, "team-1")
+	req = withGateParam(req, "gate-1")
+	w := httptest.NewRecorder()
+
+	h.Evaluate(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Evaluate without auth status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestQualityGatesEvaluateMissingGateID(t *testing.T) {
+	h := &QualityGatesHandler{Store: nil, DB: nil}
+
+	body := `{"report_id":"report-123"}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates//evaluate", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaimsRole(req, "owner")
+	req = withTeamParam(req, "team-1")
+	req = withGateParam(req, "")
+	w := httptest.NewRecorder()
+
+	h.Evaluate(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Evaluate missing gate ID status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
 }
 

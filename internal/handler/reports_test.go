@@ -6,6 +6,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/scaledtest/scaledtest/internal/ctrf"
+	"github.com/scaledtest/scaledtest/internal/model"
 )
 
 
@@ -702,5 +705,143 @@ func TestCompareReports_OnlyHeadEmpty(t *testing.T) {
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("Compare with empty head: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+// --- buildReportData tests ---
+
+func TestBuildReportData_BasicCounts(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{
+				Tests:   10,
+				Passed:  7,
+				Failed:  2,
+				Skipped: 1,
+			},
+		},
+	}
+
+	results := []model.TestResult{
+		{Name: "t1", Status: "passed", DurationMs: 100},
+		{Name: "t2", Status: "passed", DurationMs: 200},
+		{Name: "t3", Status: "failed", DurationMs: 300},
+		{Name: "t4", Status: "failed", DurationMs: 150},
+		{Name: "t5", Status: "skipped", DurationMs: 0},
+	}
+
+	data := buildReportData(report, results)
+
+	if data.TotalTests != 10 {
+		t.Errorf("TotalTests = %d, want 10", data.TotalTests)
+	}
+	if data.PassedTests != 7 {
+		t.Errorf("PassedTests = %d, want 7", data.PassedTests)
+	}
+	if data.FailedTests != 2 {
+		t.Errorf("FailedTests = %d, want 2", data.FailedTests)
+	}
+	if data.SkippedTests != 1 {
+		t.Errorf("SkippedTests = %d, want 1", data.SkippedTests)
+	}
+	if data.TotalDurationMs != 750 {
+		t.Errorf("TotalDurationMs = %d, want 750", data.TotalDurationMs)
+	}
+}
+
+func TestBuildReportData_FailedTests(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{Tests: 3, Passed: 1, Failed: 2},
+		},
+	}
+
+	results := []model.TestResult{
+		{Name: "passing", Status: "passed", DurationMs: 100},
+		{Name: "failing1", Status: "failed", DurationMs: 200},
+		{Name: "failing2", Status: "failed", DurationMs: 300},
+	}
+
+	data := buildReportData(report, results)
+
+	if len(data.CurrentFailedTests) != 2 {
+		t.Errorf("CurrentFailedTests count = %d, want 2", len(data.CurrentFailedTests))
+	}
+	if !data.CurrentFailedTests["failing1"] {
+		t.Error("expected failing1 in CurrentFailedTests")
+	}
+	if !data.CurrentFailedTests["failing2"] {
+		t.Error("expected failing2 in CurrentFailedTests")
+	}
+	if data.CurrentFailedTests["passing"] {
+		t.Error("passing test should not be in CurrentFailedTests")
+	}
+}
+
+func TestBuildReportData_FlakyTests(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{Tests: 3, Passed: 3},
+		},
+	}
+
+	results := []model.TestResult{
+		{Name: "stable", Status: "passed", DurationMs: 100, Flaky: false},
+		{Name: "flaky1", Status: "passed", DurationMs: 200, Flaky: true, Suite: "auth", FilePath: "tests/auth.go"},
+		{Name: "flaky2", Status: "passed", DurationMs: 300, Flaky: true},
+	}
+
+	data := buildReportData(report, results)
+
+	if len(data.FlakyTests) != 2 {
+		t.Errorf("FlakyTests count = %d, want 2", len(data.FlakyTests))
+	}
+	if data.FlakyTests[0].Name != "flaky1" {
+		t.Errorf("FlakyTests[0].Name = %s, want flaky1", data.FlakyTests[0].Name)
+	}
+	if data.FlakyTests[0].Suite != "auth" {
+		t.Errorf("FlakyTests[0].Suite = %s, want auth", data.FlakyTests[0].Suite)
+	}
+}
+
+func TestBuildReportData_EmptyResults(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{Tests: 0},
+		},
+	}
+
+	data := buildReportData(report, nil)
+
+	if data.TotalTests != 0 {
+		t.Errorf("TotalTests = %d, want 0", data.TotalTests)
+	}
+	if data.TotalDurationMs != 0 {
+		t.Errorf("TotalDurationMs = %d, want 0", data.TotalDurationMs)
+	}
+	if len(data.CurrentFailedTests) != 0 {
+		t.Errorf("CurrentFailedTests count = %d, want 0", len(data.CurrentFailedTests))
+	}
+	if data.FlakyTests != nil {
+		t.Errorf("FlakyTests should be nil, got %v", data.FlakyTests)
+	}
+}
+
+func TestBuildReportData_PreviousFailedTestsNil(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{Tests: 1, Passed: 1},
+		},
+	}
+
+	results := []model.TestResult{
+		{Name: "t1", Status: "passed", DurationMs: 100},
+	}
+
+	data := buildReportData(report, results)
+
+	// PreviousFailedTests should be nil (not populated from a single report)
+	if data.PreviousFailedTests != nil {
+		t.Error("PreviousFailedTests should be nil for single report submission")
 	}
 }
