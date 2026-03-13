@@ -18,7 +18,33 @@ A comprehensive platform for test result management and reporting built with Nex
 - Docker and Docker Compose
 - Git
 
-## Quick Start
+## Quick Start (Docker Compose)
+
+The fastest way to get ScaledTest running locally:
+
+```bash
+git clone <repository-url>
+cd <repository-directory>
+docker compose up
+```
+
+This starts TimescaleDB and the ScaledTest app with migrations applied automatically.
+The app is available at `http://localhost:3000` and TimescaleDB at `localhost:5432`.
+
+To rebuild after code changes:
+
+```bash
+docker compose up --build
+```
+
+To reset the database:
+
+```bash
+docker compose down -v
+docker compose up
+```
+
+## Quick Start (Manual)
 
 1. Clone the repository:
 
