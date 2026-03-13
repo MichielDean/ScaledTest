@@ -40,14 +40,32 @@ func TestCSRFMiddleware_APITokenSkipsCRSF(t *testing.T) {
 	}
 }
 
+func TestCSRFMiddleware_BearerJWTSkipsCSRF(t *testing.T) {
+	mw := CSRFMiddleware(testHMACKey)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
+		req := httptest.NewRequest(method, "/test", nil)
+		req.Header.Set("Authorization", "Bearer some-jwt-token")
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusOK {
+			t.Errorf("Bearer JWT %s: status = %d, want %d", method, w.Code, http.StatusOK)
+		}
+	}
+}
+
 func TestCSRFMiddleware_MissingCookieRejects(t *testing.T) {
 	mw := CSRFMiddleware(testHMACKey)
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
+	// No Authorization header — simulates browser cookie-based auth
 	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-jwt")
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
 
@@ -64,7 +82,6 @@ func TestCSRFMiddleware_MissingHeaderRejects(t *testing.T) {
 
 	token := generateSignedToken(testHMACKey)
 	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-jwt")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -84,7 +101,6 @@ func TestCSRFMiddleware_MismatchRejects(t *testing.T) {
 	token2 := generateSignedToken(testHMACKey)
 
 	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-jwt")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token1})
 	req.Header.Set(csrfHeaderName, token2)
 	w := httptest.NewRecorder()
@@ -105,7 +121,6 @@ func TestCSRFMiddleware_ValidDoubleSubmitPasses(t *testing.T) {
 
 	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
 		req := httptest.NewRequest(method, "/test", nil)
-		req.Header.Set("Authorization", "Bearer some-jwt")
 		req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 		req.Header.Set(csrfHeaderName, token)
 		w := httptest.NewRecorder()
@@ -127,7 +142,6 @@ func TestCSRFMiddleware_ForgedSignatureRejects(t *testing.T) {
 	badToken := generateSignedToken([]byte("wrong-key-for-testing-purposes!!"))
 
 	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-jwt")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: badToken})
 	req.Header.Set(csrfHeaderName, badToken)
 	w := httptest.NewRecorder()
@@ -147,7 +161,6 @@ func TestCSRFMiddleware_MalformedTokenRejects(t *testing.T) {
 	badToken := "not-a-valid-token-no-dot"
 
 	req := httptest.NewRequest("POST", "/test", nil)
-	req.Header.Set("Authorization", "Bearer some-jwt")
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: badToken})
 	req.Header.Set(csrfHeaderName, badToken)
 	w := httptest.NewRecorder()

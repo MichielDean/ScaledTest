@@ -226,18 +226,20 @@ func TestCSRFTokenEndpoint(t *testing.T) {
 	}
 }
 
-func TestCSRFBlocksMutationWithoutToken(t *testing.T) {
+func TestCSRFAllowsBearerJWTWithoutCSRF(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	token := testToken()
 
+	// Bearer JWT POSTs should NOT be blocked by CSRF — the Authorization header
+	// is never auto-attached by browsers, so CSRF is not a threat.
 	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{}`))
 	req.Header.Set("Authorization", "Bearer "+token)
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusForbidden {
-		t.Errorf("POST without CSRF: status = %d, want %d", w.Code, http.StatusForbidden)
+	if w.Code == http.StatusForbidden {
+		t.Errorf("Bearer JWT POST without CSRF: got 403 (CSRF rejection), want non-CSRF status (body: %s)", w.Body.String())
 	}
 }
 
