@@ -944,6 +944,247 @@ func TestCreateReport_NoDB_QualityGateNotEvaluatedWhenStoreNil(t *testing.T) {
 	}
 }
 
+// --- Quality gate auto-evaluation with mock store ---
+
+// mockQualityGateStore implements qualityGateEvaluator for testing.
+type mockQualityGateStore struct {
+	gates       []model.QualityGate
+	listErr     error
+	evalCalls   []mockEvalCall
+	createErr   error
+}
+
+type mockEvalCall struct {
+	GateID   string
+	ReportID string
+	Passed   bool
+}
+
+func (m *mockQualityGateStore) ListEnabled(_ context.Context, teamID string) ([]model.QualityGate, error) {
+	if m.listErr != nil {
+		return nil, m.listErr
+	}
+	var result []model.QualityGate
+	for _, g := range m.gates {
+		if g.TeamID == teamID {
+			result = append(result, g)
+		}
+	}
+	return result, nil
+}
+
+func (m *mockQualityGateStore) CreateEvaluation(_ context.Context, gateID, reportID string, passed bool, _ json.RawMessage) (*model.QualityGateEvaluation, error) {
+	m.evalCalls = append(m.evalCalls, mockEvalCall{GateID: gateID, ReportID: reportID, Passed: passed})
+	if m.createErr != nil {
+		return nil, m.createErr
+	}
+	return &model.QualityGateEvaluation{
+		ID:       "eval-1",
+		GateID:   gateID,
+		ReportID: reportID,
+		Passed:   passed,
+	}, nil
+}
+
+func TestEvaluateQualityGates_TeamScopedAPIToken(t *testing.T) {
+	// Simulates the machine-facing path: API token with team_id submits a report,
+	// quality gates for that team are auto-evaluated, results returned in response.
+	teamID := "team-machine-abc"
+
+	mockStore := &mockQualityGateStore{
+		gates: []model.QualityGate{
+			{
+				ID:      "gate-1",
+				TeamID:  teamID,
+				Name:    "Release Gate",
+				Enabled: true,
+				// Rules in quality.Rule format: require 100% pass rate (will fail on 66.7%)
+				Rules: json.RawMessage(`[{"type":"pass_rate","params":{"threshold":100}}]`),
+			},
+		},
+	}
+
+	h := &ReportsHandler{QualityGateStore: mockStore}
+
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Tool: ctrf.Tool{Name: "ci-runner"},
+			Summary: ctrf.Summary{
+				Tests: 3, Passed: 2, Failed: 1, Skipped: 0,
+			},
+		},
+	}
+	results := []model.TestResult{
+		{Name: "test-a", Status: "passed", DurationMs: 100},
+		{Name: "test-b", Status: "passed", DurationMs: 200},
+		{Name: "test-c", Status: "failed", DurationMs: 50},
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", nil)
+	gateResult := h.evaluateQualityGates(req, teamID, "report-xyz", report, results)
+
+	if gateResult == nil {
+		t.Fatal("expected quality gate result, got nil")
+	}
+	if gateResult.Passed {
+		t.Error("expected gate to fail (66.7% < 100% threshold)")
+	}
+	if len(gateResult.Gates) != 1 {
+		t.Fatalf("expected 1 gate, got %d", len(gateResult.Gates))
+	}
+	gate := gateResult.Gates[0]
+	if gate.ID != "gate-1" {
+		t.Errorf("gate ID = %s, want gate-1", gate.ID)
+	}
+	if gate.Name != "Release Gate" {
+		t.Errorf("gate name = %s, want Release Gate", gate.Name)
+	}
+	if gate.Passed {
+		t.Error("expected individual gate to fail")
+	}
+	if len(gate.Rules) != 1 {
+		t.Fatalf("expected 1 rule result, got %d", len(gate.Rules))
+	}
+	rr := gate.Rules[0]
+	if rr.Metric != "pass_rate" {
+		t.Errorf("rule metric = %s, want pass_rate", rr.Metric)
+	}
+	if rr.Passed {
+		t.Error("pass_rate rule should have failed")
+	}
+
+	// Verify evaluation was persisted
+	if len(mockStore.evalCalls) != 1 {
+		t.Fatalf("expected 1 CreateEvaluation call, got %d", len(mockStore.evalCalls))
+	}
+	if mockStore.evalCalls[0].GateID != "gate-1" {
+		t.Errorf("stored gate_id = %s, want gate-1", mockStore.evalCalls[0].GateID)
+	}
+	if mockStore.evalCalls[0].Passed {
+		t.Error("stored evaluation should be failed")
+	}
+}
+
+func TestEvaluateQualityGates_PassingGateViaAPIToken(t *testing.T) {
+	teamID := "team-ci-pass"
+
+	mockStore := &mockQualityGateStore{
+		gates: []model.QualityGate{
+			{
+				ID:      "gate-pass",
+				TeamID:  teamID,
+				Name:    "Lenient Gate",
+				Enabled: true,
+				Rules:   json.RawMessage(`[{"type":"pass_rate","params":{"threshold":50}}]`),
+			},
+		},
+	}
+
+	h := &ReportsHandler{QualityGateStore: mockStore}
+
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Tool:    ctrf.Tool{Name: "ci-runner"},
+			Summary: ctrf.Summary{Tests: 4, Passed: 3, Failed: 1},
+		},
+	}
+	results := []model.TestResult{
+		{Name: "a", Status: "passed", DurationMs: 10},
+		{Name: "b", Status: "passed", DurationMs: 20},
+		{Name: "c", Status: "passed", DurationMs: 30},
+		{Name: "d", Status: "failed", DurationMs: 15},
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", nil)
+	gateResult := h.evaluateQualityGates(req, teamID, "report-pass", report, results)
+
+	if gateResult == nil {
+		t.Fatal("expected gate result, got nil")
+	}
+	if !gateResult.Passed {
+		t.Error("expected gate to pass (75% >= 50% threshold)")
+	}
+	if len(gateResult.Gates) != 1 || !gateResult.Gates[0].Passed {
+		t.Error("individual gate should have passed")
+	}
+}
+
+func TestEvaluateQualityGates_NoGatesForTeam(t *testing.T) {
+	mockStore := &mockQualityGateStore{
+		gates: []model.QualityGate{
+			{ID: "gate-other", TeamID: "team-other", Enabled: true,
+				Rules: json.RawMessage(`[{"type":"pass_rate","params":{"threshold":50}}]`)},
+		},
+	}
+
+	h := &ReportsHandler{QualityGateStore: mockStore}
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Tool:    ctrf.Tool{Name: "test"},
+			Summary: ctrf.Summary{Tests: 1, Passed: 1},
+		},
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", nil)
+	// Different team — no gates should match
+	result := h.evaluateQualityGates(req, "team-empty", "report-1", report, nil)
+
+	if result != nil {
+		t.Error("expected nil result when no gates exist for team")
+	}
+}
+
+func TestEvaluateQualityGates_MultipleGates(t *testing.T) {
+	teamID := "team-multi"
+
+	mockStore := &mockQualityGateStore{
+		gates: []model.QualityGate{
+			{ID: "g1", TeamID: teamID, Name: "Strict", Enabled: true,
+				Rules: json.RawMessage(`[{"type":"pass_rate","params":{"threshold":100}}]`)},
+			{ID: "g2", TeamID: teamID, Name: "Lenient", Enabled: true,
+				Rules: json.RawMessage(`[{"type":"pass_rate","params":{"threshold":50}}]`)},
+		},
+	}
+
+	h := &ReportsHandler{QualityGateStore: mockStore}
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Tool:    ctrf.Tool{Name: "test"},
+			Summary: ctrf.Summary{Tests: 2, Passed: 1, Failed: 1},
+		},
+	}
+	results := []model.TestResult{
+		{Name: "a", Status: "passed", DurationMs: 10},
+		{Name: "b", Status: "failed", DurationMs: 20},
+	}
+
+	req := httptest.NewRequest("POST", "/api/v1/reports", nil)
+	gateResult := h.evaluateQualityGates(req, teamID, "report-m", report, results)
+
+	if gateResult == nil {
+		t.Fatal("expected gate result")
+	}
+	// Overall should fail because strict gate fails
+	if gateResult.Passed {
+		t.Error("overall should fail when any gate fails")
+	}
+	if len(gateResult.Gates) != 2 {
+		t.Fatalf("expected 2 gates, got %d", len(gateResult.Gates))
+	}
+	// Strict gate fails, lenient gate passes
+	if gateResult.Gates[0].Passed {
+		t.Error("strict gate should fail")
+	}
+	if !gateResult.Gates[1].Passed {
+		t.Error("lenient gate should pass")
+	}
+
+	// Both evaluations should be stored
+	if len(mockStore.evalCalls) != 2 {
+		t.Fatalf("expected 2 evaluation calls, got %d", len(mockStore.evalCalls))
+	}
+}
+
 // --- Nil DB returns 503 tests ---
 
 func TestCreateReport_NilDB_Returns503ForGet(t *testing.T) {
