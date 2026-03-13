@@ -297,13 +297,21 @@ The system automatically creates these test users for development and testing:
 
 **Security Note**: These test users are intended for development and testing environments only. In production, create proper user accounts through the Better Auth system with secure passwords following your organization's password policy.
 
-## CI/CD Integration
+## CI Integration
 
-The project includes:
+ScaledTest integrates with CI pipelines to collect test results and enforce quality gates.
 
-- Jest tests for all code layers
-- Playwright for UI testing
-- Ready-to-use GitHub Actions workflows
+**Quick start:** Copy [`ci-integration/github-actions.yml`](ci-integration/github-actions.yml) into your repo's `.github/workflows/` directory. It demonstrates the full flow:
+
+1. Run tests and produce a CTRF report
+2. Upload the report to ScaledTest via `POST /api/v1/reports`
+3. Evaluate a quality gate to pass/fail the build
+
+**Required secrets:** `SCALEDTEST_URL`, `SCALEDTEST_API_TOKEN`, `SCALEDTEST_TEAM_ID`, `SCALEDTEST_GATE_ID`
+
+**Detailed guides:**
+- [GitHub Actions integration](docs/ci-integration/github-actions.md)
+- [GitLab CI integration](docs/ci-integration/gitlab-ci.md)
 
 ## Building for Production
 
