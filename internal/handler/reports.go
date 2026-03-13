@@ -19,6 +19,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // ReportsHandler handles CTRF report endpoints.
@@ -26,6 +27,7 @@ type ReportsHandler struct {
 	DB               *db.Pool
 	AuditStore       *store.AuditStore
 	QualityGateStore *store.QualityGateStore
+	Webhooks         *webhook.Notifier
 }
 
 // List handles GET /api/v1/reports.
@@ -276,6 +278,24 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			ResourceType: "report",
 			ResourceID:   reportID,
 			Metadata:     meta,
+		})
+	}
+
+	// Fire webhook: report.submitted
+	h.Webhooks.Notify(claims.TeamID, webhook.EventReportSubmitted, map[string]interface{}{
+		"report_id":    reportID,
+		"tool":         report.Results.Tool.Name,
+		"tool_version": report.Results.Tool.Version,
+		"tests":        report.Results.Summary.Tests,
+		"passed":       report.Results.Summary.Passed,
+		"failed":       report.Results.Summary.Failed,
+	})
+
+	// Fire webhook: gate.failed if any quality gate failed
+	if gateResult, ok := resp["qualityGate"].(*QualityGateResponse); ok && gateResult != nil && !gateResult.Passed {
+		h.Webhooks.Notify(claims.TeamID, webhook.EventGateFailed, map[string]interface{}{
+			"report_id": reportID,
+			"gates":     gateResult.Gates,
 		})
 	}
 

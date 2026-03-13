@@ -7,6 +7,7 @@ import (
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // WebhookStore handles webhook persistence.
@@ -81,6 +82,30 @@ func (s *WebhookStore) Update(ctx context.Context, teamID, webhookID, url string
 		return nil, fmt.Errorf("update webhook: %w", err)
 	}
 	return &w, nil
+}
+
+// ListByTeamAndEvent returns enabled webhooks for a team that are subscribed
+// to the given event type. It implements webhook.WebhookLister.
+func (s *WebhookStore) ListByTeamAndEvent(ctx context.Context, teamID string, event string) ([]webhook.WebhookRecord, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, url, secret_hash
+		 FROM webhooks
+		 WHERE team_id = $1 AND enabled = true AND $2 = ANY(events)`,
+		teamID, event)
+	if err != nil {
+		return nil, fmt.Errorf("query webhooks by event: %w", err)
+	}
+	defer rows.Close()
+
+	var result []webhook.WebhookRecord
+	for rows.Next() {
+		var r webhook.WebhookRecord
+		if err := rows.Scan(&r.ID, &r.URL, &r.SecretHash); err != nil {
+			return nil, fmt.Errorf("scan webhook record: %w", err)
+		}
+		result = append(result, r)
+	}
+	return result, rows.Err()
 }
 
 // Delete removes a webhook.
