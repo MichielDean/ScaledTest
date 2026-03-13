@@ -45,6 +45,31 @@ func (s *QualityGateStore) List(ctx context.Context, teamID string) ([]model.Qua
 	return gates, rows.Err()
 }
 
+// ListEnabled returns all enabled quality gates for a team.
+func (s *QualityGateStore) ListEnabled(ctx context.Context, teamID string) ([]model.QualityGate, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, team_id, name, description, rules, enabled, created_at, updated_at
+		 FROM quality_gates WHERE team_id = $1 AND enabled = true ORDER BY created_at DESC`, teamID)
+	if err != nil {
+		return nil, fmt.Errorf("query enabled quality gates: %w", err)
+	}
+	defer rows.Close()
+
+	var gates []model.QualityGate
+	for rows.Next() {
+		var g model.QualityGate
+		var desc *string
+		if err := rows.Scan(&g.ID, &g.TeamID, &g.Name, &desc, &g.Rules, &g.Enabled, &g.CreatedAt, &g.UpdatedAt); err != nil {
+			return nil, fmt.Errorf("scan quality gate: %w", err)
+		}
+		if desc != nil {
+			g.Description = *desc
+		}
+		gates = append(gates, g)
+	}
+	return gates, rows.Err()
+}
+
 // Get returns a single quality gate by ID, scoped to team.
 func (s *QualityGateStore) Get(ctx context.Context, teamID, gateID string) (*model.QualityGate, error) {
 	var g model.QualityGate

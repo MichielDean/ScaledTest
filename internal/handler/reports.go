@@ -10,18 +10,22 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
+	"github.com/rs/zerolog/log"
 
+	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/ctrf"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // ReportsHandler handles CTRF report endpoints.
 type ReportsHandler struct {
-	DB         *db.Pool
-	AuditStore *store.AuditStore
+	DB               *db.Pool
+	AuditStore       *store.AuditStore
+	QualityGateStore *store.QualityGateStore
 }
 
 // List handles GET /api/v1/reports.
@@ -246,6 +250,14 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if executionID != "" {
 		resp["execution_id"] = executionID
+	}
+
+	// Evaluate quality gates for this team
+	if h.QualityGateStore != nil {
+		gateResult := h.evaluateQualityGates(r, claims.TeamID, reportID, report, results)
+		if gateResult != nil {
+			resp["qualityGate"] = gateResult
+		}
 	}
 
 	if h.AuditStore != nil {
@@ -589,4 +601,127 @@ func parsePagination(r *http.Request) (int, int) {
 	}
 
 	return limit, offset
+}
+
+// QualityGateRuleResult is a single rule evaluation for the API response.
+type QualityGateRuleResult struct {
+	Metric    string      `json:"metric"`
+	Threshold interface{} `json:"threshold"`
+	Actual    interface{} `json:"actual"`
+	Passed    bool        `json:"passed"`
+	Message   string      `json:"message"`
+}
+
+// QualityGateResponse is the quality gate section of the report submission response.
+type QualityGateResponse struct {
+	Passed bool                    `json:"passed"`
+	Gates  []QualityGateDetail     `json:"gates"`
+}
+
+// QualityGateDetail is a single gate's evaluation in the response.
+type QualityGateDetail struct {
+	ID     string                  `json:"id"`
+	Name   string                  `json:"name"`
+	Passed bool                    `json:"passed"`
+	Rules  []QualityGateRuleResult `json:"rules"`
+}
+
+// evaluateQualityGates evaluates all enabled quality gates for the team against
+// the submitted report and stores evaluation results. Returns the gate result
+// for inclusion in the response, or nil if there are no enabled gates.
+func (h *ReportsHandler) evaluateQualityGates(
+	r *http.Request,
+	teamID, reportID string,
+	report *ctrf.Report,
+	results []model.TestResult,
+) *QualityGateResponse {
+	gates, err := h.QualityGateStore.ListEnabled(r.Context(), teamID)
+	if err != nil {
+		log.Error().Err(err).Str("team_id", teamID).Msg("failed to list enabled quality gates")
+		return nil
+	}
+	if len(gates) == 0 {
+		return nil
+	}
+
+	data := buildReportData(report, results)
+
+	gateResp := &QualityGateResponse{Passed: true}
+	for _, gate := range gates {
+		evalResult, err := quality.Evaluate(gate.Rules, data)
+		if err != nil {
+			log.Error().Err(err).Str("gate_id", gate.ID).Msg("failed to evaluate quality gate")
+			continue
+		}
+
+		// Store evaluation in DB
+		detailsJSON, _ := json.Marshal(evalResult.Results)
+		_, storeErr := h.QualityGateStore.CreateEvaluation(
+			r.Context(), gate.ID, reportID, evalResult.Passed, detailsJSON,
+		)
+		if storeErr != nil {
+			log.Error().Err(storeErr).Str("gate_id", gate.ID).Msg("failed to store gate evaluation")
+		}
+
+		// Build response detail
+		rules := make([]QualityGateRuleResult, len(evalResult.Results))
+		for i, rr := range evalResult.Results {
+			rules[i] = QualityGateRuleResult{
+				Metric:    string(rr.Type),
+				Threshold: rr.Threshold,
+				Actual:    rr.Actual,
+				Passed:    rr.Passed,
+				Message:   rr.Message,
+			}
+		}
+
+		gateResp.Gates = append(gateResp.Gates, QualityGateDetail{
+			ID:     gate.ID,
+			Name:   gate.Name,
+			Passed: evalResult.Passed,
+			Rules:  rules,
+		})
+
+		if !evalResult.Passed {
+			gateResp.Passed = false
+		}
+	}
+
+	return gateResp
+}
+
+// buildReportData constructs quality.ReportData from a CTRF report and its
+// normalized test results.
+func buildReportData(report *ctrf.Report, results []model.TestResult) *quality.ReportData {
+	summary := report.Results.Summary
+
+	var totalDurationMs int64
+	currentFailed := make(map[string]bool)
+	var flakyTests []analytics.FlakyTest
+
+	for _, res := range results {
+		totalDurationMs += res.DurationMs
+		if res.Status == "failed" {
+			currentFailed[res.Name] = true
+		}
+		if res.Flaky {
+			flakyTests = append(flakyTests, analytics.FlakyTest{
+				Name:     res.Name,
+				Suite:    res.Suite,
+				FilePath: res.FilePath,
+			})
+		}
+	}
+
+	return &quality.ReportData{
+		TotalTests:         summary.Tests,
+		PassedTests:        summary.Passed,
+		FailedTests:        summary.Failed,
+		SkippedTests:       summary.Skipped,
+		TotalDurationMs:    totalDurationMs,
+		FlakyTests:         flakyTests,
+		CurrentFailedTests: currentFailed,
+		// PreviousFailedTests left nil — no_new_failures requires historical data
+		// that is not available from a single report submission.
+	}
 }
