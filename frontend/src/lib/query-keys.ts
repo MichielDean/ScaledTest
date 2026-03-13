@@ -23,6 +23,10 @@ export const queryKeys = {
     all: ['teams'] as const,
     list: () => ['teams'] as const,
   },
+  sharding: {
+    durations: ['sharding', 'durations'] as const,
+    plan: ['sharding', 'plan'] as const,
+  },
   admin: {
     users: () => ['admin', 'users'] as const,
   },
