@@ -7,6 +7,7 @@ import { z } from 'zod';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { hasRole } from '@/lib/roles';
 import { createExecution, listExecutions, type ExecutionStatus } from '@/lib/executions';
+import { getUserTeams } from '@/lib/teamManagement';
 import { sanitizeString, sanitizeStringRecord } from '@/lib/sanitize';
 
 // Regex: docker image names — no shell injection
@@ -44,12 +45,24 @@ export default createBetterAuthApi({
     const page = Math.max(1, parseInt(pageStr ?? '1', 10) || 1);
     const size = Math.min(Math.max(1, parseInt(sizeStr ?? '20', 10) || 20), 100);
 
+    // Enforce team-scoped access: user can only see executions from their teams
+    // or ones they personally created.
+    const userTeams = await getUserTeams(req.user.id);
+    const userTeamIds = userTeams.map(t => t.id);
+
+    if (teamId && !userTeamIds.includes(teamId)) {
+      // User requested a specific team they don't belong to — return empty
+      return res.json({ success: true, data: [], total: 0, pagination: { page, size, total: 0 } });
+    }
+
     try {
       const { executions, total } = await listExecutions({
         page,
         size,
         status: status as ExecutionStatus | undefined,
-        teamId,
+        // If user specified a teamId (and membership was verified), use single-team filter.
+        // Otherwise use the access filter to scope by all teams + personal requests.
+        ...(teamId ? { teamId } : { accessUserId: req.user.id, teamIds: userTeamIds }),
         requestedBy,
         dateFrom,
         dateTo,
