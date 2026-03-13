@@ -1,9 +1,9 @@
 // User Teams API - Get current user's team assignments
-import { BetterAuthMethodHandler, createBetterAuthApi } from '../../auth/betterAuthApi';
-import { logError } from '../../logging/logger';
-import { getUserTeams } from '../../lib/teamManagement';
+import { BetterAuthMethodHandler, createBetterAuthApi } from '../../../auth/betterAuthApi';
+import { logError } from '../../../logging/logger';
+import { getUserTeams } from '../../../lib/teamManagement';
 
-import { Team } from '../../types/team';
+import { Team } from '../../../types/team';
 
 interface GetUserTeamsResponse {
   success: true;
@@ -56,6 +56,6 @@ const handleGet: BetterAuthMethodHandler<GetUserTeamsResponse | ErrorResponse> =
 
 /**
  * User Teams API for getting current user's team assignments
- * GET /api/user-teams - Get current user's teams (authenticated users only)
+ * GET /api/v1/user-teams - Get current user's teams (authenticated users only)
  */
 export default createBetterAuthApi({ GET: handleGet }, 'readonly');
