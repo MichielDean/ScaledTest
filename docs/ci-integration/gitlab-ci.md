@@ -48,11 +48,11 @@ npm install --save-dev @scaledtest/sdk
 Create `scripts/upload-ctrf.ts` (or `.js`):
 
 ```typescript
-import { ScaledTestClient } from "@scaledtest/sdk";
-import { readFileSync } from "fs";
+import { ScaledTestClient } from '@scaledtest/sdk';
+import { readFileSync } from 'fs';
 
-const reportPath = process.argv[2] || "ctrf-report.json";
-const report = JSON.parse(readFileSync(reportPath, "utf-8"));
+const reportPath = process.argv[2] || 'ctrf-report.json';
+const report = JSON.parse(readFileSync(reportPath, 'utf-8'));
 
 const client = new ScaledTestClient({
   baseUrl: process.env.SCALEDTEST_URL!,
@@ -75,8 +75,8 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error("Failed to upload report:", err.message);
+main().catch(err => {
+  console.error('Failed to upload report:', err.message);
   process.exit(1);
 });
 ```
@@ -90,7 +90,7 @@ upload_report:
     - npx tsx scripts/upload-ctrf.ts ctrf-report.json
   when: always
   dependencies:
-    - test  # job that produces ctrf-report.json
+    - test # job that produces ctrf-report.json
 ```
 
 ## Uploading Reports with `curl`
@@ -188,7 +188,7 @@ stages:
   - report
 
 variables:
-  NODE_VERSION: "22"
+  NODE_VERSION: '22'
 
 install:
   stage: install
@@ -265,12 +265,14 @@ upload_report:
 Uploads a CTRF test report.
 
 **Headers:**
+
 - `Authorization: Bearer sct_<token>`
 - `Content-Type: application/json`
 
 **Body:** A valid CTRF report object (see [CTRF specification](https://ctrf.io))
 
 **Response (201):**
+
 ```json
 {
   "success": true,
@@ -288,6 +290,7 @@ Uploads a CTRF test report.
 ```
 
 **Error responses:**
+
 - `400` — Invalid CTRF report (validation errors in `details`)
 - `401` — Missing or invalid API token
 - `503` — Database unavailable
