@@ -44,6 +44,10 @@ const viewConfigs: Record<SPAView, ViewConfig> = {
     title: 'ScaledTest - Test Executions',
     description: 'Run and monitor parallel test executions',
   },
+  'report-detail': {
+    title: 'ScaledTest - Report Detail',
+    description: 'Detailed view of a test report',
+  },
 };
 
 const DynamicHead: React.FC = () => {

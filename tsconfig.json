@@ -52,6 +52,7 @@
     "**/*temp*",
     ".next",
     "scripts/generate-demo-data.ts",
-    "scripts/setup-keycloak.ts"
+    "scripts/setup-keycloak.ts",
+    "frontend"
   ]
 }
