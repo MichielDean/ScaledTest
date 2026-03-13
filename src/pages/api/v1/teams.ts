@@ -112,8 +112,8 @@ function processUsersForRole(
   );
 
   // Only show users that the current user has permission to see
-  if (currentUser.role === 'owner' || currentUser.role === 'admin') {
-    authLogger.info('User has owner/admin role, returning all users');
+  if (currentUser.role === 'owner') {
+    authLogger.info('User has owner role, returning all users');
 
     return users.map((user: BetterAuthUser) => ({
       id: user.id,
@@ -153,8 +153,8 @@ async function getAllUsersWithRoles(
   limit: number = 100,
   offset: number = 0
 ): Promise<UserWithRole[]> {
-  // Only allow users with 'admin', 'owner', or 'maintainer' role to view user lists
-  const allowedRoles = ['admin', 'owner', 'maintainer'];
+  // Only allow users with 'owner' or 'maintainer' role to view user lists
+  const allowedRoles = ['owner', 'maintainer'];
 
   if (!currentUser || !currentUser.role || !allowedRoles.includes(currentUser.role)) {
     authLogger.warn(
@@ -550,10 +550,11 @@ async function handleCreateTeam(
       teamName: req.body?.name,
       createdBy,
     });
-    return res.status(500).json({
-      success: false,
-      error: error instanceof Error ? error.message : 'Failed to create team',
-    });
+    // Surface expected business errors; hide internal details
+    if (error instanceof Error && error.message === 'Team name already exists') {
+      return res.status(409).json({ success: false, error: error.message });
+    }
+    return res.status(500).json({ success: false, error: 'Failed to create team' });
   }
 }
 
@@ -618,13 +619,14 @@ async function handleAssignUserToTeam(
       userId: req.body?.userId,
       teamId: req.body?.teamId,
     });
-    return res.status(500).json({
-      success: false,
-      error:
-        error instanceof Error
-          ? `Failed to assign user to team: ${error.message}`
-          : 'Failed to assign user to team',
-    });
+    // Surface expected business errors; hide internal details
+    if (
+      error instanceof Error &&
+      (error.message === 'User not found' || error.message === 'Team not found')
+    ) {
+      return res.status(404).json({ success: false, error: error.message });
+    }
+    return res.status(500).json({ success: false, error: 'Failed to assign user to team' });
   }
 }
 
@@ -686,12 +688,6 @@ async function handleRemoveUserFromTeam(
       userId: req.body?.userId,
       teamId: req.body?.teamId,
     });
-    return res.status(500).json({
-      success: false,
-      error:
-        error instanceof Error
-          ? `Failed to remove user from team: ${error.message}`
-          : 'Failed to remove user from team',
-    });
+    return res.status(500).json({ success: false, error: 'Failed to remove user from team' });
   }
 }

@@ -31,6 +31,12 @@ jest.mock('../../src/lib/timescaledb', () => ({
   getTimescalePool: jest.fn(() => ({ query: mockPoolQuery })),
 }));
 
+// Mock teamManagement — getUserTeams returns a default team for the test user
+const mockGetUserTeams = jest.fn();
+jest.mock('../../src/lib/teamManagement', () => ({
+  getUserTeams: (...args: unknown[]) => mockGetUserTeams(...args),
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -71,10 +77,13 @@ function makeReqRes(
   const res = {
     status: mockStatus,
     json: mockJson,
+    setHeader: jest.fn(),
   } as unknown as NextApiResponse;
 
   return { req, res, mockJson, mockStatus };
 }
+
+const DEFAULT_TEAM_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 function setupAuth() {
   mockGetSession.mockResolvedValue({
@@ -85,6 +94,7 @@ function setupAuth() {
       role: 'readonly',
     },
   });
+  mockGetUserTeams.mockResolvedValue([{ id: DEFAULT_TEAM_ID, name: 'Default Team' }]);
 }
 
 describe('GET /api/v1/executions/active', () => {
@@ -162,7 +172,7 @@ describe('GET /api/v1/executions/active', () => {
     expect(mockJson).toHaveBeenCalledWith(expect.objectContaining({ success: false }));
   });
 
-  it('returns active count across all teams when no teamId provided', async () => {
+  it('returns active count scoped to user teams when no teamId provided', async () => {
     setupAuth();
     mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '7' }] });
     const { req, res, mockJson } = makeReqRes(); // no teamId in query
@@ -171,17 +181,17 @@ describe('GET /api/v1/executions/active', () => {
       success: true,
       data: { activeExecutions: 7 },
     });
-    // Verify no team_id filter in SQL when teamId not provided
-    const [sql, params] = mockPoolQuery.mock.calls[0] as [string, unknown[]?];
-    expect(sql).not.toContain('team_id');
-    expect(params ?? []).toHaveLength(0);
+    // Verify team_id filter is applied using user's teams
+    const [sql, params] = mockPoolQuery.mock.calls[0] as [string, unknown[]];
+    expect(sql).toContain('team_id');
+    expect(params).toEqual([[DEFAULT_TEAM_ID]]);
   });
 
   it('returns active count filtered by teamId when teamId query param is provided', async () => {
     setupAuth();
-    const teamId = '550e8400-e29b-41d4-a716-446655440000';
+    // Use the DEFAULT_TEAM_ID which the user belongs to
     mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '4' }] });
-    const { req, res, mockJson } = makeReqRes({ teamId });
+    const { req, res, mockJson } = makeReqRes({ teamId: DEFAULT_TEAM_ID });
     await handler(req, res);
     expect(mockJson).toHaveBeenCalledWith({
       success: true,
@@ -191,7 +201,7 @@ describe('GET /api/v1/executions/active', () => {
     const [sql, params] = mockPoolQuery.mock.calls[0] as [string, string[]];
     expect(sql).toContain('team_id');
     expect(sql).toContain('$1');
-    expect(params).toEqual([teamId]);
+    expect(params).toEqual([DEFAULT_TEAM_ID]);
   });
 
   it('uses COUNT(*) FROM test_executions in query', async () => {
@@ -244,9 +254,9 @@ describe('GET /api/v1/executions/active', () => {
 
   it('unwraps string[] teamId (Next.js array query) to the first element', async () => {
     setupAuth();
-    const validUuid = '550e8400-e29b-41d4-a716-446655440000';
+    // Use the DEFAULT_TEAM_ID which the user belongs to
     // Next.js passes duplicate query params as string[]
-    const arrayTeamId: string[] = [validUuid, 'another-value'];
+    const arrayTeamId: string[] = [DEFAULT_TEAM_ID, 'another-value'];
     mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '2' }] });
     const { req, res, mockJson } = makeReqRes({ teamId: arrayTeamId });
     await handler(req, res);
@@ -256,7 +266,7 @@ describe('GET /api/v1/executions/active', () => {
       data: { activeExecutions: 2 },
     });
     const [, params] = mockPoolQuery.mock.calls[0] as [string, string[]];
-    expect(params).toEqual([validUuid]);
+    expect(params).toEqual([DEFAULT_TEAM_ID]);
   });
 
   // --- QA edge cases ---
@@ -287,6 +297,21 @@ describe('GET /api/v1/executions/active', () => {
     const { req, res, mockStatus } = makeReqRes({ teamId: arrayTeamId });
     await handler(req, res);
     expect(mockStatus).toHaveBeenCalledWith(400);
+    expect(mockPoolQuery).not.toHaveBeenCalled();
+  });
+
+  it('returns 0 when user has no teams', async () => {
+    mockGetSession.mockResolvedValue({
+      user: { id: 'user-1', email: 'test@example.com', name: 'Test User', role: 'readonly' },
+    });
+    mockGetUserTeams.mockResolvedValue([]);
+    const { req, res, mockJson } = makeReqRes();
+    await handler(req, res);
+    expect(mockJson).toHaveBeenCalledWith({
+      success: true,
+      data: { activeExecutions: 0 },
+    });
+    // DB should NOT be called when user has no teams
     expect(mockPoolQuery).not.toHaveBeenCalled();
   });
 
@@ -327,8 +352,12 @@ describe('GET /api/v1/executions/active', () => {
   });
 
   it('accepts uppercase UUID as valid teamId (UUID regex is case-insensitive)', async () => {
-    setupAuth();
-    const upperUuid = '550E8400-E29B-41D4-A716-446655440000';
+    // Use uppercase version of DEFAULT_TEAM_ID — user belongs to it (case-insensitive match)
+    const upperUuid = DEFAULT_TEAM_ID.toUpperCase();
+    mockGetSession.mockResolvedValue({
+      user: { id: 'user-1', email: 'test@example.com', name: 'Test User', role: 'readonly' },
+    });
+    mockGetUserTeams.mockResolvedValue([{ id: upperUuid, name: 'Default Team' }]);
     mockPoolQuery.mockResolvedValueOnce({ rows: [{ count: '1' }] });
     const { req, res, mockJson, mockStatus } = makeReqRes({ teamId: upperUuid });
     await handler(req, res);

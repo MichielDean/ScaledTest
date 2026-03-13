@@ -18,10 +18,8 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     reqLogger.info({ page, pageSize, offset, search }, 'Fetching users with direct database query');
 
     // Direct database query for user listing
-    const { Pool } = await import('pg');
-    const pool = new Pool({
-      connectionString: process.env.DATABASE_URL,
-    });
+    const { getAuthUserPool } = await import('../../../lib/authUserPool');
+    const pool = getAuthUserPool();
 
     let query =
       'SELECT id, email, name, role, "emailVerified", "createdAt", "updatedAt" FROM "user"';
@@ -53,7 +51,6 @@ const handleGet: BetterAuthMethodHandler = async (req, res, reqLogger) => {
     ]);
 
     const total = parseInt(countResult.rows[0]?.total || '0');
-    await pool.end();
 
     const users = result.rows.map(row => ({
       id: row.id,

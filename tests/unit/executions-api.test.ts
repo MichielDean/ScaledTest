@@ -20,6 +20,12 @@ jest.mock('../../src/lib/executions', () => ({
   cancelExecution: jest.fn(),
 }));
 
+// Mock teamManagement — getUserTeams returns a default team for the test user
+const mockGetUserTeams = jest.fn();
+jest.mock('../../src/lib/teamManagement', () => ({
+  getUserTeams: (...args: unknown[]) => mockGetUserTeams(...args),
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -77,10 +83,13 @@ function makeReqRes(
   return { req, res, mockJson, mockStatus };
 }
 
+const DEFAULT_TEAM_ID = '550e8400-e29b-41d4-a716-446655440000';
+
 function setupAuthUser(role: 'owner' | 'maintainer' | 'readonly') {
   mockGetSession.mockResolvedValue({
     user: { id: 'user-1', email: 'test@example.com', name: 'Test', role },
   });
+  mockGetUserTeams.mockResolvedValue([{ id: DEFAULT_TEAM_ID, name: 'Default Team' }]);
 }
 
 const fakeExecution = {

@@ -19,6 +19,12 @@ jest.mock('../../src/lib/timescaledb', () => ({
   getTimescalePool: jest.fn(() => ({ query: mockPoolQuery })),
 }));
 
+// Mock teamManagement — getUserTeams returns a default team for the test user
+const mockGetUserTeams = jest.fn();
+jest.mock('../../src/lib/teamManagement', () => ({
+  getUserTeams: (...args: unknown[]) => mockGetUserTeams(...args),
+}));
+
 // Mock logger
 jest.mock('../../src/logging/logger', () => ({
   apiLogger: {
@@ -54,10 +60,13 @@ function makeReqRes(method = 'GET', headers: Record<string, string> = {}) {
   const res = {
     status: mockStatus,
     json: mockJson,
+    setHeader: jest.fn(),
   } as unknown as NextApiResponse;
 
   return { req, res, mockJson, mockStatus };
 }
+
+const DEFAULT_TEAM_ID = '550e8400-e29b-41d4-a716-446655440000';
 
 function setupAuth() {
   mockGetSession.mockResolvedValue({
@@ -68,6 +77,7 @@ function setupAuth() {
       role: 'owner',
     },
   });
+  mockGetUserTeams.mockResolvedValue([{ id: DEFAULT_TEAM_ID, name: 'Default Team' }]);
 }
 
 /**

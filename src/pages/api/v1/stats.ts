@@ -7,6 +7,7 @@
 import type { NextApiResponse } from 'next';
 import { createBetterAuthApi, type BetterAuthenticatedRequest } from '@/auth/betterAuthApi';
 import { getTimescalePool } from '@/lib/timescaledb';
+import { getUserTeams } from '@/lib/teamManagement';
 import { apiLogger as logger } from '@/logging/logger';
 
 export interface StatsData {
@@ -25,7 +26,6 @@ type CacheEntry = {
 // Module-level cache with 60s TTL (exported for testing)
 export const statsCache = new Map<string, CacheEntry>();
 const CACHE_TTL_MS = 60_000;
-const CACHE_KEY = 'stats';
 
 const ZERO_STATS: StatsData = {
   totalReports: 0,
@@ -35,28 +35,39 @@ const ZERO_STATS: StatsData = {
   activeExecutions: 0,
 };
 
-// Active execution statuses queried from test_executions
-const ACTIVE_STATUSES = `'queued', 'running'`;
-
-async function fetchStatsFromDB(): Promise<StatsData> {
+async function fetchStatsFromDB(teamIds: string[]): Promise<StatsData> {
   const pool = getTimescalePool();
 
+  if (teamIds.length === 0) return { ...ZERO_STATS };
+
   const [reportsResult, testsResult, passRateResult, executionsResult] = await Promise.all([
-    pool.query<{ count: string }>(`SELECT COUNT(*) as count FROM test_reports`),
-    pool.query<{ sum: string | null }>(`SELECT SUM(summary_tests) as sum FROM test_reports`),
-    pool.query<{ passed: string; total: string }>(`
-      SELECT
+    pool.query<{ count: string }>(
+      `SELECT COUNT(*) as count FROM test_reports
+       WHERE metadata->'userTeams' ?| $1`,
+      [teamIds]
+    ),
+    pool.query<{ sum: string | null }>(
+      `SELECT SUM(summary_tests) as sum FROM test_reports
+       WHERE metadata->'userTeams' ?| $1`,
+      [teamIds]
+    ),
+    pool.query<{ passed: string; total: string }>(
+      `SELECT
         COALESCE(SUM(summary_passed), 0) as passed,
         COALESCE(SUM(summary_tests), 0) as total
       FROM test_reports
       WHERE timestamp >= NOW() - INTERVAL '7 days'
-    `),
-    pool.query<{ total: string; active: string }>(`
-      SELECT
+        AND metadata->'userTeams' ?| $1`,
+      [teamIds]
+    ),
+    pool.query<{ total: string; active: string }>(
+      `SELECT
         COUNT(*) as total,
-        COUNT(*) FILTER (WHERE status IN (${ACTIVE_STATUSES})) as active
+        COUNT(*) FILTER (WHERE status IN ('queued', 'running')) as active
       FROM test_executions
-    `),
+      WHERE team_id = ANY($1::uuid[])`,
+      [teamIds]
+    ),
   ]);
 
   const totalReports = parseInt(reportsResult.rows[0]?.count ?? '0', 10) || 0;
@@ -79,9 +90,14 @@ async function fetchStatsFromDB(): Promise<StatsData> {
 }
 
 export default createBetterAuthApi({
-  GET: async (_req: BetterAuthenticatedRequest, res: NextApiResponse) => {
+  GET: async (req: BetterAuthenticatedRequest, res: NextApiResponse) => {
+    const userTeams = await getUserTeams(req.user.id);
+    const teamIds = userTeams.map(t => t.id).filter(Boolean);
+
+    // Per-user cache key based on sorted team memberships
+    const cacheKey = `stats:${[...teamIds].sort().join(',')}`;
     const now = Date.now();
-    const cached = statsCache.get(CACHE_KEY);
+    const cached = statsCache.get(cacheKey);
 
     if (cached && cached.expiresAt > now) {
       return res.json({ success: true, data: cached.data });
@@ -89,13 +105,13 @@ export default createBetterAuthApi({
 
     let data: StatsData;
     try {
-      data = await fetchStatsFromDB();
+      data = await fetchStatsFromDB(teamIds);
     } catch (err) {
       logger.error({ err }, 'Failed to fetch stats from DB, returning zeros');
       data = { ...ZERO_STATS };
     }
 
-    statsCache.set(CACHE_KEY, { data, expiresAt: now + CACHE_TTL_MS });
+    statsCache.set(cacheKey, { data, expiresAt: now + CACHE_TTL_MS });
 
     return res.json({ success: true, data });
   },
