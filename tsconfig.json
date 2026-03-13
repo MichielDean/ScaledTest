@@ -53,6 +53,8 @@
     ".next",
     "scripts/generate-demo-data.ts",
     "scripts/setup-keycloak.ts",
-    "frontend"
+    "frontend",
+    "sdk",
+    "e2e"
   ]
 }
