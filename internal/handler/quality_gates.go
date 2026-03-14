@@ -161,7 +161,7 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateQualityGateRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -246,7 +246,7 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateQualityGateRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -345,7 +345,7 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 
 	var req EvaluateRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 	if req.ReportID == "" {
@@ -433,7 +433,7 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 
 	evalResult, err := quality.Evaluate(gate.Rules, data)
 	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to evaluate gate: "+err.Error())
+		Error(w, http.StatusInternalServerError, "failed to evaluate quality gate")
 		return
 	}
 
