@@ -55,9 +55,16 @@ func Setup(t *testing.T) *TestDB {
 		t.Fatalf("ping test database: %v", err)
 	}
 
-	// Run migrations once per package
+	// Run migrations once per package. Handle dirty state from prior failed runs
+	// by dropping and recreating the schema before retrying.
 	migrateOnce.Do(func() {
 		migrateErr = db.MigrateUp(url)
+		if migrateErr != nil && strings.Contains(migrateErr.Error(), "Dirty database") {
+			// Force clean: drop everything and re-migrate
+			if dropErr := db.MigrateForceClean(url); dropErr == nil {
+				migrateErr = db.MigrateUp(url)
+			}
+		}
 	})
 	if migrateErr != nil {
 		pool.Close()
@@ -79,6 +86,7 @@ func Setup(t *testing.T) *TestDB {
 
 // truncateTables is the list of application tables to clean between tests.
 var truncateTables = []string{
+	"invitations",
 	"audit_logs",
 	"quality_gate_evaluations",
 	"quality_gates",
