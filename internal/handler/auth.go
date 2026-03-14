@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"io"
 	"net"
 	"net/http"
 	"time"
@@ -21,9 +22,11 @@ type AuthHandler struct {
 }
 
 // RegisterRequest is the request body for user registration.
+// Password max=72 matches bcrypt's internal limit — prevents silent truncation
+// and CPU abuse from oversized passwords.
 type RegisterRequest struct {
 	Email       string `json:"email" validate:"required,email"`
-	Password    string `json:"password" validate:"required,min=8"`
+	Password    string `json:"password" validate:"required,min=8,max=72"`
 	DisplayName string `json:"display_name" validate:"required,min=1"`
 }
 
@@ -54,6 +57,8 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
+
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 4<<10)) // 4KB limit
 
 	var req RegisterRequest
 	if err := Decode(r, &req); err != nil {
@@ -117,6 +122,8 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
+
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 4<<10)) // 4KB limit
 
 	var req LoginRequest
 	if err := Decode(r, &req); err != nil {

@@ -87,7 +87,7 @@ func (m *JWTManager) ValidateAccessToken(tokenString string) (*Claims, error) {
 			return nil, fmt.Errorf("unexpected signing method: %v", token.Header["alg"])
 		}
 		return m.secret, nil
-	})
+	}, jwt.WithIssuer("scaledtest"))
 	if err != nil {
 		return nil, fmt.Errorf("parse token: %w", err)
 	}
