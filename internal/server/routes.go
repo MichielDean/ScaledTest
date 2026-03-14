@@ -174,10 +174,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.With(auth.RequireRole("maintainer", "owner"), httprate.LimitByIP(20, 1*time.Minute)).Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
 			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{executionID}", execH.Cancel)
-			r.Put("/{executionID}/status", execH.UpdateStatus)
-			r.Post("/{executionID}/progress", execH.ReportProgress)
-			r.Post("/{executionID}/test-result", execH.ReportTestResult)
-			r.Post("/{executionID}/worker-status", execH.ReportWorkerStatus)
+
+			// Worker-facing endpoints: tighter rate limit to prevent flooding at scale.
+			// Workers submit high-frequency updates (progress, test results, status).
+			workerRL := httprate.LimitByIP(300, 1*time.Minute)
+			r.With(workerRL).Put("/{executionID}/status", execH.UpdateStatus)
+			r.With(workerRL).Post("/{executionID}/progress", execH.ReportProgress)
+			r.With(workerRL).Post("/{executionID}/test-result", execH.ReportTestResult)
+			r.With(workerRL).Post("/{executionID}/worker-status", execH.ReportWorkerStatus)
 		})
 
 		r.Route("/analytics", func(r chi.Router) {

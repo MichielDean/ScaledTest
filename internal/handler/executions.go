@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"net/http"
 	"strconv"
 	"time"
@@ -313,6 +314,8 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 1<<10)) // 1KB limit
+
 	var req UpdateStatusRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
@@ -453,6 +456,8 @@ func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 1<<10)) // 1KB limit
+
 	var req ProgressRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
@@ -497,6 +502,8 @@ func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 64<<10)) // 64KB limit (message + trace can be large)
+
 	var req TestResultEvent
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
@@ -538,6 +545,8 @@ func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Re
 		Error(w, http.StatusBadRequest, "missing execution ID")
 		return
 	}
+
+	r.Body = io.NopCloser(io.LimitReader(r.Body, 1<<10)) // 1KB limit
 
 	var req WorkerStatusEvent
 	if err := Decode(r, &req); err != nil {
