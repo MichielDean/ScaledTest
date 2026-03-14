@@ -753,3 +753,86 @@ func buildReportData(report *ctrf.Report, results []model.TestResult) *quality.R
 		// that is not available from a single report submission.
 	}
 }
+
+// TestHistory handles GET /api/v1/tests/history?testName=<name>&days=30.
+// Returns chronological list of runs where this test appeared.
+func (h *ReportsHandler) TestHistory(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	testName := r.URL.Query().Get("testName")
+	if testName == "" {
+		Error(w, http.StatusBadRequest, "testName query parameter is required")
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	days := 30
+	if d := r.URL.Query().Get("days"); d != "" {
+		if v, err := strconv.Atoi(d); err == nil && v > 0 && v <= 365 {
+			days = v
+		}
+	}
+
+	limit := 100
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if v, err := strconv.Atoi(l); err == nil && v > 0 && v <= 500 {
+			limit = v
+		}
+	}
+
+	since := time.Now().AddDate(0, 0, -days)
+
+	rows, err := h.DB.Query(r.Context(),
+		`SELECT tr.report_id, tr.status, tr.duration_ms, tr.message, tr.suite, tr.created_at
+		 FROM test_results tr
+		 WHERE tr.team_id = $1 AND tr.name = $2 AND tr.created_at >= $3
+		 ORDER BY tr.created_at DESC
+		 LIMIT $4`,
+		claims.TeamID, testName, since, limit)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to query test history")
+		return
+	}
+	defer rows.Close()
+
+	type historyEntry struct {
+		ReportID   string    `json:"report_id"`
+		Status     string    `json:"status"`
+		DurationMs int64     `json:"duration_ms"`
+		Message    string    `json:"message,omitempty"`
+		Suite      string    `json:"suite,omitempty"`
+		RunAt      time.Time `json:"run_at"`
+	}
+
+	var entries []historyEntry
+	for rows.Next() {
+		var e historyEntry
+		if err := rows.Scan(&e.ReportID, &e.Status, &e.DurationMs, &e.Message, &e.Suite, &e.RunAt); err != nil {
+			Error(w, http.StatusInternalServerError, "failed to scan test history")
+			return
+		}
+		entries = append(entries, e)
+	}
+	if err := rows.Err(); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to iterate test history")
+		return
+	}
+	if entries == nil {
+		entries = []historyEntry{}
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"test_name": testName,
+		"entries":   entries,
+		"total":     len(entries),
+		"days":      days,
+	})
+}

@@ -237,6 +237,8 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		})
 
 
+		r.Get("/tests/history", reportsH.TestHistory)
+
 		r.Route("/sharding", func(r chi.Router) {
 			r.Post("/plan", shardH.CreatePlan)
 			r.Post("/rebalance", shardH.Rebalance)
