@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { useWebSocket } from '../hooks/use-websocket';
@@ -35,11 +35,22 @@ interface ExecutionsResponse {
 
 export function ExecutionsPage() {
   const [selectedExecution, setSelectedExecution] = useState<string | null>(null);
+  const queryClient = useQueryClient();
+
+  // Global WebSocket (no execution_id filter) to catch all status changes
+  const { lastMessage: globalMessage } = useWebSocket();
+
+  // Refresh execution list immediately when any execution status changes
+  useEffect(() => {
+    if (globalMessage?.type === 'execution.status') {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.executions.all });
+    }
+  }, [globalMessage, queryClient]);
 
   const executionsQuery = useQuery({
     queryKey: queryKeys.executions.all,
     queryFn: () => api.getExecutions() as Promise<ExecutionsResponse>,
-    refetchInterval: 10000,
+    refetchInterval: 30000, // Reduced polling since WebSocket provides real-time updates
   });
 
   const executions = executionsQuery.data?.executions ?? [];
