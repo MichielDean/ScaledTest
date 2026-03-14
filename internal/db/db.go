@@ -4,6 +4,7 @@ import (
 	"context"
 	"embed"
 	"fmt"
+	"time"
 
 	"github.com/golang-migrate/migrate/v4"
 	_ "github.com/golang-migrate/migrate/v4/database/postgres"
@@ -25,6 +26,12 @@ func Connect(ctx context.Context, databaseURL string) (*Pool, error) {
 		return nil, fmt.Errorf("parse database url: %w", err)
 	}
 
+	// Set pool limits to prevent connection exhaustion under load
+	config.MaxConns = 25
+	config.MinConns = 2
+	config.MaxConnLifetime = 15 * time.Minute
+	config.MaxConnIdleTime = 5 * time.Minute
+
 	pool, err := pgxpool.NewWithConfig(ctx, config)
 	if err != nil {
 		return nil, fmt.Errorf("create connection pool: %w", err)
@@ -45,6 +52,7 @@ func MigrateUp(databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	defer closeMigrator(m)
 
 	if err := m.Up(); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate up: %w", err)
@@ -61,6 +69,7 @@ func MigrateDown(databaseURL string) error {
 	if err != nil {
 		return err
 	}
+	defer closeMigrator(m)
 
 	if err := m.Steps(-1); err != nil && err != migrate.ErrNoChange {
 		return fmt.Errorf("migrate down: %w", err)
@@ -77,7 +86,18 @@ func MigrateVersion(databaseURL string) (uint, bool, error) {
 	if err != nil {
 		return 0, false, err
 	}
+	defer closeMigrator(m)
 	return m.Version()
+}
+
+func closeMigrator(m *migrate.Migrate) {
+	srcErr, dbErr := m.Close()
+	if srcErr != nil {
+		log.Warn().Err(srcErr).Msg("migrator: failed to close source")
+	}
+	if dbErr != nil {
+		log.Warn().Err(dbErr).Msg("migrator: failed to close database")
+	}
 }
 
 func newMigrator(databaseURL string) (*migrate.Migrate, error) {
