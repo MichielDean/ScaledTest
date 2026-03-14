@@ -143,7 +143,7 @@ test.describe('Execution Lifecycle', () => {
     expect(detail.status).toBe('failed');
   });
 
-  test('cancel execution: create → cancel', async ({ request }) => {
+  test('cancel execution: create → cancel → verify cancelled', async ({ request }) => {
     const session = await loginViaAPI(request);
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
@@ -160,6 +160,16 @@ test.describe('Execution Lifecycle', () => {
     // Cancel it
     const cancelRes = await request.delete(`/api/v1/executions/${execution.id}`, { headers });
     expect(cancelRes.ok(), `Cancel failed: ${cancelRes.status()}`).toBeTruthy();
+
+    // Verify status is cancelled
+    const getRes = await request.get(`/api/v1/executions/${execution.id}`, { headers });
+    expect(getRes.ok()).toBeTruthy();
+    const detail = await getRes.json();
+    expect(detail.status).toBe('cancelled');
+
+    // Verify cancelling again fails (already cancelled)
+    const recancel = await request.delete(`/api/v1/executions/${execution.id}`, { headers });
+    expect(recancel.ok()).toBeFalsy();
   });
 
   test('list executions returns created entries', async ({ request }) => {
