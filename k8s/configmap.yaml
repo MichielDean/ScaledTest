@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: scaledtest-config
+  namespace: scaledtest
+data:
+  ST_PORT: '8080'
+  ST_LOG_LEVEL: 'info'
+  ST_LOG_FORMAT: 'json'
+  ST_JWT_ACCESS_DURATION: '15m'
+  ST_JWT_REFRESH_DURATION: '168h'
+  ST_K8S_NAMESPACE: 'scaledtest'
+  ST_K8S_IN_CLUSTER: 'true'
+  ST_WORKER_IMAGE: 'scaledtest/worker:latest'
+  ST_BASE_URL: 'https://scaledtest.example.com'
