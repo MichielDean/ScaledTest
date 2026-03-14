@@ -139,8 +139,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// CSRF token endpoint — SPA calls this to get a token before mutations
 	r.Get("/auth/csrf-token", func(w http.ResponseWriter, r *http.Request) {
 		token := auth.SetCSRFCookie(w, []byte(cfg.JWTSecret), isSecure)
-		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"csrf_token":"` + token + `"}`))
+		handler.JSON(w, http.StatusOK, map[string]string{"csrf_token": token})
 	})
 
 	// Auth routes (public) — stricter rate limit to prevent brute-force
