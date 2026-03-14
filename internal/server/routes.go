@@ -204,27 +204,27 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/teams/{teamID}/quality-gates", func(r chi.Router) {
 			r.Get("/", qgH.List)
-			r.Post("/", qgH.Create)
+			r.With(httprate.LimitByIP(20, 1*time.Minute)).Post("/", qgH.Create)
 			r.Get("/{gateID}", qgH.Get)
 			r.Put("/{gateID}", qgH.Update)
 			r.Delete("/{gateID}", qgH.Delete)
-			r.Post("/{gateID}/evaluate", qgH.Evaluate)
+			r.With(httprate.LimitByIP(30, 1*time.Minute)).Post("/{gateID}/evaluate", qgH.Evaluate)
 			r.Get("/{gateID}/evaluations", qgH.ListEvaluations)
 		})
 
 		r.Route("/teams", func(r chi.Router) {
 			r.Get("/", teamsH.List)
-			r.Post("/", teamsH.Create)
+			r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/", teamsH.Create)
 			r.Get("/{teamID}", teamsH.Get)
 			r.Delete("/{teamID}", teamsH.Delete)
 			r.Route("/{teamID}/tokens", func(r chi.Router) {
 				r.Get("/", teamsH.ListTokens)
-				r.Post("/", teamsH.CreateToken)
+				r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/", teamsH.CreateToken)
 				r.Delete("/{tokenID}", teamsH.DeleteToken)
 			})
 			r.Route("/{teamID}/webhooks", func(r chi.Router) {
 				r.Get("/", whH.List)
-				r.Post("/", whH.Create)
+				r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/", whH.Create)
 				r.Get("/{webhookID}", whH.Get)
 				r.Put("/{webhookID}", whH.Update)
 				r.Delete("/{webhookID}", whH.Delete)
