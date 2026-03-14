@@ -97,10 +97,19 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		durStore = store.NewDurationStore(dbPool)
 	}
 
+	// Webhook delivery store for persisting delivery history
+	var whDeliveryStore *store.WebhookDeliveryStore
+	if dbPool != nil {
+		whDeliveryStore = store.NewWebhookDeliveryStore(dbPool)
+	}
+
 	// Webhook dispatcher: fires outbound webhooks on events
 	var whNotifier *webhook.Notifier
 	if whStore != nil {
 		whNotifier = webhook.NewNotifier(whStore, webhook.NewDispatcher())
+		if whDeliveryStore != nil {
+			whNotifier.SetRecorder(whDeliveryStore)
+		}
 	}
 
 	// HTTPS detection
@@ -128,7 +137,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
-	whH := &handler.WebhooksHandler{Store: whStore}
+	whH := &handler.WebhooksHandler{Store: whStore, DeliveryStore: whDeliveryStore}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
@@ -213,6 +222,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Get("/{webhookID}", whH.Get)
 				r.Put("/{webhookID}", whH.Update)
 				r.Delete("/{webhookID}", whH.Delete)
+				r.Get("/{webhookID}/deliveries", whH.ListDeliveries)
 			})
 		})
 
