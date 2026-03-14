@@ -214,3 +214,15 @@ type Webhook struct {
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`
 }
+
+// Invitation represents a pending or accepted team invitation.
+type Invitation struct {
+	ID         string     `json:"id"`
+	TeamID     string     `json:"team_id"`
+	Email      string     `json:"email"`
+	Role       string     `json:"role"`
+	InvitedBy  string     `json:"invited_by"`
+	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
+	ExpiresAt  time.Time  `json:"expires_at"`
+	CreatedAt  time.Time  `json:"created_at"`
+}
