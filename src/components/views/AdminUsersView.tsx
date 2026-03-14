@@ -65,7 +65,7 @@ const AdminUsersView: React.FC = () => {
       logger.debug('Starting admin users API call');
 
       // Use our backend admin API endpoint
-      const response = await axios.get('/api/admin/users', {
+      const response = await axios.get('/api/v1/admin/users', {
         headers: {
           'Content-Type': 'application/json',
         },
@@ -106,7 +106,7 @@ const AdminUsersView: React.FC = () => {
       setDeletingUserId(userId);
       setError(null);
 
-      const response = await axios.delete(`/api/admin/users?userId=${userId}`, {
+      const response = await axios.delete(`/api/v1/admin/users?userId=${userId}`, {
         headers: {
           'Content-Type': 'application/json',
         },

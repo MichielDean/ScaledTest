@@ -38,7 +38,7 @@ export default function RegisterPage() {
   useEffect(() => {
     const loadTeams = async () => {
       try {
-        const response = await fetch('/api/teams/public');
+        const response = await fetch('/api/v1/teams/public');
         if (response.ok) {
           const data = (await response.json()) as {
             success: boolean;
