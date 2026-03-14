@@ -31,6 +31,7 @@ export function WebhooksPage() {
   const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [expandedWebhook, setExpandedWebhook] = useState<string | null>(null);
 
   // Fetch user's teams to get the teamId for webhook API calls
   const teamsQuery = useQuery({
@@ -238,6 +239,17 @@ export function WebhooksPage() {
                   )}
                 </div>
               </div>
+              <button
+                onClick={() => setExpandedWebhook(prev => prev === webhook.id ? null : webhook.id)}
+                className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+              >
+                {expandedWebhook === webhook.id ? 'Hide Deliveries' : 'View Deliveries'}
+              </button>
+              {expandedWebhook === webhook.id && teamId && (
+                <div className="mt-3 border-t pt-3">
+                  <DeliveryHistory teamId={teamId} webhookId={webhook.id} />
+                </div>
+              )}
             </div>
           ))}
         </div>
@@ -387,5 +399,101 @@ function WebhookForm({
         </button>
       </div>
     </form>
+  );
+}
+
+interface WebhookDeliveryRecord {
+  id: string;
+  webhook_id: string;
+  url: string;
+  event_type: string;
+  attempt: number;
+  status_code: number;
+  error: string;
+  duration_ms: number;
+  delivered_at: string;
+}
+
+function DeliveryHistory({ teamId, webhookId }: { teamId: string; webhookId: string }) {
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.webhooks.deliveries(teamId, webhookId),
+    queryFn: () => api.getWebhookDeliveries(teamId, webhookId),
+  });
+
+  const deliveries = (data?.deliveries ?? []) as WebhookDeliveryRecord[];
+
+  if (isLoading) {
+    return <p className="text-sm text-muted-foreground">Loading delivery history...</p>;
+  }
+
+  if (error) {
+    return <p className="text-sm text-red-600">Failed to load deliveries: {(error as Error).message}</p>;
+  }
+
+  if (deliveries.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No deliveries yet. Deliveries are recorded when events trigger this webhook.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-2">
+      <h4 className="text-sm font-semibold">Recent Deliveries</h4>
+      <div className="rounded-md border bg-white overflow-hidden">
+        <table className="w-full text-xs">
+          <thead className="bg-gray-50 border-b">
+            <tr>
+              <th className="text-left px-3 py-2 font-medium text-gray-600">Event</th>
+              <th className="text-center px-3 py-2 font-medium text-gray-600">Status</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-600">Duration</th>
+              <th className="text-center px-3 py-2 font-medium text-gray-600">Attempt</th>
+              <th className="text-right px-3 py-2 font-medium text-gray-600">Time</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {deliveries.map(d => {
+              const ok = d.status_code >= 200 && d.status_code < 300;
+              return (
+                <tr key={d.id} className="hover:bg-gray-50">
+                  <td className="px-3 py-2">
+                    {WEBHOOK_EVENTS.find(e => e.value === d.event_type)?.label ?? d.event_type}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    <span
+                      className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
+                        ok ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      }`}
+                    >
+                      {d.status_code || 'ERR'}
+                    </span>
+                  </td>
+                  <td className="px-3 py-2 text-right tabular-nums">{d.duration_ms}ms</td>
+                  <td className="px-3 py-2 text-center">{d.attempt}</td>
+                  <td className="px-3 py-2 text-right text-muted-foreground">
+                    {new Date(d.delivered_at).toLocaleString()}
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      {deliveries.length > 0 && deliveries.some(d => d.error) && (
+        <details className="text-xs">
+          <summary className="text-muted-foreground cursor-pointer hover:text-foreground">
+            Show errors
+          </summary>
+          <div className="mt-1 space-y-1">
+            {deliveries.filter(d => d.error).map(d => (
+              <div key={d.id} className="rounded border bg-red-50 px-2 py-1 text-red-700 font-mono">
+                {d.error}
+              </div>
+            ))}
+          </div>
+        </details>
+      )}
+    </div>
   );
 }

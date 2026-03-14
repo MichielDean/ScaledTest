@@ -192,6 +192,10 @@ export const api = {
     }),
   deleteWebhook: (teamId: string, webhookId: string) =>
     fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, { method: 'DELETE' }),
+  getWebhookDeliveries: (teamId: string, webhookId: string) =>
+    fetchAPI<{ deliveries: unknown[]; total: number }>(
+      `/api/v1/teams/${teamId}/webhooks/${webhookId}/deliveries`
+    ),
 
   // Sharding
   getShardDurations: () =>
