@@ -279,7 +279,8 @@ describe('API Endpoints', () => {
         id: VALID_UUID,
       });
 
-      expect(res.status).not.toHaveBeenCalledWith(400);
+      // Handler calls res.json() directly (Next.js defaults to 200)
+      expect(res.status).not.toHaveBeenCalled();
       expect(res.json).toHaveBeenCalledWith(
         expect.objectContaining({
           success: true,

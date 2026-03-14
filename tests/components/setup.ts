@@ -92,8 +92,10 @@ jest.mock('../../src/auth/BetterAuthProvider', () => ({
     React.createElement(React.Fragment, null, children),
 }));
 
-// Global fetch mock for API calls
-global.fetch = jest.fn();
+// Global fetch mock — rejects by default so unmocked fetch calls fail loudly
+global.fetch = jest.fn(() =>
+  Promise.reject(new Error('global.fetch called without a mock — add a per-test mock'))
+);
 
 // Mock CSS modules
 jest.mock(
