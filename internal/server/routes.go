@@ -139,6 +139,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
 	whH := &handler.WebhooksHandler{Store: whStore, DeliveryStore: whDeliveryStore}
 
+	var invStore *store.InvitationStore
+	if dbPool != nil {
+		invStore = store.NewInvitationStore(dbPool)
+	}
+	invH := &handler.InvitationsHandler{Store: invStore, DB: dbPool}
+
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
@@ -223,7 +229,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Delete("/{webhookID}", whH.Delete)
 				r.Get("/{webhookID}/deliveries", whH.ListDeliveries)
 			})
+			r.Route("/{teamID}/invitations", func(r chi.Router) {
+				r.Get("/", invH.List)
+				r.Post("/", invH.Create)
+				r.Delete("/{invitationID}", invH.Revoke)
+			})
 		})
+
 
 		r.Route("/sharding", func(r chi.Router) {
 			r.Post("/plan", shardH.CreatePlan)
@@ -239,6 +251,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		})
 
 		r.Get("/openapi.json", openapi.Handler())
+	})
+
+	// Public invitation endpoints — no auth required (invitee uses token)
+	r.Route("/api/v1/invitations/{token}", func(r chi.Router) {
+		r.Get("/", invH.Preview)
+		r.Post("/accept", invH.Accept)
 	})
 
 	// WebSocket — mount the execution hub for real-time status updates
