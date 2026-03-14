@@ -34,7 +34,6 @@ jobs:
   go-integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     services:
       postgres:
         image: timescale/timescaledb:latest-pg16
@@ -91,7 +90,6 @@ jobs:
   jest-tests:
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    continue-on-error: true
     steps:
       - uses: actions/checkout@v4
 
@@ -114,6 +112,27 @@ jobs:
           name: jest-test-results
           path: ctrf-report.json
           if-no-files-found: ignore
+
+  sdk-tests:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: sdk/package-lock.json
+
+      - name: Install SDK dependencies
+        working-directory: sdk
+        run: npm ci
+
+      - name: Run SDK tests
+        working-directory: sdk
+        run: npm test
 
   go-build:
     runs-on: ubuntu-latest
