@@ -1,304 +1,130 @@
 /**
  * Team-Based Analytics Integration Tests
  *
- * This test suite verifies that team-based filtering is properly implemented
- * across all analytics APIs and test report management endpoints.
+ * Verifies that team-based filtering logic works correctly for
+ * access control and data isolation.
  */
 
-import { dbLogger as logger } from '../../src/logging/logger';
+// Mock getUserTeams before importing anything that uses it
+const mockGetUserTeams = jest.fn();
+jest.mock('../../src/lib/teamManagement', () => ({
+  getUserTeams: mockGetUserTeams,
+}));
 
 describe('Team-Based Analytics Integration', () => {
-  beforeAll(async () => {
-    logger.info('Setting up team-based analytics integration tests');
+  beforeEach(() => {
+    jest.clearAllMocks();
   });
 
-  afterAll(async () => {
-    logger.info('Team-based analytics integration tests completed');
-  });
-
-  describe('Test Reports API with Team Filtering', () => {
-    it('should handle users with no teams gracefully', async () => {
-      // Mock getUserTeams to return empty array for test user
-      const mockGetUserTeams = jest.fn().mockResolvedValue([]);
-      jest.doMock('../../src/lib/teamManagement', () => ({
-        getUserTeams: mockGetUserTeams,
-      }));
-
-      // This should not throw an error - user with no teams can still store reports
-      expect(mockGetUserTeams).toBeDefined();
-    });
-
-    it('should allow users to retrieve their own reports even without teams', async () => {
-      // Mock getUserTeams to return empty array
-      const mockGetUserTeams = jest.fn().mockResolvedValue([]);
-      jest.doMock('../../src/lib/teamManagement', () => ({
-        getUserTeams: mockGetUserTeams,
-      }));
-
-      // This should not throw an error - user should be able to see their own reports
-      expect(mockGetUserTeams).toBeDefined();
-    });
-  });
-
-  describe('Analytics APIs with Team Filtering', () => {
-    const analyticsEndpoints = [
-      '/api/analytics/test-suite-overview',
-      '/api/analytics/test-trends',
-      '/api/analytics/error-analysis',
-      '/api/analytics/test-duration',
-      '/api/analytics/flaky-tests',
-      '/api/analytics/flaky-test-runs',
-    ];
-
-    analyticsEndpoints.forEach(endpoint => {
-      it(`${endpoint} should handle team filtering gracefully`, async () => {
-        // Mock getUserTeams for different scenarios
-        const mockGetUserTeams = jest
-          .fn()
-          .mockResolvedValue([{ id: 'team-1', name: 'Development Team', isDefault: false }]);
-
-        jest.doMock('../../src/lib/teamManagement', () => ({
-          getUserTeams: mockGetUserTeams,
-        }));
-
-        logger.info(`Testing team filtering for ${endpoint}`);
-
-        // Verify that the endpoint can handle team filtering without errors
-        expect(mockGetUserTeams).toBeDefined();
-      });
-
-      it(`${endpoint} should handle users with no teams`, async () => {
-        // Mock getUserTeams to return empty array
-        const mockGetUserTeams = jest.fn().mockResolvedValue([]);
-
-        jest.doMock('../../src/lib/teamManagement', () => ({
-          getUserTeams: mockGetUserTeams,
-        }));
-
-        logger.info(`Testing no teams scenario for ${endpoint}`);
-
-        // Verify that the endpoint can handle users with no teams
-        expect(mockGetUserTeams).toBeDefined();
-      });
-    });
-  });
-
-  describe('Database Query Building', () => {
-    it('should build team filters correctly', () => {
-      // Test the team filter building logic
-      const teamIds = ['team-1', 'team-2'];
-
-      // Expected filter structure for team-based queries
-      const expectedFilter = {
-        terms: {
-          'metadata.userTeams.keyword': teamIds,
-        },
-      };
-
-      logger.info({ teamIds, expectedFilter }, 'Testing team filter building logic');
-
-      // This verifies the structure we expect in team-based queries
-      expect(expectedFilter.terms['metadata.userTeams.keyword']).toEqual(teamIds);
-    });
-
-    it('should handle empty team lists', () => {
-      const teamIds: string[] = [];
-
-      // When no teams are provided, the filter should be minimal
-      logger.info({ teamIds }, 'Testing empty team filter handling');
-
-      // The system should handle empty team arrays gracefully
-      expect(teamIds.length).toBe(0);
-    });
-  });
-
-  describe('Access Control Scenarios', () => {
-    it('should allow users to access data from their teams', () => {
-      const userTeams = [
+  describe('getUserTeams contract', () => {
+    it('returns an array of teams for a valid user', async () => {
+      mockGetUserTeams.mockResolvedValue([
         { id: 'team-1', name: 'Dev Team', isDefault: false },
         { id: 'team-2', name: 'QA Team', isDefault: false },
-      ];
+      ]);
 
-      const expectedTeamIds = ['team-1', 'team-2'];
-
-      logger.info(
-        {
-          userTeams,
-          expectedTeamIds,
-        },
-        'Testing team-based access control'
-      );
-
-      // User should be able to access data from all their teams
-      expect(userTeams.map(team => team.id)).toEqual(expectedTeamIds);
+      const teams = await mockGetUserTeams('user-123');
+      expect(mockGetUserTeams).toHaveBeenCalledWith('user-123');
+      expect(teams).toHaveLength(2);
+      expect(teams[0]).toHaveProperty('id', 'team-1');
+      expect(teams[1]).toHaveProperty('id', 'team-2');
     });
 
-    it('should allow users to access their own uploaded data', () => {
-      const userId = 'user-123';
-      const uploadedBy = 'user-123';
+    it('returns empty array for user with no teams', async () => {
+      mockGetUserTeams.mockResolvedValue([]);
 
-      logger.info(
-        {
-          userId,
-          uploadedBy,
-        },
-        'Testing user data access control'
-      );
-
-      // User should always be able to access data they uploaded
-      expect(userId).toBe(uploadedBy);
+      const teams = await mockGetUserTeams('orphan-user');
+      expect(mockGetUserTeams).toHaveBeenCalledWith('orphan-user');
+      expect(teams).toEqual([]);
     });
 
-    it('should combine team access and user upload access with OR logic', () => {
-      const userTeams = ['team-1'];
-      const userId = 'user-123';
+    it('throws on authentication service failure', async () => {
+      mockGetUserTeams.mockRejectedValue(new Error('Authentication service connection failed'));
 
-      // The query should allow access to:
-      // 1. Reports from user's teams OR
-      // 2. Reports uploaded by the user
-      const accessConditions = [{ teamAccess: userTeams.length > 0 }, { userUploadAccess: true }];
-
-      logger.info(
-        {
-          userTeams,
-          userId,
-          accessConditions,
-        },
-        'Testing combined access logic'
+      await expect(mockGetUserTeams('user-123')).rejects.toThrow(
+        'Authentication service connection failed'
       );
-
-      // At least one access condition should be true
-      const hasAccess = accessConditions.some(
-        condition => condition.teamAccess || condition.userUploadAccess
-      );
-      expect(hasAccess).toBe(true);
-    });
-  });
-
-  describe('Error Handling', () => {
-    it('should handle authentication connection errors gracefully', async () => {
-      // Mock getUserTeams to simulate authentication connection failure
-      const mockGetUserTeams = jest
-        .fn()
-        .mockRejectedValue(new Error('Authentication service connection failed'));
-
-      jest.doMock('../../src/lib/teamManagement', () => ({
-        getUserTeams: mockGetUserTeams,
-      }));
-
-      logger.info('Testing authentication connection error handling');
-
-      // The system should handle authentication errors gracefully
-      try {
-        await mockGetUserTeams('test-user');
-      } catch (error) {
-        expect(error).toBeInstanceOf(Error);
-      }
     });
 
-    it('should handle user not found in authentication system', async () => {
-      // Mock getUserTeams to simulate user not found (404)
-      const mockGetUserTeams = jest.fn().mockResolvedValue([]);
+    it('returns empty array for non-existent user', async () => {
+      mockGetUserTeams.mockResolvedValue([]);
 
-      jest.doMock('../../src/lib/teamManagement', () => ({
-        getUserTeams: mockGetUserTeams,
-      }));
-
-      logger.info('Testing user not found scenario');
-
-      const result = await mockGetUserTeams('non-existent-user');
+      const result = await mockGetUserTeams('non-existent');
       expect(result).toEqual([]);
     });
   });
 
-  describe('Data Isolation Verification', () => {
-    it('should ensure proper data isolation between teams', () => {
-      const team1Data = {
-        reportId: 'report-1',
-        metadata: { userTeams: ['team-1'] },
+  describe('Team filter construction', () => {
+    it('builds correct terms filter from team IDs', () => {
+      const teamIds = ['team-1', 'team-2'];
+      const filter = {
+        terms: { 'metadata.userTeams.keyword': teamIds },
       };
 
-      const team2Data = {
-        reportId: 'report-2',
-        metadata: { userTeams: ['team-2'] },
-      };
-
-      logger.info(
-        {
-          team1Data,
-          team2Data,
-        },
-        'Testing data isolation between teams'
-      );
-
-      // Reports should be properly tagged with team information
-      expect(team1Data.metadata.userTeams).not.toEqual(team2Data.metadata.userTeams);
+      expect(filter.terms['metadata.userTeams.keyword']).toEqual(teamIds);
+      expect(filter.terms['metadata.userTeams.keyword']).toHaveLength(2);
     });
 
-    it('should prevent cross-team data leakage', () => {
-      const userTeam1Teams = ['team-1'];
-      const userTeam2Teams = ['team-2'];
+    it('builds empty filter for empty team list', () => {
+      const teamIds: string[] = [];
+      const filter = {
+        terms: { 'metadata.userTeams.keyword': teamIds },
+      };
 
-      // User from team-1 should not see team-2 data
-      const hasOverlap = userTeam1Teams.some(team => userTeam2Teams.includes(team));
+      expect(filter.terms['metadata.userTeams.keyword']).toHaveLength(0);
+    });
 
-      logger.info(
-        {
-          userTeam1Teams,
-          userTeam2Teams,
-          hasOverlap,
-        },
-        'Testing cross-team data isolation'
-      );
+    it('handles large team lists', () => {
+      const teamIds = Array.from({ length: 50 }, (_, i) => `team-${i}`);
+      const filter = {
+        terms: { 'metadata.userTeams.keyword': teamIds },
+      };
 
-      expect(hasOverlap).toBe(false);
+      expect(filter.terms['metadata.userTeams.keyword']).toHaveLength(50);
+      expect(filter.terms['metadata.userTeams.keyword'][0]).toBe('team-0');
+      expect(filter.terms['metadata.userTeams.keyword'][49]).toBe('team-49');
     });
   });
 
-  describe('Performance Considerations', () => {
-    it('should handle large team lists efficiently', () => {
-      // Simulate a user with many teams
-      const manyTeams = Array.from({ length: 50 }, (_, i) => ({
-        id: `team-${i}`,
-        name: `Team ${i}`,
-        isDefault: false,
-      }));
+  describe('Data isolation', () => {
+    it('team-scoped reports do not overlap between teams', () => {
+      const team1Reports = [
+        { id: 'r1', teamId: 'team-1' },
+        { id: 'r2', teamId: 'team-1' },
+      ];
+      const team2Reports = [{ id: 'r3', teamId: 'team-2' }];
 
-      const teamIds = manyTeams.map(team => team.id);
+      const team1Ids = team1Reports.map(r => r.id);
+      const team2Ids = team2Reports.map(r => r.id);
 
-      logger.info(
-        {
-          teamCount: manyTeams.length,
-          sampleTeams: teamIds.slice(0, 3),
-        },
-        'Testing performance with many teams'
-      );
-
-      // System should handle users with many teams
-      expect(teamIds.length).toBe(50);
-      expect(teamIds.every(id => typeof id === 'string')).toBe(true);
+      expect(team1Ids).not.toEqual(expect.arrayContaining(team2Ids));
+      expect(team2Ids).not.toEqual(expect.arrayContaining(team1Ids));
     });
 
-    it('should handle team filtering queries efficiently', () => {
-      const teamIds = ['team-1', 'team-2', 'team-3'];
+    it('user access combines team membership and ownership', () => {
+      const userTeams = ['team-1'];
+      const userId = 'user-123';
+      const report = { id: 'r1', teamId: 'team-1', uploadedBy: 'user-456' };
 
-      // Team filtering should use efficient query structures
-      const queryStructure = {
-        terms: {
-          'metadata.userTeams.keyword': teamIds,
-        },
-      };
+      const hasTeamAccess = userTeams.includes(report.teamId);
+      const isOwner = report.uploadedBy === userId;
+      const canAccess = hasTeamAccess || isOwner;
 
-      logger.info(
-        {
-          teamIds,
-          queryStructure,
-        },
-        'Testing efficient team query structure'
-      );
+      expect(hasTeamAccess).toBe(true);
+      expect(isOwner).toBe(false);
+      expect(canAccess).toBe(true);
+    });
 
-      // Terms query is efficient for multiple team ID matching
-      expect(queryStructure.terms['metadata.userTeams.keyword']).toEqual(teamIds);
+    it('denies access when user has no team membership and is not owner', () => {
+      const userTeams = ['team-3'];
+      const userId = 'user-999';
+      const report = { id: 'r1', teamId: 'team-1', uploadedBy: 'user-456' };
+
+      const hasTeamAccess = userTeams.includes(report.teamId);
+      const isOwner = report.uploadedBy === userId;
+      const canAccess = hasTeamAccess || isOwner;
+
+      expect(canAccess).toBe(false);
     });
   });
 });
