@@ -80,6 +80,22 @@ func MigrateDown(databaseURL string) error {
 	return nil
 }
 
+// MigrateForceClean drops all migrations and resets the schema_migrations table.
+// Used to recover from a dirty database state in test environments.
+func MigrateForceClean(databaseURL string) error {
+	m, err := newMigrator(databaseURL)
+	if err != nil {
+		return err
+	}
+	defer closeMigrator(m)
+
+	if err := m.Drop(); err != nil {
+		return fmt.Errorf("drop all: %w", err)
+	}
+	log.Warn().Msg("migrations: force-cleaned dirty database")
+	return nil
+}
+
 // MigrateVersion returns the current migration version.
 func MigrateVersion(databaseURL string) (uint, bool, error) {
 	m, err := newMigrator(databaseURL)
