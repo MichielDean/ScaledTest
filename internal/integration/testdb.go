@@ -82,6 +82,7 @@ var truncateTables = []string{
 	"audit_logs",
 	"quality_gate_evaluations",
 	"quality_gates",
+	"webhook_deliveries",
 	"webhooks",
 	"test_results",
 	"test_reports",
