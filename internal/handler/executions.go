@@ -275,6 +275,18 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Clean up the K8s job if one was launched
+	if h.K8s != nil {
+		var jobName *string
+		_ = h.DB.QueryRow(r.Context(),
+			`SELECT k8s_job_name FROM test_executions WHERE id = $1`, executionID).Scan(&jobName)
+		if jobName != nil && *jobName != "" {
+			if err := h.K8s.DeleteJob(r.Context(), *jobName); err != nil {
+				log.Error().Err(err).Str("job", *jobName).Msg("failed to delete k8s job on cancel")
+			}
+		}
+	}
+
 	if h.AuditStore != nil {
 		h.AuditStore.Log(r.Context(), store.Entry{
 			ActorID:      claims.UserID,
