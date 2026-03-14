@@ -48,6 +48,12 @@ export function ExecutionsPage() {
     <div className="p-6 space-y-6">
       <h1 className="text-2xl font-bold">Executions</h1>
 
+      {executionsQuery.error && (
+        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          Failed to load executions: {(executionsQuery.error as Error).message}
+        </div>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         {/* Execution list */}
         <div className="lg:col-span-1">
@@ -204,7 +210,14 @@ function ProgressPanel({ progress }: { progress: ExecutionProgress }) {
       </div>
 
       {/* Progress bar */}
-      <div className="w-full bg-muted rounded-full h-3 overflow-hidden">
+      <div
+        className="w-full bg-muted rounded-full h-3 overflow-hidden"
+        role="progressbar"
+        aria-valuenow={progress.completed}
+        aria-valuemin={0}
+        aria-valuemax={progress.total}
+        aria-label={`Test progress: ${progress.completed} of ${progress.total} completed`}
+      >
         <div className="h-full rounded-full flex">
           {progress.total > 0 && (
             <>
