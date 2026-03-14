@@ -1,0 +1,84 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: timescaledb
+  namespace: scaledtest
+  labels:
+    app: scaledtest
+    component: database
+spec:
+  serviceName: timescaledb
+  replicas: 1
+  selector:
+    matchLabels:
+      app: scaledtest
+      component: database
+  template:
+    metadata:
+      labels:
+        app: scaledtest
+        component: database
+    spec:
+      containers:
+        - name: timescaledb
+          image: timescale/timescaledb:2.14.2-pg16
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              value: scaledtest
+            - name: POSTGRES_USER
+              value: scaledtest
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: timescaledb-secret
+                  key: password
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: '1'
+              memory: 2Gi
+          readinessProbe:
+            exec:
+              command: ['pg_isready', '-U', 'scaledtest', '-d', 'scaledtest']
+            initialDelaySeconds: 5
+            periodSeconds: 10
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ['ReadWriteOnce']
+        resources:
+          requests:
+            storage: 10Gi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: timescaledb
+  namespace: scaledtest
+spec:
+  type: ClusterIP
+  selector:
+    app: scaledtest
+    component: database
+  ports:
+    - port: 5432
+      targetPort: postgres
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: timescaledb-secret
+  namespace: scaledtest
+type: Opaque
+stringData:
+  # REQUIRED: Change this password before deploying
+  password: 'CHANGE_ME_DB_PASSWORD'
