@@ -133,14 +133,17 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	report, err := ctrf.Parse(body)
 	if err != nil {
-		Error(w, http.StatusBadRequest, "invalid CTRF format: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid CTRF format")
 		return
 	}
 
 	if err := ctrf.Validate(report); err != nil {
-		Error(w, http.StatusBadRequest, "CTRF validation failed: "+err.Error())
+		Error(w, http.StatusBadRequest, "CTRF validation failed")
 		return
 	}
+
+	// Sanitize all user-controlled string fields to prevent stored XSS
+	ctrf.Sanitize(report)
 
 	if h.DB == nil {
 		// Fallback for no-DB mode: accept but don't persist
