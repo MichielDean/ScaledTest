@@ -237,6 +237,69 @@ func TestBroadcastClosedClientDoesNotBlock(t *testing.T) {
 	hub.unregister(healthy)
 }
 
+func TestConcurrentBroadcastAndUnregister(t *testing.T) {
+	hub := NewHub()
+
+	// Register many clients
+	clients := make([]*client, 20)
+	for i := range clients {
+		clients[i] = newTestClient("", 16)
+		hub.register(clients[i])
+	}
+
+	// Concurrently broadcast and unregister
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		for i := 0; i < 100; i++ {
+			hub.Broadcast(Message{
+				Type:        "execution.status",
+				ExecutionID: "exec-1",
+				Data:        i,
+				Timestamp:   time.Now(),
+			})
+		}
+	}()
+
+	// Unregister clients while broadcasting
+	for _, c := range clients {
+		hub.unregister(c)
+	}
+
+	select {
+	case <-done:
+		// Broadcast completed without panic — correct
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent broadcast + unregister deadlocked")
+	}
+
+	if hub.ClientCount() != 0 {
+		t.Errorf("ClientCount after all unregistered = %d, want 0", hub.ClientCount())
+	}
+}
+
+func TestRegisterAndBroadcastConcurrently(t *testing.T) {
+	hub := NewHub()
+	done := make(chan struct{})
+
+	// Concurrently register clients and broadcast
+	go func() {
+		defer close(done)
+		for i := 0; i < 50; i++ {
+			c := newTestClient("", 4)
+			hub.register(c)
+			hub.Broadcast(Message{Type: "test", ExecutionID: "e1", Timestamp: time.Now()})
+			hub.unregister(c)
+		}
+	}()
+
+	select {
+	case <-done:
+	case <-time.After(5 * time.Second):
+		t.Fatal("concurrent register/broadcast/unregister deadlocked")
+	}
+}
+
 func TestBroadcastConvenienceMethods(t *testing.T) {
 	hub := NewHub()
 
