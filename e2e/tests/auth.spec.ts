@@ -37,8 +37,10 @@ test.describe('Authentication', () => {
     await page.getByLabel('Email').fill('bad@example.com');
     await page.getByLabel('Password').fill('wrongpassword');
     await page.getByRole('button', { name: 'Sign In' }).click();
-    // Should show error (either network error or auth error)
-    await expect(page.locator('[class*="red"]')).toBeVisible({ timeout: 5000 });
+    // Should show an error message — check for role=alert or common error text patterns
+    await expect(
+      page.getByRole('alert').or(page.getByText(/invalid|error|failed|unauthorized/i))
+    ).toBeVisible({ timeout: 5000 });
   });
 
   test('shows OAuth buttons', async ({ page }) => {
