@@ -120,9 +120,10 @@ export function TestResultsPage() {
                     setExpandedReportId(isExpanded ? null : report.id);
                     setExpandedTestIdx(null);
                   }}
+                  aria-expanded={isExpanded}
                   className="w-full px-5 py-4 flex items-center gap-4 text-left hover:bg-muted/30 transition-colors"
                 >
-                  <span className="text-muted-foreground text-sm">
+                  <span className="text-muted-foreground text-sm" aria-hidden="true">
                     {isExpanded ? '\u25BC' : '\u25B6'}
                   </span>
                   <div className="flex-1 min-w-0">
