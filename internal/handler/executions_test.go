@@ -223,6 +223,81 @@ func TestUpdateStatus_NoDB(t *testing.T) {
 	}
 }
 
+func TestReportProgress_MissingID(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions//progress", strings.NewReader(`{"total":10}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	h.ReportProgress(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportProgress missing ID: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReportTestResult_MissingID(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions//test-result", strings.NewReader(`{"name":"t1","status":"passed"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	h.ReportTestResult(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportTestResult missing ID: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReportWorkerStatus_MissingID(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions//worker-status", strings.NewReader(`{"worker_id":"w1","status":"running"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	h.ReportWorkerStatus(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportWorkerStatus missing ID: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReportProgress_InvalidBody(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/progress", strings.NewReader(`{bad json`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	r = testWithChiParam(r, "executionID", "exec-1")
+	h.ReportProgress(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportProgress invalid body: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReportTestResult_InvalidBody(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/test-result", strings.NewReader(`{bad`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	r = testWithChiParam(r, "executionID", "exec-1")
+	h.ReportTestResult(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportTestResult invalid body: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestReportWorkerStatus_InvalidBody(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/worker-status", strings.NewReader(`{bad`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaims(r, testClaims)
+	r = testWithChiParam(r, "executionID", "exec-1")
+	h.ReportWorkerStatus(w, r)
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ReportWorkerStatus invalid body: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func TestErrorResponse_Format(t *testing.T) {
 	w := httptest.NewRecorder()
 	Error(w, http.StatusBadRequest, "test error")
