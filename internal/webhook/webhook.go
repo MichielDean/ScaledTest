@@ -154,6 +154,11 @@ type WebhookLister interface {
 	ListByTeamAndEvent(ctx context.Context, teamID string, event string) ([]WebhookRecord, error)
 }
 
+// DeliveryRecorder persists webhook delivery results.
+type DeliveryRecorder interface {
+	Record(ctx context.Context, webhookID, url, eventType string, attempt, statusCode int, errMsg string, durationMs int) error
+}
+
 // WebhookRecord is the minimal webhook data needed for dispatch.
 type WebhookRecord struct {
 	ID         string
@@ -165,6 +170,7 @@ type WebhookRecord struct {
 type Notifier struct {
 	lister     WebhookLister
 	dispatcher *Dispatcher
+	recorder   DeliveryRecorder // optional; nil means no persistence
 }
 
 // NewNotifier creates a Notifier. Returns nil if lister or dispatcher is nil.
@@ -173,6 +179,13 @@ func NewNotifier(lister WebhookLister, dispatcher *Dispatcher) *Notifier {
 		return nil
 	}
 	return &Notifier{lister: lister, dispatcher: dispatcher}
+}
+
+// SetRecorder sets the delivery recorder for persisting delivery results.
+func (n *Notifier) SetRecorder(r DeliveryRecorder) {
+	if n != nil {
+		n.recorder = r
+	}
 }
 
 // Notify fires webhooks for the given event asynchronously (fire-and-forget).
@@ -208,13 +221,21 @@ func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 			dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
 			go func() {
 				defer dCancel()
-				_, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+				start := time.Now()
+				delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+				durationMs := int(time.Since(start).Milliseconds())
 				if err != nil {
 					log.Warn().Err(err).
 						Str("webhook_id", h.ID).
 						Str("url", h.URL).
 						Str("event", string(event)).
 						Msg("webhook: delivery failed")
+				}
+
+				// Persist delivery result if recorder is configured.
+				if n.recorder != nil && delivery != nil {
+					_ = n.recorder.Record(dCtx, h.ID, h.URL, string(event),
+						delivery.Attempt, delivery.StatusCode, delivery.Error, durationMs)
 				}
 			}()
 		}

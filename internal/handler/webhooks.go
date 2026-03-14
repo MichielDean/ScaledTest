@@ -24,7 +24,8 @@ var validWebhookEvents = map[string]bool{
 
 // WebhooksHandler handles webhook CRUD endpoints.
 type WebhooksHandler struct {
-	Store *store.WebhookStore
+	Store         *store.WebhookStore
+	DeliveryStore *store.WebhookDeliveryStore
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
@@ -304,4 +305,43 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "webhook deleted"})
+}
+
+// ListDeliveries handles GET /api/v1/teams/:teamID/webhooks/:webhookID/deliveries.
+func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	_, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	if h.DeliveryStore == nil {
+		JSON(w, http.StatusOK, map[string]interface{}{
+			"deliveries": []interface{}{},
+			"total":      0,
+		})
+		return
+	}
+
+	deliveries, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, 20)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to list deliveries")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"deliveries": deliveries,
+		"total":      len(deliveries),
+	})
 }
