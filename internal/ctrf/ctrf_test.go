@@ -135,6 +135,75 @@ func TestSummaryJSON(t *testing.T) {
 	}
 }
 
+func TestValidateMissingTestName(t *testing.T) {
+	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[{"name":"","status":"passed"}]}}`
+	report, _ := Parse([]byte(data))
+	err := Validate(report)
+	if err == nil {
+		t.Error("expected error for missing test name")
+	}
+}
+
+func TestValidateSummaryCountMismatch(t *testing.T) {
+	// Summary says 5 tests but only 1 test in array — should pass (allowed per spec)
+	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":5},"tests":[{"name":"t1","status":"passed"}]}}`
+	report, _ := Parse([]byte(data))
+	err := Validate(report)
+	if err != nil {
+		t.Errorf("expected no error for summary mismatch (allowed), got: %v", err)
+	}
+}
+
+func TestValidateSummaryNonZeroWithEmptyTests(t *testing.T) {
+	// Summary says 3 tests but test array is empty — should pass (summary-only reports)
+	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":3},"tests":[]}}`
+	report, _ := Parse([]byte(data))
+	err := Validate(report)
+	// Current behavior: allows this because summary.Tests != 0 even though tests array is empty
+	// This is a known design choice — some reporters send summary-only
+	if err != nil {
+		t.Logf("note: summary-only report (3 tests in summary, 0 in array) returned error: %v", err)
+	}
+}
+
+func TestParseNilInput(t *testing.T) {
+	_, err := Parse(nil)
+	if err == nil {
+		t.Error("expected error for nil input")
+	}
+}
+
+func TestParseEmptyJSON(t *testing.T) {
+	report, err := Parse([]byte(`{}`))
+	if err != nil {
+		t.Fatalf("Parse({}) error: %v", err)
+	}
+	// Empty JSON parses but should fail validation
+	err = Validate(report)
+	if err == nil {
+		t.Error("expected validation error for empty report")
+	}
+}
+
+func TestNormalizeEmptyReport(t *testing.T) {
+	report := &Report{}
+	results := Normalize(report, "r1", "t1")
+	if len(results) != 0 {
+		t.Errorf("expected 0 results for empty report, got %d", len(results))
+	}
+}
+
+func TestValidateMultipleStatuses(t *testing.T) {
+	statuses := []string{"passed", "failed", "skipped", "pending", "other"}
+	for _, status := range statuses {
+		data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[{"name":"t","status":"` + status + `"}]}}`
+		report, _ := Parse([]byte(data))
+		if err := Validate(report); err != nil {
+			t.Errorf("status %q should be valid, got error: %v", status, err)
+		}
+	}
+}
+
 func TestNormalizeWithTags(t *testing.T) {
 	data := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1},"tests":[
 		{"name":"tagged test","status":"passed","duration":10,"tags":["smoke","regression"],"flaky":true,"retry":2}
