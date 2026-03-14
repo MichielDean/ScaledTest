@@ -26,6 +26,17 @@ export function OAuthCallbackPage() {
           return;
         }
         const payload = JSON.parse(atob(parts[1]));
+
+        // Validate required claims
+        if (!payload.sub || typeof payload.sub !== 'string') {
+          setError('OAuth login failed: missing user ID');
+          return;
+        }
+        if (!payload.email || typeof payload.email !== 'string') {
+          setError('OAuth login failed: missing email');
+          return;
+        }
+
         const user = {
           id: payload.sub,
           email: payload.email,
@@ -33,6 +44,10 @@ export function OAuthCallbackPage() {
           role: payload.role || 'member',
         };
         setAuth(user, token);
+
+        // Clear token from URL to prevent leakage via browser history / referrer
+        window.history.replaceState({}, '', '/auth/callback');
+
         navigate({ to: '/' });
       } catch {
         setError('OAuth login failed: invalid token');
