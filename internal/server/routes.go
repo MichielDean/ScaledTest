@@ -37,6 +37,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	r.Use(middleware.RealIP)
 	r.Use(zerologMiddleware)
 	r.Use(middleware.Recoverer)
+	r.Use(maxBodySize(10 << 20)) // 10MB global request body limit
 	r.Use(httprate.LimitByIP(100, 1*time.Minute))
 	r.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{cfg.BaseURL, "http://localhost:5173"},
@@ -283,4 +284,16 @@ func zerologMiddleware(next http.Handler) http.Handler {
 			Msg("request")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// maxBodySize limits the request body size for all requests.
+func maxBodySize(maxBytes int64) func(http.Handler) http.Handler {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.Body != nil {
+				r.Body = http.MaxBytesReader(w, r.Body, maxBytes)
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
