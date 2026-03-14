@@ -20,12 +20,12 @@ type TeamsHandler struct {
 
 // CreateTeamRequest is the request body for creating a team.
 type CreateTeamRequest struct {
-	Name string `json:"name" validate:"required,min=1"`
+	Name string `json:"name" validate:"required,min=1,max=256"`
 }
 
 // CreateTokenRequest is the request body for creating an API token.
 type CreateTokenRequest struct {
-	Name string `json:"name" validate:"required,min=1"`
+	Name string `json:"name" validate:"required,min=1,max=256"`
 }
 
 // List handles GET /api/v1/teams.
@@ -84,7 +84,7 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateTeamRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -289,7 +289,7 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateTokenRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 

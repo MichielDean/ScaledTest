@@ -37,8 +37,8 @@ type ExecutionsHandler struct {
 
 // CreateExecutionRequest is the request body for creating a test execution.
 type CreateExecutionRequest struct {
-	Command string            `json:"command" validate:"required"`
-	Image   string            `json:"image,omitempty"`
+	Command string            `json:"command" validate:"required,max=10000"`
+	Image   string            `json:"image,omitempty" validate:"max=1000"`
 	EnvVars map[string]string `json:"env_vars,omitempty"`
 }
 
@@ -116,7 +116,7 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateExecutionRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -185,9 +185,11 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		// Store K8s job name on the execution record
-		h.DB.Exec(r.Context(),
+		if _, err := h.DB.Exec(r.Context(),
 			`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
-			jobName, time.Now(), id)
+			jobName, time.Now(), id); err != nil {
+			log.Error().Err(err).Str("execution_id", id).Msg("failed to store k8s job name")
+		}
 	}
 
 	if h.AuditStore != nil {
@@ -315,7 +317,7 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 
 	var req UpdateStatusRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -436,26 +438,39 @@ func getExecution(ctx context.Context, pool *db.Pool, id, teamID string) (*model
 
 // ProgressRequest is the request body for reporting test progress.
 type ProgressRequest struct {
-	Passed       int     `json:"passed"`
-	Failed       int     `json:"failed"`
-	Skipped      int     `json:"skipped"`
+	Passed       int     `json:"passed" validate:"min=0"`
+	Failed       int     `json:"failed" validate:"min=0"`
+	Skipped      int     `json:"skipped" validate:"min=0"`
 	Total        int     `json:"total" validate:"required,min=1"`
-	DurationMs   int64   `json:"duration_ms"`
+	DurationMs   int64   `json:"duration_ms" validate:"min=0"`
 	EstimatedETA float64 `json:"estimated_eta_seconds,omitempty"`
 }
 
 // ReportProgress handles POST /api/v1/executions/{executionID}/progress.
 // Called by workers to stream live test counters.
 func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	executionID := chi.URLParam(r, "executionID")
 	if executionID == "" {
 		Error(w, http.StatusBadRequest, "missing execution ID")
 		return
 	}
 
+	if h.DB != nil {
+		if _, err := getExecution(r.Context(), h.DB, executionID, claims.TeamID); err != nil {
+			Error(w, http.StatusNotFound, "execution not found")
+			return
+		}
+	}
+
 	var req ProgressRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -482,7 +497,7 @@ func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Reques
 type TestResultEvent struct {
 	Name       string `json:"name" validate:"required"`
 	Status     string `json:"status" validate:"required,oneof=passed failed skipped pending other"`
-	DurationMs int64  `json:"duration_ms"`
+	DurationMs int64  `json:"duration_ms" validate:"min=0"`
 	Message    string `json:"message,omitempty"`
 	Suite      string `json:"suite,omitempty"`
 	WorkerID   string `json:"worker_id,omitempty"`
@@ -491,15 +506,28 @@ type TestResultEvent struct {
 // ReportTestResult handles POST /api/v1/executions/{executionID}/test-result.
 // Called by workers to stream individual test results as they complete.
 func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	executionID := chi.URLParam(r, "executionID")
 	if executionID == "" {
 		Error(w, http.StatusBadRequest, "missing execution ID")
 		return
 	}
 
+	if h.DB != nil {
+		if _, err := getExecution(r.Context(), h.DB, executionID, claims.TeamID); err != nil {
+			Error(w, http.StatusNotFound, "execution not found")
+			return
+		}
+	}
+
 	var req TestResultEvent
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -533,15 +561,28 @@ type WorkerStatusEvent struct {
 // ReportWorkerStatus handles POST /api/v1/executions/{executionID}/worker-status.
 // Called by workers to report their health and progress.
 func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
 	executionID := chi.URLParam(r, "executionID")
 	if executionID == "" {
 		Error(w, http.StatusBadRequest, "missing execution ID")
 		return
 	}
 
+	if h.DB != nil {
+		if _, err := getExecution(r.Context(), h.DB, executionID, claims.TeamID); err != nil {
+			Error(w, http.StatusNotFound, "execution not found")
+			return
+		}
+	}
+
 	var req WorkerStatusEvent
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 

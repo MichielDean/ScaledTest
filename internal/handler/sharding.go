@@ -18,8 +18,8 @@ type ShardingHandler struct {
 
 // CreateShardPlanRequest is the request body for creating a shard plan.
 type CreateShardPlanRequest struct {
-	TestNames    []string            `json:"test_names" validate:"required,min=1"`
-	NumWorkers   int                 `json:"num_workers" validate:"required,min=1"`
+	TestNames    []string            `json:"test_names" validate:"required,min=1,max=10000"`
+	NumWorkers   int                 `json:"num_workers" validate:"required,min=1,max=1000"`
 	Strategy     string              `json:"strategy,omitempty"`
 	ExecutionID  string              `json:"execution_id,omitempty"`
 	Dependencies map[string][]string `json:"dependencies,omitempty"`
@@ -36,7 +36,7 @@ func (h *ShardingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateShardPlanRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -87,7 +87,7 @@ func (h *ShardingHandler) Rebalance(w http.ResponseWriter, r *http.Request) {
 
 	var req RebalanceRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 

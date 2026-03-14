@@ -146,7 +146,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	var req CreateWebhookRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 
@@ -240,7 +240,7 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	var req UpdateWebhookRequest
 	if err := Decode(r, &req); err != nil {
-		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		Error(w, http.StatusBadRequest, "invalid request body")
 		return
 	}
 

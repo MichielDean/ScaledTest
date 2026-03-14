@@ -389,5 +389,9 @@ func parseIntParam(r *http.Request, name string, defaultVal int) int {
 	if err != nil || v <= 0 {
 		return defaultVal
 	}
+	// Cap to prevent abuse
+	if v > 10000 {
+		v = 10000
+	}
 	return v
 }
