@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-kjdzo
+## Item: sc-yaxdh
 
-**Title:** Populate PreviousFailedTests from prior report
+**Title:** Remove continue-on-error from go-integration-test
 **Status:** in_progress
 **Priority:** 1
 
 ### Description
 
-When evaluating quality gates on report submission, look up the most recent prior report for the same team, load its failed test names, and pass them as PreviousFailedTests in ReportData.
+Remove the 'continue-on-error: true' setting from the 'go-integration-test' job in the pullRequest.yml workflow, so integration test failures will fail the entire CI pipeline.
 
 ## Current Step: implement
 
@@ -34,16 +34,16 @@ When evaluating quality gates on report submission, look up the most recent prio
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-kjdzo
+    ct droplet pass sc-yaxdh
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-kjdzo
-    ct droplet recirculate sc-kjdzo --to implement
+    ct droplet recirculate sc-yaxdh
+    ct droplet recirculate sc-yaxdh --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-kjdzo
+    ct droplet block sc-yaxdh
 
 Add notes before signaling:
-    ct droplet note sc-kjdzo "What you did / found"
+    ct droplet note sc-yaxdh "What you did / found"
 
 The `ct` binary is on your PATH.
