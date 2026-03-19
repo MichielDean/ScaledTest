@@ -7,17 +7,24 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 )
 
 const refreshTokenCookie = "refresh_token"
 
+// authDB is the minimal database interface used by AuthHandler.
+// *pgxpool.Pool satisfies this interface.
+type authDB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	JWT *auth.JWTManager
-	DB  *db.Pool
+	DB  authDB
 }
 
 // RegisterRequest is the request body for user registration.
@@ -46,6 +53,76 @@ type UserResponse struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+}
+
+// ChangePasswordRequest is the request body for changing the authenticated user's password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
+}
+
+// ChangePassword handles POST /api/v1/auth/change-password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	// Look up current password hash
+	var passwordHash string
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT password_hash FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&passwordHash)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Verify current password
+	if !auth.CheckPassword(req.CurrentPassword, passwordHash) {
+		Error(w, http.StatusUnauthorized, "invalid current password")
+		return
+	}
+
+	// Hash new password
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Update password
+	tag, err := h.DB.Exec(r.Context(),
+		"UPDATE users SET password_hash = $1 WHERE id = $2",
+		newHash, claims.UserID,
+	)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "password changed"})
 }
 
 // Register handles POST /auth/register.

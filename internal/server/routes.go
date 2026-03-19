@@ -121,7 +121,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// Handlers
 	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
-	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	authH := &handler.AuthHandler{JWT: jwtMgr}
+	if dbPool != nil {
+		authH.DB = dbPool
+	}
 	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,
@@ -175,6 +178,8 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 		r.Use(csrfMW)
+
+		r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/auth/change-password", authH.ChangePassword)
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
