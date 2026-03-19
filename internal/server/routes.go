@@ -121,7 +121,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// Handlers
 	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
-	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	authH := &handler.AuthHandler{JWT: jwtMgr}
+	if dbPool != nil {
+		authH.DB = dbPool
+	}
 	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,

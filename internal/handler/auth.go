@@ -7,17 +7,24 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 )
 
 const refreshTokenCookie = "refresh_token"
 
+// authDB is the minimal database interface used by AuthHandler.
+// *pgxpool.Pool satisfies this interface.
+type authDB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	JWT *auth.JWTManager
-	DB  *db.Pool
+	DB  authDB
 }
 
 // RegisterRequest is the request body for user registration.

@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -8,8 +9,34 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+
 	"github.com/scaledtest/scaledtest/internal/auth"
 )
+
+// mockAuthDB implements authDB for testing.
+type mockAuthDB struct {
+	queryRowFn func(ctx context.Context, sql string, args ...any) pgx.Row
+	execFn     func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
+func (m *mockAuthDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
+	return m.queryRowFn(ctx, sql, args...)
+}
+
+func (m *mockAuthDB) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+	return m.execFn(ctx, sql, arguments...)
+}
+
+// mockRow implements pgx.Row for testing.
+type mockRow struct {
+	scanFn func(dest ...any) error
+}
+
+func (r *mockRow) Scan(dest ...any) error {
+	return r.scanFn(dest...)
+}
 
 const testSecret = "test-secret-32-chars-long-enough!"
 
@@ -298,6 +325,105 @@ func TestChangePasswordNoDB(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("ChangePassword without DB: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestChangePasswordSuccess(t *testing.T) {
+	hash, err := auth.HashPassword("oldpassword123")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*(dest[0].(*string)) = hash
+				return nil
+			}}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 1"), nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, DB: mockDB}
+
+	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("ChangePassword success: status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestChangePasswordWrongCurrentPassword(t *testing.T) {
+	hash, err := auth.HashPassword("correctpassword")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*(dest[0].(*string)) = hash
+				return nil
+			}}
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, DB: mockDB}
+
+	body := `{"current_password":"wrongpassword","new_password":"newpassword123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ChangePassword wrong password: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestChangePasswordRowsAffectedZero(t *testing.T) {
+	hash, err := auth.HashPassword("oldpassword123")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*(dest[0].(*string)) = hash
+				return nil
+			}}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("UPDATE 0"), nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, DB: mockDB}
+
+	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("ChangePassword rows affected 0: status = %d, want %d", w.Code, http.StatusInternalServerError)
 	}
 }
 
