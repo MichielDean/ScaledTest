@@ -74,14 +74,17 @@ All API endpoints live under `/api/v1` and require a Bearer token (`Authorizatio
 
 ```bash
 # Register
-POST /auth/register  { "email", "password", "display_name" }
+POST /auth/register         { "email", "password", "display_name" }
 
 # Login → returns { access_token, expires_at, user }
-POST /auth/login     { "email", "password" }
+POST /auth/login            { "email", "password" }
+
+# Change password (requires valid JWT; rate-limited to 10 req/min per IP)
+POST /auth/change-password  { "current_password", "new_password" }
 
 # OAuth (if configured)
-GET /auth/github     # Redirects to GitHub
-GET /auth/google     # Redirects to Google
+GET /auth/github            # Redirects to GitHub
+GET /auth/google            # Redirects to Google
 ```
 
 ### CTRF Report Submission
