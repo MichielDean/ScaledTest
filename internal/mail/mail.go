@@ -62,6 +62,19 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 		return fmt.Errorf("smtp dial: %w", err)
 	}
 
+	// Propagate context cancellation/deadline to all post-connect SMTP
+	// operations by closing the underlying connection when ctx is done.
+	// Without this, a server that stalls after TCP accept blocks forever.
+	done := make(chan struct{})
+	defer close(done)
+	go func() {
+		select {
+		case <-ctx.Done():
+			conn.Close()
+		case <-done:
+		}
+	}()
+
 	client, err := smtp.NewClient(conn, s.host)
 	if err != nil {
 		_ = conn.Close()

@@ -2,7 +2,10 @@ package mail_test
 
 import (
 	"context"
+	"net"
+	"strconv"
 	"testing"
+	"time"
 
 	"github.com/scaledtest/scaledtest/internal/config"
 	"github.com/scaledtest/scaledtest/internal/mail"
@@ -62,6 +65,58 @@ func TestSMTPSender_Send_FailsWithUnreachableHost(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error connecting to unreachable host, got nil")
+	}
+}
+
+func TestSMTPSender_Send_ContextTimeoutAfterConnect_ReturnsError(t *testing.T) {
+	// Start a listener that accepts TCP connections but never sends an SMTP
+	// greeting, simulating a server that stalls after the TCP handshake.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatalf("listen: %v", err)
+	}
+	defer ln.Close()
+
+	go func() {
+		for {
+			c, err := ln.Accept()
+			if err != nil {
+				return
+			}
+			// Hold the connection open and write nothing.
+			go func(c net.Conn) {
+				defer c.Close()
+				select {} //nolint:staticcheck
+			}(c)
+		}
+	}()
+
+	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	port, _ := strconv.Atoi(portStr)
+
+	cfg := &config.Config{
+		SMTPHost: "127.0.0.1",
+		SMTPPort: port,
+		SMTPFrom: "from@example.com",
+	}
+	s := mail.New(cfg)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
+	defer cancel()
+
+	start := time.Now()
+	err = s.Send(ctx, mail.Message{
+		To:      "to@example.com",
+		Subject: "Test",
+		Body:    "body",
+	})
+	elapsed := time.Since(start)
+
+	if err == nil {
+		t.Fatal("expected error from stalled server with context timeout, got nil")
+	}
+	if elapsed > 5*time.Second {
+		t.Fatalf("Send blocked for %v — context timeout not respected", elapsed)
 	}
 }
 
