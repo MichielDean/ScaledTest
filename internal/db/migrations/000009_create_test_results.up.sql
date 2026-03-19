@@ -26,8 +26,16 @@ CREATE INDEX idx_test_results_created_at ON test_results (created_at DESC);
 -- Composite index for common analytics queries
 CREATE INDEX idx_test_results_team_name_created ON test_results (team_id, name, created_at DESC);
 
--- Hypertable for time-series queries on individual test results
-SELECT create_hypertable('test_results', 'created_at',
-    migrate_data => true,
-    if_not_exists => true
-);
+-- Hypertable for time-series queries on individual test results.
+-- Wrapped in exception handler: hypertable creation may fail if the primary key
+-- does not include the partition column; the table still works as a regular table.
+DO $$
+BEGIN
+    PERFORM create_hypertable('test_results', 'created_at',
+        migrate_data => true,
+        if_not_exists => true
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for test_results: %', SQLERRM;
+END $$;
