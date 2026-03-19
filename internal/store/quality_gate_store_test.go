@@ -133,7 +133,7 @@ func TestQualityGateStore_CreateEvaluation(t *testing.T) {
 	// Create a test report for the evaluation FK
 	var reportID string
 	err := tdb.Pool.QueryRow(ctx,
-		`INSERT INTO test_reports (team_id, tool_name, summary, raw_report, created_at)
+		`INSERT INTO test_reports (team_id, tool_name, summary, raw, created_at)
 		 VALUES ($1, 'jest', '{}', '{}', now()) RETURNING id`, teamID).Scan(&reportID)
 	if err != nil {
 		t.Fatalf("create test report: %v", err)

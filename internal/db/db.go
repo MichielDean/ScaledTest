@@ -80,6 +80,21 @@ func MigrateDown(databaseURL string) error {
 	return nil
 }
 
+// MigrateDrop drops everything in the database (all tables, schema_migrations).
+// This is intended for test environments only, to recover from dirty migration state.
+func MigrateDrop(databaseURL string) error {
+	m, err := newMigrator(databaseURL)
+	if err != nil {
+		return err
+	}
+	defer closeMigrator(m)
+
+	if err := m.Drop(); err != nil {
+		return fmt.Errorf("migrate drop: %w", err)
+	}
+	return nil
+}
+
 // MigrateVersion returns the current migration version.
 func MigrateVersion(databaseURL string) (uint, bool, error) {
 	m, err := newMigrator(databaseURL)
