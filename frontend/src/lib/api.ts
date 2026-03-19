@@ -206,4 +206,8 @@ export const api = {
 
   // Admin
   adminListUsers: () => fetchAPI('/api/v1/admin/users'),
+  adminListAuditLog: (limit = 20, offset = 0) =>
+    fetchAPI<{ audit_log: unknown[]; total: number }>(
+      `/api/v1/admin/audit-log?limit=${limit}&offset=${offset}`
+    ),
 };
