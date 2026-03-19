@@ -64,3 +64,24 @@ func TestSMTPSender_Send_FailsWithUnreachableHost(t *testing.T) {
 		t.Fatal("expected error connecting to unreachable host, got nil")
 	}
 }
+
+func TestSMTPSender_Send_CancelledContext_ReturnsError(t *testing.T) {
+	cfg := &config.Config{
+		SMTPHost: "127.0.0.1",
+		SMTPPort: 19999,
+		SMTPUser: "u",
+		SMTPPass: "p",
+		SMTPFrom: "from@example.com",
+	}
+	s := mail.New(cfg)
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // cancel before dialing
+	err := s.Send(ctx, mail.Message{
+		To:      "to@example.com",
+		Subject: "Test",
+		Body:    "body",
+	})
+	if err == nil {
+		t.Fatal("expected error with cancelled context, got nil")
+	}
+}
