@@ -13,6 +13,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/webhook"
@@ -26,11 +27,32 @@ var validWebhookEvents = map[string]bool{
 	"execution.failed":    true,
 }
 
+// WebhookStoreProvider is the store interface needed by WebhooksHandler.
+type WebhookStoreProvider interface {
+	List(ctx context.Context, teamID string) ([]model.Webhook, error)
+	Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+	Create(ctx context.Context, teamID, url, secretHash string, events []string) (*model.Webhook, error)
+	Update(ctx context.Context, teamID, webhookID, url string, events []string, enabled bool) (*model.Webhook, error)
+	Delete(ctx context.Context, teamID, webhookID string) error
+}
+
+// WebhookDeliveryStoreProvider is the delivery store interface needed by WebhooksHandler.
+type WebhookDeliveryStoreProvider interface {
+	Record(ctx context.Context, webhookID, url, eventType string, payload []byte, attempt, statusCode int, errMsg string, durationMs int) error
+	GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+	ListByWebhook(ctx context.Context, webhookID string, limit int) ([]store.WebhookDelivery, error)
+}
+
+// WebhookSender is the dispatcher interface needed by WebhooksHandler.
+type WebhookSender interface {
+	Send(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error)
+}
+
 // WebhooksHandler handles webhook CRUD endpoints.
 type WebhooksHandler struct {
-	Store         *store.WebhookStore
-	DeliveryStore *store.WebhookDeliveryStore
-	Dispatcher    *webhook.Dispatcher
+	Store         WebhookStoreProvider
+	DeliveryStore WebhookDeliveryStoreProvider
+	Dispatcher    WebhookSender
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.

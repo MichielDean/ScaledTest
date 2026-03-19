@@ -2,6 +2,9 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +13,9 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 func webhookWithClaims(r *http.Request, role string) *http.Request {
@@ -406,6 +412,216 @@ func TestWebhooksRetryDeliveryWithoutDB(t *testing.T) {
 
 	if w.Code != http.StatusNotImplemented {
 		t.Errorf("RetryDelivery without DB = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
+// mockWebhookStore implements WebhookStoreProvider for unit tests.
+type mockWebhookStore struct {
+	getFunc func(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+}
+
+func (m *mockWebhookStore) List(_ context.Context, _ string) ([]model.Webhook, error) { return nil, nil }
+func (m *mockWebhookStore) Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error) {
+	if m.getFunc != nil {
+		return m.getFunc(ctx, teamID, webhookID)
+	}
+	return &model.Webhook{ID: webhookID, TeamID: teamID, URL: "https://example.com/hook", SecretHash: "hash"}, nil
+}
+func (m *mockWebhookStore) Create(_ context.Context, _, _, _ string, _ []string) (*model.Webhook, error) {
+	return nil, nil
+}
+func (m *mockWebhookStore) Update(_ context.Context, _, _, _ string, _ []string, _ bool) (*model.Webhook, error) {
+	return nil, nil
+}
+func (m *mockWebhookStore) Delete(_ context.Context, _, _ string) error { return nil }
+
+// mockWebhookDeliveryStore implements WebhookDeliveryStoreProvider for unit tests.
+type mockWebhookDeliveryStore struct {
+	getByWebhookFunc func(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+}
+
+func (m *mockWebhookDeliveryStore) Record(_ context.Context, _, _, _ string, _ []byte, _, _ int, _ string, _ int) error {
+	return nil
+}
+func (m *mockWebhookDeliveryStore) GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error) {
+	if m.getByWebhookFunc != nil {
+		return m.getByWebhookFunc(ctx, webhookID, deliveryID)
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockWebhookDeliveryStore) ListByWebhook(_ context.Context, _ string, _ int) ([]store.WebhookDelivery, error) {
+	return nil, nil
+}
+
+// mockWebhookSender implements WebhookSender for unit tests.
+type mockWebhookSender struct {
+	sendFunc func(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error)
+}
+
+func (m *mockWebhookSender) Send(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error) {
+	if m.sendFunc != nil {
+		return m.sendFunc(ctx, url, secret, payload)
+	}
+	return &webhook.Delivery{StatusCode: 200, Attempt: 1}, nil
+}
+
+// validRetryPayload is a well-formed webhook.Payload JSON for dispatch tests.
+var validRetryPayload = json.RawMessage(`{"event":"report.submitted","timestamp":"2024-01-01T00:00:00Z","data":{}}`)
+
+func makeDelivery(payload json.RawMessage) *store.WebhookDelivery {
+	return &store.WebhookDelivery{
+		ID:        "d-1",
+		WebhookID: "wh-1",
+		EventType: "report.submitted",
+		Payload:   payload,
+	}
+}
+
+func retryReq() (*http.Request, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	return req, httptest.NewRecorder()
+}
+
+func TestRetryDeliverySuccess(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return &webhook.Delivery{StatusCode: 200, Attempt: 1}, nil
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery success status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), `"success":true`) {
+		t.Errorf("RetryDelivery success body missing success:true: %s", w.Body.String())
+	}
+}
+
+func TestRetryDeliveryRemoteError(t *testing.T) {
+	// dispatchErr==nil but result.Error non-empty: success must be false.
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return &webhook.Delivery{StatusCode: 404, Error: "HTTP 404", Attempt: 1}, nil
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery remote error status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"success":false`) {
+		t.Errorf("RetryDelivery remote error: expected success:false, got: %s", body)
+	}
+	if !strings.Contains(body, "HTTP 404") {
+		t.Errorf("RetryDelivery remote error: expected HTTP 404 in body, got: %s", body)
+	}
+}
+
+func TestRetryDeliveryTransportError(t *testing.T) {
+	// dispatchErr!=nil: success must be false and error message propagated.
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return nil, errors.New("connection refused")
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery transport error status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"success":false`) {
+		t.Errorf("RetryDelivery transport error: expected success:false, got: %s", body)
+	}
+	if !strings.Contains(body, "connection refused") {
+		t.Errorf("RetryDelivery transport error: expected error message in body, got: %s", body)
+	}
+}
+
+func TestRetryDeliveryEmptyPayload(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(nil), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("RetryDelivery empty payload status = %d, want %d", w.Code, http.StatusUnprocessableEntity)
+	}
+}
+
+func TestRetryDeliveryBadJSONPayload(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(json.RawMessage(`not valid json`)), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("RetryDelivery bad JSON status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRetryDeliveryNilDispatcher(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: nil,
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("RetryDelivery nil dispatcher status = %d, want %d", w.Code, http.StatusNotImplemented)
 	}
 }
 
