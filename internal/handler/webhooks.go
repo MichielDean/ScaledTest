@@ -404,7 +404,7 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	// Record the new delivery attempt (best effort).
 	_ = h.DeliveryStore.Record(r.Context(), wh.ID, wh.URL, delivery.EventType, sentPayload, attempt, statusCode, errMsg, durationMs)
 
-	success := dispatchErr == nil
+	success := dispatchErr == nil && errMsg == ""
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"success":     success,
 		"status_code": statusCode,
