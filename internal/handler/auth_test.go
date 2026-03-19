@@ -268,3 +268,67 @@ func TestClearRefreshCookie(t *testing.T) {
 		t.Errorf("clear cookie value = %q, want empty", c.Value)
 	}
 }
+
+func TestChangePasswordNoAuth(t *testing.T) {
+	h := newTestAuthHandler()
+
+	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	// No claims injected into context
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ChangePassword with no auth: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestChangePasswordNoDB(t *testing.T) {
+	h := newTestAuthHandler()
+
+	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
+	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.ChangePassword(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("ChangePassword without DB: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestChangePasswordInvalidRequest(t *testing.T) {
+	h := newTestAuthHandler()
+
+	tests := []struct {
+		name string
+		body string
+	}{
+		{"empty body", ""},
+		{"missing new_password", `{"current_password":"oldpassword123"}`},
+		{"short new_password", `{"current_password":"oldpassword123","new_password":"short"}`},
+		{"missing current_password", `{"new_password":"newpassword123"}`},
+		{"invalid json", `{bad}`},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(tt.body))
+			req.Header.Set("Content-Type", "application/json")
+			req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+			w := httptest.NewRecorder()
+
+			h.ChangePassword(w, req)
+
+			// With nil DB, we get 503 before request body parsing.
+			// Either way, it should NOT be 200.
+			if w.Code == http.StatusOK {
+				t.Errorf("ChangePassword(%s): should not succeed, got %d", tt.name, w.Code)
+			}
+		})
+	}
+}

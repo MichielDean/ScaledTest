@@ -48,6 +48,72 @@ type UserResponse struct {
 	Role        string `json:"role"`
 }
 
+// ChangePasswordRequest is the request body for changing the authenticated user's password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
+}
+
+// ChangePassword handles POST /api/v1/auth/change-password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	// Look up current password hash
+	var passwordHash string
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT password_hash FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&passwordHash)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Verify current password
+	if !auth.CheckPassword(req.CurrentPassword, passwordHash) {
+		Error(w, http.StatusUnauthorized, "invalid current password")
+		return
+	}
+
+	// Hash new password
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Update password
+	_, err = h.DB.Exec(r.Context(),
+		"UPDATE users SET password_hash = $1 WHERE id = $2",
+		newHash, claims.UserID,
+	)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "password changed"})
+}
+
 // Register handles POST /auth/register.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	if h.DB == nil {
