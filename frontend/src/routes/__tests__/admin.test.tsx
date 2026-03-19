@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminPage } from '../admin';
 import { api } from '../../lib/api';
@@ -152,5 +152,29 @@ describe('AdminPage', () => {
     fireEvent.click(next);
 
     expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 20);
+  });
+
+  it('returns to first page when Previous is clicked after Next', async () => {
+    const entries = Array.from({ length: 20 }, (_, i) => ({
+      id: `al${i}`,
+      actor_id: 'u1',
+      actor_email: `user${i}@example.com`,
+      team_id: null,
+      action: 'action',
+      resource_type: null,
+      resource_id: null,
+      created_at: '2026-01-15T10:00:00Z',
+    }));
+    vi.mocked(api.adminListAuditLog).mockResolvedValue({ audit_log: entries, total: 30 });
+    renderWithClient(<AdminPage />);
+
+    const next = await screen.findByRole('button', { name: 'Next' });
+    fireEvent.click(next);
+
+    const prev = await screen.findByRole('button', { name: 'Previous' });
+    await waitFor(() => expect(prev).not.toBeDisabled());
+    fireEvent.click(prev);
+
+    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0);
   });
 });
