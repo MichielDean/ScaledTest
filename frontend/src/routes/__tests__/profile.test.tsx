@@ -1,8 +1,11 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { ProfilePage } from '../profile';
 
-const mockUpdateProfile = vi.fn();
-const mockChangePassword = vi.fn();
+const { mockUpdateProfile, mockChangePassword, mockSetUser } = vi.hoisted(() => ({
+  mockUpdateProfile: vi.fn(),
+  mockChangePassword: vi.fn(),
+  mockSetUser: vi.fn(),
+}));
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -10,8 +13,6 @@ vi.mock('../../lib/api', () => ({
     changePassword: mockChangePassword,
   },
 }));
-
-const mockSetUser = vi.fn();
 
 vi.mock('../../stores/auth-store', () => ({
   useAuthStore: () => ({
