@@ -175,6 +175,6 @@ describe('AdminPage', () => {
     await waitFor(() => expect(prev).not.toBeDisabled());
     fireEvent.click(prev);
 
-    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0);
+    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenLastCalledWith(20, 0);
   });
 });
