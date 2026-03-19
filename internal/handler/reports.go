@@ -756,6 +756,9 @@ func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, curren
 		}
 		failed[name] = true
 	}
+	if err := rows.Err(); err != nil {
+		return nil
+	}
 	if len(failed) == 0 {
 		return nil
 	}
