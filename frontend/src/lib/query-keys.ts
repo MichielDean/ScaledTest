@@ -32,5 +32,6 @@ export const queryKeys = {
   },
   admin: {
     users: () => ['admin', 'users'] as const,
+    auditLog: (limit: number, offset: number) => ['admin', 'audit-log', limit, offset] as const,
   },
 } as const;
