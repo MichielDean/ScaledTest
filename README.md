@@ -4,11 +4,7 @@ Scale out end-to-end testing with unparalleled reporting and capabilities.
 
 ## Architecture
 
-ScaledTest is a dual-stack platform with v1 (legacy) and v2 (active development) on the same `main` branch.
-
-### v2 — Go backend + React SPA (active)
-
-The v2 stack is the active development target:
+ScaledTest is built on a Go backend with a React SPA frontend.
 
 - **Go backend**: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
 - **React 19 frontend**: TanStack Router/Query, Zustand, Recharts
@@ -18,16 +14,7 @@ The v2 stack is the active development target:
 - **WebSocket hub**: real-time execution status streaming
 - **OAuth 2.0**: GitHub and Google login (plus email/password)
 
-### v1 — Next.js monolith (legacy)
-
-- Next.js 15 + React 19 + TypeScript
-- Better Auth for authentication/RBAC
-- TimescaleDB for time-series test data
-- Jest + Playwright test suites
-
-v1 remains on `main` and is functional. New feature work targets v2.
-
-## Quick Start (v2)
+## Quick Start
 
 ### Prerequisites
 
@@ -133,7 +120,7 @@ Response:
 
 ## Testing
 
-### Go tests (v2)
+### Go tests
 
 ```bash
 make test               # All Go tests with race detector
@@ -142,20 +129,10 @@ make test-integration   # Store integration tests (requires TEST_DATABASE_URL)
 make lint               # golangci-lint
 ```
 
-### Frontend tests (v2)
+### Frontend tests
 
 ```bash
 make frontend-test      # React component/unit tests
-```
-
-### v1 Jest/Playwright tests
-
-```bash
-npm test                # All v1 tests
-npm run test:unit       # Unit tests
-npm run test:components # Component tests
-npm run test:integration # Integration tests
-npm run test:system     # System + Playwright E2E
 ```
 
 ## User Roles
@@ -200,9 +177,7 @@ internal/
   k8s/                # Kubernetes job management
 frontend/             # React 19 SPA (TanStack Router, Vite)
 sdk/                  # @scaledtest/sdk TypeScript client
-e2e/                  # Playwright E2E tests (v2 API)
-src/                  # v1 Next.js application
-tests/                # v1 Jest test suites
+e2e/                  # Playwright E2E tests
 ci-integration/       # Example CI workflow files
 ```
 
