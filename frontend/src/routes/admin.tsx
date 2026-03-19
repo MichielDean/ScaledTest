@@ -118,7 +118,7 @@ function UsersSection() {
 function AuditLogSection() {
   const [offset, setOffset] = useState(0);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isError } = useQuery({
     queryKey: queryKeys.admin.auditLog(AUDIT_PAGE_SIZE, offset),
     queryFn: () =>
       api.adminListAuditLog(AUDIT_PAGE_SIZE, offset) as Promise<{
@@ -137,6 +137,8 @@ function AuditLogSection() {
       <h2 className="text-lg font-semibold mb-4">Audit Log</h2>
       {isLoading ? (
         <p className="text-muted-foreground">Loading audit log...</p>
+      ) : isError ? (
+        <p className="text-destructive">Failed to load audit log.</p>
       ) : (
         <>
           <div className="rounded-lg border overflow-hidden">

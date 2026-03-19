@@ -127,6 +127,13 @@ describe('AdminPage', () => {
     expect(await screen.findByRole('button', { name: 'Next' })).not.toBeDisabled();
   });
 
+  it('shows error message when audit log query fails', async () => {
+    vi.mocked(api.adminListAuditLog).mockRejectedValue(new Error('Network error'));
+    renderWithClient(<AdminPage />);
+    expect(await screen.findByText('Failed to load audit log.')).toBeInTheDocument();
+    expect(screen.queryByText('No audit log entries found')).not.toBeInTheDocument();
+  });
+
   it('advances to next page when Next is clicked', async () => {
     const entries = Array.from({ length: 20 }, (_, i) => ({
       id: `al${i}`,
