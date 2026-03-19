@@ -1,3 +1,4 @@
+import { ProfilePage } from './profile';
 import { createRootRoute, createRoute, redirect } from '@tanstack/react-router';
 import { RootLayout } from '../components/layout/root-layout';
 import { DashboardPage } from './dashboard';
@@ -112,6 +113,13 @@ const invitationAcceptRoute = createRoute({
   component: AcceptInvitationPage,
 });
 
+const profileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/profile',
+  beforeLoad: requireAuth,
+  component: ProfilePage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -126,4 +134,5 @@ export const routeTree = rootRoute.addChildren([
   shardingRoute,
   adminRoute,
   invitationAcceptRoute,
+  profileRoute,
 ]);

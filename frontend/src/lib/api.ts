@@ -123,6 +123,18 @@ export const api = {
     }),
   refresh: () => fetchAPI('/auth/refresh', { method: 'POST' }),
   logout: () => fetchAPI('/auth/logout', { method: 'POST' }),
+  getMe: () =>
+    fetchAPI<{ id: string; email: string; display_name: string; role: string }>('/api/v1/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    fetchAPI<{ message: string }>('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  updateProfile: (displayName: string) =>
+    fetchAPI<{ id: string; email: string; display_name: string; role: string }>(
+      '/api/v1/auth/profile',
+      { method: 'PUT', body: JSON.stringify({ display_name: displayName }) }
+    ),
 
   // Reports
   getReports: () => fetchAPI<{ reports: unknown[]; total: number }>('/api/v1/reports'),
