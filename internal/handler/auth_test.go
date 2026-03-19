@@ -302,6 +302,8 @@ func TestChangePasswordNoDB(t *testing.T) {
 }
 
 func TestChangePasswordInvalidRequest(t *testing.T) {
+	// Decode/validate runs before the DB nil check, so invalid requests must
+	// produce 400 Bad Request even when h.DB is nil.
 	h := newTestAuthHandler()
 
 	tests := []struct {
@@ -324,10 +326,9 @@ func TestChangePasswordInvalidRequest(t *testing.T) {
 
 			h.ChangePassword(w, req)
 
-			// With nil DB, we get 503 before request body parsing.
-			// Either way, it should NOT be 200.
-			if w.Code == http.StatusOK {
-				t.Errorf("ChangePassword(%s): should not succeed, got %d", tt.name, w.Code)
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("ChangePassword(%s): got %d, want %d (validation must reject before DB check)",
+					tt.name, w.Code, http.StatusBadRequest)
 			}
 		})
 	}

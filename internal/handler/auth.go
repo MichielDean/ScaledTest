@@ -62,14 +62,14 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
-		Error(w, http.StatusServiceUnavailable, "database not configured")
-		return
-	}
-
 	var req ChangePasswordRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
@@ -102,11 +102,15 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Update password
-	_, err = h.DB.Exec(r.Context(),
+	tag, err := h.DB.Exec(r.Context(),
 		"UPDATE users SET password_hash = $1 WHERE id = $2",
 		newHash, claims.UserID,
 	)
 	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() != 1 {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
