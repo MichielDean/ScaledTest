@@ -116,6 +116,8 @@ Response:
 | `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
 | `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
 | `GET` | `/api/v1/teams` | List teams |
+| `GET` | `/api/v1/admin/users` | List all users (owner only) |
+| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
 
 ## Testing
