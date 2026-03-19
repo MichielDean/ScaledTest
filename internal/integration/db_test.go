@@ -1080,46 +1080,46 @@ func TestWebhookCRUD(t *testing.T) {
 	// Create webhook
 	var webhookID string
 	err := tdb.Pool.QueryRow(ctx,
-		`INSERT INTO webhooks (team_id, url, events, secret)
+		`INSERT INTO webhooks (team_id, url, events, secret_hash)
 		 VALUES ($1, $2, $3, $4) RETURNING id`,
-		teamID, "https://example.com/webhook", `{report.created,execution.completed}`, "webhook-secret",
+		teamID, "https://example.com/webhook", `{report.created,execution.completed}`, "webhook-secret-hash",
 	).Scan(&webhookID)
 	if err != nil {
 		t.Fatalf("insert webhook: %v", err)
 	}
 
-	// Query active webhooks for team
+	// Query enabled webhooks for team
 	var url string
-	var active bool
+	var enabled bool
 	err = tdb.Pool.QueryRow(ctx,
-		`SELECT url, active FROM webhooks WHERE team_id = $1 AND active = true`, teamID,
-	).Scan(&url, &active)
+		`SELECT url, enabled FROM webhooks WHERE team_id = $1 AND enabled = true`, teamID,
+	).Scan(&url, &enabled)
 	if err != nil {
 		t.Fatalf("query webhook: %v", err)
 	}
 	if url != "https://example.com/webhook" {
 		t.Errorf("webhook url = %q", url)
 	}
-	if !active {
-		t.Error("webhook should be active by default")
+	if !enabled {
+		t.Error("webhook should be enabled by default")
 	}
 
-	// Deactivate
+	// Disable
 	_, err = tdb.Pool.Exec(ctx,
-		`UPDATE webhooks SET active = false WHERE id = $1`, webhookID,
+		`UPDATE webhooks SET enabled = false WHERE id = $1`, webhookID,
 	)
 	if err != nil {
-		t.Fatalf("deactivate webhook: %v", err)
+		t.Fatalf("disable webhook: %v", err)
 	}
 
-	// Verify no active webhooks
+	// Verify no enabled webhooks
 	var count int
 	if err = tdb.Pool.QueryRow(ctx,
-		`SELECT count(*) FROM webhooks WHERE team_id = $1 AND active = true`, teamID,
+		`SELECT count(*) FROM webhooks WHERE team_id = $1 AND enabled = true`, teamID,
 	).Scan(&count); err != nil {
-		t.Fatalf("count active webhooks: %v", err)
+		t.Fatalf("count enabled webhooks: %v", err)
 	}
 	if count != 0 {
-		t.Errorf("active webhooks after deactivation = %d, want 0", count)
+		t.Errorf("enabled webhooks after disabling = %d, want 0", count)
 	}
 }
