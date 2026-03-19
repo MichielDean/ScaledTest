@@ -317,6 +317,98 @@ func TestValidateWebhookEvents(t *testing.T) {
 	}
 }
 
+// webhookWithDeliveryParam adds a deliveryID URL param to the request context.
+func webhookWithDeliveryParam(r *http.Request, deliveryID string) *http.Request {
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		rctx = chi.NewRouteContext()
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	}
+	rctx.URLParams.Add("deliveryID", deliveryID)
+	return r
+}
+
+func TestWebhooksRetryDeliveryUnauthorized(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RetryDelivery without auth = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestWebhooksRetryDeliveryWrongTeam(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/other-team/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer") // claims have team-1
+	req = webhookWithTeamParam(req, "other-team")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RetryDelivery wrong team = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestWebhooksRetryDeliveryReadonlyForbidden(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "readonly")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RetryDelivery as readonly = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestWebhooksRetryDeliveryMissingDeliveryID(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries//retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("RetryDelivery missing delivery ID = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWebhooksRetryDeliveryWithoutDB(t *testing.T) {
+	h := &WebhooksHandler{Store: nil, DeliveryStore: nil}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("RetryDelivery without DB = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
 func TestGenerateWebhookSecret(t *testing.T) {
 	plaintext, hash, err := generateWebhookSecret()
 	if err != nil {

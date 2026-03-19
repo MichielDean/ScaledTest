@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-yaxdh
+## Item: sc-w4osy
 
-**Title:** Remove continue-on-error from go-integration-test
+**Title:** Add manual retry endpoint for failed webhook deliveries
 **Status:** in_progress
-**Priority:** 1
+**Priority:** 3
 
 ### Description
 
-Remove the 'continue-on-error: true' setting from the 'go-integration-test' job in the pullRequest.yml workflow, so integration test failures will fail the entire CI pipeline.
+Implement POST /api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries/{deliveryID}/retry endpoint that re-dispatches the stored payload to the webhook URL and records a new delivery attempt. Also add unit test for the retry endpoint.
 
 ## Current Step: implement
 
@@ -34,16 +34,16 @@ Remove the 'continue-on-error: true' setting from the 'go-integration-test' job 
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-yaxdh
+    ct droplet pass sc-w4osy
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-yaxdh
-    ct droplet recirculate sc-yaxdh --to implement
+    ct droplet recirculate sc-w4osy
+    ct droplet recirculate sc-w4osy --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-yaxdh
+    ct droplet block sc-w4osy
 
 Add notes before signaling:
-    ct droplet note sc-yaxdh "What you did / found"
+    ct droplet note sc-w4osy "What you did / found"
 
 The `ct` binary is on your PATH.

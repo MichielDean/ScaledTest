@@ -1,17 +1,21 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // Supported webhook event types.
@@ -26,6 +30,7 @@ var validWebhookEvents = map[string]bool{
 type WebhooksHandler struct {
 	Store         *store.WebhookStore
 	DeliveryStore *store.WebhookDeliveryStore
+	Dispatcher    *webhook.Dispatcher
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
@@ -305,6 +310,108 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "webhook deleted"})
+}
+
+// RetryDelivery handles POST /api/v1/teams/:teamID/webhooks/:webhookID/deliveries/:deliveryID/retry.
+// It re-dispatches the stored payload and records a new delivery attempt.
+func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if !webhookRequireMaintainer(w, claims) {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	deliveryID := chi.URLParam(r, "deliveryID")
+	if deliveryID == "" {
+		Error(w, http.StatusBadRequest, "missing delivery ID")
+		return
+	}
+
+	if h.Store == nil || h.DeliveryStore == nil {
+		Error(w, http.StatusNotImplemented, "retry delivery requires database connection")
+		return
+	}
+
+	// Verify webhook belongs to team and get its secret hash.
+	wh, err := h.Store.Get(r.Context(), teamID, webhookID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+
+	// Look up the stored delivery scoped to this webhook.
+	delivery, err := h.DeliveryStore.GetByWebhook(r.Context(), webhookID, deliveryID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "delivery not found")
+		return
+	}
+
+	if len(delivery.Payload) == 0 {
+		Error(w, http.StatusUnprocessableEntity, "delivery has no stored payload to retry")
+		return
+	}
+
+	var payload webhook.Payload
+	if err := json.Unmarshal(delivery.Payload, &payload); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to decode stored payload")
+		return
+	}
+
+	if h.Dispatcher == nil {
+		Error(w, http.StatusNotImplemented, "retry delivery requires dispatcher")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, wh.SecretHash, payload)
+	durationMs := int(time.Since(start).Milliseconds())
+
+	statusCode := 0
+	errMsg := ""
+	attempt := 1
+	var sentPayload []byte
+	if result != nil {
+		statusCode = result.StatusCode
+		errMsg = result.Error
+		attempt = result.Attempt
+		sentPayload = result.Payload
+	}
+	if dispatchErr != nil && errMsg == "" {
+		errMsg = dispatchErr.Error()
+	}
+	if sentPayload == nil {
+		sentPayload = delivery.Payload
+	}
+
+	// Record the new delivery attempt (best effort).
+	_ = h.DeliveryStore.Record(r.Context(), wh.ID, wh.URL, delivery.EventType, sentPayload, attempt, statusCode, errMsg, durationMs)
+
+	success := dispatchErr == nil
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"success":     success,
+		"status_code": statusCode,
+		"attempt":     attempt,
+		"duration_ms": durationMs,
+		"error":       errMsg,
+	})
 }
 
 // ListDeliveries handles GET /api/v1/teams/:teamID/webhooks/:webhookID/deliveries.
