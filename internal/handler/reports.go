@@ -675,7 +675,8 @@ func (h *ReportsHandler) evaluateQualityGates(
 		return nil
 	}
 
-	data := buildReportData(report, results)
+	previousFailed := fetchPreviousFailedTests(r.Context(), h.DB, teamID, reportID)
+	data := buildReportData(report, results, previousFailed)
 
 	gateResp := &QualityGateResponse{Passed: true}
 	for _, gate := range gates {
@@ -721,9 +722,49 @@ func (h *ReportsHandler) evaluateQualityGates(
 	return gateResp
 }
 
-// buildReportData constructs quality.ReportData from a CTRF report and its
-// normalized test results.
-func buildReportData(report *ctrf.Report, results []model.TestResult) *quality.ReportData {
+// fetchPreviousFailedTests returns the set of failed test names from the most
+// recent prior report for the given team (excluding currentReportID). Returns
+// nil if the DB is unavailable, no prior report exists, or it had no failures.
+func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, currentReportID string) map[string]bool {
+	if pool == nil {
+		return nil
+	}
+
+	var prevReportID string
+	err := pool.QueryRow(ctx,
+		`SELECT id FROM test_reports WHERE team_id = $1 AND id != $2 ORDER BY created_at DESC LIMIT 1`,
+		teamID, currentReportID,
+	).Scan(&prevReportID)
+	if err != nil {
+		return nil
+	}
+
+	rows, err := pool.Query(ctx,
+		`SELECT name FROM test_results WHERE report_id = $1 AND status = 'failed'`,
+		prevReportID,
+	)
+	if err != nil {
+		return nil
+	}
+	defer rows.Close()
+
+	failed := make(map[string]bool)
+	for rows.Next() {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			continue
+		}
+		failed[name] = true
+	}
+	if len(failed) == 0 {
+		return nil
+	}
+	return failed
+}
+
+// buildReportData constructs quality.ReportData from a CTRF report, its
+// normalized test results, and an optional set of previously failed test names.
+func buildReportData(report *ctrf.Report, results []model.TestResult, previousFailed map[string]bool) *quality.ReportData {
 	summary := report.Results.Summary
 
 	var totalDurationMs int64
@@ -745,14 +786,13 @@ func buildReportData(report *ctrf.Report, results []model.TestResult) *quality.R
 	}
 
 	return &quality.ReportData{
-		TotalTests:         summary.Tests,
-		PassedTests:        summary.Passed,
-		FailedTests:        summary.Failed,
-		SkippedTests:       summary.Skipped,
-		TotalDurationMs:    totalDurationMs,
-		FlakyTests:         flakyTests,
-		CurrentFailedTests: currentFailed,
-		// PreviousFailedTests left nil — no_new_failures requires historical data
-		// that is not available from a single report submission.
+		TotalTests:          summary.Tests,
+		PassedTests:         summary.Passed,
+		FailedTests:         summary.Failed,
+		SkippedTests:        summary.Skipped,
+		TotalDurationMs:     totalDurationMs,
+		FlakyTests:          flakyTests,
+		CurrentFailedTests:  currentFailed,
+		PreviousFailedTests: previousFailed,
 	}
 }
