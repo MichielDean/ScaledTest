@@ -223,7 +223,7 @@ describe('WebhooksPage', () => {
     });
   });
 
-  it('does not show Load More when there is no next_cursor', async () => {
+  it('does not show Load More when fewer than page size deliveries are returned', async () => {
     vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
     vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
     vi.mocked(api.getWebhookDeliveries).mockResolvedValue(mockDeliveries);
@@ -235,12 +235,22 @@ describe('WebhooksPage', () => {
     expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument();
   });
 
-  it('shows Load More button when next_cursor is present', async () => {
+  it('shows Load More button when a full page of deliveries is returned', async () => {
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      id: `del-${i}`,
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'report.submitted',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 100,
+      delivered_at: '2026-01-01T00:00:00Z',
+    }));
     vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
     vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
     vi.mocked(api.getWebhookDeliveries).mockResolvedValue({
-      ...mockDeliveries,
-      next_cursor: 'cursor-abc',
+      deliveries: fullPage,
+      total: 20,
     });
 
     renderWithClient(<WebhooksPage />);
@@ -250,8 +260,18 @@ describe('WebhooksPage', () => {
   });
 
   it('appends new deliveries when Load More is clicked', async () => {
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      id: `del-${i}`,
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'report.submitted',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 100,
+      delivered_at: '2026-01-01T00:00:00Z',
+    }));
     const page2delivery = {
-      id: 'del-3',
+      id: 'del-extra',
       webhook_id: 'wh-1',
       url: 'https://example.com/hook',
       event_type: 'execution.completed',
@@ -263,18 +283,18 @@ describe('WebhooksPage', () => {
     vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
     vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
     vi.mocked(api.getWebhookDeliveries)
-      .mockResolvedValueOnce({ deliveries: [mockDeliveries.deliveries[0]], total: 1, next_cursor: 'cursor-1' })
+      .mockResolvedValueOnce({ deliveries: fullPage, total: 20 })
       .mockResolvedValueOnce({ deliveries: [page2delivery], total: 1 });
 
     renderWithClient(<WebhooksPage />);
     fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
-    expect(await screen.findByText('report.submitted')).toBeInTheDocument();
+    expect((await screen.findAllByText('report.submitted')).length).toBeGreaterThan(0);
 
     fireEvent.click(await screen.findByRole('button', { name: 'Load More' }));
 
     expect(await screen.findByText('execution.completed')).toBeInTheDocument();
-    // first page item still visible
-    expect(screen.getByText('report.submitted')).toBeInTheDocument();
+    // first page items still visible
+    expect(screen.getAllByText('report.submitted').length).toBeGreaterThan(0);
   });
 
   it('shows "Failed to load deliveries." when getWebhookDeliveries rejects', async () => {
@@ -308,9 +328,19 @@ describe('WebhooksPage', () => {
     expect(await screen.findByText(/retry failed/i)).toBeInTheDocument();
   });
 
-  it('calls getWebhookDeliveries with next_cursor when Load More is clicked', async () => {
+  it('calls getWebhookDeliveries with last delivery ID when Load More is clicked', async () => {
+    const fullPage = Array.from({ length: 20 }, (_, i) => ({
+      id: `del-${i}`,
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'report.submitted',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 100,
+      delivered_at: '2026-01-01T00:00:00Z',
+    }));
     const page2delivery = {
-      id: 'del-3',
+      id: 'del-extra',
       webhook_id: 'wh-1',
       url: 'https://example.com/hook',
       event_type: 'execution.completed',
@@ -322,16 +352,17 @@ describe('WebhooksPage', () => {
     vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
     vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
     vi.mocked(api.getWebhookDeliveries)
-      .mockResolvedValueOnce({ deliveries: [mockDeliveries.deliveries[0]], total: 1, next_cursor: 'my-cursor' })
+      .mockResolvedValueOnce({ deliveries: fullPage, total: 20 })
       .mockResolvedValueOnce({ deliveries: [page2delivery], total: 1 });
 
     renderWithClient(<WebhooksPage />);
     fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
-    await screen.findByText('report.submitted');
+    await screen.findAllByText('report.submitted');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Load More' }));
     await screen.findByText('execution.completed');
 
-    expect(vi.mocked(api.getWebhookDeliveries)).toHaveBeenCalledWith('team-1', 'wh-1', 'my-cursor');
+    // Second call should pass the ID of the last delivery from the first page
+    expect(vi.mocked(api.getWebhookDeliveries)).toHaveBeenCalledWith('team-1', 'wh-1', 'del-19');
   });
 });

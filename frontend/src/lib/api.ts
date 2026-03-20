@@ -204,10 +204,10 @@ export const api = {
     }),
   deleteWebhook: (teamId: string, webhookId: string) =>
     fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, { method: 'DELETE' }),
-  getWebhookDeliveries: (teamId: string, webhookId: string, cursor?: string) => {
+  getWebhookDeliveries: (teamId: string, webhookId: string, beforeId?: string) => {
     const base = `/api/v1/teams/${teamId}/webhooks/${webhookId}/deliveries`;
-    return fetchAPI<{ deliveries: unknown[]; total: number; next_cursor?: string }>(
-      cursor ? `${base}?cursor=${encodeURIComponent(cursor)}` : base
+    return fetchAPI<{ deliveries: unknown[]; total: number }>(
+      beforeId ? `${base}?before_id=${encodeURIComponent(beforeId)}` : base
     );
   },
   retryWebhookDelivery: (teamId: string, webhookId: string, deliveryId: string) =>

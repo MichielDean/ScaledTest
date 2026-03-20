@@ -37,22 +37,9 @@ interface Team {
   name: string;
 }
 
-interface WebhookDelivery {
-  id: string;
-  webhook_id: string;
-  url: string;
-  event_type: string;
-  attempt: number;
-  status_code: number;
-  error?: string;
-  duration_ms: number;
-  delivered_at: string;
-}
-
 interface DeliveryPage {
   deliveries: WebhookDelivery[];
   total: number;
-  next_cursor?: string;
 }
 
 export function WebhooksPage() {
@@ -304,11 +291,19 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
   const queryClient = useQueryClient();
   const [retryError, setRetryError] = useState<string | null>(null);
 
+  const PAGE_SIZE = 20;
+
   const deliveriesQuery = useInfiniteQuery({
     queryKey: queryKeys.webhooks.deliveries(teamId, webhookId),
     queryFn: ({ pageParam }): Promise<DeliveryPage> =>
       api.getWebhookDeliveries(teamId, webhookId, pageParam || undefined) as Promise<DeliveryPage>,
-    getNextPageParam: (lastPage: DeliveryPage) => lastPage.next_cursor ?? undefined,
+    getNextPageParam: (lastPage: DeliveryPage) => {
+      const items = lastPage.deliveries;
+      if (items.length >= PAGE_SIZE) {
+        return items[items.length - 1]!.id;
+      }
+      return undefined;
+    },
     initialPageParam: '',
   });
 
