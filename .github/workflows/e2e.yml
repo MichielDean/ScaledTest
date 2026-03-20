@@ -135,7 +135,7 @@ jobs:
       - name: Upload CTRF report to ScaledTest (dogfooding)
         if: always()
         run: |
-          REPORT="e2e/ctrf-report.json"
+          REPORT="e2e/ctrf/ctrf-report.json"
           if [ ! -f "$REPORT" ]; then
             echo "No CTRF report found at $REPORT — skipping upload"
             exit 0
@@ -177,5 +177,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ctrf-report
-          path: e2e/ctrf-report.json
+          path: e2e/ctrf/ctrf-report.json
           if-no-files-found: ignore
