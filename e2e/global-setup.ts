@@ -21,12 +21,23 @@ const SEED_USERS: SeedUser[] = [
   },
 ];
 
+const REQUEST_TIMEOUT_MS = 10_000;
+
 async function seedUser(baseURL: string, user: SeedUser): Promise<void> {
-  const res = await fetch(`${baseURL}/auth/register`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(user),
-  });
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+
+  let res: Response;
+  try {
+    res = await fetch(`${baseURL}/auth/register`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(user),
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timer);
+  }
 
   if (res.ok || res.status === 409) {
     // 201 Created — new user; 409 Conflict — user already exists. Both are fine.
