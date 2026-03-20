@@ -117,11 +117,12 @@ function UsersSection() {
 
 function AuditLogSection() {
   const [offset, setOffset] = useState(0);
+  const [actionFilter, setActionFilter] = useState('');
 
   const { data, isLoading, isError } = useQuery({
-    queryKey: queryKeys.admin.auditLog(AUDIT_PAGE_SIZE, offset),
+    queryKey: queryKeys.admin.auditLog(AUDIT_PAGE_SIZE, offset, actionFilter),
     queryFn: () =>
-      api.adminListAuditLog(AUDIT_PAGE_SIZE, offset) as Promise<{
+      api.adminListAuditLog(AUDIT_PAGE_SIZE, offset, actionFilter) as Promise<{
         audit_log: AuditLogEntry[];
         total: number;
       }>,
@@ -135,6 +136,28 @@ function AuditLogSection() {
   return (
     <section>
       <h2 className="text-lg font-semibold mb-4">Audit Log</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <label htmlFor="audit-action-filter" className="text-sm font-medium">
+          Filter by action
+        </label>
+        <select
+          id="audit-action-filter"
+          value={actionFilter}
+          onChange={e => {
+            setActionFilter(e.target.value);
+            setOffset(0);
+          }}
+          className="rounded-md border bg-background px-3 py-1.5 text-sm"
+        >
+          <option value="">All actions</option>
+          <option value="report.submitted">report.submitted</option>
+          <option value="report.deleted">report.deleted</option>
+          <option value="execution.created">execution.created</option>
+          <option value="execution.cancelled">execution.cancelled</option>
+          <option value="execution.completed">execution.completed</option>
+          <option value="execution.failed">execution.failed</option>
+        </select>
+      </div>
       {isLoading ? (
         <p className="text-muted-foreground">Loading audit log...</p>
       ) : isError ? (

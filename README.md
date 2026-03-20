@@ -124,7 +124,7 @@ Response:
 | `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
-| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=`) (owner only) |
+| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
 
 ### Quality Gate Rules
