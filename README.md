@@ -136,6 +136,35 @@ Response:
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
 
+### Quality Gate Rules
+
+Quality gates are created with a `rules` array. Each rule uses a `{type, params}` schema:
+
+```json
+{
+  "name": "CI Gate",
+  "rules": [
+    { "type": "pass_rate",       "params": { "threshold": 95.0 } },
+    { "type": "max_duration",    "params": { "threshold_ms": 120000 } },
+    { "type": "max_flaky_count", "params": { "threshold": 5 } },
+    { "type": "min_test_count",  "params": { "threshold": 10 } },
+    { "type": "zero_failures",   "params": null },
+    { "type": "no_new_failures", "params": null }
+  ]
+}
+```
+
+| Rule type | Params | Description |
+|-----------|--------|-------------|
+| `pass_rate` | `{"threshold": <float>}` | Pass rate % must be ≥ threshold |
+| `zero_failures` | none | No failed tests allowed |
+| `no_new_failures` | none | No failures that weren't in the previous run |
+| `max_duration` | `{"threshold_ms": <int>}` | Total suite duration must be ≤ threshold |
+| `max_flaky_count` | `{"threshold": <int>}` | Number of flaky tests must be ≤ threshold |
+| `min_test_count` | `{"threshold": <int>}` | Total tests must be ≥ threshold |
+
+Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` require non-null params. `zero_failures` and `no_new_failures` take no params.
+
 ## Testing
 
 ### Go tests
