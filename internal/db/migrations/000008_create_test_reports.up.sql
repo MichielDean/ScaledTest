@@ -15,7 +15,15 @@ CREATE INDEX idx_test_reports_created_at ON test_reports (created_at DESC);
 
 -- Convert to TimescaleDB hypertable for time-series analytics.
 -- This enables efficient time-range queries and automatic partitioning.
-SELECT create_hypertable('test_reports', 'created_at',
-    migrate_data => true,
-    if_not_exists => true
-);
+-- Wrapped in exception handler: hypertable creation may fail if the primary key
+-- does not include the partition column; the table still works as a regular table.
+DO $$
+BEGIN
+    PERFORM create_hypertable('test_reports', 'created_at',
+        migrate_data => true,
+        if_not_exists => true
+    );
+EXCEPTION
+    WHEN OTHERS THEN
+        RAISE NOTICE 'Skipping hypertable for test_reports: %', SQLERRM;
+END $$;

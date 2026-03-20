@@ -17,12 +17,13 @@ func TestAuditStore_LogAndList(t *testing.T) {
 	s := store.NewAuditStore(tdb.Pool)
 
 	actorID := "00000000-0000-0000-0000-000000000099"
+	teamID := tdb.CreateTeam(t, "audit-test-team")
 
 	// Log writes should not panic or block
 	s.Log(ctx, store.Entry{
 		ActorID:      actorID,
 		ActorEmail:   "test@example.com",
-		TeamID:       "team-1",
+		TeamID:       teamID,
 		Action:       "report.created",
 		ResourceType: "report",
 		ResourceID:   "r-1",
@@ -31,7 +32,7 @@ func TestAuditStore_LogAndList(t *testing.T) {
 	s.Log(ctx, store.Entry{
 		ActorID:      actorID,
 		ActorEmail:   "test@example.com",
-		TeamID:       "team-1",
+		TeamID:       teamID,
 		Action:       "execution.created",
 		ResourceType: "execution",
 		ResourceID:   "e-1",

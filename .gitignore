@@ -80,3 +80,6 @@ __pycache__/
 # Gas Town (added by gt)
 state.json
 e2e/playwright-report/
+
+# Cistern pipeline operational files
+CONTEXT.md

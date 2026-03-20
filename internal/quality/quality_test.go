@@ -193,3 +193,117 @@ func TestEvaluateUnknownRule(t *testing.T) {
 		t.Error("expected error for unknown rule type")
 	}
 }
+
+// TestZeroFailuresVsNoNewFailures_PersistingFailure is the central distinction test.
+// When a test has been failing since the previous run (a persistent failure, not a regression),
+// zero_failures FAILS because there are failures, but no_new_failures PASSES because the
+// failure was already present and no new regressions were introduced.
+func TestZeroFailuresVsNoNewFailures_PersistingFailure(t *testing.T) {
+	data := &ReportData{
+		TotalTests:          10,
+		PassedTests:         9,
+		FailedTests:         1,
+		PreviousFailedTests: map[string]bool{"test_a": true},
+		CurrentFailedTests:  map[string]bool{"test_a": true},
+	}
+
+	zeroResult, err := Evaluate(json.RawMessage(`[{"type":"zero_failures"}]`), data)
+	if err != nil {
+		t.Fatalf("Evaluate(zero_failures) error: %v", err)
+	}
+	if zeroResult.Passed {
+		t.Error("zero_failures: expected FAIL — test_a is still failing (1 failure in current run)")
+	}
+	if zeroResult.Results[0].Actual != 1 {
+		t.Errorf("zero_failures: expected Actual=1, got %v", zeroResult.Results[0].Actual)
+	}
+
+	noNewResult, err := Evaluate(json.RawMessage(`[{"type":"no_new_failures"}]`), data)
+	if err != nil {
+		t.Fatalf("Evaluate(no_new_failures) error: %v", err)
+	}
+	if !noNewResult.Passed {
+		t.Error("no_new_failures: expected PASS — test_a was already failing before, no new regression introduced")
+	}
+	if noNewResult.Results[0].Actual != 0 {
+		t.Errorf("no_new_failures: expected Actual=0 new failures, got %v", noNewResult.Results[0].Actual)
+	}
+}
+
+// TestZeroFailures_IgnoresPreviousRun shows that zero_failures only examines the current
+// run's FailedTests count and ignores PreviousFailedTests entirely.
+func TestZeroFailures_IgnoresPreviousRun(t *testing.T) {
+	// Previous run had many failures, but current run is clean.
+	data := &ReportData{
+		TotalTests:          10,
+		PassedTests:         10,
+		FailedTests:         0,
+		PreviousFailedTests: map[string]bool{"test_a": true, "test_b": true},
+		CurrentFailedTests:  map[string]bool{},
+	}
+
+	result, err := Evaluate(json.RawMessage(`[{"type":"zero_failures"}]`), data)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	if !result.Passed {
+		t.Error("zero_failures: expected PASS — 0 current failures, regardless of previous run history")
+	}
+}
+
+// TestNoNewFailures_NoPriorRun shows that when PreviousFailedTests is nil (no prior run exists),
+// all current failures are treated as new — the gate fails conservatively.
+func TestNoNewFailures_NoPriorRun(t *testing.T) {
+	t.Run("clean first run passes", func(t *testing.T) {
+		data := &ReportData{
+			TotalTests:          10,
+			PassedTests:         10,
+			FailedTests:         0,
+			PreviousFailedTests: nil,
+			CurrentFailedTests:  map[string]bool{},
+		}
+		result, err := Evaluate(json.RawMessage(`[{"type":"no_new_failures"}]`), data)
+		if err != nil {
+			t.Fatalf("Evaluate() error: %v", err)
+		}
+		if !result.Passed {
+			t.Error("no_new_failures: expected PASS — no failures on first run")
+		}
+	})
+
+	t.Run("failures on first run treated as new", func(t *testing.T) {
+		data := &ReportData{
+			TotalTests:          10,
+			PassedTests:         9,
+			FailedTests:         1,
+			PreviousFailedTests: nil, // no prior run
+			CurrentFailedTests:  map[string]bool{"test_a": true},
+		}
+		result, err := Evaluate(json.RawMessage(`[{"type":"no_new_failures"}]`), data)
+		if err != nil {
+			t.Fatalf("Evaluate() error: %v", err)
+		}
+		if result.Passed {
+			t.Error("no_new_failures: expected FAIL — all failures are new when there is no prior run")
+		}
+		if result.Results[0].Actual != 1 {
+			t.Errorf("no_new_failures: expected Actual=1 new failure, got %v", result.Results[0].Actual)
+		}
+	})
+}
+
+// TestNoNewFailures_PreviousFailuresFixed shows that fixing previously failing tests
+// does not cause no_new_failures to fail — it only blocks newly introduced failures.
+func TestNoNewFailures_PreviousFailuresFixed(t *testing.T) {
+	data := &ReportData{
+		PreviousFailedTests: map[string]bool{"test_a": true, "test_b": true},
+		CurrentFailedTests:  map[string]bool{}, // both tests fixed
+	}
+	result, err := Evaluate(json.RawMessage(`[{"type":"no_new_failures"}]`), data)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+	if !result.Passed {
+		t.Error("no_new_failures: expected PASS — previously failing tests were fixed, no new regressions")
+	}
+}

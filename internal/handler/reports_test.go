@@ -734,7 +734,7 @@ func TestBuildReportData_BasicCounts(t *testing.T) {
 		{Name: "t5", Status: "skipped", DurationMs: 0},
 	}
 
-	data := buildReportData(report, results)
+	data := buildReportData(report, results, nil)
 
 	if data.TotalTests != 10 {
 		t.Errorf("TotalTests = %d, want 10", data.TotalTests)
@@ -766,7 +766,7 @@ func TestBuildReportData_FailedTests(t *testing.T) {
 		{Name: "failing2", Status: "failed", DurationMs: 300},
 	}
 
-	data := buildReportData(report, results)
+	data := buildReportData(report, results, nil)
 
 	if len(data.CurrentFailedTests) != 2 {
 		t.Errorf("CurrentFailedTests count = %d, want 2", len(data.CurrentFailedTests))
@@ -795,7 +795,7 @@ func TestBuildReportData_FlakyTests(t *testing.T) {
 		{Name: "flaky2", Status: "passed", DurationMs: 300, Flaky: true},
 	}
 
-	data := buildReportData(report, results)
+	data := buildReportData(report, results, nil)
 
 	if len(data.FlakyTests) != 2 {
 		t.Errorf("FlakyTests count = %d, want 2", len(data.FlakyTests))
@@ -815,7 +815,7 @@ func TestBuildReportData_EmptyResults(t *testing.T) {
 		},
 	}
 
-	data := buildReportData(report, nil)
+	data := buildReportData(report, nil, nil)
 
 	if data.TotalTests != 0 {
 		t.Errorf("TotalTests = %d, want 0", data.TotalTests)
@@ -842,11 +842,50 @@ func TestBuildReportData_PreviousFailedTestsNil(t *testing.T) {
 		{Name: "t1", Status: "passed", DurationMs: 100},
 	}
 
-	data := buildReportData(report, results)
+	data := buildReportData(report, results, nil)
 
-	// PreviousFailedTests should be nil (not populated from a single report)
+	// PreviousFailedTests should be nil when nil is passed
 	if data.PreviousFailedTests != nil {
-		t.Error("PreviousFailedTests should be nil for single report submission")
+		t.Error("PreviousFailedTests should be nil when nil previousFailed is passed")
+	}
+}
+
+func TestBuildReportData_WithPreviousFailedTests(t *testing.T) {
+	report := &ctrf.Report{
+		Results: ctrf.Results{
+			Summary: ctrf.Summary{Tests: 2, Passed: 1, Failed: 1},
+		},
+	}
+	results := []model.TestResult{
+		{Name: "test-a", Status: "passed", DurationMs: 100},
+		{Name: "test-b", Status: "failed", DurationMs: 200},
+	}
+	previousFailed := map[string]bool{
+		"test-b": true,
+		"test-c": true,
+	}
+
+	data := buildReportData(report, results, previousFailed)
+
+	if data.PreviousFailedTests == nil {
+		t.Fatal("PreviousFailedTests should not be nil when previousFailed is passed")
+	}
+	if len(data.PreviousFailedTests) != 2 {
+		t.Errorf("PreviousFailedTests count = %d, want 2", len(data.PreviousFailedTests))
+	}
+	if !data.PreviousFailedTests["test-b"] {
+		t.Error("expected test-b in PreviousFailedTests")
+	}
+	if !data.PreviousFailedTests["test-c"] {
+		t.Error("expected test-c in PreviousFailedTests")
+	}
+}
+
+func TestFetchPreviousFailedTests_NilDB(t *testing.T) {
+	// When DB is nil, fetchPreviousFailedTests must return nil gracefully.
+	result := fetchPreviousFailedTests(context.Background(), nil, "team-1", "report-1")
+	if result != nil {
+		t.Errorf("expected nil when DB is nil, got %v", result)
 	}
 }
 

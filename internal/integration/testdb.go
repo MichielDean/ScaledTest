@@ -16,6 +16,7 @@ import (
 	"testing"
 
 	"github.com/jackc/pgx/v5/pgxpool"
+	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/db"
 )
@@ -55,9 +56,18 @@ func Setup(t *testing.T) *TestDB {
 		t.Fatalf("ping test database: %v", err)
 	}
 
-	// Run migrations once per package
+	// Run migrations once per package.
+	// If the database is dirty from a prior partial migration, drop everything and retry.
 	migrateOnce.Do(func() {
 		migrateErr = db.MigrateUp(url)
+		if migrateErr != nil && strings.Contains(migrateErr.Error(), "Dirty") {
+			log.Warn().Err(migrateErr).Msg("dirty database detected, dropping and retrying migrations")
+			if dropErr := db.MigrateDrop(url); dropErr != nil {
+				migrateErr = fmt.Errorf("drop dirty database: %w", dropErr)
+				return
+			}
+			migrateErr = db.MigrateUp(url)
+		}
 	})
 	if migrateErr != nil {
 		pool.Close()
@@ -88,6 +98,7 @@ var truncateTables = []string{
 	"test_reports",
 	"test_executions",
 	"api_tokens",
+	"invitations",
 	"user_teams",
 	"sessions",
 	"oauth_accounts",

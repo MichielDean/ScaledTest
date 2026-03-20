@@ -34,7 +34,6 @@ jobs:
   go-integration-test:
     runs-on: ubuntu-latest
     timeout-minutes: 10
-    continue-on-error: true
     services:
       postgres:
         image: timescale/timescaledb:latest-pg16
@@ -90,8 +89,7 @@ jobs:
 
   jest-tests:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-    continue-on-error: true
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@v4
 
@@ -100,20 +98,15 @@ jobs:
         with:
           node-version: 22
           cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
+        working-directory: frontend
         run: npm ci
 
-      - name: Run Jest unit and component tests
-        run: npm run test:ci
-
-      - name: Upload test results
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: jest-test-results
-          path: ctrf-report.json
-          if-no-files-found: ignore
+      - name: Run tests
+        working-directory: frontend
+        run: npm test
 
   go-build:
     runs-on: ubuntu-latest
