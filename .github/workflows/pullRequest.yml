@@ -216,7 +216,6 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
         run: |
           npx playwright test \
-            --screenshot=on \
             --reporter=html,github \
             --output=test-results
 
