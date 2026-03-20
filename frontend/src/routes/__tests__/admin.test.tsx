@@ -151,7 +151,7 @@ describe('AdminPage', () => {
     const next = await screen.findByRole('button', { name: 'Next' });
     fireEvent.click(next);
 
-    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 20);
+    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 20, '');
   });
 
   it('returns to first page when Previous is clicked after Next', async () => {
@@ -175,6 +175,53 @@ describe('AdminPage', () => {
     await waitFor(() => expect(prev).not.toBeDisabled());
     fireEvent.click(prev);
 
-    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenLastCalledWith(20, 0);
+    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenLastCalledWith(20, 0, '');
+  });
+
+  it('renders action type filter select', async () => {
+    renderWithClient(<AdminPage />);
+    expect(await screen.findByRole('combobox', { name: /action/i })).toBeInTheDocument();
+  });
+
+  it('calls API with empty action on initial render', async () => {
+    renderWithClient(<AdminPage />);
+    await screen.findByRole('combobox', { name: /action/i });
+    expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0, '');
+  });
+
+  it('calls API with selected action type when filter changes', async () => {
+    renderWithClient(<AdminPage />);
+    const select = await screen.findByRole('combobox', { name: /action/i });
+    fireEvent.change(select, { target: { value: 'report.submitted' } });
+    await waitFor(() => {
+      expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0, 'report.submitted');
+    });
+  });
+
+  it('resets to page 1 when action filter changes', async () => {
+    const entries = Array.from({ length: 20 }, (_, i) => ({
+      id: `al${i}`,
+      actor_id: 'u1',
+      actor_email: `user${i}@example.com`,
+      team_id: null,
+      action: 'action',
+      resource_type: null,
+      resource_id: null,
+      created_at: '2026-01-15T10:00:00Z',
+    }));
+    vi.mocked(api.adminListAuditLog).mockResolvedValue({ audit_log: entries, total: 30 });
+    renderWithClient(<AdminPage />);
+
+    const next = await screen.findByRole('button', { name: 'Next' });
+    fireEvent.click(next);
+    await waitFor(() => {
+      expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 20, '');
+    });
+
+    const select = screen.getByRole('combobox', { name: /action/i });
+    fireEvent.change(select, { target: { value: 'report.submitted' } });
+    await waitFor(() => {
+      expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0, 'report.submitted');
+    });
   });
 });
