@@ -21,7 +21,6 @@ import (
 	"context"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/scaledtest/scaledtest/internal/gotest"
@@ -47,20 +46,21 @@ func run() error {
 		return nil
 	}
 
-	// Open results source.
-	var src io.Reader = os.Stdin
+	// Load test results.
+	var (
+		summary gotest.Summary
+		err     error
+	)
 	if resultsFile != "" {
-		f, err := os.Open(resultsFile)
+		summary, err = loadSummary(resultsFile)
 		if err != nil {
-			return fmt.Errorf("open results file: %w", err)
+			return err
 		}
-		defer f.Close()
-		src = f
-	}
-
-	summary, err := gotest.ParseEvents(src)
-	if err != nil {
-		return fmt.Errorf("parse test events: %w", err)
+	} else {
+		summary, err = gotest.ParseEvents(os.Stdin)
+		if err != nil {
+			return fmt.Errorf("parse test events: %w", err)
+		}
 	}
 
 	// Determine status: prefer explicit CI_STATUS, fall back to failure count.
@@ -93,4 +93,23 @@ func run() error {
 
 	fmt.Fprintln(os.Stdout, "ci-notify: Telegram notification sent.")
 	return nil
+}
+
+// loadSummary opens path and parses go test -json events.
+// If path does not exist, a zero Summary is returned without error so that
+// a failure notification can still be sent (e.g. when go vet aborted the run).
+func loadSummary(path string) (gotest.Summary, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return gotest.Summary{}, nil
+		}
+		return gotest.Summary{}, fmt.Errorf("open results file: %w", err)
+	}
+	defer f.Close()
+	summary, err := gotest.ParseEvents(f)
+	if err != nil {
+		return gotest.Summary{}, fmt.Errorf("parse test events: %w", err)
+	}
+	return summary, nil
 }

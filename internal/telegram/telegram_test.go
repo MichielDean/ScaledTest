@@ -113,6 +113,32 @@ func TestFormatMessage_NoSkippedWhenZero(t *testing.T) {
 	}
 }
 
+func TestFormatMessage_HTMLEscapesExternalFields(t *testing.T) {
+	s := telegram.CISummary{
+		Repo:      "org/repo&co",
+		Branch:    "feat/<bar>",
+		CommitMsg: "fix Foo<T> generics",
+		Status:    "passing",
+	}
+	msg := telegram.FormatMessage(s)
+
+	if !strings.Contains(msg, "org/repo&amp;co") {
+		t.Errorf("Repo '&' should be escaped to &amp;; got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "feat/&lt;bar&gt;") {
+		t.Errorf("Branch '<bar>' should be escaped; got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "fix Foo&lt;T&gt; generics") {
+		t.Errorf("CommitMsg '<T>' should be escaped; got:\n%s", msg)
+	}
+	if strings.Contains(msg, "<T>") {
+		t.Errorf("raw <T> must not appear in output; got:\n%s", msg)
+	}
+	if strings.Contains(msg, "<bar>") {
+		t.Errorf("raw <bar> must not appear in output; got:\n%s", msg)
+	}
+}
+
 // --- SendMessage tests ---
 
 func TestSendMessage_Success(t *testing.T) {

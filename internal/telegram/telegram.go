@@ -7,6 +7,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"html"
 	"net/http"
 	"strings"
 	"time"
@@ -118,9 +119,16 @@ func FormatMessage(s CISummary) string {
 		commitLine = commitLine[:77] + "..."
 	}
 
+	// HTML-escape all external (attacker-controlled) fields before embedding
+	// in an HTML-mode Telegram message. Raw '<', '>', or '&' would produce
+	// invalid HTML that Telegram rejects, silently dropping the notification.
+	repo := html.EscapeString(s.Repo)
+	branch := html.EscapeString(s.Branch)
+	commitLine = html.EscapeString(commitLine)
+
 	var sb strings.Builder
-	sb.WriteString(fmt.Sprintf("%s <b>%s</b> — %s\n", icon, s.Repo, strings.ToUpper(s.Status)))
-	sb.WriteString(fmt.Sprintf("Branch: <code>%s</code>", s.Branch))
+	sb.WriteString(fmt.Sprintf("%s <b>%s</b> — %s\n", icon, repo, strings.ToUpper(s.Status)))
+	sb.WriteString(fmt.Sprintf("Branch: <code>%s</code>", branch))
 	if shortSHA != "" {
 		sb.WriteString(fmt.Sprintf("  Commit: <code>%s</code>", shortSHA))
 	}
