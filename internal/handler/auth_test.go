@@ -460,4 +460,92 @@ func TestChangePasswordInvalidRequest(t *testing.T) {
 	}
 }
 
+func TestGetMeNoAuth(t *testing.T) {
+	h := newTestAuthHandler()
 
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	w := httptest.NewRecorder()
+
+	h.GetMe(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("GetMe no auth: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestGetMeNoDB(t *testing.T) {
+	h := newTestAuthHandler()
+
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.GetMe(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("GetMe no DB: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestGetMeSuccess(t *testing.T) {
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				*(dest[0].(*string)) = "test@test.com"
+				*(dest[1].(*string)) = "Test User"
+				*(dest[2].(*string)) = "maintainer"
+				return nil
+			}}
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, DB: mockDB}
+
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.GetMe(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GetMe success: status = %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp UserResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal GetMe response: %v", err)
+	}
+	if resp.Email != "test@test.com" {
+		t.Errorf("GetMe: email = %q, want %q", resp.Email, "test@test.com")
+	}
+	if resp.DisplayName != "Test User" {
+		t.Errorf("GetMe: display_name = %q, want %q", resp.DisplayName, "Test User")
+	}
+	if resp.ID != "user-123" {
+		t.Errorf("GetMe: id = %q, want %q", resp.ID, "user-123")
+	}
+}
+
+func TestGetMeUserNotFound(t *testing.T) {
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			return &mockRow{scanFn: func(dest ...any) error {
+				return pgx.ErrNoRows
+			}}
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, DB: mockDB}
+
+	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.GetMe(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("GetMe user not found: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}

@@ -88,6 +88,12 @@ POST /auth/register         { "email", "password", "display_name" }
 # Login → returns { access_token, expires_at, user }
 POST /auth/login            { "email", "password" }
 
+# Get current user profile (requires valid JWT)
+GET  /auth/me
+
+# Update display name (requires valid JWT)
+PUT  /auth/profile          { "display_name" }
+
 # Change password (requires valid JWT; rate-limited to 10 req/min per IP)
 POST /auth/change-password  { "current_password", "new_password" }
 
