@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
@@ -8,11 +9,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/mailer"
+	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
-	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 const invitationTokenBytes = 32
@@ -24,10 +27,20 @@ var validInvitationRoles = map[string]bool{
 	"owner":      true,
 }
 
+// invitationStore is the subset of store.InvitationStore used by InvitationsHandler.
+type invitationStore interface {
+	Create(ctx context.Context, teamID, email, role, tokenHash, invitedBy string, expiresAt time.Time) (*model.Invitation, error)
+	ListByTeam(ctx context.Context, teamID string) ([]model.Invitation, error)
+	GetByTokenHash(ctx context.Context, tokenHash string) (*model.Invitation, error)
+	Delete(ctx context.Context, teamID, id string) error
+}
+
 // InvitationsHandler handles invitation endpoints.
 type InvitationsHandler struct {
-	Store *store.InvitationStore
-	DB    *db.Pool
+	Store   invitationStore
+	DB      *db.Pool
+	Mailer  mailer.Mailer
+	BaseURL string
 }
 
 // CreateInvitationRequest is the request body for creating an invitation.
@@ -86,6 +99,19 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create invitation")
 		return
+	}
+
+	inviteURL := h.BaseURL + "/invitations/" + token
+
+	if h.Mailer == nil {
+		log.Info().
+			Str("email", req.Email).
+			Str("invite_url", inviteURL).
+			Msg("SMTP not configured — invitation email not sent")
+	} else {
+		if err := h.Mailer.SendInvitation(r.Context(), req.Email, inviteURL); err != nil {
+			log.Error().Err(err).Str("email", req.Email).Msg("failed to send invitation email")
+		}
 	}
 
 	JSON(w, http.StatusCreated, map[string]interface{}{
@@ -162,9 +188,9 @@ func (h *InvitationsHandler) Preview(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"email":     inv.Email,
-		"role":      inv.Role,
-		"team_name": teamName,
+		"email":      inv.Email,
+		"role":       inv.Role,
+		"team_name":  teamName,
 		"expires_at": inv.ExpiresAt,
 	})
 }
