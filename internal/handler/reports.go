@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strconv"
@@ -30,12 +31,20 @@ type qualityGateEvaluator interface {
 	CreateEvaluation(ctx context.Context, gateID, reportID string, passed bool, details json.RawMessage) (*model.QualityGateEvaluation, error)
 }
 
+// githubStatusPoster posts a GitHub commit status.
+// Implemented by *github.Client (internal/github).
+type githubStatusPoster interface {
+	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext string) error
+}
+
 // ReportsHandler handles CTRF report endpoints.
 type ReportsHandler struct {
-	DB               *db.Pool
-	AuditStore       *store.AuditStore
-	QualityGateStore qualityGateEvaluator
-	Webhooks         *webhook.Notifier
+	DB                 *db.Pool
+	AuditStore         *store.AuditStore
+	QualityGateStore   qualityGateEvaluator
+	Webhooks           *webhook.Notifier
+	GitHubStatusPoster githubStatusPoster // nil when GitHub integration is disabled
+	BaseURL            string             // used to construct target URLs in GitHub statuses
 }
 
 // List handles GET /api/v1/reports.
@@ -156,6 +165,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			resp["execution_id"] = executionID
 		}
 		JSON(w, http.StatusCreated, resp)
+		h.maybePostGitHubStatus(r, report.Results.Summary, "")
 		return
 	}
 
@@ -311,6 +321,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusCreated, resp)
+	h.maybePostGitHubStatus(r, report.Results.Summary, reportID)
 }
 
 // Get handles GET /api/v1/reports/{reportID}.
@@ -798,4 +809,37 @@ func buildReportData(report *ctrf.Report, results []model.TestResult, previousFa
 		CurrentFailedTests:  currentFailed,
 		PreviousFailedTests: previousFailed,
 	}
+}
+
+// maybePostGitHubStatus fires a GitHub commit status in a background goroutine
+// when the request carries github_owner, github_repo, and github_sha query params
+// and GitHubStatusPoster is configured. Errors are logged but never propagate to
+// the caller — the status post is best-effort.
+func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Summary, reportID string) {
+	if h.GitHubStatusPoster == nil {
+		return
+	}
+	owner := r.URL.Query().Get("github_owner")
+	repo := r.URL.Query().Get("github_repo")
+	sha := r.URL.Query().Get("github_sha")
+	if owner == "" || repo == "" || sha == "" {
+		return
+	}
+
+	state := "success"
+	if summary.Failed > 0 {
+		state = "failure"
+	}
+	description := fmt.Sprintf("%d tests: %d passed, %d failed",
+		summary.Tests, summary.Passed, summary.Failed)
+	const statusContext = "scaledtest/e2e"
+
+	poster := h.GitHubStatusPoster
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := poster.PostStatus(ctx, owner, repo, sha, state, description, statusContext); err != nil {
+			log.Error().Err(err).Str("sha", sha).Msg("failed to post GitHub commit status")
+		}
+	}()
 }

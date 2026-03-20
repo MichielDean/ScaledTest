@@ -1,0 +1,178 @@
+name: E2E Tests (Dogfooding)
+
+# Runs ScaledTest's own Playwright E2E suite against a live server instance,
+# uploads the CTRF report back to that same instance (dogfooding), and posts
+# a GitHub commit status with the results via ST_GITHUB_TOKEN.
+
+permissions:
+  contents: read
+  statuses: write
+
+on:
+  pull_request:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  e2e-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    services:
+      postgres:
+        image: timescale/timescaledb:latest-pg16
+        env:
+          POSTGRES_USER: test
+          POSTGRES_PASSWORD: test
+          POSTGRES_DB: scaledtest_e2e
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      ST_DATABASE_URL: postgres://test:test@localhost:5432/scaledtest_e2e?sslmode=disable
+      ST_JWT_SECRET: e2e-ci-test-secret-at-least-32-chars
+      ST_BASE_URL: http://localhost:8080
+      # Pass GITHUB_TOKEN so the server can post commit statuses back to GitHub
+      ST_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Build frontend
+        working-directory: frontend
+        run: npm ci && npx vite build
+
+      - name: Copy frontend dist to embed location
+        run: |
+          rm -f internal/spa/dist/placeholder
+          cp -rf frontend/dist/* internal/spa/dist/
+
+      - name: Build Go binary
+        run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/scaledtest ./cmd/server
+
+      - name: Run database migrations
+        run: ./bin/scaledtest -migrate-up
+
+      - name: Start server
+        run: |
+          ./bin/scaledtest &
+          echo "SERVER_PID=$!" >> "$GITHUB_ENV"
+          # Wait until the health endpoint responds
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:8080/health > /dev/null; then
+              echo "Server is up"
+              break
+            fi
+            sleep 1
+          done
+
+      - name: Seed test user, team, and API token
+        run: |
+          # Register the E2E maintainer account
+          curl -sf -X POST http://localhost:8080/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"maintainer@example.com","password":"Maintainer123!","display_name":"E2E Maintainer"}' \
+            > /dev/null
+
+          # Login and capture the access token
+          ACCESS_TOKEN=$(curl -sf -X POST http://localhost:8080/auth/login \
+            -H "Content-Type: application/json" \
+            -d '{"email":"maintainer@example.com","password":"Maintainer123!"}' \
+            | jq -r '.access_token')
+
+          # Create a team
+          TEAM_ID=$(curl -sf -X POST http://localhost:8080/api/v1/teams \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"E2E Team"}' \
+            | jq -r '.id')
+
+          # Create an API token scoped to the team
+          API_TOKEN=$(curl -sf -X POST "http://localhost:8080/api/v1/teams/$TEAM_ID/tokens" \
+            -H "Authorization: Bearer $ACCESS_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"name":"e2e-ci-token"}' \
+            | jq -r '.token')
+
+          echo "E2E_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
+          echo "E2E_API_TOKEN=$API_TOKEN" >> "$GITHUB_ENV"
+
+      - name: Install E2E dependencies
+        working-directory: e2e
+        run: npm ci && npx playwright install --with-deps chromium
+
+      - name: Run E2E tests
+        working-directory: e2e
+        env:
+          E2E_BASE_URL: http://localhost:8080
+        run: npx playwright test
+        continue-on-error: true
+
+      - name: Upload CTRF report to ScaledTest (dogfooding)
+        if: always()
+        run: |
+          REPORT="e2e/ctrf-report.json"
+          if [ ! -f "$REPORT" ]; then
+            echo "No CTRF report found at $REPORT — skipping upload"
+            exit 0
+          fi
+
+          # Upload to the local ScaledTest instance with GitHub params so the
+          # server posts a commit status back to this PR.
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
+            "http://localhost:8080/api/v1/reports?github_owner=${{ github.repository_owner }}&github_repo=${{ github.event.repository.name }}&github_sha=${{ github.event.pull_request.head.sha }}" \
+            -H "Authorization: Bearer $E2E_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            --data-binary @"$REPORT")
+
+          HTTP_CODE=$(echo "$RESPONSE" | tail -1)
+          BODY=$(echo "$RESPONSE" | sed '$d')
+
+          echo "ScaledTest upload response (HTTP $HTTP_CODE):"
+          echo "$BODY" | jq . 2>/dev/null || echo "$BODY"
+
+          if [ "$HTTP_CODE" -ne 201 ]; then
+            echo "::warning::CTRF upload failed (HTTP $HTTP_CODE) — non-fatal"
+          fi
+
+          # Write step summary
+          TESTS=$(echo "$BODY" | jq -r '.tests // "N/A"')
+          echo "### E2E Test Results" >> "$GITHUB_STEP_SUMMARY"
+          echo "Uploaded CTRF report — **$TESTS** tests." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload Playwright report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: e2e/playwright-report/
+          if-no-files-found: ignore
+
+      - name: Upload CTRF report artifact
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ctrf-report
+          path: e2e/ctrf-report.json
+          if-no-files-found: ignore

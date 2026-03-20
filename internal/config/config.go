@@ -38,6 +38,8 @@ type Config struct {
 	SMTPUser string `koanf:"smtp_user"`
 	SMTPPass string `koanf:"smtp_pass"`
 	SMTPFrom string `koanf:"smtp_from"`
+
+	GitHubToken string `koanf:"github_token"`
 }
 
 // Load reads configuration from environment variables prefixed with ST_.
