@@ -74,14 +74,17 @@ All API endpoints live under `/api/v1` and require a Bearer token (`Authorizatio
 
 ```bash
 # Register
-POST /auth/register  { "email", "password", "display_name" }
+POST /auth/register         { "email", "password", "display_name" }
 
 # Login → returns { access_token, expires_at, user }
-POST /auth/login     { "email", "password" }
+POST /auth/login            { "email", "password" }
+
+# Change password (requires valid JWT; rate-limited to 10 req/min per IP)
+POST /auth/change-password  { "current_password", "new_password" }
 
 # OAuth (if configured)
-GET /auth/github     # Redirects to GitHub
-GET /auth/google     # Redirects to Google
+GET /auth/github            # Redirects to GitHub
+GET /auth/google            # Redirects to Google
 ```
 
 ### CTRF Report Submission
@@ -115,6 +118,10 @@ Response:
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
 | `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
 | `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
+| `GET` | `/api/v1/teams/{id}/webhooks` | List webhooks for a team |
+| `POST` | `/api/v1/teams/{id}/webhooks` | Create webhook (maintainer+) |
+| `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
+| `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=`) (owner only) |

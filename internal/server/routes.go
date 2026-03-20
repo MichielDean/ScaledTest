@@ -121,7 +121,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// Handlers
 	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
-	authH := &handler.AuthHandler{JWT: jwtMgr, DB: dbPool}
+	authH := &handler.AuthHandler{JWT: jwtMgr}
+	if dbPool != nil {
+		authH.DB = dbPool
+	}
 	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,
@@ -138,7 +141,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
-	whH := &handler.WebhooksHandler{Store: whStore, DeliveryStore: whDeliveryStore}
+	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher()}
+	if whStore != nil {
+		whH.Store = whStore
+	}
+	if whDeliveryStore != nil {
+		whH.DeliveryStore = whDeliveryStore
+	}
 
 	var invStore *store.InvitationStore
 	if dbPool != nil {
@@ -175,6 +184,8 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Use(authMW)
 		r.Use(csrfMW)
+
+		r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/auth/change-password", authH.ChangePassword)
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
@@ -229,6 +240,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Put("/{webhookID}", whH.Update)
 				r.Delete("/{webhookID}", whH.Delete)
 				r.Get("/{webhookID}/deliveries", whH.ListDeliveries)
+				r.Post("/{webhookID}/deliveries/{deliveryID}/retry", whH.RetryDelivery)
 			})
 			r.Route("/{teamID}/invitations", func(r chi.Router) {
 				r.Get("/", invH.List)
