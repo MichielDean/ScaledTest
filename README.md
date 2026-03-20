@@ -127,9 +127,13 @@ Response:
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
 | `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
 | `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
+| `GET` | `/api/v1/teams/{id}/webhooks` | List webhooks for a team |
+| `POST` | `/api/v1/teams/{id}/webhooks` | Create webhook (maintainer+) |
+| `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
+| `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
-| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=`) (owner only) |
+| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
 
 ## Testing

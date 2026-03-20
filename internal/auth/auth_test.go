@@ -1,6 +1,7 @@
 package auth
 
 import (
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -246,6 +247,253 @@ func TestMiddlewareAPIToken(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+// --- JWT edge cases ---
+
+func TestJWTMalformedToken(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+
+	malformed := []string{
+		"",
+		"not-a-jwt",
+		"three.parts.here",
+		"eyJhbGciOiJIUzI1NiJ9.invalid-payload.invalid-sig",
+		"a]b]c",
+		"eyJhbGciOiJub25lIn0.eyJ1aWQiOiJ1c2VyLTEifQ.", // alg: none
+	}
+
+	for _, tok := range malformed {
+		_, err := mgr.ValidateAccessToken(tok)
+		if err == nil {
+			t.Errorf("ValidateAccessToken(%q) should fail", tok)
+		}
+	}
+}
+
+func TestJWTShortSecretPanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Error("expected panic for short secret")
+		}
+	}()
+	NewJWTManager("short", 15*time.Minute, 7*24*time.Hour)
+}
+
+func TestJWTEmptyTeamID(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	pair, err := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "")
+	if err != nil {
+		t.Fatalf("GenerateTokenPair() error: %v", err)
+	}
+
+	claims, err := mgr.ValidateAccessToken(pair.AccessToken)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken() error: %v", err)
+	}
+	if claims.TeamID != "" {
+		t.Errorf("TeamID = %q, want empty string", claims.TeamID)
+	}
+}
+
+func TestJWTExpiresAtInFuture(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 5*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
+
+	if !pair.ExpiresAt.After(time.Now()) {
+		t.Error("ExpiresAt should be in the future")
+	}
+	if pair.ExpiresAt.After(time.Now().Add(6 * time.Minute)) {
+		t.Error("ExpiresAt should be within ~5min")
+	}
+}
+
+func TestRefreshDuration(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 48*time.Hour)
+	if mgr.RefreshDuration() != 48*time.Hour {
+		t.Errorf("RefreshDuration = %v, want 48h", mgr.RefreshDuration())
+	}
+}
+
+func TestRefreshTokenRandomness(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	p1, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
+	p2, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
+	if p1.RefreshToken == p2.RefreshToken {
+		t.Error("refresh tokens should be unique")
+	}
+	if len(p1.RefreshToken) < 32 {
+		t.Errorf("refresh token too short: %d chars", len(p1.RefreshToken))
+	}
+}
+
+// --- Middleware edge cases ---
+
+func TestMiddlewareExpiredJWT(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", -1*time.Second, 7*24*time.Hour)
+	mw := Middleware(mgr, nil)
+
+	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "")
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for expired token")
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expired JWT: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestMiddlewareInvalidAPIToken(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+
+	lookup := func(hash string) (*Claims, error) {
+		return nil, fmt.Errorf("token not found")
+	}
+
+	mw := Middleware(mgr, lookup)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for invalid API token")
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "sct_invalid_token_hash")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("invalid API token: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestMiddlewareAPITokenNoLookupConfigured(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+
+	// tokenLookup is nil — API tokens should be rejected
+	mw := Middleware(mgr, nil)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called when API tokens not configured")
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "sct_some_token")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("API token with nil lookup: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestMiddlewareBearerWithAPITokenPrefix(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+
+	apiToken, _ := GenerateAPIToken()
+	expectedClaims := &Claims{UserID: "api-user", Role: "owner", TeamID: "team-1"}
+
+	lookup := func(hash string) (*Claims, error) {
+		if hash == apiToken.TokenHash {
+			return expectedClaims, nil
+		}
+		return nil, fmt.Errorf("not found")
+	}
+
+	mw := Middleware(mgr, lookup)
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		claims := GetClaims(r.Context())
+		if claims == nil || claims.UserID != "api-user" {
+			t.Error("expected valid claims for Bearer sct_ token")
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+
+	// "Bearer sct_..." should work (Bearer prefix stripped, sct_ prefix detected)
+	req := httptest.NewRequest("GET", "/test", nil)
+	req.Header.Set("Authorization", "Bearer "+apiToken.Token)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Bearer sct_ token: status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestMiddlewareMalformedAuthHeader(t *testing.T) {
+	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mw := Middleware(mgr, nil)
+
+	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called for malformed auth header")
+	}))
+
+	headers := []string{
+		"Bearer ",           // empty token after prefix
+		"Basic dXNlcjpwYXNz", // basic auth (not supported)
+		"InvalidScheme xyz",
+		"Bearer",            // no space after Bearer
+	}
+
+	for _, h := range headers {
+		req := httptest.NewRequest("GET", "/test", nil)
+		req.Header.Set("Authorization", h)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("header %q: status = %d, want %d", h, w.Code, http.StatusUnauthorized)
+		}
+	}
+}
+
+func TestRequireRoleNoClaims(t *testing.T) {
+	roleMW := RequireRole("owner")
+	handler := roleMW(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		t.Error("handler should not be called without claims")
+	}))
+
+	req := httptest.NewRequest("GET", "/test", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RequireRole no claims: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestGetClaimsNilContext(t *testing.T) {
+	req := httptest.NewRequest("GET", "/test", nil)
+	claims := GetClaims(req.Context())
+	if claims != nil {
+		t.Errorf("GetClaims with no claims set: got %v, want nil", claims)
+	}
+}
+
+// --- Password edge cases ---
+
+func TestPasswordEmptyString(t *testing.T) {
+	hash, err := HashPassword("")
+	if err != nil {
+		t.Fatalf("HashPassword empty: %v", err)
+	}
+	if !CheckPassword("", hash) {
+		t.Error("CheckPassword should match empty password")
+	}
+	if CheckPassword("notempty", hash) {
+		t.Error("CheckPassword should not match different password")
+	}
+}
+
+func TestPasswordHashUniqueness(t *testing.T) {
+	h1, _ := HashPassword("same")
+	h2, _ := HashPassword("same")
+	if h1 == h2 {
+		t.Error("same password should produce different hashes (bcrypt salting)")
 	}
 }
 
