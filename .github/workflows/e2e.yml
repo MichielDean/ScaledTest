@@ -86,6 +86,10 @@ jobs:
             fi
             sleep 1
           done
+          if ! curl -sf http://localhost:8080/health > /dev/null; then
+            echo "Server did not start within 30 seconds" >&2
+            exit 1
+          fi
 
       - name: Seed test user, team, and API token
         run: |
