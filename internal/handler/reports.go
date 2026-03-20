@@ -34,7 +34,7 @@ type qualityGateEvaluator interface {
 // githubStatusPoster posts a GitHub commit status.
 // Implemented by *github.Client (internal/github).
 type githubStatusPoster interface {
-	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext string) error
+	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext, targetURL string) error
 }
 
 // ReportsHandler handles CTRF report endpoints.
@@ -834,11 +834,16 @@ func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Sum
 		summary.Tests, summary.Passed, summary.Failed)
 	const statusContext = "scaledtest/e2e"
 
+	targetURL := ""
+	if h.BaseURL != "" && reportID != "" {
+		targetURL = fmt.Sprintf("%s/reports/%s", h.BaseURL, reportID)
+	}
+
 	poster := h.GitHubStatusPoster
 	go func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 		defer cancel()
-		if err := poster.PostStatus(ctx, owner, repo, sha, state, description, statusContext); err != nil {
+		if err := poster.PostStatus(ctx, owner, repo, sha, state, description, statusContext, targetURL); err != nil {
 			log.Error().Err(err).Str("sha", sha).Msg("failed to post GitHub commit status")
 		}
 	}()

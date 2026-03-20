@@ -13,7 +13,7 @@ import (
 
 // StatusPoster posts a GitHub commit status.
 type StatusPoster interface {
-	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext string) error
+	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext, targetURL string) error
 }
 
 // Client implements StatusPoster using the GitHub REST API.
@@ -45,11 +45,12 @@ type statusPayload struct {
 	State       string `json:"state"`
 	Description string `json:"description,omitempty"`
 	Context     string `json:"context,omitempty"`
+	TargetURL   string `json:"target_url,omitempty"`
 }
 
 // PostStatus posts a commit status to the GitHub Statuses API.
 // state must be one of "success", "failure", "pending", "error".
-func (c *Client) PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext string) error {
+func (c *Client) PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext, targetURL string) error {
 	if !validOwnerRepo.MatchString(owner) {
 		return fmt.Errorf("invalid github owner: %q", owner)
 	}
@@ -64,6 +65,7 @@ func (c *Client) PostStatus(ctx context.Context, owner, repo, sha, state, descri
 		State:       state,
 		Description: description,
 		Context:     statusContext,
+		TargetURL:   targetURL,
 	})
 	if err != nil {
 		return fmt.Errorf("marshal status payload: %w", err)
@@ -78,6 +80,7 @@ func (c *Client) PostStatus(ctx context.Context, owner, repo, sha, state, descri
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/vnd.github+json")
 	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	req.Header.Set("User-Agent", "ScaledTest/1.0")
 
 	resp, err := c.HTTPClient.Do(req)
 	if err != nil {

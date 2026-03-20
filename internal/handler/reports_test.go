@@ -1290,13 +1290,13 @@ type mockGitHubStatusPoster struct {
 }
 
 type ghStatusCall struct {
-	Owner, Repo, SHA, State, Description, Context string
+	Owner, Repo, SHA, State, Description, Context, TargetURL string
 }
 
-func (m *mockGitHubStatusPoster) PostStatus(_ context.Context, owner, repo, sha, state, description, ctx string) error {
+func (m *mockGitHubStatusPoster) PostStatus(_ context.Context, owner, repo, sha, state, description, ctx, targetURL string) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
-	m.calls = append(m.calls, ghStatusCall{owner, repo, sha, state, description, ctx})
+	m.calls = append(m.calls, ghStatusCall{owner, repo, sha, state, description, ctx, targetURL})
 	return m.err
 }
 
