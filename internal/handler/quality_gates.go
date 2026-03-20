@@ -15,26 +15,28 @@ import (
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
-// Supported quality gate rule metrics.
-var validMetrics = map[string]bool{
-	"pass_rate":    true,
-	"failed_count": true,
-	"flaky_count":  true,
-	"duration_p95": true,
+// validRuleTypes are the supported quality gate rule types.
+var validRuleTypes = map[string]bool{
+	"pass_rate":       true,
+	"zero_failures":   true,
+	"no_new_failures": true,
+	"max_duration":    true,
+	"max_flaky_count": true,
+	"min_test_count":  true,
 }
 
-// Supported quality gate rule operators.
-var validOperators = map[string]bool{
-	"gte": true,
-	"lte": true,
-	"eq":  true,
+// ruleTypesRequiringParams are rule types that must provide non-null params.
+var ruleTypesRequiringParams = map[string]bool{
+	"pass_rate":       true,
+	"max_duration":    true,
+	"max_flaky_count": true,
+	"min_test_count":  true,
 }
 
 // QualityGateRule is a single rule in the quality gate rules array.
 type QualityGateRule struct {
-	Metric    string  `json:"metric"`
-	Operator  string  `json:"operator"`
-	Threshold float64 `json:"threshold"`
+	Type   string          `json:"type"`
+	Params json.RawMessage `json:"params"`
 }
 
 // QualityGatesHandler handles quality gate endpoints.
@@ -58,21 +60,23 @@ type UpdateQualityGateRequest struct {
 	Enabled     *bool           `json:"enabled"`
 }
 
-// validateRules checks that all rules conform to the {metric, operator, threshold} schema.
+// validateRules checks that all rules conform to the {type, params} schema.
 func validateRules(raw json.RawMessage) error {
 	var rules []QualityGateRule
 	if err := json.Unmarshal(raw, &rules); err != nil {
-		return fmt.Errorf("rules must be a JSON array of {metric, operator, threshold}")
+		return fmt.Errorf("rules must be a JSON array of {type, params}")
 	}
 	if len(rules) == 0 {
 		return fmt.Errorf("rules array must not be empty")
 	}
 	for i, rule := range rules {
-		if !validMetrics[rule.Metric] {
-			return fmt.Errorf("rule[%d]: unsupported metric %q (supported: pass_rate, failed_count, flaky_count, duration_p95)", i, rule.Metric)
+		if !validRuleTypes[rule.Type] {
+			return fmt.Errorf("rule[%d]: unsupported type %q (supported: pass_rate, zero_failures, no_new_failures, max_duration, max_flaky_count, min_test_count)", i, rule.Type)
 		}
-		if !validOperators[rule.Operator] {
-			return fmt.Errorf("rule[%d]: unsupported operator %q (supported: gte, lte, eq)", i, rule.Operator)
+		if ruleTypesRequiringParams[rule.Type] {
+			if len(rule.Params) == 0 || string(rule.Params) == "null" {
+				return fmt.Errorf("rule[%d]: type %q requires params", i, rule.Type)
+			}
 		}
 	}
 	return nil

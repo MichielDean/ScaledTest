@@ -107,7 +107,7 @@ func TestQualityGatesListReadonly(t *testing.T) {
 func TestQualityGatesCreateWithoutDB(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Release Gate","rules":[{"metric":"pass_rate","operator":"gte","threshold":95}]}`
+	body := `{"name":"Release Gate","rules":[{"type":"pass_rate","params":{"threshold":95}}]}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "maintainer")
@@ -124,7 +124,7 @@ func TestQualityGatesCreateWithoutDB(t *testing.T) {
 func TestQualityGatesCreateReadonlyForbidden(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Release Gate","rules":[{"metric":"pass_rate","operator":"gte","threshold":95}]}`
+	body := `{"name":"Release Gate","rules":[{"type":"pass_rate","params":{"threshold":95}}]}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "readonly")
@@ -157,7 +157,7 @@ func TestQualityGatesCreateInvalidBody(t *testing.T) {
 func TestQualityGatesCreateMissingName(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"rules":[{"metric":"pass_rate","operator":"gte","threshold":95}]}`
+	body := `{"rules":[{"type":"pass_rate","params":{"threshold":95}}]}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "maintainer")
@@ -171,10 +171,10 @@ func TestQualityGatesCreateMissingName(t *testing.T) {
 	}
 }
 
-func TestQualityGatesCreateInvalidMetric(t *testing.T) {
+func TestQualityGatesCreateInvalidType(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Bad Gate","rules":[{"metric":"invalid_metric","operator":"gte","threshold":95}]}`
+	body := `{"name":"Bad Gate","rules":[{"type":"invalid_type"}]}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "maintainer")
@@ -184,17 +184,17 @@ func TestQualityGatesCreateInvalidMetric(t *testing.T) {
 	h.Create(w, req)
 
 	if w.Code != http.StatusBadRequest {
-		t.Errorf("Create invalid metric status = %d, want %d", w.Code, http.StatusBadRequest)
+		t.Errorf("Create invalid type status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(w.Body.String(), "unsupported metric") {
-		t.Errorf("Create invalid metric body = %s, want unsupported metric error", w.Body.String())
+	if !strings.Contains(w.Body.String(), "unsupported type") {
+		t.Errorf("Create invalid type body = %s, want unsupported type error", w.Body.String())
 	}
 }
 
-func TestQualityGatesCreateInvalidOperator(t *testing.T) {
+func TestQualityGatesCreateMissingParams(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Bad Gate","rules":[{"metric":"pass_rate","operator":"gt","threshold":95}]}`
+	body := `{"name":"Bad Gate","rules":[{"type":"pass_rate"}]}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "maintainer")
@@ -204,10 +204,10 @@ func TestQualityGatesCreateInvalidOperator(t *testing.T) {
 	h.Create(w, req)
 
 	if w.Code != http.StatusBadRequest {
-		t.Errorf("Create invalid operator status = %d, want %d", w.Code, http.StatusBadRequest)
+		t.Errorf("Create missing params status = %d, want %d", w.Code, http.StatusBadRequest)
 	}
-	if !strings.Contains(w.Body.String(), "unsupported operator") {
-		t.Errorf("Create invalid operator body = %s, want unsupported operator error", w.Body.String())
+	if !strings.Contains(w.Body.String(), "requires params") {
+		t.Errorf("Create missing params body = %s, want requires params error", w.Body.String())
 	}
 }
 
@@ -263,7 +263,7 @@ func TestQualityGatesGetMissingGateID(t *testing.T) {
 func TestQualityGatesUpdateWithoutDB(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Updated Gate","rules":[{"metric":"failed_count","operator":"lte","threshold":0}]}`
+	body := `{"name":"Updated Gate","rules":[{"type":"zero_failures"}]}`
 	req := httptest.NewRequest("PUT", "/api/v1/teams/team-1/quality-gates/gate-1", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "maintainer")
@@ -281,7 +281,7 @@ func TestQualityGatesUpdateWithoutDB(t *testing.T) {
 func TestQualityGatesUpdateReadonlyForbidden(t *testing.T) {
 	h := &QualityGatesHandler{Store: nil}
 
-	body := `{"name":"Updated Gate","rules":[{"metric":"failed_count","operator":"lte","threshold":0}]}`
+	body := `{"name":"Updated Gate","rules":[{"type":"zero_failures"}]}`
 	req := httptest.NewRequest("PUT", "/api/v1/teams/team-1/quality-gates/gate-1", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	req = withClaimsRole(req, "readonly")
@@ -426,16 +426,27 @@ func TestValidateRules(t *testing.T) {
 		rules   string
 		wantErr bool
 	}{
-		{"valid pass_rate", `[{"metric":"pass_rate","operator":"gte","threshold":95}]`, false},
-		{"valid failed_count", `[{"metric":"failed_count","operator":"lte","threshold":0}]`, false},
-		{"valid flaky_count", `[{"metric":"flaky_count","operator":"lte","threshold":5}]`, false},
-		{"valid duration_p95", `[{"metric":"duration_p95","operator":"lte","threshold":30000}]`, false},
-		{"valid eq operator", `[{"metric":"failed_count","operator":"eq","threshold":0}]`, false},
-		{"multiple rules", `[{"metric":"pass_rate","operator":"gte","threshold":95},{"metric":"failed_count","operator":"eq","threshold":0}]`, false},
-		{"invalid metric", `[{"metric":"bogus","operator":"gte","threshold":95}]`, true},
-		{"invalid operator", `[{"metric":"pass_rate","operator":"gt","threshold":95}]`, true},
+		// Valid: param-requiring types with params present
+		{"valid pass_rate", `[{"type":"pass_rate","params":{"threshold":95}}]`, false},
+		{"valid max_duration", `[{"type":"max_duration","params":{"threshold_ms":30000}}]`, false},
+		{"valid max_flaky_count", `[{"type":"max_flaky_count","params":{"threshold":5}}]`, false},
+		{"valid min_test_count", `[{"type":"min_test_count","params":{"threshold":10}}]`, false},
+		// Valid: param-free types with no params
+		{"valid zero_failures", `[{"type":"zero_failures"}]`, false},
+		{"valid no_new_failures", `[{"type":"no_new_failures"}]`, false},
+		// Valid: multiple rules mixed
+		{"multiple rules", `[{"type":"pass_rate","params":{"threshold":95}},{"type":"zero_failures"}]`, false},
+		// Invalid: unknown type
+		{"invalid type", `[{"type":"bogus"}]`, true},
+		// Invalid: param-requiring types with null or absent params
+		{"pass_rate missing params", `[{"type":"pass_rate"}]`, true},
+		{"pass_rate null params", `[{"type":"pass_rate","params":null}]`, true},
+		{"max_duration missing params", `[{"type":"max_duration"}]`, true},
+		{"max_flaky_count missing params", `[{"type":"max_flaky_count"}]`, true},
+		{"min_test_count missing params", `[{"type":"min_test_count"}]`, true},
+		// Invalid: structural errors
 		{"empty array", `[]`, true},
-		{"not an array", `{"metric":"pass_rate"}`, true},
+		{"not an array", `{"type":"pass_rate"}`, true},
 		{"invalid json", `not json`, true},
 	}
 
