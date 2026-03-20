@@ -186,6 +186,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Use(csrfMW)
 
 		r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/auth/change-password", authH.ChangePassword)
+		r.Patch("/auth/me", authH.UpdateMe)
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
