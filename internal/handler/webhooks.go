@@ -40,7 +40,7 @@ type WebhookStoreProvider interface {
 type WebhookDeliveryStoreProvider interface {
 	Record(ctx context.Context, webhookID, url, eventType string, payload []byte, attempt, statusCode int, errMsg string, durationMs int) error
 	GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
-	ListByWebhook(ctx context.Context, webhookID string, limit int) ([]store.WebhookDelivery, error)
+	ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error)
 }
 
 // WebhookSender is the dispatcher interface needed by WebhooksHandler.
@@ -463,14 +463,20 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	deliveries, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, 20)
+	cursor := r.URL.Query().Get("cursor")
+
+	deliveries, nextCursor, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, cursor, 20)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to list deliveries")
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"deliveries": deliveries,
 		"total":      len(deliveries),
-	})
+	}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+	}
+	JSON(w, http.StatusOK, resp)
 }
