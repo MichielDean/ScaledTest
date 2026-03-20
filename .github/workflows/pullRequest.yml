@@ -202,6 +202,9 @@ jobs:
           BETTER_AUTH_SECRET: ${{ secrets.CI_BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:3000
         run: |
+          # Kill any leftover server from a previous run on this persistent runner
+          fuser -k 3000/tcp 2>/dev/null || true
+          sleep 2
           go run ./cmd/server -migrate-up
           go run ./cmd/server &
           echo "Waiting for server..."
