@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
@@ -37,6 +37,24 @@ interface Team {
   name: string;
 }
 
+interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  url: string;
+  event_type: string;
+  attempt: number;
+  status_code: number;
+  error?: string;
+  duration_ms: number;
+  delivered_at: string;
+}
+
+interface DeliveryPage {
+  deliveries: WebhookDelivery[];
+  total: number;
+  next_cursor?: string;
+}
+
 export function WebhooksPage() {
   const queryClient = useQueryClient();
   const [showForm, setShowForm] = useState(false);
@@ -44,6 +62,18 @@ export function WebhooksPage() {
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
   const [expandedDeliveries, setExpandedDeliveries] = useState<Set<string>>(new Set());
+
+  function toggleDeliveries(webhookId: string) {
+    setExpandedDeliveries(prev => {
+      const next = new Set(prev);
+      if (next.has(webhookId)) {
+        next.delete(webhookId);
+      } else {
+        next.add(webhookId);
+      }
+      return next;
+    });
+  }
 
   // Fetch user's teams to get the teamId for webhook API calls
   const teamsQuery = useQuery({
@@ -68,18 +98,6 @@ export function WebhooksPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.all(teamId!) });
     },
   });
-
-  function toggleDeliveries(webhookId: string) {
-    setExpandedDeliveries(prev => {
-      const next = new Set(prev);
-      if (next.has(webhookId)) {
-        next.delete(webhookId);
-      } else {
-        next.add(webhookId);
-      }
-      return next;
-    });
-  }
 
   function handleEdit(webhook: Webhook) {
     setEditingWebhook(webhook);
@@ -201,7 +219,8 @@ export function WebhooksPage() {
       {webhooks.length > 0 && (
         <div className="space-y-3">
           {webhooks.map(webhook => (
-            <div key={webhook.id} className="rounded-lg border bg-card p-5">
+            <div key={webhook.id}>
+            <div className="rounded-lg border bg-card p-5">
               <div className="flex items-start justify-between gap-4">
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
@@ -269,9 +288,10 @@ export function WebhooksPage() {
                   )}
                 </div>
               </div>
-              {expandedDeliveries.has(webhook.id) && (
-                <WebhookDeliveryList teamId={teamId} webhookId={webhook.id} />
-              )}
+            </div>
+            {expandedDeliveries.has(webhook.id) && teamId && (
+              <WebhookDeliveryList teamId={teamId} webhookId={webhook.id} />
+            )}
             </div>
           ))}
         </div>
@@ -282,79 +302,78 @@ export function WebhooksPage() {
 
 function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId: string }) {
   const queryClient = useQueryClient();
+  const [retryError, setRetryError] = useState<string | null>(null);
 
-  const { data, isLoading, error } = useQuery({
+  const deliveriesQuery = useInfiniteQuery({
     queryKey: queryKeys.webhooks.deliveries(teamId, webhookId),
-    queryFn: () => api.getWebhookDeliveries(teamId, webhookId),
+    queryFn: ({ pageParam }): Promise<DeliveryPage> =>
+      api.getWebhookDeliveries(teamId, webhookId, pageParam || undefined) as Promise<DeliveryPage>,
+    getNextPageParam: (lastPage: DeliveryPage) => lastPage.next_cursor ?? undefined,
+    initialPageParam: '',
   });
 
   const retryMutation = useMutation({
     mutationFn: (deliveryId: string) => api.retryWebhookDelivery(teamId, webhookId, deliveryId),
     onSuccess: () => {
+      setRetryError(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.deliveries(teamId, webhookId) });
     },
-    onError: () => {
-      // error surfaced via retryMutation.isError in the render
+    onError: (err: Error) => {
+      setRetryError(`Retry failed: ${err.message}`);
     },
   });
 
-  const deliveries = (data?.deliveries ?? []) as WebhookDelivery[];
+  const deliveries = deliveriesQuery.data?.pages.flatMap(p => p.deliveries) ?? [];
 
-  if (isLoading) {
-    return <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">Loading deliveries...</div>;
+  if (deliveriesQuery.isLoading) {
+    return <p className="px-4 py-2 text-sm text-muted-foreground">Loading deliveries...</p>;
   }
 
-  if (error) {
-    return <div className="mt-3 pt-3 border-t text-xs text-red-600">Failed to load deliveries.</div>;
-  }
-
-  if (deliveries.length === 0) {
-    return (
-      <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">No deliveries yet.</div>
-    );
+  if (deliveriesQuery.isError) {
+    return <p className="px-4 py-2 text-sm text-red-600">Failed to load deliveries.</p>;
   }
 
   return (
-    <div className="mt-3 pt-3 border-t">
-      <p className="text-xs font-medium text-muted-foreground mb-2">Recent Deliveries</p>
-      {retryMutation.isError && (
-        <p className="mb-2 text-xs text-red-600">Retry failed. Please try again.</p>
-      )}
-      <div className="space-y-1.5">
-        {deliveries.map(delivery => {
-          const is2xx = delivery.status_code >= 200 && delivery.status_code < 300;
-          const isPendingThis = retryMutation.isPending && retryMutation.variables === delivery.id;
-          return (
-            <div key={delivery.id} className="flex items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 min-w-0">
-                <span
-                  className={`inline-block rounded px-1.5 py-0.5 font-mono font-medium ${
-                    is2xx ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
-                  }`}
+    <div className="mt-2 rounded-lg border bg-muted/30 p-4 space-y-2">
+      <h3 className="text-sm font-semibold mb-2">Recent Deliveries</h3>
+      {deliveries.length === 0 ? (
+        <p className="text-sm text-muted-foreground">No deliveries yet.</p>
+      ) : (
+        <ul className="space-y-1">
+          {deliveries.map(d => (
+            <li key={d.id} className="flex items-center gap-3 text-sm py-1">
+              <span
+                className={`font-mono font-medium ${
+                  d.status_code >= 200 && d.status_code < 300 ? 'text-green-600' : 'text-red-600'
+                }`}
+              >
+                {d.status_code}
+              </span>
+              <span className="text-muted-foreground">{d.event_type}</span>
+              <span className="text-muted-foreground">{d.duration_ms}ms</span>
+              {!(d.status_code >= 200 && d.status_code < 300) && (
+                <button
+                  onClick={() => retryMutation.mutate(d.id)}
+                  disabled={retryMutation.isPending}
+                  className="rounded border border-gray-300 px-2 py-0.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
                 >
-                  {delivery.status_code ?? '—'}
-                </span>
-                <span className="truncate text-gray-600">{delivery.event_type}</span>
-                <span className="text-muted-foreground shrink-0">{delivery.duration_ms}ms</span>
-              </div>
-              <div className="flex items-center gap-2 shrink-0">
-                <span className="text-muted-foreground">
-                  {new Date(delivery.delivered_at).toLocaleString()}
-                </span>
-                {!is2xx && (
-                  <button
-                    onClick={() => retryMutation.mutate(delivery.id)}
-                    disabled={retryMutation.isPending}
-                    className="rounded border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
-                  >
-                    {isPendingThis ? 'Retrying...' : 'Retry'}
-                  </button>
-                )}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  Retry
+                </button>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+      {retryError && <p className="text-sm text-red-600">{retryError}</p>}
+      {deliveriesQuery.hasNextPage && (
+        <button
+          onClick={() => void deliveriesQuery.fetchNextPage()}
+          disabled={deliveriesQuery.isFetchingNextPage}
+          className="mt-2 rounded border border-gray-300 px-3 py-1 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+        >
+          {deliveriesQuery.isFetchingNextPage ? 'Loading...' : 'Load More'}
+        </button>
+      )}
     </div>
   );
 }

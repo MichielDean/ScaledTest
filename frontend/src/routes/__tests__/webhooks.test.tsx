@@ -222,4 +222,85 @@ describe('WebhooksPage', () => {
       expect(screen.queryByText('200')).not.toBeInTheDocument();
     });
   });
+
+  it('does not show Load More when there is no next_cursor', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockResolvedValue(mockDeliveries);
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+    await screen.findByText('200');
+
+    expect(screen.queryByRole('button', { name: 'Load More' })).not.toBeInTheDocument();
+  });
+
+  it('shows Load More button when next_cursor is present', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockResolvedValue({
+      ...mockDeliveries,
+      next_cursor: 'cursor-abc',
+    });
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+
+    expect(await screen.findByRole('button', { name: 'Load More' })).toBeInTheDocument();
+  });
+
+  it('appends new deliveries when Load More is clicked', async () => {
+    const page2delivery = {
+      id: 'del-3',
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'execution.completed',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 77,
+      delivered_at: '2026-01-01T03:00:00Z',
+    };
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries)
+      .mockResolvedValueOnce({ deliveries: [mockDeliveries.deliveries[0]], total: 1, next_cursor: 'cursor-1' })
+      .mockResolvedValueOnce({ deliveries: [page2delivery], total: 1 });
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+    expect(await screen.findByText('report.submitted')).toBeInTheDocument();
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load More' }));
+
+    expect(await screen.findByText('execution.completed')).toBeInTheDocument();
+    // first page item still visible
+    expect(screen.getByText('report.submitted')).toBeInTheDocument();
+  });
+
+  it('calls getWebhookDeliveries with next_cursor when Load More is clicked', async () => {
+    const page2delivery = {
+      id: 'del-3',
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'execution.completed',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 77,
+      delivered_at: '2026-01-01T03:00:00Z',
+    };
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries)
+      .mockResolvedValueOnce({ deliveries: [mockDeliveries.deliveries[0]], total: 1, next_cursor: 'my-cursor' })
+      .mockResolvedValueOnce({ deliveries: [page2delivery], total: 1 });
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+    await screen.findByText('report.submitted');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Load More' }));
+    await screen.findByText('execution.completed');
+
+    expect(vi.mocked(api.getWebhookDeliveries)).toHaveBeenCalledWith('team-1', 'wh-1', 'my-cursor');
+  });
 });
