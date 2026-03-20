@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -1278,4 +1279,143 @@ func eventually(t *testing.T, timeoutMs int, fn func() bool, msg string) {
 		time.Sleep(10 * time.Millisecond)
 	}
 	t.Error(msg)
+}
+
+// --- GitHub commit status tests ---
+
+type mockGitHubStatusPoster struct {
+	mu    sync.Mutex
+	calls []ghStatusCall
+	err   error
+}
+
+type ghStatusCall struct {
+	Owner, Repo, SHA, State, Description, Context, TargetURL string
+}
+
+func (m *mockGitHubStatusPoster) PostStatus(_ context.Context, owner, repo, sha, state, description, ctx, targetURL string) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	m.calls = append(m.calls, ghStatusCall{owner, repo, sha, state, description, ctx, targetURL})
+	return m.err
+}
+
+func (m *mockGitHubStatusPoster) callCount() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return len(m.calls)
+}
+
+func (m *mockGitHubStatusPoster) firstCall() (ghStatusCall, bool) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if len(m.calls) == 0 {
+		return ghStatusCall{}, false
+	}
+	return m.calls[0], true
+}
+
+const validReport = `{"results":{"tool":{"name":"playwright"},"summary":{"tests":3,"passed":3,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10},{"name":"t2","status":"passed","duration":20},{"name":"t3","status":"passed","duration":30}]}}`
+const failingReport = `{"results":{"tool":{"name":"playwright"},"summary":{"tests":3,"passed":2,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10},{"name":"t2","status":"passed","duration":20},{"name":"t3","status":"failed","duration":30,"message":"oops"}]}}`
+
+func TestCreateReport_PostsGitHubStatus_AllPassed(t *testing.T) {
+	poster := &mockGitHubStatusPoster{}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
+
+	call, _ := poster.firstCall()
+	if call.State != "success" {
+		t.Errorf("state = %q, want success", call.State)
+	}
+	if call.Owner != "acme" {
+		t.Errorf("owner = %q, want acme", call.Owner)
+	}
+	if call.Repo != "app" {
+		t.Errorf("repo = %q, want app", call.Repo)
+	}
+	if call.SHA != "abc1234" {
+		t.Errorf("sha = %q, want abc1234", call.SHA)
+	}
+	if call.Context != "scaledtest/e2e" {
+		t.Errorf("context = %q, want scaledtest/e2e", call.Context)
+	}
+}
+
+func TestCreateReport_PostsGitHubStatus_WithFailures(t *testing.T) {
+	poster := &mockGitHubStatusPoster{}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(failingReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
+
+	call, _ := poster.firstCall()
+	if call.State != "failure" {
+		t.Errorf("state = %q, want failure (report has 1 failed test)", call.State)
+	}
+}
+
+func TestCreateReport_GitHubStatusError_IsNonFatal(t *testing.T) {
+	poster := &mockGitHubStatusPoster{err: fmt.Errorf("github API down")}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	// Error from poster must not affect HTTP response
+	if w.Code != http.StatusCreated {
+		t.Errorf("poster error should be non-fatal; got %d, want 201", w.Code)
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("response body is not valid JSON: %v", err)
+	}
+}
+
+func TestCreateReport_NoGitHubParams_NoPosterCalled(t *testing.T) {
+	poster := &mockGitHubStatusPoster{}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	time.Sleep(50 * time.Millisecond)
+	if poster.callCount() != 0 {
+		t.Errorf("poster should not be called when github params are absent; got %d calls", poster.callCount())
+	}
+}
+
+func TestCreateReport_NilGitHubPoster_NoError(t *testing.T) {
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("nil poster should not cause error; got %d, want 201", w.Code)
+	}
 }

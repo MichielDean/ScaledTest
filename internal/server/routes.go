@@ -14,6 +14,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/config"
 	"github.com/scaledtest/scaledtest/internal/db"
+	ghclient "github.com/scaledtest/scaledtest/internal/github"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/k8s"
 	"github.com/scaledtest/scaledtest/internal/mailer"
@@ -126,7 +127,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if dbPool != nil {
 		authH.DB = dbPool
 	}
-	reportsH := &handler.ReportsHandler{DB: dbPool, AuditStore: auditStore, QualityGateStore: qgStore, Webhooks: whNotifier}
+	reportsH := &handler.ReportsHandler{
+		DB:                 dbPool,
+		AuditStore:         auditStore,
+		QualityGateStore:   qgStore,
+		Webhooks:           whNotifier,
+		GitHubStatusPoster: ghclient.New(cfg.GitHubToken),
+		BaseURL:            cfg.BaseURL,
+	}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,
 		Hub:         wsHub,
