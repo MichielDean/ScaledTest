@@ -12,6 +12,7 @@ import { AdminPage } from './admin';
 import { ReportsComparePage } from './reports-compare';
 import { AnalyticsPage } from './analytics';
 import { TestResultsPage } from './test-results';
+import { AcceptInvitationPage } from './accept-invitation';
 import { useAuthStore } from '../stores/auth-store';
 
 function requireAuth() {
@@ -105,6 +106,12 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const invitationAcceptRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invitations/$token',
+  component: AcceptInvitationPage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -118,4 +125,5 @@ export const routeTree = rootRoute.addChildren([
   webhooksRoute,
   shardingRoute,
   adminRoute,
+  invitationAcceptRoute,
 ]);
