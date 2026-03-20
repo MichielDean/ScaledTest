@@ -156,6 +156,28 @@ Quality gates are created with a `rules` array. Each rule uses a `{type, params}
 
 Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` require non-null params. `zero_failures` and `no_new_failures` take no params.
 
+### Webhook Delivery Pagination
+
+`GET /api/v1/teams/{id}/webhooks/{wid}/deliveries` returns up to 20 deliveries per page using cursor-based pagination.
+
+**Query parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `cursor` | ID of the last delivery on the previous page (omit for the first page) |
+
+**Response:**
+
+```json
+{
+  "deliveries": [...],
+  "total": 20,
+  "next_cursor": "delivery-uuid"
+}
+```
+
+`next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. Ordering is by `delivered_at DESC, id DESC` for stable pagination.
+
 ## Testing
 
 ### Go tests

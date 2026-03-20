@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
@@ -437,7 +438,8 @@ func (m *mockWebhookStore) Delete(_ context.Context, _, _ string) error { return
 
 // mockWebhookDeliveryStore implements WebhookDeliveryStoreProvider for unit tests.
 type mockWebhookDeliveryStore struct {
-	getByWebhookFunc func(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+	getByWebhookFunc  func(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+	listByWebhookFunc func(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error)
 }
 
 func (m *mockWebhookDeliveryStore) Record(_ context.Context, _, _, _ string, _ []byte, _, _ int, _ string, _ int) error {
@@ -449,8 +451,11 @@ func (m *mockWebhookDeliveryStore) GetByWebhook(ctx context.Context, webhookID, 
 	}
 	return nil, fmt.Errorf("not found")
 }
-func (m *mockWebhookDeliveryStore) ListByWebhook(_ context.Context, _ string, _ int) ([]store.WebhookDelivery, error) {
-	return nil, nil
+func (m *mockWebhookDeliveryStore) ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error) {
+	if m.listByWebhookFunc != nil {
+		return m.listByWebhookFunc(ctx, webhookID, cursor, limit)
+	}
+	return nil, "", nil
 }
 
 // mockWebhookSender implements WebhookSender for unit tests.
@@ -650,5 +655,90 @@ func TestGenerateWebhookSecret(t *testing.T) {
 	}
 	if hash == hash2 {
 		t.Error("two generated hashes should be different")
+	}
+}
+
+func listDeliveriesReq(cursor string) (*http.Request, *httptest.ResponseRecorder) {
+	url := "/api/v1/teams/team-1/webhooks/wh-1/deliveries"
+	if cursor != "" {
+		url += "?cursor=" + cursor
+	}
+	req := httptest.NewRequest("GET", url, nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	return req, httptest.NewRecorder()
+}
+
+func TestListDeliveriesNoNextCursor(t *testing.T) {
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ string, _ int) ([]store.WebhookDelivery, string, error) {
+				return []store.WebhookDelivery{
+					{ID: "d-1", WebhookID: "wh-1", DeliveredAt: time.Now()},
+				}, "", nil
+			},
+		},
+	}
+	req, w := listDeliveriesReq("")
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "next_cursor") {
+		t.Errorf("ListDeliveries should not contain next_cursor when there are no more results: %s", body)
+	}
+}
+
+func TestListDeliveriesHasNextCursor(t *testing.T) {
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ string, _ int) ([]store.WebhookDelivery, string, error) {
+				return []store.WebhookDelivery{
+					{ID: "d-1", WebhookID: "wh-1", DeliveredAt: time.Now()},
+				}, "2026-01-01T00:00:00Z,d-1", nil
+			},
+		},
+	}
+	req, w := listDeliveriesReq("")
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	nc, ok := resp["next_cursor"]
+	if !ok {
+		t.Fatal("ListDeliveries response missing next_cursor")
+	}
+	if nc != "2026-01-01T00:00:00Z,d-1" {
+		t.Errorf("next_cursor = %v, want %q", nc, "2026-01-01T00:00:00Z,d-1")
+	}
+}
+
+func TestListDeliveriesPassesCursorToStore(t *testing.T) {
+	var receivedCursor string
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, cursor string, _ int) ([]store.WebhookDelivery, string, error) {
+				receivedCursor = cursor
+				return []store.WebhookDelivery{}, "", nil
+			},
+		},
+	}
+	cursorVal := "2026-01-01T00:00:00Z,d-5"
+	req, w := listDeliveriesReq(cursorVal)
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if receivedCursor != cursorVal {
+		t.Errorf("store received cursor = %q, want %q", receivedCursor, cursorVal)
 	}
 }
