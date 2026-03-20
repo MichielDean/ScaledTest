@@ -1,17 +1,22 @@
 package handler
 
 import (
+	"context"
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // Supported webhook event types.
@@ -22,10 +27,32 @@ var validWebhookEvents = map[string]bool{
 	"execution.failed":    true,
 }
 
+// WebhookStoreProvider is the store interface needed by WebhooksHandler.
+type WebhookStoreProvider interface {
+	List(ctx context.Context, teamID string) ([]model.Webhook, error)
+	Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+	Create(ctx context.Context, teamID, url, secretHash string, events []string) (*model.Webhook, error)
+	Update(ctx context.Context, teamID, webhookID, url string, events []string, enabled bool) (*model.Webhook, error)
+	Delete(ctx context.Context, teamID, webhookID string) error
+}
+
+// WebhookDeliveryStoreProvider is the delivery store interface needed by WebhooksHandler.
+type WebhookDeliveryStoreProvider interface {
+	Record(ctx context.Context, webhookID, url, eventType string, payload []byte, attempt, statusCode int, errMsg string, durationMs int) error
+	GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+	ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error)
+}
+
+// WebhookSender is the dispatcher interface needed by WebhooksHandler.
+type WebhookSender interface {
+	Send(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error)
+}
+
 // WebhooksHandler handles webhook CRUD endpoints.
 type WebhooksHandler struct {
-	Store         *store.WebhookStore
-	DeliveryStore *store.WebhookDeliveryStore
+	Store         WebhookStoreProvider
+	DeliveryStore WebhookDeliveryStoreProvider
+	Dispatcher    WebhookSender
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
@@ -307,6 +334,108 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	JSON(w, http.StatusOK, map[string]string{"message": "webhook deleted"})
 }
 
+// RetryDelivery handles POST /api/v1/teams/:teamID/webhooks/:webhookID/deliveries/:deliveryID/retry.
+// It re-dispatches the stored payload and records a new delivery attempt.
+func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	teamID, ok := webhookTeamID(w, r, claims)
+	if !ok {
+		return
+	}
+
+	if !webhookRequireMaintainer(w, claims) {
+		return
+	}
+
+	webhookID := chi.URLParam(r, "webhookID")
+	if webhookID == "" {
+		Error(w, http.StatusBadRequest, "missing webhook ID")
+		return
+	}
+
+	deliveryID := chi.URLParam(r, "deliveryID")
+	if deliveryID == "" {
+		Error(w, http.StatusBadRequest, "missing delivery ID")
+		return
+	}
+
+	if h.Store == nil || h.DeliveryStore == nil {
+		Error(w, http.StatusNotImplemented, "retry delivery requires database connection")
+		return
+	}
+
+	// Verify webhook belongs to team and get its secret hash.
+	wh, err := h.Store.Get(r.Context(), teamID, webhookID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "webhook not found")
+		return
+	}
+
+	// Look up the stored delivery scoped to this webhook.
+	delivery, err := h.DeliveryStore.GetByWebhook(r.Context(), webhookID, deliveryID)
+	if err != nil {
+		Error(w, http.StatusNotFound, "delivery not found")
+		return
+	}
+
+	if len(delivery.Payload) == 0 {
+		Error(w, http.StatusUnprocessableEntity, "delivery has no stored payload to retry")
+		return
+	}
+
+	var payload webhook.Payload
+	if err := json.Unmarshal(delivery.Payload, &payload); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to decode stored payload")
+		return
+	}
+
+	if h.Dispatcher == nil {
+		Error(w, http.StatusNotImplemented, "retry delivery requires dispatcher")
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(r.Context(), 30*time.Second)
+	defer cancel()
+
+	start := time.Now()
+	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, wh.SecretHash, payload)
+	durationMs := int(time.Since(start).Milliseconds())
+
+	statusCode := 0
+	errMsg := ""
+	attempt := 1
+	var sentPayload []byte
+	if result != nil {
+		statusCode = result.StatusCode
+		errMsg = result.Error
+		attempt = result.Attempt
+		sentPayload = result.Payload
+	}
+	if dispatchErr != nil && errMsg == "" {
+		errMsg = dispatchErr.Error()
+	}
+	if sentPayload == nil {
+		sentPayload = delivery.Payload
+	}
+
+	// Record the new delivery attempt (best effort).
+	_ = h.DeliveryStore.Record(r.Context(), wh.ID, wh.URL, delivery.EventType, sentPayload, attempt, statusCode, errMsg, durationMs)
+
+	success := dispatchErr == nil && errMsg == ""
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"success":     success,
+		"status_code": statusCode,
+		"attempt":     attempt,
+		"duration_ms": durationMs,
+		"error":       errMsg,
+	})
+}
+
 // ListDeliveries handles GET /api/v1/teams/:teamID/webhooks/:webhookID/deliveries.
 func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
@@ -334,14 +463,20 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	deliveries, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, 20)
+	cursor := r.URL.Query().Get("cursor")
+
+	deliveries, nextCursor, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, cursor, 20)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to list deliveries")
 		return
 	}
 
-	JSON(w, http.StatusOK, map[string]interface{}{
+	resp := map[string]interface{}{
 		"deliveries": deliveries,
 		"total":      len(deliveries),
-	})
+	}
+	if nextCursor != "" {
+		resp["next_cursor"] = nextCursor
+	}
+	JSON(w, http.StatusOK, resp)
 }

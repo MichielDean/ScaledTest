@@ -4,6 +4,19 @@ import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { useAuthStore } from '../stores/auth-store';
 
+const AUDIT_PAGE_SIZE = 20;
+
+interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  actor_email: string;
+  team_id: string | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  created_at: string;
+}
+
 interface User {
   id: string;
   email: string;
@@ -37,6 +50,7 @@ export function AdminPage() {
       <h1 className="text-2xl font-bold">Admin</h1>
       <UsersSection />
       <TeamsSection />
+      <AuditLogSection />
     </div>
   );
 }
@@ -96,6 +110,123 @@ function UsersSection() {
             </tbody>
           </table>
         </div>
+      )}
+    </section>
+  );
+}
+
+function AuditLogSection() {
+  const [offset, setOffset] = useState(0);
+  const [actionFilter, setActionFilter] = useState('');
+
+  const { data, isLoading, isError } = useQuery({
+    queryKey: queryKeys.admin.auditLog(AUDIT_PAGE_SIZE, offset, actionFilter),
+    queryFn: () =>
+      api.adminListAuditLog(AUDIT_PAGE_SIZE, offset, actionFilter) as Promise<{
+        audit_log: AuditLogEntry[];
+        total: number;
+      }>,
+  });
+
+  const entries = data?.audit_log ?? [];
+  const total = data?.total ?? 0;
+  const hasPrev = offset > 0;
+  const hasNext = offset + AUDIT_PAGE_SIZE < total;
+
+  return (
+    <section>
+      <h2 className="text-lg font-semibold mb-4">Audit Log</h2>
+      <div className="flex items-center gap-2 mb-4">
+        <label htmlFor="audit-action-filter" className="text-sm font-medium">
+          Filter by action
+        </label>
+        <select
+          id="audit-action-filter"
+          value={actionFilter}
+          onChange={e => {
+            setActionFilter(e.target.value);
+            setOffset(0);
+          }}
+          className="rounded-md border bg-background px-3 py-1.5 text-sm"
+        >
+          <option value="">All actions</option>
+          <option value="report.submitted">report.submitted</option>
+          <option value="report.deleted">report.deleted</option>
+          <option value="execution.created">execution.created</option>
+          <option value="execution.cancelled">execution.cancelled</option>
+          <option value="execution.completed">execution.completed</option>
+          <option value="execution.failed">execution.failed</option>
+        </select>
+      </div>
+      {isLoading ? (
+        <p className="text-muted-foreground">Loading audit log...</p>
+      ) : isError ? (
+        <p className="text-destructive">Failed to load audit log.</p>
+      ) : (
+        <>
+          <div className="rounded-lg border overflow-hidden">
+            <table className="w-full text-sm">
+              <thead className="bg-muted/50">
+                <tr>
+                  <th className="text-left p-3 font-medium">Actor</th>
+                  <th className="text-left p-3 font-medium">Action</th>
+                  <th className="text-left p-3 font-medium">Resource Type</th>
+                  <th className="text-left p-3 font-medium">Resource ID</th>
+                  <th className="text-left p-3 font-medium">Team</th>
+                  <th className="text-left p-3 font-medium">Timestamp</th>
+                </tr>
+              </thead>
+              <tbody>
+                {entries.map(e => (
+                  <tr key={e.id} className="border-t">
+                    <td className="p-3">{e.actor_email}</td>
+                    <td className="p-3 font-mono text-xs">{e.action}</td>
+                    <td className="p-3 text-muted-foreground">{e.resource_type ?? '—'}</td>
+                    <td className="p-3 text-muted-foreground font-mono text-xs">
+                      {e.resource_id ?? '—'}
+                    </td>
+                    <td className="p-3 text-muted-foreground font-mono text-xs">
+                      {e.team_id ?? '—'}
+                    </td>
+                    <td className="p-3 text-muted-foreground">
+                      {new Date(e.created_at).toLocaleString()}
+                    </td>
+                  </tr>
+                ))}
+                {entries.length === 0 && (
+                  <tr>
+                    <td colSpan={6} className="p-3 text-center text-muted-foreground">
+                      No audit log entries found
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+          <div className="flex items-center justify-between mt-3">
+            <span className="text-sm text-muted-foreground">
+              {total === 0
+                ? 'No entries'
+                : `Showing ${offset + 1}–${Math.min(offset + AUDIT_PAGE_SIZE, total)} of ${total}`}
+            </span>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setOffset(o => Math.max(0, o - AUDIT_PAGE_SIZE))}
+                disabled={!hasPrev}
+                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                Previous
+              </button>
+              <button
+                onClick={() => setOffset(o => o + AUDIT_PAGE_SIZE)}
+                disabled={!hasNext}
+                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        </>
       )}
     </section>
   );

@@ -7,17 +7,24 @@ import (
 	"time"
 
 	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 )
 
 const refreshTokenCookie = "refresh_token"
 
+// authDB is the minimal database interface used by AuthHandler.
+// *pgxpool.Pool satisfies this interface.
+type authDB interface {
+	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
+	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
+}
+
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
 	JWT *auth.JWTManager
-	DB  *db.Pool
+	DB  authDB
 }
 
 // RegisterRequest is the request body for user registration.
@@ -46,6 +53,164 @@ type UserResponse struct {
 	Email       string `json:"email"`
 	DisplayName string `json:"display_name"`
 	Role        string `json:"role"`
+}
+
+// ChangePasswordRequest is the request body for changing the authenticated user's password.
+type ChangePasswordRequest struct {
+	CurrentPassword string `json:"current_password" validate:"required"`
+	NewPassword     string `json:"new_password" validate:"required,min=8"`
+}
+
+// UpdateProfileRequest is the request body for updating the authenticated user's profile.
+type UpdateProfileRequest struct {
+	DisplayName string `json:"display_name" validate:"required,min=1"`
+}
+
+// ChangePassword handles POST /api/v1/auth/change-password.
+func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	// Look up current password hash
+	var passwordHash string
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT password_hash FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&passwordHash)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Verify current password
+	if !auth.CheckPassword(req.CurrentPassword, passwordHash) {
+		Error(w, http.StatusUnauthorized, "invalid current password")
+		return
+	}
+
+	// Hash new password
+	newHash, err := auth.HashPassword(req.NewPassword)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	// Update password
+	tag, err := h.DB.Exec(r.Context(),
+		"UPDATE users SET password_hash = $1 WHERE id = $2",
+		newHash, claims.UserID,
+	)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+	if tag.RowsAffected() != 1 {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, map[string]string{"message": "password changed"})
+}
+
+// UpdateMeRequest is the request body for updating the authenticated user's profile.
+type UpdateMeRequest struct {
+	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
+}
+
+// UpdateMe handles PATCH /api/v1/auth/me.
+func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	var req UpdateMeRequest
+	if err := Decode(r, &req); err != nil {
+		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	var userID, email, displayName, role string
+	err := h.DB.QueryRow(r.Context(),
+		`UPDATE users SET display_name = $1, updated_at = now()
+		 WHERE id = $2
+		 RETURNING id, email, display_name, role`,
+		req.DisplayName, claims.UserID,
+	).Scan(&userID, &email, &displayName, &role)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "user not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, UserResponse{
+		ID:          userID,
+		Email:       email,
+		DisplayName: displayName,
+		Role:        role,
+	})
+}
+
+// GetMe handles GET /api/v1/auth/me.
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	var email, displayName, role string
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT email, display_name, role FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&email, &displayName, &role)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, UserResponse{
+		ID:          claims.UserID,
+		Email:       email,
+		DisplayName: displayName,
+		Role:        role,
+	})
 }
 
 // Register handles POST /auth/register.

@@ -49,7 +49,16 @@ export ST_OAUTH_GITHUB_CLIENT_ID=...
 export ST_OAUTH_GITHUB_CLIENT_SECRET=...
 export ST_OAUTH_GOOGLE_CLIENT_ID=...
 export ST_OAUTH_GOOGLE_CLIENT_SECRET=...
+
+# Optional: SMTP email (required for email notifications)
+export ST_SMTP_HOST=smtp.example.com
+export ST_SMTP_PORT=587          # default: 587
+export ST_SMTP_USER=user@example.com
+export ST_SMTP_PASS=your-smtp-password
+export ST_SMTP_FROM=noreply@example.com
 ```
+
+When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.
 
 ### Database Migrations
 
@@ -74,14 +83,23 @@ All API endpoints live under `/api/v1` and require a Bearer token (`Authorizatio
 
 ```bash
 # Register
-POST /auth/register  { "email", "password", "display_name" }
+POST /auth/register         { "email", "password", "display_name" }
 
 # Login → returns { access_token, expires_at, user }
-POST /auth/login     { "email", "password" }
+POST /auth/login            { "email", "password" }
+
+# Get current user profile (requires valid JWT)
+GET  /auth/me
+
+# Update display name (requires valid JWT)
+PUT  /auth/profile          { "display_name" }
+
+# Change password (requires valid JWT; rate-limited to 10 req/min per IP)
+POST /auth/change-password  { "current_password", "new_password" }
 
 # OAuth (if configured)
-GET /auth/github     # Redirects to GitHub
-GET /auth/google     # Redirects to Google
+GET /auth/github            # Redirects to GitHub
+GET /auth/google            # Redirects to Google
 ```
 
 ### CTRF Report Submission
@@ -102,6 +120,32 @@ Response:
 }
 ```
 
+### Invitations
+
+Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
+
+```bash
+# Create an invitation (maintainer or owner; returns token shown once)
+POST /api/v1/teams/{teamID}/invitations  { "email", "role" }
+# role: "readonly" | "maintainer" | "owner"
+
+# List pending invitations for a team
+GET /api/v1/teams/{teamID}/invitations
+
+# Revoke a pending invitation
+DELETE /api/v1/teams/{teamID}/invitations/{invitationID}
+
+# Preview invitation details — public, no auth (used by the accept page)
+GET /api/v1/invitations/{token}
+# → { email, role, team_name, expires_at }
+
+# Accept invitation — creates user account and team membership
+POST /api/v1/invitations/{token}/accept  { "display_name", "password" }
+# → { message, user_id, team_id, role }
+```
+
+Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. The accept page is served at `/invitations/:token` in the SPA.
+
 ### Key Endpoints
 
 | Method | Path | Description |
@@ -115,8 +159,70 @@ Response:
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
 | `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
 | `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
+| `GET` | `/api/v1/teams/{id}/webhooks` | List webhooks for a team |
+| `POST` | `/api/v1/teams/{id}/webhooks` | Create webhook (maintainer+) |
+| `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
+| `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
+| `POST` | `/api/v1/teams/{id}/invitations` | Invite user to team |
+| `GET` | `/api/v1/teams/{id}/invitations` | List team invitations |
+| `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation |
+| `GET` | `/api/v1/invitations/{token}` | Preview invitation (public) |
+| `POST` | `/api/v1/invitations/{token}/accept` | Accept invitation (public) |
+| `GET` | `/api/v1/admin/users` | List all users (owner only) |
+| `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
+
+### Quality Gate Rules
+
+Quality gates are created with a `rules` array. Each rule uses a `{type, params}` schema:
+
+```json
+{
+  "name": "CI Gate",
+  "rules": [
+    { "type": "pass_rate",       "params": { "threshold": 95.0 } },
+    { "type": "max_duration",    "params": { "threshold_ms": 120000 } },
+    { "type": "max_flaky_count", "params": { "threshold": 5 } },
+    { "type": "min_test_count",  "params": { "threshold": 10 } },
+    { "type": "zero_failures",   "params": null },
+    { "type": "no_new_failures", "params": null }
+  ]
+}
+```
+
+| Rule type | Params | Description |
+|-----------|--------|-------------|
+| `pass_rate` | `{"threshold": <float>}` | Pass rate % must be ≥ threshold |
+| `zero_failures` | none | No failed tests allowed |
+| `no_new_failures` | none | No failures that weren't in the previous run |
+| `max_duration` | `{"threshold_ms": <int>}` | Total suite duration must be ≤ threshold |
+| `max_flaky_count` | `{"threshold": <int>}` | Number of flaky tests must be ≤ threshold |
+| `min_test_count` | `{"threshold": <int>}` | Total tests must be ≥ threshold |
+
+Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` require non-null params. `zero_failures` and `no_new_failures` take no params.
+
+### Webhook Delivery Pagination
+
+`GET /api/v1/teams/{id}/webhooks/{wid}/deliveries` returns up to 20 deliveries per page using cursor-based pagination.
+
+**Query parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `cursor` | ID of the last delivery on the previous page (omit for the first page) |
+
+**Response:**
+
+```json
+{
+  "deliveries": [...],
+  "total": 20,
+  "next_cursor": "delivery-uuid"
+}
+```
+
+`next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. Ordering is by `delivered_at DESC, id DESC` for stable pagination.
 
 ## Testing
 
@@ -172,6 +278,7 @@ internal/
   handler/            # HTTP handlers (reports, executions, teams, admin, etc.)
   server/             # Router and middleware setup
   store/              # Data access (audit, webhooks, quality gates)
+  mail/               # Email sender interface and SMTP implementation
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
   k8s/                # Kubernetes job management

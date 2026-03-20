@@ -32,6 +32,12 @@ type Config struct {
 	WorkerToken string `koanf:"worker_token"`
 
 	BaseURL string `koanf:"base_url"`
+
+	SMTPHost string `koanf:"smtp_host"`
+	SMTPPort int    `koanf:"smtp_port"`
+	SMTPUser string `koanf:"smtp_user"`
+	SMTPPass string `koanf:"smtp_pass"`
+	SMTPFrom string `koanf:"smtp_from"`
 }
 
 // Load reads configuration from environment variables prefixed with ST_.
@@ -53,6 +59,7 @@ func Load() (*Config, error) {
 		K8sNamespace:       "default",
 		WorkerImage:        "scaledtest/worker:latest",
 		BaseURL:            "http://localhost:8080",
+		SMTPPort:           587,
 	}
 
 	if err := k.Unmarshal("", cfg); err != nil {

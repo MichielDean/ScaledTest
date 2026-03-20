@@ -156,7 +156,7 @@ type WebhookLister interface {
 
 // DeliveryRecorder persists webhook delivery results.
 type DeliveryRecorder interface {
-	Record(ctx context.Context, webhookID, url, eventType string, attempt, statusCode int, errMsg string, durationMs int) error
+	Record(ctx context.Context, webhookID, url, eventType string, payload []byte, attempt, statusCode int, errMsg string, durationMs int) error
 }
 
 // WebhookRecord is the minimal webhook data needed for dispatch.
@@ -235,7 +235,7 @@ func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 				// Persist delivery result if recorder is configured.
 				if n.recorder != nil && delivery != nil {
 					_ = n.recorder.Record(dCtx, h.ID, h.URL, string(event),
-						delivery.Attempt, delivery.StatusCode, delivery.Error, durationMs)
+						delivery.Payload, delivery.Attempt, delivery.StatusCode, delivery.Error, durationMs)
 				}
 			}()
 		}

@@ -123,6 +123,18 @@ export const api = {
     }),
   refresh: () => fetchAPI('/auth/refresh', { method: 'POST' }),
   logout: () => fetchAPI('/auth/logout', { method: 'POST' }),
+  getMe: () =>
+    fetchAPI<{ id: string; email: string; display_name: string; role: string }>('/api/v1/auth/me'),
+  changePassword: (currentPassword: string, newPassword: string) =>
+    fetchAPI<{ message: string }>('/api/v1/auth/change-password', {
+      method: 'POST',
+      body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+    }),
+  updateProfile: (displayName: string) =>
+    fetchAPI<{ id: string; email: string; display_name: string; role: string }>(
+      '/api/v1/auth/profile',
+      { method: 'PUT', body: JSON.stringify({ display_name: displayName }) }
+    ),
 
   // Reports
   getReports: () => fetchAPI<{ reports: unknown[]; total: number }>('/api/v1/reports'),
@@ -192,6 +204,15 @@ export const api = {
     }),
   deleteWebhook: (teamId: string, webhookId: string) =>
     fetchAPI(`/api/v1/teams/${teamId}/webhooks/${webhookId}`, { method: 'DELETE' }),
+  getWebhookDeliveries: (teamId: string, webhookId: string) =>
+    fetchAPI<{ deliveries: unknown[]; total: number }>(
+      `/api/v1/teams/${teamId}/webhooks/${webhookId}/deliveries`
+    ),
+  retryWebhookDelivery: (teamId: string, webhookId: string, deliveryId: string) =>
+    fetchAPI<{ success: boolean; status_code: number; attempt: number; duration_ms: number; error: string }>(
+      `/api/v1/teams/${teamId}/webhooks/${webhookId}/deliveries/${deliveryId}/retry`,
+      { method: 'POST' }
+    ),
 
   // Sharding
   getShardDurations: () =>
@@ -204,6 +225,23 @@ export const api = {
   rebalanceShards: (data: unknown) =>
     fetchAPI<unknown>('/api/v1/sharding/rebalance', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Invitations
+  previewInvitation: (token: string, signal?: AbortSignal) =>
+    fetchAPI<{ email: string; role: string; team_name: string; expires_at: string }>(
+      `/api/v1/invitations/${token}`,
+      signal ? { signal } : {}
+    ),
+  acceptInvitation: (token: string, password: string, displayName: string) =>
+    fetchAPI(`/api/v1/invitations/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ password, display_name: displayName }),
+    }),
+
   // Admin
   adminListUsers: () => fetchAPI('/api/v1/admin/users'),
+  adminListAuditLog: (limit = 20, offset = 0, action = '') => {
+    const params = new URLSearchParams({ limit: String(limit), offset: String(offset) });
+    if (action) params.set('action', action);
+    return fetchAPI<{ audit_log: unknown[]; total: number }>(`/api/v1/admin/audit-log?${params}`);
+  },
 };

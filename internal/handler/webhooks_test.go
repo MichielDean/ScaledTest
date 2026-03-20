@@ -2,14 +2,21 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 func webhookWithClaims(r *http.Request, role string) *http.Request {
@@ -317,6 +324,312 @@ func TestValidateWebhookEvents(t *testing.T) {
 	}
 }
 
+// webhookWithDeliveryParam adds a deliveryID URL param to the request context.
+func webhookWithDeliveryParam(r *http.Request, deliveryID string) *http.Request {
+	rctx := chi.RouteContext(r.Context())
+	if rctx == nil {
+		rctx = chi.NewRouteContext()
+		r = r.WithContext(context.WithValue(r.Context(), chi.RouteCtxKey, rctx))
+	}
+	rctx.URLParams.Add("deliveryID", deliveryID)
+	return r
+}
+
+func TestWebhooksRetryDeliveryUnauthorized(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RetryDelivery without auth = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestWebhooksRetryDeliveryWrongTeam(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/other-team/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer") // claims have team-1
+	req = webhookWithTeamParam(req, "other-team")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RetryDelivery wrong team = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestWebhooksRetryDeliveryReadonlyForbidden(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "readonly")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("RetryDelivery as readonly = %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestWebhooksRetryDeliveryMissingDeliveryID(t *testing.T) {
+	h := &WebhooksHandler{}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries//retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("RetryDelivery missing delivery ID = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWebhooksRetryDeliveryWithoutDB(t *testing.T) {
+	h := &WebhooksHandler{Store: nil, DeliveryStore: nil}
+
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	w := httptest.NewRecorder()
+
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("RetryDelivery without DB = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
+// mockWebhookStore implements WebhookStoreProvider for unit tests.
+type mockWebhookStore struct {
+	getFunc func(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+}
+
+func (m *mockWebhookStore) List(_ context.Context, _ string) ([]model.Webhook, error) { return nil, nil }
+func (m *mockWebhookStore) Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error) {
+	if m.getFunc != nil {
+		return m.getFunc(ctx, teamID, webhookID)
+	}
+	return &model.Webhook{ID: webhookID, TeamID: teamID, URL: "https://example.com/hook", SecretHash: "hash"}, nil
+}
+func (m *mockWebhookStore) Create(_ context.Context, _, _, _ string, _ []string) (*model.Webhook, error) {
+	return nil, nil
+}
+func (m *mockWebhookStore) Update(_ context.Context, _, _, _ string, _ []string, _ bool) (*model.Webhook, error) {
+	return nil, nil
+}
+func (m *mockWebhookStore) Delete(_ context.Context, _, _ string) error { return nil }
+
+// mockWebhookDeliveryStore implements WebhookDeliveryStoreProvider for unit tests.
+type mockWebhookDeliveryStore struct {
+	getByWebhookFunc  func(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
+	listByWebhookFunc func(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error)
+}
+
+func (m *mockWebhookDeliveryStore) Record(_ context.Context, _, _, _ string, _ []byte, _, _ int, _ string, _ int) error {
+	return nil
+}
+func (m *mockWebhookDeliveryStore) GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error) {
+	if m.getByWebhookFunc != nil {
+		return m.getByWebhookFunc(ctx, webhookID, deliveryID)
+	}
+	return nil, fmt.Errorf("not found")
+}
+func (m *mockWebhookDeliveryStore) ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error) {
+	if m.listByWebhookFunc != nil {
+		return m.listByWebhookFunc(ctx, webhookID, cursor, limit)
+	}
+	return nil, "", nil
+}
+
+// mockWebhookSender implements WebhookSender for unit tests.
+type mockWebhookSender struct {
+	sendFunc func(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error)
+}
+
+func (m *mockWebhookSender) Send(ctx context.Context, url, secret string, payload webhook.Payload) (*webhook.Delivery, error) {
+	if m.sendFunc != nil {
+		return m.sendFunc(ctx, url, secret, payload)
+	}
+	return &webhook.Delivery{StatusCode: 200, Attempt: 1}, nil
+}
+
+// validRetryPayload is a well-formed webhook.Payload JSON for dispatch tests.
+var validRetryPayload = json.RawMessage(`{"event":"report.submitted","timestamp":"2024-01-01T00:00:00Z","data":{}}`)
+
+func makeDelivery(payload json.RawMessage) *store.WebhookDelivery {
+	return &store.WebhookDelivery{
+		ID:        "d-1",
+		WebhookID: "wh-1",
+		EventType: "report.submitted",
+		Payload:   payload,
+	}
+}
+
+func retryReq() (*http.Request, *httptest.ResponseRecorder) {
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks/wh-1/deliveries/d-1/retry", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	req = webhookWithDeliveryParam(req, "d-1")
+	return req, httptest.NewRecorder()
+}
+
+func TestRetryDeliverySuccess(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return &webhook.Delivery{StatusCode: 200, Attempt: 1}, nil
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery success status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if !strings.Contains(w.Body.String(), `"success":true`) {
+		t.Errorf("RetryDelivery success body missing success:true: %s", w.Body.String())
+	}
+}
+
+func TestRetryDeliveryRemoteError(t *testing.T) {
+	// dispatchErr==nil but result.Error non-empty: success must be false.
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return &webhook.Delivery{StatusCode: 404, Error: "HTTP 404", Attempt: 1}, nil
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery remote error status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"success":false`) {
+		t.Errorf("RetryDelivery remote error: expected success:false, got: %s", body)
+	}
+	if !strings.Contains(body, "HTTP 404") {
+		t.Errorf("RetryDelivery remote error: expected HTTP 404 in body, got: %s", body)
+	}
+}
+
+func TestRetryDeliveryTransportError(t *testing.T) {
+	// dispatchErr!=nil: success must be false and error message propagated.
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{
+			sendFunc: func(_ context.Context, _, _ string, _ webhook.Payload) (*webhook.Delivery, error) {
+				return nil, errors.New("connection refused")
+			},
+		},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("RetryDelivery transport error status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, `"success":false`) {
+		t.Errorf("RetryDelivery transport error: expected success:false, got: %s", body)
+	}
+	if !strings.Contains(body, "connection refused") {
+		t.Errorf("RetryDelivery transport error: expected error message in body, got: %s", body)
+	}
+}
+
+func TestRetryDeliveryEmptyPayload(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(nil), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Errorf("RetryDelivery empty payload status = %d, want %d", w.Code, http.StatusUnprocessableEntity)
+	}
+}
+
+func TestRetryDeliveryBadJSONPayload(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(json.RawMessage(`not valid json`)), nil
+			},
+		},
+		Dispatcher: &mockWebhookSender{},
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("RetryDelivery bad JSON status = %d, want %d", w.Code, http.StatusInternalServerError)
+	}
+}
+
+func TestRetryDeliveryNilDispatcher(t *testing.T) {
+	h := &WebhooksHandler{
+		Store: &mockWebhookStore{},
+		DeliveryStore: &mockWebhookDeliveryStore{
+			getByWebhookFunc: func(_ context.Context, _, _ string) (*store.WebhookDelivery, error) {
+				return makeDelivery(validRetryPayload), nil
+			},
+		},
+		Dispatcher: nil,
+	}
+	req, w := retryReq()
+	h.RetryDelivery(w, req)
+
+	if w.Code != http.StatusNotImplemented {
+		t.Errorf("RetryDelivery nil dispatcher status = %d, want %d", w.Code, http.StatusNotImplemented)
+	}
+}
+
 func TestGenerateWebhookSecret(t *testing.T) {
 	plaintext, hash, err := generateWebhookSecret()
 	if err != nil {
@@ -342,5 +655,90 @@ func TestGenerateWebhookSecret(t *testing.T) {
 	}
 	if hash == hash2 {
 		t.Error("two generated hashes should be different")
+	}
+}
+
+func listDeliveriesReq(cursor string) (*http.Request, *httptest.ResponseRecorder) {
+	url := "/api/v1/teams/team-1/webhooks/wh-1/deliveries"
+	if cursor != "" {
+		url += "?cursor=" + cursor
+	}
+	req := httptest.NewRequest("GET", url, nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	return req, httptest.NewRecorder()
+}
+
+func TestListDeliveriesNoNextCursor(t *testing.T) {
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ string, _ int) ([]store.WebhookDelivery, string, error) {
+				return []store.WebhookDelivery{
+					{ID: "d-1", WebhookID: "wh-1", DeliveredAt: time.Now()},
+				}, "", nil
+			},
+		},
+	}
+	req, w := listDeliveriesReq("")
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	body := w.Body.String()
+	if strings.Contains(body, "next_cursor") {
+		t.Errorf("ListDeliveries should not contain next_cursor when there are no more results: %s", body)
+	}
+}
+
+func TestListDeliveriesHasNextCursor(t *testing.T) {
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ string, _ int) ([]store.WebhookDelivery, string, error) {
+				return []store.WebhookDelivery{
+					{ID: "d-1", WebhookID: "wh-1", DeliveredAt: time.Now()},
+				}, "2026-01-01T00:00:00Z,d-1", nil
+			},
+		},
+	}
+	req, w := listDeliveriesReq("")
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("failed to decode response: %v", err)
+	}
+	nc, ok := resp["next_cursor"]
+	if !ok {
+		t.Fatal("ListDeliveries response missing next_cursor")
+	}
+	if nc != "2026-01-01T00:00:00Z,d-1" {
+		t.Errorf("next_cursor = %v, want %q", nc, "2026-01-01T00:00:00Z,d-1")
+	}
+}
+
+func TestListDeliveriesPassesCursorToStore(t *testing.T) {
+	var receivedCursor string
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, cursor string, _ int) ([]store.WebhookDelivery, string, error) {
+				receivedCursor = cursor
+				return []store.WebhookDelivery{}, "", nil
+			},
+		},
+	}
+	cursorVal := "2026-01-01T00:00:00Z,d-5"
+	req, w := listDeliveriesReq(cursorVal)
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListDeliveries status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if receivedCursor != cursorVal {
+		t.Errorf("store received cursor = %q, want %q", receivedCursor, cursorVal)
 	}
 }

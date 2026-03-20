@@ -1,3 +1,4 @@
+import { ProfilePage } from './profile';
 import { createRootRoute, createRoute, redirect } from '@tanstack/react-router';
 import { RootLayout } from '../components/layout/root-layout';
 import { DashboardPage } from './dashboard';
@@ -12,6 +13,7 @@ import { AdminPage } from './admin';
 import { ReportsComparePage } from './reports-compare';
 import { AnalyticsPage } from './analytics';
 import { TestResultsPage } from './test-results';
+import { AcceptInvitationPage } from './accept-invitation';
 import { useAuthStore } from '../stores/auth-store';
 
 function requireAuth() {
@@ -105,6 +107,19 @@ const adminRoute = createRoute({
   component: AdminPage,
 });
 
+const invitationAcceptRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/invitations/$token',
+  component: AcceptInvitationPage,
+});
+
+const profileRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  path: '/profile',
+  beforeLoad: requireAuth,
+  component: ProfilePage,
+});
+
 export const routeTree = rootRoute.addChildren([
   indexRoute,
   loginRoute,
@@ -118,4 +133,6 @@ export const routeTree = rootRoute.addChildren([
   webhooksRoute,
   shardingRoute,
   adminRoute,
+  invitationAcceptRoute,
+  profileRoute,
 ]);

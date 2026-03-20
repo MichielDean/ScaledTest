@@ -25,6 +25,7 @@ export const queryKeys = {
   },
   webhooks: {
     all: (teamId: string) => ['webhooks', teamId] as const,
+    deliveries: (teamId: string, webhookId: string) => ['webhooks', teamId, webhookId, 'deliveries'] as const,
   },
   sharding: {
     durations: ['sharding', 'durations'] as const,
@@ -32,5 +33,6 @@ export const queryKeys = {
   },
   admin: {
     users: () => ['admin', 'users'] as const,
+    auditLog: (limit: number, offset: number, action: string) => ['admin', 'audit-log', limit, offset, action] as const,
   },
 } as const;
