@@ -154,6 +154,8 @@ function AuditLogSection() {
           <option value="report.deleted">report.deleted</option>
           <option value="execution.created">execution.created</option>
           <option value="execution.cancelled">execution.cancelled</option>
+          <option value="execution.completed">execution.completed</option>
+          <option value="execution.failed">execution.failed</option>
         </select>
       </div>
       {isLoading ? (
