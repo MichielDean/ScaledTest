@@ -266,6 +266,7 @@ ScaledTest integrates with CI pipelines to collect test results and enforce qual
 **Detailed guides:**
 - [GitHub Actions integration](docs/ci-integration/github-actions.md)
 - [GitLab CI integration](docs/ci-integration/gitlab-ci.md)
+- [Telegram CI notifications](docs/ci-integration/telegram-notifications.md)
 
 ## Project Structure
 
@@ -273,6 +274,7 @@ ScaledTest integrates with CI pipelines to collect test results and enforce qual
 cmd/
   server/             # v2 Go server entrypoint
   worker/             # v2 worker binary for distributed execution
+  ci-notify/          # CLI: send CI health notifications to Telegram
 internal/
   auth/               # JWT, RBAC, OAuth, CSRF
   config/             # Environment-based configuration
@@ -284,6 +286,8 @@ internal/
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
   k8s/                # Kubernetes job management
+  gotest/             # go test -json output parser
+  telegram/           # Telegram Bot API client for CI notifications
 frontend/             # React 19 SPA (TanStack Router, Vite)
 sdk/                  # @scaledtest/sdk TypeScript client
 e2e/                  # Playwright E2E tests
