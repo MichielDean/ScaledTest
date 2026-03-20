@@ -293,6 +293,9 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
     onSuccess: () => {
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.deliveries(teamId, webhookId) });
     },
+    onError: () => {
+      // error surfaced via retryMutation.isError in the render
+    },
   });
 
   const deliveries = (data?.deliveries ?? []) as WebhookDelivery[];
@@ -314,6 +317,9 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
   return (
     <div className="mt-3 pt-3 border-t">
       <p className="text-xs font-medium text-muted-foreground mb-2">Recent Deliveries</p>
+      {retryMutation.isError && (
+        <p className="mb-2 text-xs text-red-600">Retry failed. Please try again.</p>
+      )}
       <div className="space-y-1.5">
         {deliveries.map(delivery => {
           const is2xx = delivery.status_code >= 200 && delivery.status_code < 300;
@@ -326,7 +332,7 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
                     is2xx ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                   }`}
                 >
-                  {delivery.status_code || '—'}
+                  {delivery.status_code ?? '—'}
                 </span>
                 <span className="truncate text-gray-600">{delivery.event_type}</span>
                 <span className="text-muted-foreground shrink-0">{delivery.duration_ms}ms</span>

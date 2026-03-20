@@ -157,6 +157,53 @@ describe('WebhooksPage', () => {
     });
   });
 
+  it('shows error message when retry fails', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockResolvedValue(mockDeliveries);
+    vi.mocked(api.retryWebhookDelivery).mockRejectedValue(new Error('Network error'));
+
+    renderWithClient(<WebhooksPage />);
+
+    const deliveriesBtn = await screen.findByRole('button', { name: /deliveries/i });
+    fireEvent.click(deliveriesBtn);
+
+    const retryBtn = await screen.findByRole('button', { name: /^retry$/i });
+    fireEvent.click(retryBtn);
+
+    expect(await screen.findByText(/retry failed/i)).toBeInTheDocument();
+  });
+
+  it('shows 0 for status_code 0 instead of dash', async () => {
+    const deliveriesWithZero = {
+      deliveries: [
+        {
+          id: 'del-3',
+          webhook_id: 'wh-1',
+          url: 'https://example.com/hook',
+          event_type: 'report.submitted',
+          attempt: 1,
+          status_code: 0,
+          error: 'connection refused',
+          duration_ms: 0,
+          delivered_at: '2026-01-01T03:00:00Z',
+        },
+      ],
+      total: 1,
+    };
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockResolvedValue(deliveriesWithZero);
+
+    renderWithClient(<WebhooksPage />);
+
+    const deliveriesBtn = await screen.findByRole('button', { name: /deliveries/i });
+    fireEvent.click(deliveriesBtn);
+
+    expect(await screen.findByText('0')).toBeInTheDocument();
+    expect(screen.queryByText('—')).not.toBeInTheDocument();
+  });
+
   it('hides delivery list when Deliveries button is clicked again', async () => {
     vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
     vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
