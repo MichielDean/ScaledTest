@@ -1,14 +1,57 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
 )
+
+// mockInvitationStore is a test double for invitationStore.
+type mockInvitationStore struct {
+	inv *model.Invitation
+	err error
+}
+
+func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _, _ string, _ time.Time) (*model.Invitation, error) {
+	return m.inv, m.err
+}
+
+func (m *mockInvitationStore) ListByTeam(_ context.Context, _ string) ([]model.Invitation, error) {
+	return nil, nil
+}
+
+func (m *mockInvitationStore) GetByTokenHash(_ context.Context, _ string) (*model.Invitation, error) {
+	return nil, nil
+}
+
+func (m *mockInvitationStore) Delete(_ context.Context, _, _ string) error {
+	return nil
+}
+
+// mockMailer is a test double for mailer.Mailer.
+type mockMailer struct {
+	called bool
+	sentTo string
+	sentURL string
+	err    error
+}
+
+func (m *mockMailer) SendInvitation(_ context.Context, to, url string) error {
+	m.called = true
+	m.sentTo = to
+	m.sentURL = url
+	return m.err
+}
 
 func TestCreateInvitation_Unauthorized(t *testing.T) {
 	h := &InvitationsHandler{}
@@ -249,6 +292,109 @@ func TestInvitationTokenUniqueness(t *testing.T) {
 	t2, _, _ := generateInvitationToken()
 	if t1 == t2 {
 		t.Error("two generated tokens are identical")
+	}
+}
+
+func TestCreateInvitation_CallsMailer(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-1",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	store := &mockInvitationStore{inv: inv}
+	ml := &mockMailer{}
+	h := &InvitationsHandler{
+		Store:   store,
+		DB:      new(pgxpool.Pool),
+		Mailer:  ml,
+		BaseURL: "http://app.example.com",
+	}
+
+	body := `{"email":"invitee@example.com","role":"readonly"}`
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-1/invitations", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+	if !ml.called {
+		t.Error("expected SendInvitation to be called")
+	}
+	if ml.sentTo != "invitee@example.com" {
+		t.Errorf("sentTo = %q, want %q", ml.sentTo, "invitee@example.com")
+	}
+	if !strings.HasPrefix(ml.sentURL, "http://app.example.com/invitations/inv_") {
+		t.Errorf("sentURL = %q, want prefix http://app.example.com/invitations/inv_", ml.sentURL)
+	}
+}
+
+func TestCreateInvitation_NilMailer_ReturnsCreated(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-2",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	h := &InvitationsHandler{
+		Store:   &mockInvitationStore{inv: inv},
+		DB:      new(pgxpool.Pool),
+		Mailer:  nil, // no SMTP configured
+		BaseURL: "http://app.example.com",
+	}
+
+	body := `{"email":"invitee@example.com","role":"readonly"}`
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-1/invitations", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with nil mailer: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+}
+
+func TestCreateInvitation_MailerError_StillReturnsCreated(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-3",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	ml := &mockMailer{err: fmt.Errorf("smtp connection refused")}
+	h := &InvitationsHandler{
+		Store:   &mockInvitationStore{inv: inv},
+		DB:      new(pgxpool.Pool),
+		Mailer:  ml,
+		BaseURL: "http://app.example.com",
+	}
+
+	body := `{"email":"invitee@example.com","role":"readonly"}`
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-1/invitations", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, r)
+
+	// Mailer errors must not fail the invitation creation.
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with mailer error: got %d, want %d", w.Code, http.StatusCreated)
 	}
 }
 

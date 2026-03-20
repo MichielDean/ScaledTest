@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/k8s"
+	"github.com/scaledtest/scaledtest/internal/mailer"
 	"github.com/scaledtest/scaledtest/internal/openapi"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -149,11 +150,14 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		whH.DeliveryStore = whDeliveryStore
 	}
 
-	var invStore *store.InvitationStore
-	if dbPool != nil {
-		invStore = store.NewInvitationStore(dbPool)
+	invH := &handler.InvitationsHandler{
+		DB:      dbPool,
+		BaseURL: cfg.BaseURL,
+		Mailer:  mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom),
 	}
-	invH := &handler.InvitationsHandler{Store: invStore, DB: dbPool}
+	if dbPool != nil {
+		invH.Store = store.NewInvitationStore(dbPool)
+	}
 
 	// Health check
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
