@@ -489,7 +489,10 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	JSON(w, http.StatusOK, deliveries)
+	JSON(w, http.StatusOK, map[string]interface{}{
+		"deliveries": deliveries,
+		"total":      len(deliveries),
+	})
 }
 
 
