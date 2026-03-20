@@ -61,6 +61,11 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" validate:"required,min=8"`
 }
 
+// UpdateProfileRequest is the request body for updating the authenticated user's profile.
+type UpdateProfileRequest struct {
+	DisplayName string `json:"display_name" validate:"required,min=1"`
+}
+
 // ChangePassword handles POST /api/v1/auth/change-password.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
@@ -167,6 +172,41 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 
 	JSON(w, http.StatusOK, UserResponse{
 		ID:          userID,
+		Email:       email,
+		DisplayName: displayName,
+		Role:        role,
+	})
+}
+
+// GetMe handles GET /api/v1/auth/me.
+func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return
+	}
+
+	var email, displayName, role string
+	err := h.DB.QueryRow(r.Context(),
+		"SELECT email, display_name, role FROM users WHERE id = $1",
+		claims.UserID,
+	).Scan(&email, &displayName, &role)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
+
+	JSON(w, http.StatusOK, UserResponse{
+		ID:          claims.UserID,
 		Email:       email,
 		DisplayName: displayName,
 		Role:        role,

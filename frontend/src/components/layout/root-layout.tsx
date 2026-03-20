@@ -76,9 +76,13 @@ export function RootLayout() {
           <div className="ml-auto flex items-center gap-4">
             {isAuthenticated ? (
               <>
-                <span className="text-sm text-muted-foreground">
+                <Link
+                  to="/profile"
+                  id="nav-profile"
+                  className="text-sm text-muted-foreground hover:text-foreground"
+                >
                   {user?.display_name || user?.email}
-                </span>
+                </Link>
                 <button
                   id="btn-sign-out"
                   onClick={() => logout()}
