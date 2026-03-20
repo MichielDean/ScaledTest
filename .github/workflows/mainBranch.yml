@@ -1,0 +1,50 @@
+name: Main Branch CI
+
+on:
+  push:
+    branches: [main]
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test-and-notify:
+    name: Test & Notify
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '1.23'
+          cache: true
+
+      - name: Go vet
+        run: go vet ./...
+
+      - name: Run tests
+        id: go-test
+        # continue-on-error so the notification step always runs.
+        continue-on-error: true
+        run: go test -json ./... > test-results.json
+
+      - name: Send Telegram notification
+        if: always()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+          CI_REPO: ${{ github.repository }}
+          CI_BRANCH: ${{ github.ref_name }}
+          CI_COMMIT_SHA: ${{ github.sha }}
+          CI_COMMIT_MSG: ${{ github.event.head_commit.message }}
+          CI_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          CI_STATUS: ${{ steps.go-test.outcome == 'success' && 'passing' || 'failing' }}
+        run: go run ./cmd/ci-notify -results test-results.json
+
+      - name: Fail if tests failed
+        if: steps.go-test.outcome == 'failure'
+        run: exit 1
