@@ -114,6 +114,32 @@ Response:
 }
 ```
 
+### Invitations
+
+Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
+
+```bash
+# Create an invitation (maintainer or owner; returns token shown once)
+POST /api/v1/teams/{teamID}/invitations  { "email", "role" }
+# role: "readonly" | "maintainer" | "owner"
+
+# List pending invitations for a team
+GET /api/v1/teams/{teamID}/invitations
+
+# Revoke a pending invitation
+DELETE /api/v1/teams/{teamID}/invitations/{invitationID}
+
+# Preview invitation details — public, no auth (used by the accept page)
+GET /api/v1/invitations/{token}
+# → { email, role, team_name, expires_at }
+
+# Accept invitation — creates user account and team membership
+POST /api/v1/invitations/{token}/accept  { "display_name", "password" }
+# → { message, user_id, team_id, role }
+```
+
+Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. The accept page is served at `/invitations/:token` in the SPA.
+
 ### Key Endpoints
 
 | Method | Path | Description |
@@ -132,6 +158,11 @@ Response:
 | `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
 | `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
+| `POST` | `/api/v1/teams/{id}/invitations` | Invite user to team |
+| `GET` | `/api/v1/teams/{id}/invitations` | List team invitations |
+| `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation |
+| `GET` | `/api/v1/invitations/{token}` | Preview invitation (public) |
+| `POST` | `/api/v1/invitations/{token}/accept` | Accept invitation (public) |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
@@ -164,6 +195,28 @@ Quality gates are created with a `rules` array. Each rule uses a `{type, params}
 | `min_test_count` | `{"threshold": <int>}` | Total tests must be ≥ threshold |
 
 Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` require non-null params. `zero_failures` and `no_new_failures` take no params.
+
+### Webhook Delivery Pagination
+
+`GET /api/v1/teams/{id}/webhooks/{wid}/deliveries` returns up to 20 deliveries per page using cursor-based pagination.
+
+**Query parameters:**
+
+| Parameter | Description |
+|-----------|-------------|
+| `cursor` | ID of the last delivery on the previous page (omit for the first page) |
+
+**Response:**
+
+```json
+{
+  "deliveries": [...],
+  "total": 20,
+  "next_cursor": "delivery-uuid"
+}
+```
+
+`next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. Ordering is by `delivered_at DESC, id DESC` for stable pagination.
 
 ## Testing
 

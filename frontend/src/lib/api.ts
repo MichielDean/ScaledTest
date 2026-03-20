@@ -204,6 +204,18 @@ export const api = {
   rebalanceShards: (data: unknown) =>
     fetchAPI<unknown>('/api/v1/sharding/rebalance', { method: 'POST', body: JSON.stringify(data) }),
 
+  // Invitations
+  previewInvitation: (token: string, signal?: AbortSignal) =>
+    fetchAPI<{ email: string; role: string; team_name: string; expires_at: string }>(
+      `/api/v1/invitations/${token}`,
+      signal ? { signal } : {}
+    ),
+  acceptInvitation: (token: string, password: string, displayName: string) =>
+    fetchAPI(`/api/v1/invitations/${token}/accept`, {
+      method: 'POST',
+      body: JSON.stringify({ password, display_name: displayName }),
+    }),
+
   // Admin
   adminListUsers: () => fetchAPI('/api/v1/admin/users'),
   adminListAuditLog: (limit = 20, offset = 0, action = '') => {

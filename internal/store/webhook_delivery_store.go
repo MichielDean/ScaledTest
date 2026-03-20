@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5/pgxpool"
@@ -59,21 +60,41 @@ func (s *WebhookDeliveryStore) GetByWebhook(ctx context.Context, webhookID, deli
 }
 
 // ListByWebhook returns the most recent deliveries for a webhook.
-func (s *WebhookDeliveryStore) ListByWebhook(ctx context.Context, webhookID string, limit int) ([]WebhookDelivery, error) {
+// It accepts an optional cursor for keyset pagination and returns a nextCursor
+// when more results are available. The cursor is a composite of
+// "delivered_at_RFC3339Nano,id" for stable ordering.
+func (s *WebhookDeliveryStore) ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]WebhookDelivery, string, error) {
 	if limit <= 0 || limit > 100 {
 		limit = 20
 	}
 
-	rows, err := s.pool.Query(ctx,
-		`SELECT id, webhook_id, url, event_type, attempt, status_code, error, duration_ms, payload, delivered_at
+	var args []interface{}
+	query := `SELECT id, webhook_id, url, event_type, attempt, status_code, error, duration_ms, payload, delivered_at
 		 FROM webhook_deliveries
-		 WHERE webhook_id = $1
-		 ORDER BY delivered_at DESC
-		 LIMIT $2`,
-		webhookID, limit,
-	)
+		 WHERE webhook_id = $1`
+	args = append(args, webhookID)
+
+	if cursor != "" {
+		parts := strings.SplitN(cursor, ",", 2)
+		if len(parts) != 2 {
+			return nil, "", fmt.Errorf("invalid cursor")
+		}
+		cursorTime, parseErr := time.Parse(time.RFC3339Nano, parts[0])
+		if parseErr != nil {
+			return nil, "", fmt.Errorf("invalid cursor: %w", parseErr)
+		}
+		cursorID := parts[1]
+		query += ` AND (delivered_at, id) < ($2, $3)`
+		args = append(args, cursorTime, cursorID)
+	}
+
+	query += ` ORDER BY delivered_at DESC, id DESC
+		 LIMIT $` + fmt.Sprintf("%d", len(args)+1)
+	args = append(args, limit+1)
+
+	rows, err := s.pool.Query(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	defer rows.Close()
 
@@ -81,12 +102,24 @@ func (s *WebhookDeliveryStore) ListByWebhook(ctx context.Context, webhookID stri
 	for rows.Next() {
 		var d WebhookDelivery
 		if err := rows.Scan(&d.ID, &d.WebhookID, &d.URL, &d.EventType, &d.Attempt, &d.StatusCode, &d.Error, &d.DurationMs, &d.Payload, &d.DeliveredAt); err != nil {
-			return nil, err
+			return nil, "", err
 		}
 		deliveries = append(deliveries, d)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, "", err
 	}
 	if deliveries == nil {
 		deliveries = []WebhookDelivery{}
 	}
-	return deliveries, rows.Err()
+
+	var nextCursor string
+	if len(deliveries) > limit {
+		// More results available; cursor points to the last item of the current page.
+		last := deliveries[limit-1]
+		nextCursor = last.DeliveredAt.Format(time.RFC3339Nano) + "," + last.ID
+		deliveries = deliveries[:limit]
+	}
+
+	return deliveries, nextCursor, nil
 }
