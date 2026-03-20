@@ -146,7 +146,7 @@ jobs:
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/scaledtest-worker ./cmd/worker
 
   e2e-tests:
-    runs-on: ubuntu-latest
+    runs-on: self-hosted
     timeout-minutes: 20
     services:
       timescaledb:
