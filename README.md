@@ -56,9 +56,14 @@ export ST_SMTP_PORT=587          # default: 587
 export ST_SMTP_USER=user@example.com
 export ST_SMTP_PASS=your-smtp-password
 export ST_SMTP_FROM=noreply@example.com
+
+# Optional: GitHub commit status reporting
+export ST_GITHUB_TOKEN=ghp_your_token   # needs repo:status scope
 ```
 
 When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.
+
+When `ST_GITHUB_TOKEN` is not set, GitHub commit status posting is disabled. When set, passing `github_owner`, `github_repo`, and `github_sha` query parameters to `POST /api/v1/reports` will post a `scaledtest/e2e` commit status back to GitHub after the report is ingested.
 
 ### Database Migrations
 
@@ -119,6 +124,17 @@ Response:
   "summary": { "tests": 150, "passed": 145, "failed": 3, "skipped": 2 }
 }
 ```
+
+**GitHub commit status (optional):** Pass `github_owner`, `github_repo`, and `github_sha` as query parameters and configure `ST_GITHUB_TOKEN` on the server to automatically post a `scaledtest/e2e` commit status to GitHub after ingestion:
+
+```bash
+curl -X POST "https://your-instance/api/v1/reports?github_owner=acme&github_repo=myrepo&github_sha=$GIT_SHA" \
+  -H "Authorization: Bearer sct_your_token" \
+  -H "Content-Type: application/json" \
+  -d @ctrf-report.json
+```
+
+The status is posted asynchronously (best-effort) and does not affect the HTTP response.
 
 ### Invitations
 
@@ -282,6 +298,7 @@ internal/
   handler/            # HTTP handlers (reports, executions, teams, admin, etc.)
   server/             # Router and middleware setup
   store/              # Data access (audit, webhooks, quality gates)
+  github/             # GitHub commit status client
   mail/               # Email sender interface and SMTP implementation
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
