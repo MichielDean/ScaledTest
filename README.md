@@ -49,7 +49,16 @@ export ST_OAUTH_GITHUB_CLIENT_ID=...
 export ST_OAUTH_GITHUB_CLIENT_SECRET=...
 export ST_OAUTH_GOOGLE_CLIENT_ID=...
 export ST_OAUTH_GOOGLE_CLIENT_SECRET=...
+
+# Optional: SMTP email (required for email notifications)
+export ST_SMTP_HOST=smtp.example.com
+export ST_SMTP_PORT=587          # default: 587
+export ST_SMTP_USER=user@example.com
+export ST_SMTP_PASS=your-smtp-password
+export ST_SMTP_FROM=noreply@example.com
 ```
+
+When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.
 
 ### Database Migrations
 
@@ -263,6 +272,7 @@ internal/
   handler/            # HTTP handlers (reports, executions, teams, admin, etc.)
   server/             # Router and middleware setup
   store/              # Data access (audit, webhooks, quality gates)
+  mail/               # Email sender interface and SMTP implementation
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
   k8s/                # Kubernetes job management
