@@ -259,6 +259,10 @@ jobs:
           if-no-files-found: ignore
 ```
 
+## Telegram CI Health Notifications
+
+ScaledTest's main-branch workflow posts a summary of every `go test` run to a Telegram chat. See [Telegram CI notifications](telegram-notifications.md) for setup instructions, environment variable reference, and message format details.
+
 ## API Reference
 
 ### `POST /api/v1/reports`
