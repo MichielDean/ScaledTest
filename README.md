@@ -105,6 +105,32 @@ Response:
 }
 ```
 
+### Invitations
+
+Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
+
+```bash
+# Create an invitation (maintainer or owner; returns token shown once)
+POST /api/v1/teams/{teamID}/invitations  { "email", "role" }
+# role: "readonly" | "maintainer" | "owner"
+
+# List pending invitations for a team
+GET /api/v1/teams/{teamID}/invitations
+
+# Revoke a pending invitation
+DELETE /api/v1/teams/{teamID}/invitations/{invitationID}
+
+# Preview invitation details — public, no auth (used by the accept page)
+GET /api/v1/invitations/{token}
+# → { email, role, team_name, expires_at }
+
+# Accept invitation — creates user account and team membership
+POST /api/v1/invitations/{token}/accept  { "display_name", "password" }
+# → { message, user_id, team_id, role }
+```
+
+Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. The accept page is served at `/invitations/:token` in the SPA.
+
 ### Key Endpoints
 
 | Method | Path | Description |
@@ -123,6 +149,11 @@ Response:
 | `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
 | `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
+| `POST` | `/api/v1/teams/{id}/invitations` | Invite user to team |
+| `GET` | `/api/v1/teams/{id}/invitations` | List team invitations |
+| `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation |
+| `GET` | `/api/v1/invitations/{token}` | Preview invitation (public) |
+| `POST` | `/api/v1/invitations/{token}/accept` | Accept invitation (public) |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
