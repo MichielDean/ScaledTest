@@ -630,6 +630,152 @@ func TestRetryDeliveryNilDispatcher(t *testing.T) {
 	}
 }
 
+func TestListDeliveriesWithoutDB(t *testing.T) {
+	h := &WebhooksHandler{DeliveryStore: nil}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("ListDeliveries without DB = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestListDeliveriesPassesBeforeID(t *testing.T) {
+	var capturedBeforeID string
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ int, beforeID string) ([]store.WebhookDelivery, error) {
+				capturedBeforeID = beforeID
+				return []store.WebhookDelivery{}, nil
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries?before_id=d-99", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("ListDeliveries before_id status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if capturedBeforeID != "d-99" {
+		t.Errorf("before_id not passed through: got %q, want %q", capturedBeforeID, "d-99")
+	}
+}
+
+func TestListDeliveriesPassesLimit(t *testing.T) {
+	var capturedLimit int
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, limit int, _ string) ([]store.WebhookDelivery, error) {
+				capturedLimit = limit
+				return []store.WebhookDelivery{}, nil
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries?limit=5", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("ListDeliveries limit status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if capturedLimit != 5 {
+		t.Errorf("limit not passed through: got %d, want %d", capturedLimit, 5)
+	}
+}
+
+func TestListDeliveriesDefaultLimit(t *testing.T) {
+	var capturedLimit int
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, limit int, _ string) ([]store.WebhookDelivery, error) {
+				capturedLimit = limit
+				return []store.WebhookDelivery{}, nil
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("ListDeliveries default limit status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if capturedLimit != 20 {
+		t.Errorf("default limit = %d, want 20", capturedLimit)
+	}
+}
+
+func TestListDeliveriesEmptyBeforeID(t *testing.T) {
+	var capturedBeforeID string
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ int, beforeID string) ([]store.WebhookDelivery, error) {
+				capturedBeforeID = beforeID
+				return []store.WebhookDelivery{}, nil
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if capturedBeforeID != "" {
+		t.Errorf("before_id without param should be empty, got %q", capturedBeforeID)
+	}
+}
+
+func TestListDeliveriesInvalidCursorReturns400(t *testing.T) {
+	h := &WebhooksHandler{
+		DeliveryStore: &mockWebhookDeliveryStore{
+			listByWebhookFunc: func(_ context.Context, _ string, _ int, _ string) ([]store.WebhookDelivery, error) {
+				return nil, store.ErrInvalidCursor
+			},
+		},
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/webhooks/wh-1/deliveries?before_id=nonexistent", nil)
+	req = webhookWithClaims(req, "owner")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.ListDeliveries(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("ListDeliveries invalid cursor status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+	if !strings.Contains(w.Body.String(), "invalid before_id cursor") {
+		t.Errorf("ListDeliveries invalid cursor body = %s, want invalid before_id cursor error", w.Body.String())
+	}
+}
+
 func TestGenerateWebhookSecret(t *testing.T) {
 	plaintext, hash, err := generateWebhookSecret()
 	if err != nil {

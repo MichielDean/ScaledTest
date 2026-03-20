@@ -10,6 +10,9 @@ import (
 	"net/http"
 	"time"
 
+	"errors"
+	"strconv"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
@@ -40,7 +43,7 @@ type WebhookStoreProvider interface {
 type WebhookDeliveryStoreProvider interface {
 	Record(ctx context.Context, webhookID, url, eventType string, payload []byte, attempt, statusCode int, errMsg string, durationMs int) error
 	GetByWebhook(ctx context.Context, webhookID, deliveryID string) (*store.WebhookDelivery, error)
-	ListByWebhook(ctx context.Context, webhookID string, cursor string, limit int) ([]store.WebhookDelivery, string, error)
+	ListByWebhook(ctx context.Context, webhookID string, limit int, beforeID string) ([]store.WebhookDelivery, error)
 }
 
 // WebhookSender is the dispatcher interface needed by WebhooksHandler.
@@ -444,7 +447,7 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	_, ok := webhookTeamID(w, r, claims)
+	teamID, ok := webhookTeamID(w, r, claims)
 	if !ok {
 		return
 	}
@@ -456,27 +459,37 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 	}
 
 	if h.DeliveryStore == nil {
-		JSON(w, http.StatusOK, map[string]interface{}{
-			"deliveries": []interface{}{},
-			"total":      0,
-		})
+		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	cursor := r.URL.Query().Get("cursor")
+	// Verify webhook belongs to this team
+	if h.Store != nil {
+		if _, err := h.Store.Get(r.Context(), teamID, webhookID); err != nil {
+			Error(w, http.StatusNotFound, "webhook not found")
+			return
+		}
+	}
 
-	deliveries, nextCursor, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, cursor, 20)
+	limit := 20
+	if l := r.URL.Query().Get("limit"); l != "" {
+		if parsed, err := strconv.Atoi(l); err == nil {
+			limit = parsed
+		}
+	}
+	beforeID := r.URL.Query().Get("before_id")
+
+	deliveries, err := h.DeliveryStore.ListByWebhook(r.Context(), webhookID, limit, beforeID)
 	if err != nil {
+		if errors.Is(err, store.ErrInvalidCursor) {
+			Error(w, http.StatusBadRequest, "invalid before_id cursor")
+			return
+		}
 		Error(w, http.StatusInternalServerError, "failed to list deliveries")
 		return
 	}
 
-	resp := map[string]interface{}{
-		"deliveries": deliveries,
-		"total":      len(deliveries),
-	}
-	if nextCursor != "" {
-		resp["next_cursor"] = nextCursor
-	}
-	JSON(w, http.StatusOK, resp)
+	JSON(w, http.StatusOK, deliveries)
 }
+
+
