@@ -35,6 +35,36 @@ make test-short
 make frontend-test
 ```
 
+## Running E2E Tests (Playwright)
+
+E2E tests live in `e2e/` and use Playwright. A global setup step runs before the suite to seed required test users via `POST /auth/register`.
+
+**The backend must be running** before you start Playwright:
+
+```bash
+# In one terminal — start the backend
+make dev
+
+# In another terminal — run Playwright
+cd e2e && npx playwright test
+```
+
+The setup reads the base URL from `playwright.config.ts` → `projects[0].use.baseURL`, falling back to the `E2E_BASE_URL` environment variable, and finally `http://localhost:8080`.
+
+To point tests at a non-default backend:
+
+```bash
+E2E_BASE_URL=http://localhost:9090 npx playwright test
+```
+
+### Seeded test users
+
+The global setup creates the following users (idempotent — safe to re-run):
+
+| Email | Password | Role |
+|---|---|---|
+| `maintainer@example.com` | `Maintainer123!` | Maintainer |
+
 ## Building
 
 ```bash
