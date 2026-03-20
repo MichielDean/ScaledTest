@@ -210,7 +210,7 @@ Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` 
 
 | Parameter | Description |
 |-----------|-------------|
-| `cursor` | ID of the last delivery on the previous page (omit for the first page) |
+| `cursor` | Opaque cursor from the previous response's `next_cursor` field (omit for the first page) |
 
 **Response:**
 
@@ -218,11 +218,13 @@ Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` 
 {
   "deliveries": [...],
   "total": 20,
-  "next_cursor": "delivery-uuid"
+  "next_cursor": "<opaque-cursor>"
 }
 ```
 
-`next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. Ordering is by `delivered_at DESC, id DESC` for stable pagination.
+`next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. The cursor is an opaque composite of `delivered_at` (RFC3339Nano) and `id` for stable keyset ordering by `delivered_at DESC, id DESC`. Treat it as an opaque string — do not construct or parse it.
+
+**Frontend UI:** The Webhooks page includes a **Deliveries** button per webhook that expands an inline delivery list. A **Load More** button appears when additional pages are available, and failed deliveries (non-2xx status codes) show a **Retry** button to re-dispatch.
 
 ## Testing
 
