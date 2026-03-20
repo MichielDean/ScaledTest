@@ -20,6 +20,18 @@ interface Webhook {
   updated_at: string;
 }
 
+interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  url: string;
+  event_type: string;
+  attempt: number;
+  status_code: number;
+  error?: string;
+  duration_ms: number;
+  delivered_at: string;
+}
+
 interface Team {
   id: string;
   name: string;
@@ -31,6 +43,7 @@ export function WebhooksPage() {
   const [editingWebhook, setEditingWebhook] = useState<Webhook | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
   const [newSecret, setNewSecret] = useState<string | null>(null);
+  const [expandedDeliveries, setExpandedDeliveries] = useState<Set<string>>(new Set());
 
   // Fetch user's teams to get the teamId for webhook API calls
   const teamsQuery = useQuery({
@@ -55,6 +68,18 @@ export function WebhooksPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.all(teamId!) });
     },
   });
+
+  function toggleDeliveries(webhookId: string) {
+    setExpandedDeliveries(prev => {
+      const next = new Set(prev);
+      if (next.has(webhookId)) {
+        next.delete(webhookId);
+      } else {
+        next.add(webhookId);
+      }
+      return next;
+    });
+  }
 
   function handleEdit(webhook: Webhook) {
     setEditingWebhook(webhook);
@@ -207,6 +232,12 @@ export function WebhooksPage() {
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
                   <button
+                    onClick={() => toggleDeliveries(webhook.id)}
+                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  >
+                    Deliveries
+                  </button>
+                  <button
                     onClick={() => handleEdit(webhook)}
                     className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
                   >
@@ -238,10 +269,92 @@ export function WebhooksPage() {
                   )}
                 </div>
               </div>
+              {expandedDeliveries.has(webhook.id) && (
+                <WebhookDeliveryList teamId={teamId} webhookId={webhook.id} />
+              )}
             </div>
           ))}
         </div>
       )}
+    </div>
+  );
+}
+
+function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId: string }) {
+  const queryClient = useQueryClient();
+
+  const { data, isLoading, error } = useQuery({
+    queryKey: queryKeys.webhooks.deliveries(teamId, webhookId),
+    queryFn: () => api.getWebhookDeliveries(teamId, webhookId),
+  });
+
+  const retryMutation = useMutation({
+    mutationFn: (deliveryId: string) => api.retryWebhookDelivery(teamId, webhookId, deliveryId),
+    onSuccess: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.deliveries(teamId, webhookId) });
+    },
+    onError: () => {
+      // error surfaced via retryMutation.isError in the render
+    },
+  });
+
+  const deliveries = (data?.deliveries ?? []) as WebhookDelivery[];
+
+  if (isLoading) {
+    return <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">Loading deliveries...</div>;
+  }
+
+  if (error) {
+    return <div className="mt-3 pt-3 border-t text-xs text-red-600">Failed to load deliveries.</div>;
+  }
+
+  if (deliveries.length === 0) {
+    return (
+      <div className="mt-3 pt-3 border-t text-xs text-muted-foreground">No deliveries yet.</div>
+    );
+  }
+
+  return (
+    <div className="mt-3 pt-3 border-t">
+      <p className="text-xs font-medium text-muted-foreground mb-2">Recent Deliveries</p>
+      {retryMutation.isError && (
+        <p className="mb-2 text-xs text-red-600">Retry failed. Please try again.</p>
+      )}
+      <div className="space-y-1.5">
+        {deliveries.map(delivery => {
+          const is2xx = delivery.status_code >= 200 && delivery.status_code < 300;
+          const isPendingThis = retryMutation.isPending && retryMutation.variables === delivery.id;
+          return (
+            <div key={delivery.id} className="flex items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 min-w-0">
+                <span
+                  className={`inline-block rounded px-1.5 py-0.5 font-mono font-medium ${
+                    is2xx ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                  }`}
+                >
+                  {delivery.status_code ?? '—'}
+                </span>
+                <span className="truncate text-gray-600">{delivery.event_type}</span>
+                <span className="text-muted-foreground shrink-0">{delivery.duration_ms}ms</span>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <span className="text-muted-foreground">
+                  {new Date(delivery.delivered_at).toLocaleString()}
+                </span>
+                {!is2xx && (
+                  <button
+                    onClick={() => retryMutation.mutate(delivery.id)}
+                    disabled={retryMutation.isPending}
+                    className="rounded border border-blue-300 bg-white px-2 py-0.5 text-xs font-medium text-blue-600 hover:bg-blue-50 disabled:opacity-50 transition-colors"
+                  >
+                    {isPendingThis ? 'Retrying...' : 'Retry'}
+                  </button>
+                )}
+              </div>
+            </div>
+          );
+        })}
+      </div>
     </div>
   );
 }
