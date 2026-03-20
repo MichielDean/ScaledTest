@@ -459,3 +459,5 @@ func TestChangePasswordInvalidRequest(t *testing.T) {
 		})
 	}
 }
+
+
