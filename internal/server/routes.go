@@ -141,7 +141,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	teamsH := &handler.TeamsHandler{DB: dbPool}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
-	whH := &handler.WebhooksHandler{Store: whStore, DeliveryStore: whDeliveryStore}
+	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher()}
+	if whStore != nil {
+		whH.Store = whStore
+	}
+	if whDeliveryStore != nil {
+		whH.DeliveryStore = whDeliveryStore
+	}
 
 	var invStore *store.InvitationStore
 	if dbPool != nil {
@@ -234,6 +240,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 				r.Put("/{webhookID}", whH.Update)
 				r.Delete("/{webhookID}", whH.Delete)
 				r.Get("/{webhookID}/deliveries", whH.ListDeliveries)
+				r.Post("/{webhookID}/deliveries/{deliveryID}/retry", whH.RetryDelivery)
 			})
 			r.Route("/{teamID}/invitations", func(r chi.Router) {
 				r.Get("/", invH.List)
