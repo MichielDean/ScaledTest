@@ -314,9 +314,13 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
 
   const retryMutation = useMutation({
     mutationFn: (deliveryId: string) => api.retryWebhookDelivery(teamId, webhookId, deliveryId),
-    onSuccess: () => {
-      setRetryError(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.deliveries(teamId, webhookId) });
+    onSuccess: (response) => {
+      if (!response.success) {
+        setRetryError(`Retry failed: ${response.error}`);
+      } else {
+        setRetryError(null);
+        void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.deliveries(teamId, webhookId) });
+      }
     },
     onError: (err: Error) => {
       setRetryError(`Retry failed: ${err.message}`);

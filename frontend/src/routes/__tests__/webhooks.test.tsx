@@ -277,6 +277,37 @@ describe('WebhooksPage', () => {
     expect(screen.getByText('report.submitted')).toBeInTheDocument();
   });
 
+  it('shows "Failed to load deliveries." when getWebhookDeliveries rejects', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockRejectedValue(new Error('Network error'));
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+
+    expect(await screen.findByText('Failed to load deliveries.')).toBeInTheDocument();
+  });
+
+  it('shows error message when retry responds with success: false', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.getWebhookDeliveries).mockResolvedValue(mockDeliveries);
+    vi.mocked(api.retryWebhookDelivery).mockResolvedValue({
+      success: false,
+      status_code: 500,
+      attempt: 2,
+      duration_ms: 100,
+      error: 'target returned 500',
+    });
+
+    renderWithClient(<WebhooksPage />);
+    fireEvent.click(await screen.findByRole('button', { name: /deliveries/i }));
+    const retryBtn = await screen.findByRole('button', { name: /^retry$/i });
+    fireEvent.click(retryBtn);
+
+    expect(await screen.findByText(/retry failed/i)).toBeInTheDocument();
+  });
+
   it('calls getWebhookDeliveries with next_cursor when Load More is clicked', async () => {
     const page2delivery = {
       id: 'del-3',
