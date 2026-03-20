@@ -15,12 +15,13 @@ concurrency:
 jobs:
   go-test:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
           cache: true
@@ -33,10 +34,11 @@ jobs:
 
   go-integration-test:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     services:
       postgres:
-        image: timescale/timescaledb:latest-pg16
+        image: timescale/timescaledb:2.14.2-pg16
         env:
           POSTGRES_USER: test
           POSTGRES_PASSWORD: test
@@ -49,10 +51,10 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
           cache: true
@@ -64,12 +66,13 @@ jobs:
 
   frontend-build:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
@@ -89,12 +92,13 @@ jobs:
 
   jest-tests:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
@@ -110,19 +114,20 @@ jobs:
 
   go-build:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     needs: [go-test, frontend-build]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
@@ -147,6 +152,7 @@ jobs:
 
   e2e-tests:
     runs-on: self-hosted
+    if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 20
     services:
       timescaledb:
@@ -163,16 +169,16 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Go
-        uses: actions/setup-go@v5
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
         with:
           go-version: '1.23'
           cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: 'npm'
@@ -190,9 +196,9 @@ jobs:
       - name: Run migrations and start server
         env:
           ST_DATABASE_URL: postgres://scaledtest:password@localhost:5432/scaledtest?sslmode=disable
-          ST_JWT_SECRET: ci-test-secret-at-least-32-characters-long
+          ST_JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
           ST_PORT: 3000
-          BETTER_AUTH_SECRET: ci-better-auth-secret-at-least-32-chars
+          BETTER_AUTH_SECRET: ${{ secrets.CI_BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:3000
         run: |
           go run ./cmd/server -migrate-up
@@ -216,11 +222,12 @@ jobs:
           E2E_BASE_URL: http://localhost:3000
         run: |
           npx playwright test \
+            --screenshot=on \
             --reporter=html,github \
             --output=test-results
 
       - name: Upload Playwright screenshots
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: playwright-screenshots
@@ -228,7 +235,7 @@ jobs:
           retention-days: 30
 
       - name: Upload Playwright HTML report
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         if: always()
         with:
           name: playwright-report
