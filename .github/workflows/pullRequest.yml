@@ -198,6 +198,7 @@ jobs:
           ST_DATABASE_URL: postgres://scaledtest:password@localhost:5432/scaledtest?sslmode=disable
           ST_JWT_SECRET: ${{ secrets.CI_JWT_SECRET }}
           ST_PORT: 3000
+          ST_DISABLE_RATE_LIMIT: true
           BETTER_AUTH_SECRET: ${{ secrets.CI_BETTER_AUTH_SECRET }}
           BETTER_AUTH_URL: http://localhost:3000
         run: |

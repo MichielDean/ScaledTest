@@ -39,7 +39,9 @@ make frontend-test
 
 E2E tests live in `e2e/` and use Playwright. A global setup step runs before the suite to:
 
-1. Seed required test users via `POST /auth/register` (idempotent).
+1. Seed required test users (idempotent):
+   - Maintainer via `POST /auth/register`.
+   - Owner via the invitation flow (maintainer creates a team, invites `owner@example.com` with `role='owner'`, then accepts the invitation). `/auth/register` always creates `role='maintainer'`, so the invitation flow is required.
 2. Log in once per role and write JWT tokens to `e2e/.auth/tokens.json`.
 
 **The backend must be running** before you start Playwright:
@@ -67,6 +69,7 @@ The global setup creates the following users (idempotent — safe to re-run):
 | Email | Password | Role |
 |---|---|---|
 | `maintainer@example.com` | `Maintainer123!` | Maintainer |
+| `owner@example.com` | `Owner123!` | Owner |
 
 ### JWT token caching
 
@@ -76,9 +79,24 @@ After seeding, global setup logs in once per role and writes cached tokens to `e
 import { loadCachedToken } from './helpers';
 
 const { accessToken } = loadCachedToken('maintainer');
+const { accessToken: ownerToken } = loadCachedToken('owner');
 ```
 
 `e2e/.auth/` is gitignored — tokens are ephemeral CI artifacts and must never be committed. The `loginViaAPI()` helper is kept for cases where a fresh token is explicitly needed.
+
+### Browser UI tests
+
+`browser-ui.spec.ts` contains browser-based tests that drive the full UI via Playwright (login form → navigate → assert). Each test produces a screenshot proving the authenticated UI is functional. Use `loginViaUI()` from `helpers.ts` to log in; it accepts an optional `credentials` parameter (defaults to the maintainer user):
+
+```typescript
+import { loginViaUI, OWNER } from './helpers';
+
+// Log in as maintainer (default)
+await loginViaUI(page);
+
+// Log in as owner
+await loginViaUI(page, OWNER);
+```
 
 ## Building
 
