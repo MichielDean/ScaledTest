@@ -1,4 +1,7 @@
 import { expect, type Page, type APIRequestContext } from '@playwright/test';
+import * as fs from 'node:fs';
+import * as path from 'node:path';
+import type { CachedTokens } from '../global-setup';
 
 export const MAINTAINER = {
   email: 'maintainer@example.com',
@@ -17,6 +20,17 @@ export async function loginViaUI(page: Page): Promise<void> {
   await page.getByLabel('Password').fill(MAINTAINER.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
   await page.waitForURL('/');
+}
+
+/**
+ * Load a cached JWT token written by global-setup.ts.
+ * Avoids hitting the per-IP rate limiter (10 req/min on auth routes) when
+ * many parallel tests each call loginViaAPI().
+ */
+export function loadCachedToken(role: keyof CachedTokens = 'maintainer'): AuthSession {
+  const tokensPath = path.join(__dirname, '..', '.auth', 'tokens.json');
+  const tokens = JSON.parse(fs.readFileSync(tokensPath, 'utf-8')) as CachedTokens;
+  return tokens[role];
 }
 
 /** Login via API and return access token. */

@@ -1,12 +1,12 @@
 import { test, expect } from '@playwright/test';
-import { loginViaAPI, loginViaUI, authHeaders, buildCtrfReport } from './helpers';
+import { loadCachedToken, loginViaUI, authHeaders, buildCtrfReport } from './helpers';
 
 test.describe('Report Submission', () => {
   test('submit CTRF report via API and verify it appears in the reports list', async ({
     page,
     request,
   }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
 
     // Submit a report with a unique tool name
     const uniqueTool = `E2E-Report-${Date.now()}`;
@@ -32,7 +32,7 @@ test.describe('Report Submission', () => {
   });
 
   test('report detail shows individual test results when expanded', async ({ page, request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const uniqueTool = `E2E-Detail-${Date.now()}`;
     await request.post('/api/v1/reports', {
       headers: authHeaders(session),

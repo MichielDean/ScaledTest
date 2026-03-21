@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  loginViaAPI,
+  loadCachedToken,
   authHeaders,
   tokenHeaders,
   buildCtrfReport,
@@ -13,7 +13,7 @@ test.describe('Execution Lifecycle', () => {
     request,
   }) => {
     // ── Setup: team + API token ───────────────────────────────────────
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
@@ -106,7 +106,7 @@ test.describe('Execution Lifecycle', () => {
   });
 
   test('execution failure flow: create → run → fail with error message', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
@@ -144,7 +144,7 @@ test.describe('Execution Lifecycle', () => {
   });
 
   test('cancel execution: create → cancel → verify cancelled', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
@@ -173,7 +173,7 @@ test.describe('Execution Lifecycle', () => {
   });
 
   test('list executions returns created entries', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
