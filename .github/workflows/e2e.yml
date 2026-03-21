@@ -125,6 +125,26 @@ jobs:
           echo "E2E_TEAM_ID=$TEAM_ID" >> "$GITHUB_ENV"
           echo "E2E_API_TOKEN=$API_TOKEN" >> "$GITHUB_ENV"
 
+      - name: Create execution record
+        run: |
+          EXEC_RESPONSE=$(curl -sf -X POST "http://localhost:8080/api/v1/executions" \
+            -H "Authorization: Bearer $E2E_API_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d '{"command":"npx playwright test"}' || echo '{}')
+
+          EXECUTION_ID=$(echo "$EXEC_RESPONSE" | jq -r '.id // empty')
+          if [ -n "$EXECUTION_ID" ]; then
+            echo "E2E_EXECUTION_ID=$EXECUTION_ID" >> "$GITHUB_ENV"
+            # Transition execution to running
+            curl -sf -X PUT "http://localhost:8080/api/v1/executions/$EXECUTION_ID/status" \
+              -H "Authorization: Bearer $E2E_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d '{"status":"running"}' > /dev/null
+            echo "Created execution: $EXECUTION_ID"
+          else
+            echo "::warning::Failed to create execution record — continuing without lifecycle tracking"
+          fi
+
       - name: Install E2E dependencies
         working-directory: e2e
         run: npm ci && npx playwright install --with-deps chromium
@@ -141,13 +161,26 @@ jobs:
           REPORT="e2e/ctrf/ctrf-report.json"
           if [ ! -f "$REPORT" ]; then
             echo "No CTRF report found at $REPORT — skipping upload"
+            # Mark execution as failed if one was created
+            if [ -n "$E2E_EXECUTION_ID" ]; then
+              curl -sf -X PUT "http://localhost:8080/api/v1/executions/$E2E_EXECUTION_ID/status" \
+                -H "Authorization: Bearer $E2E_API_TOKEN" \
+                -H "Content-Type: application/json" \
+                -d '{"status":"failed","error_msg":"no CTRF report generated"}' > /dev/null || true
+            fi
             exit 0
+          fi
+
+          # Build report upload URL; include execution_id when available so the
+          # report is linked to the tracked execution in the dashboard.
+          REPORT_URL="http://localhost:8080/api/v1/reports?github_owner=${{ github.repository_owner }}&github_repo=${{ github.event.repository.name }}&github_sha=${{ github.event.pull_request.head.sha }}"
+          if [ -n "$E2E_EXECUTION_ID" ]; then
+            REPORT_URL="${REPORT_URL}&execution_id=${E2E_EXECUTION_ID}"
           fi
 
           # Upload to the local ScaledTest instance with GitHub params so the
           # server posts a commit status back to this PR.
-          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST \
-            "http://localhost:8080/api/v1/reports?github_owner=${{ github.repository_owner }}&github_repo=${{ github.event.repository.name }}&github_sha=${{ github.event.pull_request.head.sha }}" \
+          RESPONSE=$(curl -s -w "\n%{http_code}" -X POST "$REPORT_URL" \
             -H "Authorization: Bearer $E2E_API_TOKEN" \
             -H "Content-Type: application/json" \
             --data-binary @"$REPORT")
@@ -162,10 +195,29 @@ jobs:
             echo "::warning::CTRF upload failed (HTTP $HTTP_CODE) — non-fatal"
           fi
 
+          # Update execution status based on test results
+          if [ -n "$E2E_EXECUTION_ID" ]; then
+            FAILED_TESTS=$(jq -r '.results.summary.failed // 0' "$REPORT")
+            if [ "$FAILED_TESTS" -gt 0 ]; then
+              EXEC_STATUS="failed"
+            else
+              EXEC_STATUS="completed"
+            fi
+            curl -sf -X PUT "http://localhost:8080/api/v1/executions/$E2E_EXECUTION_ID/status" \
+              -H "Authorization: Bearer $E2E_API_TOKEN" \
+              -H "Content-Type: application/json" \
+              -d "{\"status\":\"$EXEC_STATUS\"}" > /dev/null || true
+            echo "Updated execution $E2E_EXECUTION_ID status: $EXEC_STATUS"
+          fi
+
           # Write step summary
           TESTS=$(echo "$BODY" | jq -r '.tests // "N/A"')
           echo "### E2E Test Results" >> "$GITHUB_STEP_SUMMARY"
-          echo "Uploaded CTRF report — **$TESTS** tests." >> "$GITHUB_STEP_SUMMARY"
+          if [ -n "$E2E_EXECUTION_ID" ]; then
+            echo "Uploaded CTRF report — **$TESTS** tests. Execution: \`$E2E_EXECUTION_ID\`" >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "Uploaded CTRF report — **$TESTS** tests." >> "$GITHUB_STEP_SUMMARY"
+          fi
 
       - name: Upload Playwright report artifact
         if: always()

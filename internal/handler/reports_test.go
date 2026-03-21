@@ -1419,3 +1419,52 @@ func TestCreateReport_NilGitHubPoster_NoError(t *testing.T) {
 		t.Errorf("nil poster should not cause error; got %d, want 201", w.Code)
 	}
 }
+
+func TestCreateReport_GitHubStatus_WithExecutionID_LinksToExecution(t *testing.T) {
+	poster := &mockGitHubStatusPoster{}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster, BaseURL: "http://example.com"}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST",
+		"/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234&execution_id=exec-uuid-123",
+		strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
+
+	call, _ := poster.firstCall()
+	wantURL := "http://example.com/executions/exec-uuid-123"
+	if call.TargetURL != wantURL {
+		t.Errorf("targetURL = %q, want %q", call.TargetURL, wantURL)
+	}
+	if !strings.Contains(call.Description, "exec-uuid-123") {
+		t.Errorf("description %q should contain execution ID", call.Description)
+	}
+}
+
+func TestCreateReport_GitHubStatus_WithoutExecutionID_LinksToReport(t *testing.T) {
+	poster := &mockGitHubStatusPoster{}
+	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster, BaseURL: "http://example.com"}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST",
+		"/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234",
+		strings.NewReader(validReport))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
+
+	call, _ := poster.firstCall()
+	// Without execution_id and no reportID (no-DB path), targetURL should be empty
+	if strings.Contains(call.TargetURL, "/executions/") {
+		t.Errorf("targetURL %q should not link to execution when no execution_id", call.TargetURL)
+	}
+}
