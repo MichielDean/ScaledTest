@@ -403,7 +403,8 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	for rows.Next() {
-		var name, status, suite, filePath string
+		var name, status string
+		var suite, filePath *string
 		var durationMs int64
 		var flaky bool
 		if err := rows.Scan(&name, &status, &durationMs, &flaky, &suite, &filePath); err != nil {
@@ -415,9 +416,16 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 			currentFailed[name] = true
 		}
 		if flaky {
+			s, fp := "", ""
+			if suite != nil {
+				s = *suite
+			}
+			if filePath != nil {
+				fp = *filePath
+			}
 			flakyTests = append(flakyTests, struct {
 				name, suite, filePath string
-			}{name, suite, filePath})
+			}{name, s, fp})
 		}
 	}
 	if err := rows.Err(); err != nil {
