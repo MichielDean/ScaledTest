@@ -614,7 +614,10 @@ func TestLoginNoTeamHasEmptyTeamIDInJWT(t *testing.T) {
 		t.Fatalf("unmarshal response: %v", err)
 	}
 
-	accessToken := resp["access_token"].(string)
+	accessToken, ok := resp["access_token"].(string)
+	if !ok || accessToken == "" {
+		t.Fatal("missing or empty access_token in response")
+	}
 	claims, err := jwtMgr.ValidateAccessToken(accessToken)
 	if err != nil {
 		t.Fatalf("ValidateAccessToken: %v", err)

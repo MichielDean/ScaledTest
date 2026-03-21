@@ -8,16 +8,24 @@ export const MAINTAINER = {
   password: 'Maintainer123!',
 };
 
+export const OWNER = {
+  email: 'owner@example.com',
+  password: 'Owner123!',
+};
+
 export interface AuthSession {
   accessToken: string;
   userId: string;
 }
 
-/** Login via the browser UI form. */
-export async function loginViaUI(page: Page): Promise<void> {
+/** Login via the browser UI form. Defaults to the maintainer user. */
+export async function loginViaUI(
+  page: Page,
+  credentials: { email: string; password: string } = MAINTAINER
+): Promise<void> {
   await page.goto('/login');
-  await page.getByLabel('Email').fill(MAINTAINER.email);
-  await page.getByLabel('Password').fill(MAINTAINER.password);
+  await page.getByLabel('Email').fill(credentials.email);
+  await page.getByLabel('Password').fill(credentials.password);
   await page.getByRole('button', { name: 'Sign In' }).click();
   await page.waitForURL('/');
 }

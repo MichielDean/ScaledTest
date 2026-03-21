@@ -21,6 +21,7 @@ import {
   getOrCreateTeam,
   createAPIToken,
   buildCtrfReport,
+  OWNER,
 } from './helpers';
 
 test.describe('Browser UI — Core Platform Flows', () => {
@@ -56,6 +57,8 @@ test.describe('Browser UI — Core Platform Flows', () => {
     // Authenticated navigation is visible
     await expect(page.getByRole('link', { name: 'ScaledTest' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-dashboard.png' });
   });
 
   // ---------------------------------------------------------------------------
@@ -99,6 +102,8 @@ test.describe('Browser UI — Core Platform Flows', () => {
     // Pass/fail counts are visible in the report row
     await expect(page.getByText('2 passed')).toBeVisible();
     await expect(page.getByText('1 failed')).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-test-results.png' });
   });
 
   // ---------------------------------------------------------------------------
@@ -121,6 +126,8 @@ test.describe('Browser UI — Core Platform Flows', () => {
 
     // Either a list of quality gates or the empty-state placeholder is shown
     await expect(page.locator('.rounded-lg.border.bg-card').first()).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-quality-gates.png' });
   });
 
   // ---------------------------------------------------------------------------
@@ -140,29 +147,32 @@ test.describe('Browser UI — Core Platform Flows', () => {
 
     // User is authenticated
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-webhooks.png' });
   });
 
   // ---------------------------------------------------------------------------
   // Admin
   // ---------------------------------------------------------------------------
 
-  test('admin: navigate to /admin and assert page renders with RBAC enforcement', async ({
-    page,
-    request,
-  }) => {
-    const session = loadCachedToken();
-    await getOrCreateTeam(request, session);
-
-    await loginViaUI(page);
+  test('admin: login as owner via UI and assert admin page renders', async ({ page }) => {
+    // Log in as the owner user (role='owner' in users table, seeded in global-setup
+    // via the invitation flow). The admin page requires owner role; a maintainer
+    // would see "Access Denied".
+    await loginViaUI(page, OWNER);
     await page.goto('/admin');
 
-    // The maintainer user sees "Access Denied" — correct RBAC enforcement.
-    // An owner would see the "Admin" heading and user/team management sections.
-    await expect(
-      page.getByRole('heading', { name: /^(Admin|Access Denied)$/ })
-    ).toBeVisible();
+    // Owner sees the full admin page — not the "Access Denied" fallback
+    await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
 
-    // Regardless of role, the user remains authenticated
+    // Admin sections are present
+    await expect(page.getByRole('heading', { name: 'Users' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Teams' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Audit Log' })).toBeVisible();
+
+    // Owner remains authenticated
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-admin.png' });
   });
 });
