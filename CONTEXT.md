@@ -43,11 +43,17 @@ Use the loginViaUI helper pattern (page.goto('/login'), fill, click) or the glob
 
 The goal: screenshots that prove the platform frontend is functional, not just the auth pages.
 
-## Current Step: implement
+## Current Step: simplify
 
 - **Type:** agent
-- **Role:** implementer
+- **Role:** simplifier
 - **Context:** full_codebase
+
+## Recent Step Notes
+
+### From: manual
+
+Implemented browser UI E2E tests for all 5 core platform flows (dashboard, test-results, quality-gates, webhooks, admin). Committed sha 7349115. Tests: all 23 Go packages pass. Verified: e2e/tests/browser-ui.spec.ts created (170 lines), internal/handler/auth.go modified (team_id lookup in Login), internal/handler/auth_test.go has TestLoginEmbedsPrimaryTeamInJWT and TestLoginNoTeamHasEmptyTeamIDInJWT.
 
 <available_skills>
   <skill>
@@ -56,9 +62,9 @@ The goal: screenshots that prove the platform frontend is functional, not just t
     <location>/home/lobsterdog/.cistern/skills/cistern-droplet-state/SKILL.md</location>
   </skill>
   <skill>
-    <name>github-workflow</name>
-    <description>---</description>
-    <location>/home/lobsterdog/.cistern/skills/github-workflow/SKILL.md</location>
+    <name>code-simplifier</name>
+    <description>code-simplifier</description>
+    <location>/home/lobsterdog/.cistern/skills/code-simplifier/SKILL.md</location>
   </skill>
 </available_skills>
 

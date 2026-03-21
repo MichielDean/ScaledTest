@@ -17,7 +17,6 @@ import { test, expect } from '@playwright/test';
 import {
   loginViaUI,
   loadCachedToken,
-  authHeaders,
   tokenHeaders,
   getOrCreateTeam,
   createAPIToken,
@@ -121,8 +120,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await expect(page.getByText('Define pass/fail criteria')).toBeVisible();
 
     // Either a list of quality gates or the empty-state placeholder is shown
-    const hasGates = await page.locator('.rounded-lg.border.bg-card').first().isVisible();
-    expect(hasGates).toBe(true);
+    await expect(page.locator('.rounded-lg.border.bg-card').first()).toBeVisible();
   });
 
   // ---------------------------------------------------------------------------
