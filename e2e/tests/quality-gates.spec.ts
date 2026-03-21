@@ -51,7 +51,7 @@ test.describe('Quality Gates', () => {
     expect(evalRes.ok(), `Evaluate failed: ${evalRes.status()}`).toBeTruthy();
     const evaluation = await evalRes.json();
     expect(evaluation.passed).toBeDefined();
-    expect(evaluation.details?.results?.length).toBeGreaterThan(0);
+    expect(evaluation.rules?.length).toBeGreaterThan(0);
 
     // Verify evaluation appears in history
     const historyRes = await request.get(

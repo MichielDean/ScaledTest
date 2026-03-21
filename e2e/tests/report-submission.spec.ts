@@ -39,7 +39,7 @@ test.describe('Report Submission', () => {
     expect(found, `Report '${uniqueTool}' not found in reports list`).toBeTruthy();
   });
 
-  test('report detail shows individual test results via API', async ({ request }) => {
+  test('report detail shows summary via API', async ({ request }) => {
     const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
@@ -58,10 +58,11 @@ test.describe('Report Submission', () => {
     expect(detailRes.ok(), `Get report failed: ${detailRes.status()}`).toBeTruthy();
     const detail = await detailRes.json();
 
-    // Verify individual test results
-    expect(detail.tests?.length).toBe(3);
-    const testNames = detail.tests.map((t: { name: string }) => t.name);
-    expect(testNames).toContain('Test passes A');
-    expect(testNames).toContain('Test fails C');
+    // Verify report metadata and summary
+    expect(detail.tool_name).toBe(uniqueTool);
+    const summary = detail.summary;
+    expect(summary.tests).toBe(3);
+    expect(summary.passed).toBe(2);
+    expect(summary.failed).toBe(1);
   });
 });

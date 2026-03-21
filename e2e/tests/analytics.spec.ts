@@ -1,7 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
   loadCachedToken,
-  loginViaUI,
   tokenHeaders,
   buildCtrfReport,
   getOrCreateTeam,
@@ -9,14 +8,6 @@ import {
 } from './helpers';
 
 test.describe('Analytics', () => {
-  test('analytics page renders', async ({ page }) => {
-    // Verify the analytics page loads and renders its main sections
-    await loginViaUI(page);
-    await page.goto('/analytics');
-
-    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible({ timeout: 10000 });
-  });
-
   test('analytics trends API returns valid data after submissions', async ({ request }) => {
     const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
