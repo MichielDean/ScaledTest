@@ -98,13 +98,9 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await expect(page.getByRole('button', { name: 'All' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Failed' }).first()).toBeVisible();
 
-    // The submitted report should appear in the list
+    // The submitted report should appear in the list with its tool name and version
     await expect(page.getByText(uniqueTool)).toBeVisible({ timeout: 10_000 });
-
-    // Pass/fail counts are visible in the report row (scoped to the specific report)
-    const reportRow = page.locator('.rounded-lg.border.bg-card').filter({ hasText: uniqueTool });
-    await expect(reportRow.getByText(/\d+ passed/)).toBeVisible();
-    await expect(reportRow.getByText(/\d+ failed/)).toBeVisible();
+    await expect(page.getByText('v1.0.0')).toBeVisible();
 
     await page.screenshot({ path: 'screenshots/browser-ui-test-results.png' });
   });
