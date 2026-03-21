@@ -118,7 +118,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await loginViaUI(page);
     await page.getByRole('link', { name: 'Quality Gates' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Quality Gates' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Quality Gates', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Quality Gate' })).toBeVisible();
     await expect(page.getByText('Define pass/fail criteria')).toBeVisible();
 
@@ -139,7 +139,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await loginViaUI(page);
     await page.getByRole('link', { name: 'Webhooks' }).click();
 
-    await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Webhooks', exact: true })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Webhook' })).toBeVisible();
     await expect(page.getByText('Receive HTTP notifications')).toBeVisible();
 
