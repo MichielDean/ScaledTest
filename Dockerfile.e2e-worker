@@ -1,0 +1,35 @@
+# Stage 1: Build the Go worker binary
+FROM golang:1.25-alpine AS builder
+RUN apk add --no-cache git
+WORKDIR /build
+COPY go.mod go.sum ./
+RUN go mod download
+COPY . .
+RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/scaledtest-worker ./cmd/worker
+
+# Stage 2: Playwright runtime with baked-in e2e test suite
+# mcr.microsoft.com/playwright:v1.58.2-jammy ships Node.js + Chromium + all browser deps
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
+
+WORKDIR /workspace
+
+# Install e2e dependencies (cached layer — package files change rarely)
+COPY e2e/package.json e2e/package-lock.json ./
+RUN npm ci
+
+# Bake in the test suite
+COPY e2e/ .
+
+# Copy the Go worker binary
+COPY --from=builder /build/scaledtest-worker /usr/local/bin/scaledtest-worker
+
+# Required env vars (must be supplied at pod launch):
+#   ST_API_URL        - ScaledTest API base URL
+#   ST_WORKER_TOKEN   - API token for reporting results
+#   ST_EXECUTION_ID   - Execution record to update
+#   ST_COMMAND        - Playwright command, e.g. "npx playwright test"
+#
+# Optional:
+#   E2E_BASE_URL      - Target app URL (default: http://localhost:5173)
+
+ENTRYPOINT ["/usr/local/bin/scaledtest-worker"]
