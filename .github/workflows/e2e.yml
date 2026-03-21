@@ -40,6 +40,9 @@ jobs:
       ST_DATABASE_URL: postgres://test:test@localhost:5432/scaledtest_e2e?sslmode=disable
       ST_JWT_SECRET: e2e-ci-test-secret-at-least-32-chars
       ST_BASE_URL: http://localhost:8080
+      # Disable rate limiting so per-test user registrations never trip 429.
+      # This is an explicit application config flag, not the ambient CI env var.
+      ST_DISABLE_RATE_LIMIT: "true"
       # Pass GITHUB_TOKEN so the server can post commit statuses back to GitHub
       ST_GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -40,6 +40,11 @@ type Config struct {
 	SMTPFrom string `koanf:"smtp_from"`
 
 	GitHubToken string `koanf:"github_token"`
+
+	// DisableRateLimit bypasses all rate-limit middleware when true.
+	// Set ST_DISABLE_RATE_LIMIT=true only in controlled test environments.
+	// WARNING: disabling rate limiting removes brute-force protection on auth endpoints.
+	DisableRateLimit bool `koanf:"disable_rate_limit"`
 }
 
 // Load reads configuration from environment variables prefixed with ST_.

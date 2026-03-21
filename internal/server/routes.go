@@ -34,13 +34,17 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 	r := chi.NewRouter()
 
+	if cfg.DisableRateLimit {
+		log.Warn().Msg("rate limiting disabled via ST_DISABLE_RATE_LIMIT — do not use in production")
+	}
+
 	// Global middleware
 	r.Use(middleware.RequestID)
 	r.Use(middleware.RealIP)
 	r.Use(zerologMiddleware)
 	r.Use(middleware.Recoverer)
 	r.Use(maxBodySize(10 << 20)) // 10MB global request body limit
-	r.Use(httprate.LimitByIP(100, 1*time.Minute))
+	r.Use(rateLimitMW(cfg.DisableRateLimit, 100, 1*time.Minute))
 	r.Use(cors.New(cors.Options{
 		AllowedOrigins:   []string{cfg.BaseURL, "http://localhost:5173"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -181,7 +185,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// Auth routes (public) — stricter rate limit to prevent brute-force
 	r.Route("/auth", func(r chi.Router) {
-		r.Use(httprate.LimitByIP(10, 1*time.Minute))
+		r.Use(rateLimitMW(cfg.DisableRateLimit, 10, 1*time.Minute))
 		r.Post("/register", authH.Register)
 		r.Post("/login", authH.Login)
 		r.Post("/refresh", authH.Refresh)
@@ -198,12 +202,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		r.Use(csrfMW)
 
 		r.Get("/auth/me", authH.GetMe)
-		r.With(httprate.LimitByIP(10, 1*time.Minute)).Post("/auth/change-password", authH.ChangePassword)
+		r.With(rateLimitMW(cfg.DisableRateLimit, 10, 1*time.Minute)).Post("/auth/change-password", authH.ChangePassword)
 		r.Patch("/auth/me", authH.UpdateMe)
 
 		r.Route("/reports", func(r chi.Router) {
 			r.Get("/", reportsH.List)
-			r.With(auth.RequireRole("maintainer", "owner"), httprate.LimitByIP(30, 1*time.Minute)).Post("/", reportsH.Create)
+			r.With(auth.RequireRole("maintainer", "owner"), rateLimitMW(cfg.DisableRateLimit, 30, 1*time.Minute)).Post("/", reportsH.Create)
 			r.Get("/compare", reportsH.Compare)
 			r.Get("/{reportID}", reportsH.Get)
 			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{reportID}", reportsH.Delete)
@@ -211,7 +215,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 		r.Route("/executions", func(r chi.Router) {
 			r.Get("/", execH.List)
-			r.With(auth.RequireRole("maintainer", "owner"), httprate.LimitByIP(20, 1*time.Minute)).Post("/", execH.Create)
+			r.With(auth.RequireRole("maintainer", "owner"), rateLimitMW(cfg.DisableRateLimit, 20, 1*time.Minute)).Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
 			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{executionID}", execH.Cancel)
 			r.Put("/{executionID}/status", execH.UpdateStatus)
@@ -310,6 +314,15 @@ func zerologMiddleware(next http.Handler) http.Handler {
 			Msg("request")
 		next.ServeHTTP(w, r)
 	})
+}
+
+// rateLimitMW returns a rate-limit middleware, or a passthrough when disabled.
+// Pass cfg.DisableRateLimit to bypass rate limiting in controlled test environments.
+func rateLimitMW(disabled bool, n int, dur time.Duration) func(http.Handler) http.Handler {
+	if disabled {
+		return func(next http.Handler) http.Handler { return next }
+	}
+	return httprate.LimitByIP(n, dur)
 }
 
 // maxBodySize limits the request body size for all requests.
