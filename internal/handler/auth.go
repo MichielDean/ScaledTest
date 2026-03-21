@@ -310,8 +310,18 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Look up user's primary team to embed in the JWT so browser sessions
+	// have team context for team-scoped API calls.
+	var teamID string
+	if err = h.DB.QueryRow(r.Context(),
+		`SELECT team_id FROM user_teams WHERE user_id = $1 ORDER BY joined_at ASC LIMIT 1`,
+		userID,
+	).Scan(&teamID); err != nil && err != pgx.ErrNoRows {
+		teamID = ""
+	}
+
 	// Generate token pair and create session
-	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, "")
+	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, teamID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return

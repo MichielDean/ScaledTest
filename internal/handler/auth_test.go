@@ -487,6 +487,144 @@ func TestGetMeNoDB(t *testing.T) {
 	}
 }
 
+func TestLoginEmbedsPrimaryTeamInJWT(t *testing.T) {
+	hash, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	const teamID = "550e8400-e29b-41d4-a716-446655440000"
+	callCount := 0
+
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			callCount++
+			switch callCount {
+			case 1:
+				// User lookup: id, password_hash, display_name, role
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*string)) = "user-id-1"
+					*(dest[1].(*string)) = hash
+					*(dest[2].(*string)) = "Test User"
+					*(dest[3].(*string)) = "maintainer"
+					return nil
+				}}
+			case 2:
+				// Primary team lookup
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*string)) = teamID
+					return nil
+				}}
+			default:
+				t.Errorf("unexpected QueryRow call #%d", callCount)
+				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("INSERT 1"), nil
+		},
+	}
+
+	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+
+	body := `{"email":"test@example.com","password":"password123"}`
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login with team: status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	accessToken, ok := resp["access_token"].(string)
+	if !ok || accessToken == "" {
+		t.Fatal("missing or empty access_token in response")
+	}
+
+	claims, err := jwtMgr.ValidateAccessToken(accessToken)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken: %v", err)
+	}
+
+	if claims.TeamID != teamID {
+		t.Errorf("JWT TeamID = %q, want %q", claims.TeamID, teamID)
+	}
+}
+
+func TestLoginNoTeamHasEmptyTeamIDInJWT(t *testing.T) {
+	hash, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	callCount := 0
+
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			callCount++
+			switch callCount {
+			case 1:
+				// User lookup
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*string)) = "user-id-1"
+					*(dest[1].(*string)) = hash
+					*(dest[2].(*string)) = "Test User"
+					*(dest[3].(*string)) = "maintainer"
+					return nil
+				}}
+			case 2:
+				// No teams found
+				return &mockRow{scanFn: func(dest ...any) error {
+					return pgx.ErrNoRows
+				}}
+			default:
+				t.Errorf("unexpected QueryRow call #%d", callCount)
+				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("INSERT 1"), nil
+		},
+	}
+
+	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+
+	body := `{"email":"test@example.com","password":"password123"}`
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Login no team: status = %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+
+	accessToken := resp["access_token"].(string)
+	claims, err := jwtMgr.ValidateAccessToken(accessToken)
+	if err != nil {
+		t.Fatalf("ValidateAccessToken: %v", err)
+	}
+
+	if claims.TeamID != "" {
+		t.Errorf("JWT TeamID = %q, want empty (no team)", claims.TeamID)
+	}
+}
+
 func TestGetMeSuccess(t *testing.T) {
 	mockDB := &mockAuthDB{
 		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
