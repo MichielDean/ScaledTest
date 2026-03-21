@@ -83,6 +83,42 @@ Deploy ScaledTest to a Kubernetes cluster.
 | `timescaledb.yaml`    | StatefulSet | Database with persistent storage      |
 | `kustomization.yaml`  | Kustomize   | Orchestrates all resources            |
 
+## E2E Worker Image
+
+ScaledTest dispatches distributed Playwright test runs as Kubernetes Jobs. Each
+Job pod runs the **e2e worker** image, which contains:
+
+- The ScaledTest worker binary (built from `cmd/worker`)
+- The `e2e/` test suite baked in at `/workspace`
+- Node.js + Playwright + Chromium (via `mcr.microsoft.com/playwright`)
+
+### `ST_WORKER_IMAGE`
+
+`configmap.yaml` sets the image pulled for every worker Job:
+
+```yaml
+ST_WORKER_IMAGE: 'ghcr.io/michialdean/scaledtest/e2e-worker:latest'
+```
+
+This image is built from `Dockerfile.e2e-worker` and published automatically by
+the **Publish E2E Worker Image** GitHub Actions workflow on every push to `main`
+that touches `Dockerfile.e2e-worker`, `e2e/**`, `cmd/worker/**`, `go.mod`, or
+`go.sum`.
+
+To use a pinned version instead of `latest`, update `ST_WORKER_IMAGE` in
+`configmap.yaml` to reference a specific image digest or tag, then
+`kubectl apply -k k8s/` to roll out the change.
+
+### Environment variables injected into each worker pod
+
+| Variable | Source | Purpose |
+|---|---|---|
+| `ST_API_URL` | Config/secret | ScaledTest API base URL for progress reporting |
+| `ST_WORKER_TOKEN` | Secret | API token used by the worker to authenticate |
+| `ST_EXECUTION_ID` | Runtime | Execution record the worker reports results into |
+| `ST_COMMAND` | Runtime | Playwright command, e.g. `npx playwright test` |
+| `E2E_BASE_URL` | Optional | Target app URL (default: `http://localhost:5173`) |
+
 ## Production Considerations
 
 - **Database**: Use a managed PostgreSQL with TimescaleDB (e.g., Timescale Cloud, AWS RDS) instead of the in-cluster StatefulSet
