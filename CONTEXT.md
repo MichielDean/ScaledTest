@@ -1,44 +1,38 @@
 # Context
 
-## Item: sc-elrq5
+## Item: sc-x4my8
 
-**Title:** Send invitation email on invitation creation
+**Title:** E2E: cache JWT tokens in global-setup to eliminate per-test login calls
 **Status:** in_progress
 **Priority:** 2
 
 ### Description
 
-In the invitations.Create handler, after successfully creating a new invitation, send an email to the invited user's email address with the invitation URL (ST_BASE_URL + /invitations/{token}). Gracefully handle the case where SMTP is not configured by logging the invite URL and continuing without error.
+Follow-up to sc-gnqys. The root cause of 429 errors is httprate.LimitByIP(10, 1*time.Minute) on all auth routes (internal/server/routes.go:184). All E2E tests run from 127.0.0.1, so 10 tests × login = rate limit hit.
 
-## Current Step: implement
+Fix: extend e2e/global-setup.ts to perform ONE login per user role (readonly, maintainer, owner) after seeding users, then write the JWT tokens to e2e/.auth/tokens.json. Tests that need authenticated API calls import from this file instead of calling loginViaAPI(). The helpers.ts loginViaAPI() function should remain but tests should prefer the cached tokens.
+
+This preserves full test isolation — each test still creates its own data/resources — but eliminates the N login calls from parallel tests. The application rate limiter does not need to change.
+
+Implementation:
+- global-setup.ts: after registering users, POST /api/v1/auth/login for each role, store {maintainer: token, readonly: token, owner: token} to .auth/tokens.json
+- helpers.ts: add loadCachedToken(role) helper that reads from .auth/tokens.json
+- Update tests that currently call loginViaAPI() to use loadCachedToken() instead
+- .auth/ directory should be in .gitignore (tokens are ephemeral CI artifacts)
+
+Note: sc-gnqys may have already added CI=true rate limit bypass — if so, evaluate whether this is still needed or if both approaches complement each other.
+
+## Current Step: simplify
 
 - **Type:** agent
-- **Role:** implementer
+- **Role:** simplifier
 - **Context:** full_codebase
 
 ## Recent Step Notes
 
 ### From: manual
 
-Implemented invitation email sending. Created internal/mailer package (Mailer interface + SMTPMailer). Added SMTP config fields (ST_SMTP_HOST/PORT/USERNAME/PASSWORD/FROM). InvitationsHandler.Create now sends email after successful creation; when Mailer is nil (SMTP not configured), logs invite URL and continues. Mailer errors are non-fatal. Tests: all 18 packages pass. Commit: 3cc85549a33c7ba96e68880418817b6e7519fbff. Verified: inviteURL construction, SendInvitation call, nil-mailer log path, mailer-error graceful handling.
-
-### From: manual
-
-Phase 2 — two issues.
-
-Issue 1 — broken test assertion (invitations_test.go:212):
-TestCreateInvitation_CallsMailer asserts strings.HasPrefix(ml.sentURL, "http://app.example.com/invitations/inv_"). The token is generated from crypto/rand (invitationTokenBytes=32) encoded with encoding/hex, producing a 64-char lowercase hex string. Hex characters are 0-9a-f; no inv_ prefix is possible. This assertion always fails, making the test produce no real coverage for the URL passed to SendInvitation. (The mailer_test.go uses a literal "inv_token123" string that has no bearing on the real token format.)
-
-Issue 2 — missing timeout / context not honoured (mailer/mailer.go:326):
-SMTPMailer.SendInvitation accepts context.Context but discards it (_ context.Context). smtp.SendMail is a synchronous blocking call with no timeout and no context cancellation path. A slow or unresponsive SMTP server will hang the HTTP handler goroutine indefinitely, with no way for the caller to cancel via the request context. Either run the send in a goroutine with a deadline, or use net.Dialer.DialContext to honour the passed context.
-
-### From: manual
-
-Fixed Issue 2: SMTPMailer.SendInvitation now uses net.Dialer.DialContext to honour the passed context during dial, and propagates the context deadline to the connection so the SMTP session cannot hang indefinitely. Added TestSendInvitation_CancelledContext (listener that accepts but never responds — test fails in 2s with old blocking code, returns immediately with new code). Issue 1 (inv_ prefix assertion) was already correct — generateInvitationToken returns 'inv_'+hex, test passes as-is. Commit: e82535b. Tests: all 18 packages pass.
-
-### From: manual
-
-Phase 2 — two new issues. Issue 1: mailer/mailer.go:343 — conn.SetDeadline(deadline) return value silently discarded; if SetDeadline fails, the SMTP session has no network deadline after a successful dial, allowing a slow SMTP server to still hang the handler goroutine — defeating the context-cancellation fix. Error must be checked and returned (or at minimum, the connection closed). Issue 2: mailer/mailer.go:331-335 — email header injection: 'to' (user-supplied invitation email address) is interpolated directly into the To: MIME header without CRLF sanitization. An address containing \r\n injects arbitrary headers (e.g., Bcc:), enabling spam relay. The mailer performs no sanitization and no upstream validation is visible in the diff.
+Implemented JWT token caching in E2E tests. global-setup.ts now logs in once per role after seeding and writes tokens to e2e/.auth/tokens.json. Added loadCachedToken(role) helper to helpers.ts. Updated all 6 test files (analytics, authorization, execution-lifecycle, quality-gates, report-submission, webhooks) to call loadCachedToken() instead of loginViaAPI(). loginViaAPI() kept for backward-compat. Added e2e/.auth/ to .gitignore.
 
 <available_skills>
   <skill>
@@ -47,9 +41,9 @@ Phase 2 — two new issues. Issue 1: mailer/mailer.go:343 — conn.SetDeadline(d
     <location>.claude/skills/cistern-droplet-state/SKILL.md</location>
   </skill>
   <skill>
-    <name>github-workflow</name>
-    <description>---</description>
-    <location>.claude/skills/github-workflow/SKILL.md</location>
+    <name>code-simplifier</name>
+    <description>code-simplifier</description>
+    <location>.claude/skills/code-simplifier/SKILL.md</location>
   </skill>
 </available_skills>
 
@@ -58,16 +52,16 @@ Phase 2 — two new issues. Issue 1: mailer/mailer.go:343 — conn.SetDeadline(d
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-elrq5
+    ct droplet pass sc-x4my8
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-elrq5
-    ct droplet recirculate sc-elrq5 --to implement
+    ct droplet recirculate sc-x4my8
+    ct droplet recirculate sc-x4my8 --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-elrq5
+    ct droplet block sc-x4my8
 
 Add notes before signaling:
-    ct droplet note sc-elrq5 "What you did / found"
+    ct droplet note sc-x4my8 "What you did / found"
 
 The `ct` binary is on your PATH.

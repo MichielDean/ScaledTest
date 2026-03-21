@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  loginViaAPI,
+  loadCachedToken,
   authHeaders,
   tokenHeaders,
   buildCtrfReport,
@@ -11,7 +11,7 @@ import {
 test.describe('Quality Gates', () => {
   test('create quality gate, submit report, and evaluate', async ({ request }) => {
     // Setup: team + API token for team-scoped operations
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
@@ -64,7 +64,7 @@ test.describe('Quality Gates', () => {
   });
 
   test('quality gate with strict rules fails on low pass rate', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
