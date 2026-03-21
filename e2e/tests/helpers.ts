@@ -1,7 +1,7 @@
 import { expect, type Page, type APIRequestContext } from '@playwright/test';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
-import type { CachedTokens } from '../global-setup';
+import { OWNER_EMAIL, OWNER_PASSWORD, type CachedTokens } from '../global-setup';
 
 export const MAINTAINER = {
   email: 'maintainer@example.com',
@@ -9,8 +9,8 @@ export const MAINTAINER = {
 };
 
 export const OWNER = {
-  email: 'owner@example.com',
-  password: 'Owner123!',
+  email: OWNER_EMAIL,
+  password: OWNER_PASSWORD,
 };
 
 export interface AuthSession {
