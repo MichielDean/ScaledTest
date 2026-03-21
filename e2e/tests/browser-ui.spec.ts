@@ -94,9 +94,9 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await expect(page.getByRole('heading', { name: 'Test Reports' })).toBeVisible();
     await expect(page.getByPlaceholder(/search reports/i)).toBeVisible();
 
-    // Status filter buttons
-    await expect(page.getByRole('button', { name: 'All' })).toBeVisible();
-    await expect(page.getByRole('button', { name: 'Failed' })).toBeVisible();
+    // Status filter buttons (use .first() — report rows may also contain buttons with these labels)
+    await expect(page.getByRole('button', { name: 'All' }).first()).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Failed' }).first()).toBeVisible();
 
     // The submitted report should appear in the list
     await expect(page.getByText(uniqueTool)).toBeVisible({ timeout: 10_000 });
