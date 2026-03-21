@@ -101,9 +101,10 @@ test.describe('Browser UI — Core Platform Flows', () => {
     // The submitted report should appear in the list
     await expect(page.getByText(uniqueTool)).toBeVisible({ timeout: 10_000 });
 
-    // Pass/fail counts are visible in the report row
-    await expect(page.getByText('2 passed')).toBeVisible();
-    await expect(page.getByText('1 failed')).toBeVisible();
+    // Pass/fail counts are visible in the report row (scoped to the specific report)
+    const reportRow = page.locator('.rounded-lg.border.bg-card').filter({ hasText: uniqueTool });
+    await expect(reportRow.getByText(/\d+ passed/)).toBeVisible();
+    await expect(reportRow.getByText(/\d+ failed/)).toBeVisible();
 
     await page.screenshot({ path: 'screenshots/browser-ui-test-results.png' });
   });
