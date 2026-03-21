@@ -1,7 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { createServer, type Server } from 'node:http';
 import {
-  loginViaAPI,
+  loadCachedToken,
   tokenHeaders,
   buildCtrfReport,
   getOrCreateTeam,
@@ -46,7 +46,7 @@ test.describe('Webhooks', () => {
 
     try {
       // Setup: team + API token
-      const session = await loginViaAPI(request);
+      const session = loadCachedToken();
       const teamId = await getOrCreateTeam(request, session);
       const apiToken = await createAPIToken(request, session, teamId);
       const headers = tokenHeaders(apiToken);
@@ -102,7 +102,7 @@ test.describe('Webhooks', () => {
   });
 
   test('webhook CRUD operations', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);

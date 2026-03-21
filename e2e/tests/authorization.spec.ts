@@ -1,6 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
-  loginViaAPI,
+  loadCachedToken,
   authHeaders,
   tokenHeaders,
   getOrCreateTeam,
@@ -22,7 +22,7 @@ test.describe('Authorization & Team Isolation', () => {
   });
 
   test('team-scoped API token cannot access other team resources', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
 
     // Create two teams
     const teamAId = await getOrCreateTeam(request, session);
@@ -82,7 +82,7 @@ test.describe('Authorization & Team Isolation', () => {
 
   test('admin endpoints reject non-owner users', async ({ request }) => {
     // The default MAINTAINER user should not have owner access to admin
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const res = await request.get('/api/v1/admin/users', {
       headers: authHeaders(session),
     });
@@ -92,7 +92,7 @@ test.describe('Authorization & Team Isolation', () => {
   });
 
   test('quality gate CRUD is team-scoped', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);

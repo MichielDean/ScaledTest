@@ -1,9 +1,9 @@
 import { test, expect } from '@playwright/test';
-import { loginViaAPI, loginViaUI, authHeaders, buildCtrfReport } from './helpers';
+import { loadCachedToken, loginViaUI, authHeaders, buildCtrfReport } from './helpers';
 
 test.describe('Analytics', () => {
   test('analytics page shows data sections after report submissions', async ({ page, request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
 
     // Submit several reports so analytics has data to display
     for (let i = 0; i < 3; i++) {
@@ -27,7 +27,7 @@ test.describe('Analytics', () => {
   });
 
   test('analytics trends API returns valid data after submissions', async ({ request }) => {
-    const session = await loginViaAPI(request);
+    const session = loadCachedToken();
 
     // Submit a report
     const submitRes = await request.post('/api/v1/reports', {

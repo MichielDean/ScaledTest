@@ -37,7 +37,10 @@ make frontend-test
 
 ## Running E2E Tests (Playwright)
 
-E2E tests live in `e2e/` and use Playwright. A global setup step runs before the suite to seed required test users via `POST /auth/register`.
+E2E tests live in `e2e/` and use Playwright. A global setup step runs before the suite to:
+
+1. Seed required test users via `POST /auth/register` (idempotent).
+2. Log in once per role and write JWT tokens to `e2e/.auth/tokens.json`.
 
 **The backend must be running** before you start Playwright:
 
@@ -64,6 +67,18 @@ The global setup creates the following users (idempotent — safe to re-run):
 | Email | Password | Role |
 |---|---|---|
 | `maintainer@example.com` | `Maintainer123!` | Maintainer |
+
+### JWT token caching
+
+After seeding, global setup logs in once per role and writes cached tokens to `e2e/.auth/tokens.json`. Tests use `loadCachedToken()` from `e2e/tests/helpers.ts` instead of calling `loginViaAPI()` on every test run. This avoids hitting the server's per-IP rate limiter (`10 req/min` on auth routes) when many tests run in parallel.
+
+```typescript
+import { loadCachedToken } from './helpers';
+
+const { accessToken } = loadCachedToken('maintainer');
+```
+
+`e2e/.auth/` is gitignored — tokens are ephemeral CI artifacts and must never be committed. The `loginViaAPI()` helper is kept for cases where a fresh token is explicitly needed.
 
 ## Building
 
