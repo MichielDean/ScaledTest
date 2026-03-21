@@ -835,19 +835,16 @@ func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Sum
 	}
 	const statusContext = "scaledtest/e2e"
 
-	var description, targetURL string
+	description := fmt.Sprintf("%d tests: %d passed, %d failed",
+		summary.Tests, summary.Passed, summary.Failed)
+	var targetURL string
 	if executionID != "" {
-		description = fmt.Sprintf("%d tests: %d passed, %d failed (execution: %s)",
-			summary.Tests, summary.Passed, summary.Failed, executionID)
+		description += fmt.Sprintf(" (execution: %s)", executionID)
 		if h.BaseURL != "" {
 			targetURL = fmt.Sprintf("%s/executions/%s", h.BaseURL, executionID)
 		}
-	} else {
-		description = fmt.Sprintf("%d tests: %d passed, %d failed",
-			summary.Tests, summary.Passed, summary.Failed)
-		if h.BaseURL != "" && reportID != "" {
-			targetURL = fmt.Sprintf("%s/reports/%s", h.BaseURL, reportID)
-		}
+	} else if h.BaseURL != "" && reportID != "" {
+		targetURL = fmt.Sprintf("%s/reports/%s", h.BaseURL, reportID)
 	}
 
 	poster := h.GitHubStatusPoster
