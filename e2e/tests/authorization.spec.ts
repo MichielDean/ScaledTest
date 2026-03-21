@@ -43,7 +43,7 @@ test.describe('Authorization & Team Isolation', () => {
       data: {
         name: `Isolation-Gate-${Date.now()}`,
         description: 'test',
-        rules: [{ metric: 'pass_rate', operator: 'gte', threshold: 50 }],
+        rules: [{ type: 'pass_rate', params: { threshold: 50 } }],
       },
     });
     expect(gateRes.ok()).toBeTruthy();
@@ -103,7 +103,7 @@ test.describe('Authorization & Team Isolation', () => {
       data: {
         name: `RBAC-Gate-${Date.now()}`,
         description: 'auth test',
-        rules: [{ metric: 'pass_rate', operator: 'gte', threshold: 80 }],
+        rules: [{ type: 'pass_rate', params: { threshold: 80 } }],
       },
     });
     expect(createRes.ok()).toBeTruthy();

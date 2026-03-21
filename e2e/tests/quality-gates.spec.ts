@@ -24,8 +24,8 @@ test.describe('Quality Gates', () => {
         name: gateName,
         description: 'E2E test quality gate',
         rules: [
-          { metric: 'pass_rate', operator: 'gte', threshold: 50 },
-          { metric: 'failed_count', operator: 'lte', threshold: 5 },
+          { type: 'pass_rate', params: { threshold: 50 } },
+          { type: 'min_test_count', params: { threshold: 1 } },
         ],
       },
     });
@@ -75,7 +75,7 @@ test.describe('Quality Gates', () => {
       data: {
         name: `Strict-Gate-${Date.now()}`,
         description: 'Must have 100% pass rate',
-        rules: [{ metric: 'pass_rate', operator: 'gte', threshold: 100 }],
+        rules: [{ type: 'pass_rate', params: { threshold: 100 } }],
       },
     });
     expect(createRes.ok()).toBeTruthy();

@@ -513,3 +513,64 @@ func TestReadonlyCanListReports(t *testing.T) {
 		t.Errorf("readonly GET /api/v1/reports: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
+
+func TestRateLimitMWEnabled(t *testing.T) {
+	// When disabled=false, rateLimitMW enforces the limit.
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	mw := rateLimitMW(false, 2, time.Minute)
+	wrapped := mw(h)
+
+	for i := 0; i < 2; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.1:1234"
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Fatalf("rateLimitMW rate-limited request %d before limit of 2", i+1)
+		}
+	}
+
+	req := httptest.NewRequest("GET", "/", nil)
+	req.RemoteAddr = "192.0.2.1:1234"
+	w := httptest.NewRecorder()
+	wrapped.ServeHTTP(w, req)
+	if w.Code != http.StatusTooManyRequests {
+		t.Errorf("enabled rateLimitMW: request 3 status = %d, want %d", w.Code, http.StatusTooManyRequests)
+	}
+}
+
+func TestRateLimitMWDisabled(t *testing.T) {
+	// When disabled=true, rateLimitMW returns a passthrough — no 429 regardless of volume.
+	h := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { w.WriteHeader(http.StatusOK) })
+	mw := rateLimitMW(true, 2, time.Minute)
+	wrapped := mw(h)
+
+	for i := 0; i < 10; i++ {
+		req := httptest.NewRequest("GET", "/", nil)
+		req.RemoteAddr = "192.0.2.2:1234"
+		w := httptest.NewRecorder()
+		wrapped.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Errorf("disabled rateLimitMW returned 429 on request %d; passthrough expected", i+1)
+		}
+	}
+}
+
+func TestRateLimitMWDisabledViaConfig(t *testing.T) {
+	// NewRouter with DisableRateLimit=true must not rate-limit auth endpoints
+	// regardless of request volume.
+	cfg := testConfig()
+	cfg.DisableRateLimit = true
+	router := NewRouter(cfg, nil)
+
+	for i := 0; i < 15; i++ {
+		req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(`{"email":"a@b.com","password":"12345678"}`))
+		req.Header.Set("Content-Type", "application/json")
+		req.RemoteAddr = "192.0.2.3:1234"
+		w := httptest.NewRecorder()
+		router.ServeHTTP(w, req)
+		if w.Code == http.StatusTooManyRequests {
+			t.Errorf("DisableRateLimit=true: request %d got 429; rate limiting should be disabled", i+1)
+		}
+	}
+}
