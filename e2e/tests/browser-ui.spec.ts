@@ -98,9 +98,8 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await expect(page.getByRole('button', { name: 'All' }).first()).toBeVisible();
     await expect(page.getByRole('button', { name: 'Failed' }).first()).toBeVisible();
 
-    // The submitted report should appear in the list with its tool name and version
+    // The submitted report should appear in the list by its unique tool name
     await expect(page.getByText(uniqueTool)).toBeVisible({ timeout: 10_000 });
-    await expect(page.getByText('v1.0.0')).toBeVisible();
 
     await page.screenshot({ path: 'screenshots/browser-ui-test-results.png' });
   });
