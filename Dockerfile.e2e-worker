@@ -1,5 +1,5 @@
 # Stage 1: Build the Go worker binary
-FROM golang:1.23-alpine AS builder
+FROM golang:1.25-alpine AS builder
 RUN apk add --no-cache git
 WORKDIR /build
 COPY go.mod go.sum ./
@@ -8,8 +8,8 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /build/scaledtest-worker ./cmd/worker
 
 # Stage 2: Playwright runtime with baked-in e2e test suite
-# mcr.microsoft.com/playwright:v1.49.0-jammy ships Node.js + Chromium + all browser deps
-FROM mcr.microsoft.com/playwright:v1.49.0-jammy
+# mcr.microsoft.com/playwright:v1.58.2-jammy ships Node.js + Chromium + all browser deps
+FROM mcr.microsoft.com/playwright:v1.58.2-jammy
 
 WORKDIR /workspace
 

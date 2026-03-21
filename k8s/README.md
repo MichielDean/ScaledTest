@@ -107,7 +107,10 @@ that touches `Dockerfile.e2e-worker`, `e2e/**`, `cmd/worker/**`, `go.mod`, or
 
 To use a pinned version instead of `latest`, update `ST_WORKER_IMAGE` in
 `configmap.yaml` to reference a specific image digest or tag, then
-`kubectl apply -k k8s/` to roll out the change.
+`kubectl apply -k k8s/` to roll out the change. Note: existing pods read
+`envFrom: configMapRef` only at startup, so restart the deployment
+(`kubectl rollout restart deployment/scaledtest -n scaledtest`) for pods to
+pick up the new image value.
 
 ### Environment variables injected into each worker pod
 
