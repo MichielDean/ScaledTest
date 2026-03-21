@@ -11,5 +11,5 @@ data:
   ST_JWT_REFRESH_DURATION: '168h'
   ST_K8S_NAMESPACE: 'scaledtest'
   ST_K8S_IN_CLUSTER: 'true'
-  ST_WORKER_IMAGE: 'scaledtest/worker:latest'
+  ST_WORKER_IMAGE: 'ghcr.io/michialdean/scaledtest/e2e-worker:latest'
   ST_BASE_URL: 'https://scaledtest.example.com'
