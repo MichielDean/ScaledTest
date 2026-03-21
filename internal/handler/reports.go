@@ -154,6 +154,8 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Sanitize all user-controlled string fields to prevent stored XSS
 	ctrf.Sanitize(report)
 
+	executionID := r.URL.Query().Get("execution_id")
+
 	if h.DB == nil {
 		// Fallback for no-DB mode: accept but don't persist
 		resp := map[string]interface{}{
@@ -161,16 +163,15 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			"tool":    report.Results.Tool.Name,
 			"tests":   report.Results.Summary.Tests,
 		}
-		if executionID := r.URL.Query().Get("execution_id"); executionID != "" {
+		if executionID != "" {
 			resp["execution_id"] = executionID
 		}
 		JSON(w, http.StatusCreated, resp)
-		h.maybePostGitHubStatus(r, report.Results.Summary, "")
+		h.maybePostGitHubStatus(r, report.Results.Summary, "", executionID)
 		return
 	}
 
 	reportID := uuid.New().String()
-	executionID := r.URL.Query().Get("execution_id")
 	now := time.Now()
 
 	// Validate execution_id as UUID and verify team ownership if provided
@@ -321,7 +322,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusCreated, resp)
-	h.maybePostGitHubStatus(r, report.Results.Summary, reportID)
+	h.maybePostGitHubStatus(r, report.Results.Summary, reportID, executionID)
 }
 
 // Get handles GET /api/v1/reports/{reportID}.
@@ -815,7 +816,9 @@ func buildReportData(report *ctrf.Report, results []model.TestResult, previousFa
 // when the request carries github_owner, github_repo, and github_sha query params
 // and GitHubStatusPoster is configured. Errors are logged but never propagate to
 // the caller — the status post is best-effort.
-func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Summary, reportID string) {
+// When executionID is non-empty the status links to the execution page and
+// includes the execution ID in the description for easy navigation.
+func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Summary, reportID, executionID string) {
 	if h.GitHubStatusPoster == nil {
 		return
 	}
@@ -830,13 +833,21 @@ func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Sum
 	if summary.Failed > 0 {
 		state = "failure"
 	}
-	description := fmt.Sprintf("%d tests: %d passed, %d failed",
-		summary.Tests, summary.Passed, summary.Failed)
 	const statusContext = "scaledtest/e2e"
 
-	targetURL := ""
-	if h.BaseURL != "" && reportID != "" {
-		targetURL = fmt.Sprintf("%s/reports/%s", h.BaseURL, reportID)
+	var description, targetURL string
+	if executionID != "" {
+		description = fmt.Sprintf("%d tests: %d passed, %d failed (execution: %s)",
+			summary.Tests, summary.Passed, summary.Failed, executionID)
+		if h.BaseURL != "" {
+			targetURL = fmt.Sprintf("%s/executions/%s", h.BaseURL, executionID)
+		}
+	} else {
+		description = fmt.Sprintf("%d tests: %d passed, %d failed",
+			summary.Tests, summary.Passed, summary.Failed)
+		if h.BaseURL != "" && reportID != "" {
+			targetURL = fmt.Sprintf("%s/reports/%s", h.BaseURL, reportID)
+		}
 	}
 
 	poster := h.GitHubStatusPoster
