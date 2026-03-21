@@ -263,11 +263,110 @@ jobs:
 
 ScaledTest's main-branch workflow posts a summary of every `go test` run to a Telegram chat. See [Telegram CI notifications](telegram-notifications.md) for setup instructions, environment variable reference, and message format details.
 
+## Execution Lifecycle Tracking
+
+By default, uploading a report creates a standalone report entry. For richer
+dashboard visibility you can link reports to an **execution record**, which
+tracks the full lifecycle of a CI run (pending → running → completed/failed)
+and makes the GitHub commit status link directly to the execution page.
+
+### Full lifecycle with `curl`
+
+```yaml
+- name: Create execution record
+  run: |
+    EXEC_RESPONSE=$(curl -sf -X POST "$SCALEDTEST_URL/api/v1/executions" \
+      -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d '{"command":"npx playwright test"}' || echo '{}')
+
+    EXECUTION_ID=$(echo "$EXEC_RESPONSE" | jq -r '.id // empty')
+    if [ -n "$EXECUTION_ID" ]; then
+      echo "SCALEDTEST_EXECUTION_ID=$EXECUTION_ID" >> "$GITHUB_ENV"
+      # Transition to running
+      curl -sf -X PUT "$SCALEDTEST_URL/api/v1/executions/$EXECUTION_ID/status" \
+        -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d '{"status":"running"}' > /dev/null
+    else
+      echo "::warning::Failed to create execution record — continuing without lifecycle tracking"
+    fi
+  env:
+    SCALEDTEST_URL: ${{ secrets.SCALEDTEST_URL }}
+    SCALEDTEST_API_TOKEN: ${{ secrets.SCALEDTEST_API_TOKEN }}
+
+- name: Run tests
+  run: npx playwright test
+
+- name: Upload CTRF report and close execution
+  if: always()
+  env:
+    SCALEDTEST_URL: ${{ secrets.SCALEDTEST_URL }}
+    SCALEDTEST_API_TOKEN: ${{ secrets.SCALEDTEST_API_TOKEN }}
+  run: |
+    REPORT_URL="$SCALEDTEST_URL/api/v1/reports"
+    if [ -n "$SCALEDTEST_EXECUTION_ID" ]; then
+      REPORT_URL="${REPORT_URL}?execution_id=${SCALEDTEST_EXECUTION_ID}"
+    fi
+
+    body=$(curl -s -X POST "$REPORT_URL" \
+      -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      --data-binary @ctrf-report.json)
+    echo "$body" | jq .
+
+    # Update execution status based on results
+    if [ -n "$SCALEDTEST_EXECUTION_ID" ]; then
+      FAILED=$(echo "$body" | jq -r '.summary.failed // 0')
+      STATUS=$([ "$FAILED" -gt 0 ] && echo "failed" || echo "completed")
+      curl -sf -X PUT "$SCALEDTEST_URL/api/v1/executions/$SCALEDTEST_EXECUTION_ID/status" \
+        -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{\"status\":\"$STATUS\"}" > /dev/null || true
+    fi
+```
+
+When `execution_id` is provided:
+- The report is associated with the execution record in the dashboard
+- The GitHub commit status (if configured) links to `/executions/{id}` and
+  includes the execution ID in its description for one-click navigation
+
 ## API Reference
+
+### `POST /api/v1/executions`
+
+Creates a new execution record with status `pending`.
+
+**Headers:**
+- `Authorization: Bearer sct_<token>`
+- `Content-Type: application/json`
+
+**Body:**
+```json
+{ "command": "npx playwright test" }
+```
+
+**Response (201):** `{ "id": "execution-uuid", ... }`
+
+### `PUT /api/v1/executions/{id}/status`
+
+Updates the lifecycle status of an execution.
+
+**Body:**
+```json
+{ "status": "running" }
+```
+
+Valid statuses: `pending`, `running`, `completed`, `failed`.
 
 ### `POST /api/v1/reports`
 
 Uploads a CTRF test report.
+
+**Query parameters:**
+- `execution_id` _(optional)_ — UUID of an existing execution to link this
+  report to. When supplied, the GitHub commit status links to the execution
+  page and includes the execution ID in its description.
 
 **Headers:**
 - `Authorization: Bearer sct_<token>`
