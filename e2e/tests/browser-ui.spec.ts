@@ -46,7 +46,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     // All four stat cards must be present
     await expect(page.getByText('Total Reports')).toBeVisible();
     await expect(page.getByText('Total Executions')).toBeVisible();
-    await expect(page.getByText('Pass Rate')).toBeVisible();
+    await expect(page.getByText('Pass Rate').first()).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
 
     // Section headings
@@ -84,9 +84,11 @@ test.describe('Browser UI — Core Platform Flows', () => {
     });
     expect(submitRes.ok(), `Report submit failed: ${submitRes.status()}`).toBeTruthy();
 
-    // Log in via the UI — the JWT now has the team_id embedded
+    // Log in via the UI — the JWT now has the team_id embedded.
+    // Navigate via SPA link click (not page.goto) to preserve auth state
+    // in Zustand memory — a full page reload would lose the access token.
     await loginViaUI(page);
-    await page.goto('/reports');
+    await page.getByRole('link', { name: 'Reports' }).click();
 
     // Page heading and search bar
     await expect(page.getByRole('heading', { name: 'Test Reports' })).toBeVisible();
@@ -118,7 +120,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await getOrCreateTeam(request, session);
 
     await loginViaUI(page);
-    await page.goto('/quality-gates');
+    await page.getByRole('link', { name: 'Quality Gates' }).click();
 
     await expect(page.getByRole('heading', { name: 'Quality Gates' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Quality Gate' })).toBeVisible();
@@ -139,7 +141,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     await getOrCreateTeam(request, session);
 
     await loginViaUI(page);
-    await page.goto('/webhooks');
+    await page.getByRole('link', { name: 'Webhooks' }).click();
 
     await expect(page.getByRole('heading', { name: 'Webhooks' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'New Webhook' })).toBeVisible();
@@ -160,7 +162,7 @@ test.describe('Browser UI — Core Platform Flows', () => {
     // via the invitation flow). The admin page requires owner role; a maintainer
     // would see "Access Denied".
     await loginViaUI(page, OWNER);
-    await page.goto('/admin');
+    await page.getByRole('link', { name: 'Admin' }).click();
 
     // Owner sees the full admin page — not the "Access Denied" fallback
     await expect(page.getByRole('heading', { name: 'Admin' })).toBeVisible();
