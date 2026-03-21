@@ -93,15 +93,11 @@ async function loginUser(
 async function tryLoginOwner(
   baseURL: string
 ): Promise<{ accessToken: string; userId: string } | null> {
-  const res = await fetch(`${baseURL}/auth/login`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ email: OWNER_EMAIL, password: OWNER_PASSWORD }),
-    signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-  });
-  if (!res.ok) return null;
-  const data = (await res.json()) as { access_token: string; user: { id: string } };
-  return { accessToken: data.access_token, userId: data.user.id };
+  try {
+    return await loginUser(baseURL, OWNER_EMAIL, OWNER_PASSWORD);
+  } catch {
+    return null;
+  }
 }
 
 /**
