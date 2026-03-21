@@ -87,7 +87,7 @@ test.describe('Execution Lifecycle', () => {
         name: gateName,
         description: 'E2E lifecycle quality gate',
         rules: [
-          { metric: 'pass_rate', operator: 'gte', threshold: 50 },
+          { type: 'pass_rate', params: { threshold: 50 } },
         ],
       },
     });

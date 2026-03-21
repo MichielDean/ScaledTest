@@ -59,11 +59,16 @@ export ST_SMTP_FROM=noreply@example.com
 
 # Optional: GitHub commit status reporting
 export ST_GITHUB_TOKEN=ghp_your_token   # needs repo:status scope
+
+# Optional: disable rate limiting (test environments only — never use in production)
+export ST_DISABLE_RATE_LIMIT=true
 ```
 
 When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.
 
 When `ST_GITHUB_TOKEN` is not set, GitHub commit status posting is disabled. When set, passing `github_owner`, `github_repo`, and `github_sha` query parameters to `POST /api/v1/reports` will post a `scaledtest/e2e` commit status back to GitHub after the report is ingested.
+
+When `ST_DISABLE_RATE_LIMIT=true` is set, all rate-limit middleware is bypassed and a warning is logged at startup. Use this only in controlled test environments (e.g. CI running E2E suites with many per-test user registrations). **Never set this in production** — it removes brute-force protection on auth endpoints.
 
 ### Database Migrations
 
