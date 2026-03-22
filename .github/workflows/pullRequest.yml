@@ -24,7 +24,7 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
 
       - name: Go vet
         run: go vet ./...
@@ -57,7 +57,7 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
 
       - name: Run store integration tests
         env:
@@ -75,8 +75,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
 
       - name: Install dependencies
         working-directory: frontend
@@ -101,8 +100,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
 
       - name: Install dependencies
         working-directory: frontend
@@ -124,14 +122,13 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
@@ -175,14 +172,13 @@ jobs:
         uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
         with:
           go-version-file: go.mod
-          cache: true
+          cache: false
 
       - name: Setup Node.js
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: 'npm'
-          cache-dependency-path: frontend/package-lock.json
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
