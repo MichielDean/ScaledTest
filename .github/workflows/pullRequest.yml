@@ -75,7 +75,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: false
+          package-manager-cache: false
 
       - name: Install dependencies
         working-directory: frontend
@@ -100,7 +100,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: false
+          package-manager-cache: false
 
       - name: Install dependencies
         working-directory: frontend
@@ -128,7 +128,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: false
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
@@ -178,7 +178,7 @@ jobs:
         uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
         with:
           node-version: 22
-          cache: false
+          package-manager-cache: false
 
       - name: Build frontend
         working-directory: frontend
