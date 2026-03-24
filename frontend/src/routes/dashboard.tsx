@@ -105,9 +105,7 @@ export function DashboardPage() {
     const totalPassed = reports.reduce((s, r) => s + (r.passed || 0), 0);
     const totalTests = reports.reduce((s, r) => s + (r.passed || 0) + (r.failed || 0) + (r.skipped || 0), 0);
     if (totalTests === 0) return undefined;
-    const rate = (totalPassed / totalTests) * 100;
-    if (!isFinite(rate)) return undefined;
-    return rate.toFixed(1);
+    return ((totalPassed / totalTests) * 100).toFixed(1);
   })();
 
   const flakyCount = flakyQuery.data?.flaky_tests?.length;
