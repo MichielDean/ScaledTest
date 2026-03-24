@@ -6,6 +6,8 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **`GET /api/v1/reports` (ListReports) response**: Summary count fields (`test_count`, `passed`, `failed`, `skipped`, `pending`) are now promoted to top-level fields alongside the raw `summary` blob. This eliminates NaN pass-rate calculations in the frontend, which previously relied on undefined fields. When the summary is unparseable, the flattened count fields are omitted gracefully rather than returning zero values. The TypeScript SDK's `Report` interface has been updated to reflect these optional top-level fields.
+
 - **`no_new_failures` quality gate**: `fetchPreviousFailedTests` now returns a proper error on database failures instead of silently returning an empty baseline. Previously, a transient DB error would cause the gate to treat all current failures as "new" and incorrectly fail the evaluation. The `POST /evaluate` endpoint now returns HTTP 500 on such errors rather than producing a wrong result.
 
 ### Added
