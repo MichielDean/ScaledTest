@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Link } from '@tanstack/react-router';
+import { AlertCircle } from 'lucide-react';
 import { useAuth } from '../hooks/use-auth';
 
 export function LoginPage() {
@@ -30,13 +31,14 @@ export function LoginPage() {
           <p className="text-muted-foreground">Sign in to your account</p>
         </div>
         {error && (
-          <div className="rounded-md border border-red-200 bg-red-50 p-3 text-sm text-red-700 dark:border-red-800 dark:bg-red-950 dark:text-red-400">
+          <div className="flex items-center gap-2 rounded-md border border-destructive/30 bg-destructive/10 p-3 text-sm text-destructive">
+            <AlertCircle size={14} className="shrink-0" />
             {error}
           </div>
         )}
         <form onSubmit={handleSubmit} className="space-y-4">
           <div>
-            <label htmlFor="email" className="block text-sm font-medium">
+            <label htmlFor="email" className="block text-sm font-medium text-foreground mb-1">
               Email
             </label>
             <input
@@ -44,12 +46,12 @@ export function LoginPage() {
               type="email"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
+              className="mt-1 block w-full rounded-md border border-border bg-muted px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
               required
             />
           </div>
           <div>
-            <label htmlFor="password" className="block text-sm font-medium">
+            <label htmlFor="password" className="block text-sm font-medium text-foreground mb-1">
               Password
             </label>
             <input
@@ -57,21 +59,21 @@ export function LoginPage() {
               type="password"
               value={password}
               onChange={e => setPassword(e.target.value)}
-              className="mt-1 block w-full rounded-md border bg-background px-3 py-2"
+              className="mt-1 block w-full rounded-md border border-border bg-muted px-3 py-2 text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
               required
             />
           </div>
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground font-medium disabled:opacity-50"
+            className="w-full rounded-md bg-primary px-4 py-2 text-primary-foreground font-medium hover:bg-primary/90 disabled:opacity-50 transition-colors"
           >
             {loading ? 'Signing in...' : 'Sign In'}
           </button>
         </form>
         <div className="relative">
           <div className="absolute inset-0 flex items-center">
-            <span className="w-full border-t" />
+            <span className="w-full border-t border-border" />
           </div>
           <div className="relative flex justify-center text-xs uppercase">
             <span className="bg-background px-2 text-muted-foreground">Or continue with</span>
@@ -80,13 +82,13 @@ export function LoginPage() {
         <div className="grid grid-cols-2 gap-3">
           <a
             href="/auth/github"
-            className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+            className="flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors no-underline"
           >
             GitHub
           </a>
           <a
             href="/auth/google"
-            className="flex items-center justify-center rounded-md border px-4 py-2 text-sm font-medium hover:bg-accent"
+            className="flex items-center justify-center rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors no-underline"
           >
             Google
           </a>

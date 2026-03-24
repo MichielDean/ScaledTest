@@ -142,26 +142,26 @@ export function WebhooksPage() {
               setShowForm(true);
             }
           }}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           {showForm ? 'Cancel' : 'New Webhook'}
         </button>
       </div>
 
       {newSecret && (
-        <div className="rounded-lg border border-green-200 bg-green-50 p-4">
-          <p className="text-sm font-medium text-green-800 mb-1">
+        <div className="rounded-lg border border-success/30 bg-success/10 p-4">
+          <p className="text-sm font-medium text-success mb-1">
             Webhook secret (shown once):
           </p>
-          <code className="block rounded bg-white px-3 py-2 text-sm font-mono text-green-900 border">
+          <code className="block rounded bg-card px-3 py-2 text-sm font-mono text-foreground border border-border">
             {newSecret}
           </code>
-          <p className="text-xs text-green-700 mt-2">
+          <p className="text-xs text-success/80 mt-2">
             Copy this secret now. It will not be shown again.
           </p>
           <button
             onClick={() => setNewSecret(null)}
-            className="mt-2 text-xs text-green-700 hover:text-green-900 underline"
+            className="mt-2 text-xs text-success/80 hover:text-success underline"
           >
             Dismiss
           </button>
@@ -189,7 +189,7 @@ export function WebhooksPage() {
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           Failed to load webhooks: {(error as Error).message}
         </div>
       )}
@@ -215,8 +215,8 @@ export function WebhooksPage() {
                     <span
                       className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
                         webhook.enabled
-                          ? 'bg-green-100 text-green-700'
-                          : 'bg-gray-100 text-gray-500'
+                          ? 'bg-success/10 text-success border border-success/20'
+                          : 'bg-muted text-muted-foreground border border-border'
                       }`}
                     >
                       {webhook.enabled ? 'Active' : 'Disabled'}
@@ -226,7 +226,7 @@ export function WebhooksPage() {
                     {webhook.events.map(event => (
                       <span
                         key={event}
-                        className="inline-flex items-center rounded-md border bg-white px-2 py-0.5 text-xs text-gray-600"
+                        className="inline-flex items-center rounded-md border border-border bg-muted px-2 py-0.5 text-xs text-muted-foreground"
                       >
                         {WEBHOOK_EVENTS.find(e => e.value === event)?.label ?? event}
                       </span>
@@ -239,13 +239,13 @@ export function WebhooksPage() {
                 <div className="flex items-center gap-2 shrink-0">
                   <button
                     onClick={() => toggleDeliveries(webhook.id)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                   >
                     Deliveries
                   </button>
                   <button
                     onClick={() => handleEdit(webhook)}
-                    className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                    className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                   >
                     Edit
                   </button>
@@ -254,13 +254,13 @@ export function WebhooksPage() {
                       <button
                         onClick={() => deleteMutation.mutate(webhook.id)}
                         disabled={deleteMutation.isPending}
-                        className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                        className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
                       >
                         {deleteMutation.isPending ? 'Deleting...' : 'Confirm'}
                       </button>
                       <button
                         onClick={() => setConfirmDelete(null)}
-                        className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                        className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                       >
                         Cancel
                       </button>
@@ -268,7 +268,7 @@ export function WebhooksPage() {
                   ) : (
                     <button
                       onClick={() => setConfirmDelete(webhook.id)}
-                      className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                      className="rounded-md border border-destructive/30 bg-card px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
                     >
                       Delete
                     </button>
@@ -329,7 +329,7 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
   }
 
   if (deliveriesQuery.isError) {
-    return <p className="px-4 py-2 text-sm text-red-600">Failed to load deliveries.</p>;
+    return <p className="px-4 py-2 text-sm text-destructive">Failed to load deliveries.</p>;
   }
 
   return (
@@ -343,7 +343,7 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
             <li key={d.id} className="flex items-center gap-3 text-sm py-1">
               <span
                 className={`font-mono font-medium ${
-                  d.status_code >= 200 && d.status_code < 300 ? 'text-green-600' : 'text-red-600'
+                  d.status_code >= 200 && d.status_code < 300 ? 'text-success' : 'text-destructive'
                 }`}
               >
                 {d.status_code}
@@ -354,7 +354,7 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
                 <button
                   onClick={() => retryMutation.mutate(d.id)}
                   disabled={retryMutation.isPending}
-                  className="rounded border border-gray-300 px-2 py-0.5 text-xs font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                  className="rounded border border-border px-2 py-0.5 text-xs font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
                 >
                   Retry
                 </button>
@@ -363,12 +363,12 @@ function WebhookDeliveryList({ teamId, webhookId }: { teamId: string; webhookId:
           ))}
         </ul>
       )}
-      {retryError && <p className="text-sm text-red-600">{retryError}</p>}
+      {retryError && <p className="text-sm text-destructive">{retryError}</p>}
       {deliveriesQuery.hasNextPage && (
         <button
           onClick={() => void deliveriesQuery.fetchNextPage()}
           disabled={deliveriesQuery.isFetchingNextPage}
-          className="mt-2 rounded border border-gray-300 px-3 py-1 text-sm font-medium hover:bg-gray-50 disabled:opacity-50 transition-colors"
+          className="mt-2 rounded border border-border px-3 py-1 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 transition-colors"
         >
           {deliveriesQuery.isFetchingNextPage ? 'Loading...' : 'Load More'}
         </button>
@@ -445,7 +445,7 @@ function WebhookForm({
       </h2>
 
       <div>
-        <label htmlFor="wh-url" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="wh-url" className="block text-sm font-medium text-foreground mb-1">
           Payload URL
         </label>
         <input
@@ -454,23 +454,23 @@ function WebhookForm({
           value={url}
           onChange={e => setUrl(e.target.value)}
           placeholder="https://example.com/webhooks/scaledtest"
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
         />
       </div>
 
       <div>
-        <span className="block text-sm font-medium text-gray-700 mb-2">Events</span>
+        <span className="block text-sm font-medium text-foreground mb-2">Events</span>
         <div className="grid grid-cols-2 gap-2">
           {WEBHOOK_EVENTS.map(evt => (
             <label
               key={evt.value}
-              className="flex items-center gap-2 rounded-md border px-3 py-2 cursor-pointer hover:bg-gray-50"
+              className="flex items-center gap-2 rounded-md border border-border px-3 py-2 cursor-pointer hover:bg-muted"
             >
               <input
                 type="checkbox"
                 checked={events.includes(evt.value)}
                 onChange={() => toggleEvent(evt.value)}
-                className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+                className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
               />
               <span className="text-sm">{evt.label}</span>
             </label>
@@ -485,21 +485,21 @@ function WebhookForm({
             type="checkbox"
             checked={enabled}
             onChange={e => setEnabled(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
           />
-          <label htmlFor="wh-enabled" className="text-sm text-gray-700">
+          <label htmlFor="wh-enabled" className="text-sm text-foreground">
             Enabled
           </label>
         </div>
       )}
 
-      {formError && <p className="text-sm text-red-600">{formError}</p>}
+      {formError && <p className="text-sm text-destructive">{formError}</p>}
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isPending
             ? webhook
@@ -512,7 +512,7 @@ function WebhookForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           Cancel
         </button>

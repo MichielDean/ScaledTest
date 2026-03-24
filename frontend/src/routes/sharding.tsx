@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { StatusBadge } from './dashboard';
 
 interface DurationEntry {
   id: string;
@@ -60,7 +61,7 @@ export function ShardingPage() {
         </div>
         <button
           onClick={() => setShowPlanForm(prev => !prev)}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           {showPlanForm ? 'Cancel' : 'Create Shard Plan'}
         </button>
@@ -93,7 +94,7 @@ export function ShardingPage() {
         )}
 
         {error && (
-          <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+          <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
             Failed to load durations: {(error as Error).message}
           </div>
         )}
@@ -111,19 +112,19 @@ export function ShardingPage() {
         {durations.length > 0 && (
           <div className="rounded-lg border bg-card overflow-hidden">
             <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
+              <thead className="bg-muted/50 border-b">
                 <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Test Name</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Suite</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Avg (ms)</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">P95 (ms)</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Runs</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Last Status</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Test Name</th>
+                  <th className="text-left px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Suite</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Avg (ms)</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">P95 (ms)</th>
+                  <th className="text-right px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Runs</th>
+                  <th className="text-center px-4 py-3 font-medium text-muted-foreground text-xs uppercase tracking-wider">Last Status</th>
                 </tr>
               </thead>
               <tbody className="divide-y">
                 {durations.map(d => (
-                  <tr key={d.id} className="hover:bg-gray-50">
+                  <tr key={d.id} className="hover:bg-muted/30 transition-colors">
                     <td className="px-4 py-3 font-mono text-xs truncate max-w-xs">{d.test_name}</td>
                     <td className="px-4 py-3 text-muted-foreground">{d.suite || '-'}</td>
                     <td className="px-4 py-3 text-right tabular-nums">{d.avg_duration_ms.toLocaleString()}</td>
@@ -140,21 +141,6 @@ export function ShardingPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors =
-    status === 'passed'
-      ? 'bg-green-100 text-green-700'
-      : status === 'failed'
-        ? 'bg-red-100 text-red-700'
-        : 'bg-gray-100 text-gray-600';
-
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors}`}>
-      {status || 'unknown'}
-    </span>
   );
 }
 
@@ -209,7 +195,7 @@ function ShardPlanForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="sh-workers" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="sh-workers" className="block text-sm font-medium text-foreground mb-1">
             Number of Workers
           </label>
           <input
@@ -219,18 +205,18 @@ function ShardPlanForm({
             max={100}
             value={numWorkers}
             onChange={e => setNumWorkers(Number(e.target.value))}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
         <div>
-          <label htmlFor="sh-strategy" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="sh-strategy" className="block text-sm font-medium text-foreground mb-1">
             Strategy
           </label>
           <select
             id="sh-strategy"
             value={strategy}
             onChange={e => setStrategy(e.target.value)}
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
           >
             {STRATEGIES.map(s => (
               <option key={s.value} value={s.value}>
@@ -242,7 +228,7 @@ function ShardPlanForm({
       </div>
 
       <div>
-        <label htmlFor="sh-tests" className="block text-sm font-medium text-gray-700 mb-1">
+        <label htmlFor="sh-tests" className="block text-sm font-medium text-foreground mb-1">
           Test Names (one per line, or leave blank to use duration history)
         </label>
         <textarea
@@ -251,24 +237,24 @@ function ShardPlanForm({
           onChange={e => setCustomTests(e.target.value)}
           placeholder={testNames.length > 0 ? `${testNames.length} tests from duration history will be used` : 'test-login\ntest-checkout\ntest-dashboard'}
           rows={4}
-          className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500 font-mono"
+          className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 font-mono"
         />
       </div>
 
-      {formError && <p className="text-sm text-red-600">{formError}</p>}
+      {formError && <p className="text-sm text-destructive">{formError}</p>}
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={mutation.isPending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {mutation.isPending ? 'Creating...' : 'Create Plan'}
         </button>
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           Cancel
         </button>
@@ -280,7 +266,7 @@ function ShardPlanForm({
 function ShardPlanView({ plan, onDismiss }: { plan: ShardPlan; onDismiss: () => void }) {
   return (
     <div className="rounded-lg border bg-card overflow-hidden">
-      <div className="px-5 py-4 border-b bg-gray-50 flex items-center justify-between">
+      <div className="px-5 py-4 border-b bg-muted/50 flex items-center justify-between">
         <div>
           <h2 className="font-semibold text-lg">Shard Plan</h2>
           <div className="flex items-center gap-4 mt-1 text-sm text-muted-foreground">
@@ -292,7 +278,7 @@ function ShardPlanView({ plan, onDismiss }: { plan: ShardPlan; onDismiss: () => 
         </div>
         <button
           onClick={onDismiss}
-          className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           Dismiss
         </button>
@@ -311,9 +297,9 @@ function ShardPlanView({ plan, onDismiss }: { plan: ShardPlan; onDismiss: () => 
               </div>
             </div>
             {/* Duration bar */}
-            <div className="h-2 rounded-full bg-gray-100 overflow-hidden mb-2">
+            <div className="h-2 rounded-full bg-muted overflow-hidden mb-2">
               <div
-                className="h-full rounded-full bg-blue-500"
+                className="h-full rounded-full bg-primary"
                 style={{
                   width: `${plan.est_wall_clock_ms > 0 ? Math.round((shard.est_duration_ms / plan.est_wall_clock_ms) * 100) : 0}%`,
                 }}
@@ -323,7 +309,7 @@ function ShardPlanView({ plan, onDismiss }: { plan: ShardPlan; onDismiss: () => 
               {shard.test_names.map(name => (
                 <span
                   key={name}
-                  className="inline-block rounded border bg-white px-1.5 py-0.5 text-xs font-mono text-gray-600 truncate max-w-xs"
+                  className="inline-block rounded border bg-muted px-1.5 py-0.5 text-xs font-mono text-muted-foreground truncate max-w-xs"
                 >
                   {name}
                 </span>

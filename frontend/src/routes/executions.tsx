@@ -9,6 +9,7 @@ import {
   type ExecutionProgress,
   type WorkerStatus,
 } from '../stores/execution-store';
+import { StatusBadge } from './dashboard';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -60,7 +61,7 @@ export function ExecutionsPage() {
       <h1 className="text-2xl font-bold">Executions</h1>
 
       {executionsQuery.error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+        <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
           Failed to load executions: {(executionsQuery.error as Error).message}
         </div>
       )}
@@ -373,22 +374,6 @@ function TestStatusIcon({ status }: { status: string }) {
 // ---------------------------------------------------------------------------
 // Shared Helpers
 // ---------------------------------------------------------------------------
-
-function StatusBadge({ status }: { status: string }) {
-  const colorMap: Record<string, string> = {
-    completed: 'bg-green-100 text-green-800',
-    running: 'bg-blue-100 text-blue-800',
-    failed: 'bg-red-100 text-red-800',
-    cancelled: 'bg-yellow-100 text-yellow-800',
-    pending: 'bg-gray-100 text-gray-800',
-  };
-  const cls = colorMap[status.toLowerCase()] ?? 'bg-gray-100 text-gray-800';
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
-      {status}
-    </span>
-  );
-}
 
 function formatDate(iso: string): string {
   try {
