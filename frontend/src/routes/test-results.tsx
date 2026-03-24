@@ -6,6 +6,7 @@ import { queryKeys } from '../lib/query-keys';
 
 interface Report {
   id: string;
+  name: string;
   tool_name: string;
   tool_version?: string;
   passed: number;

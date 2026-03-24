@@ -363,7 +363,7 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	JSON(w, http.StatusOK, rpt)
+	JSON(w, http.StatusOK, buildGetReportResponse(rpt))
 }
 
 // Delete handles DELETE /api/v1/reports/{reportID}.
@@ -620,18 +620,53 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// computeReportName derives a display name for a report.
+// If toolName is set, it returns "toolName" or "toolName vX.Y.Z" when
+// toolVersion is also set. If toolName is empty it falls back to
+// "Report <short-id>" using the first 8 characters of the report ID.
+func computeReportName(id, toolName, toolVersion string) string {
+	if toolName != "" {
+		if toolVersion != "" {
+			return toolName + " v" + toolVersion
+		}
+		return toolName
+	}
+	short := id
+	if len(id) > 8 {
+		short = id[:8]
+	}
+	return "Report " + short
+}
+
 // flattenReportForList returns a map representation of a TestReport with
 // summary count fields (tests, passed, failed, skipped, pending) promoted to
 // the top level alongside the raw summary blob, for the ListReports API response.
 // If the summary cannot be parsed the count fields are omitted rather than
 // returning zero values that could mask the underlying issue.
 func flattenReportForList(rpt model.TestReport) map[string]interface{} {
+	out := buildGetReportResponse(rpt)
+	var s model.ReportSummary
+	if err := json.Unmarshal(rpt.Summary, &s); err == nil {
+		out["test_count"] = s.Tests
+		out["passed"] = s.Passed
+		out["failed"] = s.Failed
+		out["skipped"] = s.Skipped
+		out["pending"] = s.Pending
+	}
+	return out
+}
+
+// buildGetReportResponse returns the JSON map for the GetReport API response.
+// Optional fields (tool_version, execution_id, environment) are omitted when empty,
+// matching the omitempty contract of the original struct serialization.
+func buildGetReportResponse(rpt model.TestReport) map[string]interface{} {
 	out := map[string]interface{}{
 		"id":         rpt.ID,
 		"team_id":    rpt.TeamID,
 		"tool_name":  rpt.ToolName,
 		"summary":    rpt.Summary,
 		"created_at": rpt.CreatedAt,
+		"name":       computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
 	}
 	if rpt.ToolVersion != "" {
 		out["tool_version"] = rpt.ToolVersion
@@ -641,14 +676,6 @@ func flattenReportForList(rpt model.TestReport) map[string]interface{} {
 	}
 	if len(rpt.Environment) > 0 {
 		out["environment"] = rpt.Environment
-	}
-	var s model.ReportSummary
-	if err := json.Unmarshal(rpt.Summary, &s); err == nil {
-		out["test_count"] = s.Tests
-		out["passed"] = s.Passed
-		out["failed"] = s.Failed
-		out["skipped"] = s.Skipped
-		out["pending"] = s.Pending
 	}
 	return out
 }

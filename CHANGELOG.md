@@ -6,6 +6,8 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **Test report `name` field in ListReports and GetReport responses**: Both `GET /api/v1/reports` and `GET /api/v1/reports/{reportID}` responses now include a computed `name` field. The name is derived from `tool_name` and `tool_version` (e.g., `"playwright v1.50.1"` or `"jest"`). If `tool_name` is empty, the name falls back to `"Report <short-id>"` using the first 8 characters of the report UUID. This eliminates blank report titles in the test-results list and dashboard recent reports table. The TypeScript SDK's `Report` interface has been updated to include the `name` field.
+
 - **`GET /api/v1/reports` (ListReports) response**: Summary count fields (`test_count`, `passed`, `failed`, `skipped`, `pending`) are now promoted to top-level fields alongside the raw `summary` blob. This eliminates NaN pass-rate calculations in the frontend, which previously relied on undefined fields. When the summary is unparseable, the flattened count fields are omitted gracefully rather than returning zero values. The TypeScript SDK's `Report` interface has been updated to reflect these optional top-level fields.
 
 - **`no_new_failures` quality gate**: `fetchPreviousFailedTests` now returns a proper error on database failures instead of silently returning an empty baseline. Previously, a transient DB error would cause the gate to treat all current failures as "new" and incorrectly fail the evaluation. The `POST /evaluate` endpoint now returns HTTP 500 on such errors rather than producing a wrong result.
