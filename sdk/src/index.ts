@@ -73,7 +73,15 @@ export interface Report {
     pending: number;
     other: number;
   };
+  // Flattened summary fields (top-level) for convenience; available when summary is parseable
+  test_count?: number;
+  passed?: number;
+  failed?: number;
+  skipped?: number;
+  pending?: number;
   created_at: string;
+  execution_id?: string;
+  environment?: Record<string, string>;
 }
 
 export interface Execution {
