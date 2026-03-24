@@ -83,9 +83,10 @@ describe('AdminPage', () => {
           actor_id: 'u1',
           actor_email: 'admin@example.com',
           team_id: 'team-abc',
+          team_name: 'E2E Team',
           action: 'create_team',
           resource_type: 'team',
-          resource_id: 'res-xyz',
+          resource_id: 'res-xyz-12345678-abcd',
           created_at: '2026-01-15T10:00:00Z',
         },
       ],
@@ -95,8 +96,8 @@ describe('AdminPage', () => {
     expect(await screen.findByText('admin@example.com')).toBeInTheDocument();
     expect(await screen.findByText('create_team')).toBeInTheDocument();
     expect(await screen.findByText('team')).toBeInTheDocument();
-    expect(await screen.findByText('res-xyz')).toBeInTheDocument();
-    expect(await screen.findByText('team-abc')).toBeInTheDocument();
+    expect(await screen.findByText(/res-xyz/)).toBeInTheDocument();
+    expect(await screen.findByText('E2E Team')).toBeInTheDocument();
   });
 
   it('disables Previous button on first page', async () => {
