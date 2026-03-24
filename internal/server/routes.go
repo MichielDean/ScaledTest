@@ -138,6 +138,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:           whNotifier,
 		GitHubStatusPoster: ghclient.New(cfg.GitHubToken),
 		BaseURL:            cfg.BaseURL,
+		AllowBackdate:      cfg.DisableRateLimit,
 	}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,
