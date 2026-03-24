@@ -129,7 +129,7 @@ describe('TestResultsPage', () => {
       target: { value: 'xyznonexistent' },
     });
 
-    expect(screen.getByText('No reports match your search.')).toBeInTheDocument();
+    expect(screen.getByText('No reports match your search or filter.')).toBeInTheDocument();
   });
 
   it('shows loading test results state when report is expanded and detail is pending', async () => {
@@ -197,5 +197,109 @@ describe('TestResultsPage', () => {
     expect(
       screen.queryByText('No individual test results available for this report.')
     ).not.toBeInTheDocument();
+  });
+});
+
+describe('TestResultsPage — report-level status filtering', () => {
+  const passedOnlyReport = {
+    ...mockReport,
+    id: 'rpt-pass',
+    tool_name: 'PassSuite',
+    passed: 5,
+    failed: 0,
+    skipped: 0,
+  };
+  const failedReport = {
+    ...mockReport,
+    id: 'rpt-fail',
+    tool_name: 'FailSuite',
+    passed: 3,
+    failed: 2,
+    skipped: 0,
+  };
+  const skippedReport = {
+    ...mockReport,
+    id: 'rpt-skip',
+    tool_name: 'SkipSuite',
+    passed: 4,
+    failed: 0,
+    skipped: 3,
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
+  });
+
+  it('shows only reports with failures when Failed filter is selected', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport, failedReport],
+      total: 2,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+
+    expect(screen.getByText('FailSuite')).toBeInTheDocument();
+    expect(screen.queryByText('PassSuite')).not.toBeInTheDocument();
+  });
+
+  it('shows only all-passing reports when Passed filter is selected', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport, failedReport],
+      total: 2,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Passed' }));
+
+    expect(screen.getByText('PassSuite')).toBeInTheDocument();
+    expect(screen.queryByText('FailSuite')).not.toBeInTheDocument();
+  });
+
+  it('shows only reports with skipped tests when Skipped filter is selected', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport, skippedReport],
+      total: 2,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Skipped' }));
+
+    expect(screen.getByText('SkipSuite')).toBeInTheDocument();
+    expect(screen.queryByText('PassSuite')).not.toBeInTheDocument();
+  });
+
+  it('shows all reports when All filter is selected after a status filter', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport, failedReport],
+      total: 2,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    expect(screen.queryByText('PassSuite')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole('button', { name: 'All' }));
+
+    expect(screen.getByText('PassSuite')).toBeInTheDocument();
+    expect(screen.getByText('FailSuite')).toBeInTheDocument();
+  });
+
+  it('shows no-match message when status filter produces no matching reports', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport],
+      total: 1,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+
+    expect(screen.getByText('No reports match your search or filter.')).toBeInTheDocument();
   });
 });
