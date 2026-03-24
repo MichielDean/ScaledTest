@@ -71,7 +71,7 @@ describe('TestResultsPage', () => {
   it('renders report name and pass/fail/skip stats', async () => {
     vi.mocked(api.getReports).mockResolvedValue({ reports: [mockReport], total: 1 });
     renderWithClient(<TestResultsPage />);
-    expect(await screen.findByText('My Test Suite')).toBeInTheDocument();
+    expect(await screen.findByText('Jest')).toBeInTheDocument();
     expect(screen.getByText('8 passed')).toBeInTheDocument();
     expect(screen.getByText('2 failed')).toBeInTheDocument();
     expect(screen.getByText('1 skipped')).toBeInTheDocument();
@@ -96,25 +96,25 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReports).mockResolvedValue({
       reports: [
         mockReport,
-        { ...mockReport, id: 'rpt-002', name: 'Another Suite', tool_name: 'Playwright' },
+        { ...mockReport, id: 'rpt-002', tool_name: 'Playwright' },
       ],
       total: 2,
     });
     renderWithClient(<TestResultsPage />);
-    await screen.findByText('My Test Suite');
+    await screen.findByText('Jest');
 
     fireEvent.change(screen.getByPlaceholderText('Search reports by name, tool, or ID...'), {
-      target: { value: 'another' },
+      target: { value: 'playwright' },
     });
 
-    expect(screen.getByText('Another Suite')).toBeInTheDocument();
-    expect(screen.queryByText('My Test Suite')).not.toBeInTheDocument();
+    expect(screen.getByText('Playwright')).toBeInTheDocument();
+    expect(screen.queryByText('Jest')).not.toBeInTheDocument();
   });
 
   it('shows no-match message when search returns no results', async () => {
     vi.mocked(api.getReports).mockResolvedValue({ reports: [mockReport], total: 1 });
     renderWithClient(<TestResultsPage />);
-    await screen.findByText('My Test Suite');
+    await screen.findByText('Jest');
 
     fireEvent.change(screen.getByPlaceholderText('Search reports by name, tool, or ID...'), {
       target: { value: 'xyznonexistent' },
@@ -128,7 +128,7 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReport).mockReturnValue(new Promise(() => {}));
     renderWithClient(<TestResultsPage />);
 
-    const expandBtn = await screen.findByRole('button', { name: /my test suite/i });
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
     fireEvent.click(expandBtn);
 
     expect(await screen.findByText('Loading test results...')).toBeInTheDocument();
@@ -139,7 +139,7 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
     renderWithClient(<TestResultsPage />);
 
-    const expandBtn = await screen.findByRole('button', { name: /my test suite/i });
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
     fireEvent.click(expandBtn);
 
     expect(
@@ -152,7 +152,7 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReport).mockResolvedValue({ report: detailedReport });
     renderWithClient(<TestResultsPage />);
 
-    const expandBtn = await screen.findByRole('button', { name: /my test suite/i });
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
     fireEvent.click(expandBtn);
 
     expect(await screen.findByText('should render homepage')).toBeInTheDocument();
@@ -164,7 +164,7 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReport).mockResolvedValue({ report: detailedReport });
     renderWithClient(<TestResultsPage />);
 
-    const expandBtn = await screen.findByRole('button', { name: /my test suite/i });
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
     fireEvent.click(expandBtn);
 
     await screen.findByText('should render homepage');
@@ -180,7 +180,7 @@ describe('TestResultsPage', () => {
     vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
     renderWithClient(<TestResultsPage />);
 
-    const expandBtn = await screen.findByRole('button', { name: /my test suite/i });
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
     fireEvent.click(expandBtn);
     await screen.findByText('No individual test results available for this report.');
 

@@ -6,8 +6,7 @@ import { queryKeys } from '../lib/query-keys';
 
 interface Report {
   id: string;
-  name: string;
-  tool_name?: string;
+  tool_name: string;
   tool_version?: string;
   passed: number;
   failed: number;
@@ -56,8 +55,7 @@ export function TestResultsPage() {
     const q = search.toLowerCase();
     return reports.filter(
       r =>
-        r.name.toLowerCase().includes(q) ||
-        r.tool_name?.toLowerCase().includes(q) ||
+        r.tool_name.toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q)
     );
   }, [reports, search]);
@@ -116,8 +114,11 @@ export function TestResultsPage() {
         <div className="space-y-3">
           {filteredReports.map(report => {
             const isExpanded = expandedReportId === report.id;
-            const total = report.passed + report.failed + report.skipped + (report.pending ?? 0);
-            const passRate = total > 0 ? ((report.passed / total) * 100).toFixed(1) : '—';
+            const passed = report.passed || 0;
+            const failed = report.failed || 0;
+            const skipped = report.skipped || 0;
+            const total = passed + failed + skipped + (report.pending ?? 0);
+            const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : '—';
 
             return (
               <div key={report.id} className="rounded-lg border bg-card overflow-hidden">
@@ -134,18 +135,17 @@ export function TestResultsPage() {
                     {isExpanded ? '\u25BC' : '\u25B6'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{report.name}</p>
+                    <p className="font-semibold truncate">{report.tool_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                      {report.tool_name && <span>{report.tool_name}</span>}
-                      {report.tool_version && <span> v{report.tool_version}</span>}
+                      {report.tool_version && <span>v{report.tool_version}</span>}
                       {' \u00B7 '}
                       {formatDate(report.created_at)}
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-3 text-xs">
-                    <span className="text-success font-medium">{report.passed} passed</span>
-                    <span className="text-destructive font-medium">{report.failed} failed</span>
-                    <span className="text-warning font-medium">{report.skipped} skipped</span>
+                    <span className="text-success font-medium">{passed} passed</span>
+                    <span className="text-destructive font-medium">{failed} failed</span>
+                    <span className="text-warning font-medium">{skipped} skipped</span>
                     <span className="font-mono text-muted-foreground">{passRate}%</span>
                   </div>
                 </button>

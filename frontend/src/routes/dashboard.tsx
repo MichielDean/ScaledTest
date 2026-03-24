@@ -19,10 +19,11 @@ import { queryKeys } from '../lib/query-keys';
 
 interface Report {
   id: string;
-  name: string;
+  tool_name: string;
   passed: number;
   failed: number;
   skipped: number;
+  pending?: number;
   created_at: string;
 }
 
@@ -101,8 +102,8 @@ export function DashboardPage() {
   const passRate = (() => {
     const reports = reportsQuery.data?.reports;
     if (!reports || reports.length === 0) return undefined;
-    const totalPassed = reports.reduce((s, r) => s + r.passed, 0);
-    const totalTests = reports.reduce((s, r) => s + r.passed + r.failed + r.skipped, 0);
+    const totalPassed = reports.reduce((s, r) => s + (r.passed || 0), 0);
+    const totalTests = reports.reduce((s, r) => s + (r.passed || 0) + (r.failed || 0) + (r.skipped || 0) + (r.pending ?? 0), 0);
     if (totalTests === 0) return undefined;
     return ((totalPassed / totalTests) * 100).toFixed(1);
   })();
@@ -202,7 +203,7 @@ export function DashboardPage() {
                 <tbody>
                   {recentReports.map(r => (
                     <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
-                      <td className="py-2 pr-4 pl-2 font-medium truncate max-w-[200px]">{r.name}</td>
+                      <td className="py-2 pr-4 pl-2 font-medium truncate max-w-[200px]">{r.tool_name}</td>
                       <td className="py-2 pr-4 text-success">{r.passed}</td>
                       <td className="py-2 pr-4 text-destructive">{r.failed}</td>
                       <td className="py-2 pr-4 text-warning">{r.skipped}</td>
