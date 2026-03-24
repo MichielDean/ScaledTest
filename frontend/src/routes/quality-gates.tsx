@@ -20,6 +20,11 @@ interface RuleForm {
   threshold: number;
 }
 
+interface Team {
+  id: string;
+  name: string;
+}
+
 interface QualityGate {
   id: string;
   name: string;
@@ -55,18 +60,26 @@ export function QualityGatesPage() {
   const [expandedGate, setExpandedGate] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null);
 
+  const teamsQuery = useQuery({
+    queryKey: queryKeys.teams.all,
+    queryFn: () => api.getTeams() as Promise<{ teams: Team[] }>,
+  });
+
+  const teamId = teamsQuery.data?.teams?.[0]?.id;
+
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.qualityGates.all,
-    queryFn: api.getQualityGates,
+    queryKey: queryKeys.qualityGates.all(teamId ?? ''),
+    queryFn: () => api.getQualityGates(teamId!),
+    enabled: !!teamId,
   });
 
   const qualityGates = (data?.quality_gates ?? []) as QualityGate[];
 
   const deleteMutation = useMutation({
-    mutationFn: (id: string) => api.deleteQualityGate(id),
+    mutationFn: (id: string) => api.deleteQualityGate(teamId!, id),
     onSuccess: () => {
       setConfirmDelete(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
     },
   });
 
@@ -82,7 +95,28 @@ export function QualityGatesPage() {
 
   function handleFormSuccess() {
     handleFormClose();
-    void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
+  }
+
+  if (teamsQuery.isLoading) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading teams...</p>
+      </div>
+    );
+  }
+
+  if (!teamId) {
+    return (
+      <div className="p-6">
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center">
+          <h3 className="font-semibold text-lg mb-1">No team found</h3>
+          <p className="text-muted-foreground text-sm">
+            You need to be a member of a team to manage quality gates.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -110,6 +144,7 @@ export function QualityGatesPage() {
 
       {showForm && (
         <QualityGateForm
+          teamId={teamId}
           gate={editingGate}
           onSuccess={handleFormSuccess}
           onCancel={handleFormClose}
@@ -149,6 +184,7 @@ export function QualityGatesPage() {
           {qualityGates.map(gate => (
             <GateCard
               key={gate.id}
+              teamId={teamId}
               gate={gate}
               isExpanded={expandedGate === gate.id}
               onToggleExpand={() => setExpandedGate(prev => (prev === gate.id ? null : gate.id))}
@@ -167,6 +203,7 @@ export function QualityGatesPage() {
 }
 
 function GateCard({
+  teamId,
   gate,
   isExpanded,
   onToggleExpand,
@@ -177,6 +214,7 @@ function GateCard({
   onCancelDelete,
   deleteIsPending,
 }: {
+  teamId: string;
   gate: QualityGate;
   isExpanded: boolean;
   onToggleExpand: () => void;
@@ -187,17 +225,12 @@ function GateCard({
   onCancelDelete: () => void;
   deleteIsPending: boolean;
 }) {
-  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
   const [lastEvaluation, setLastEvaluation] = useState<EvaluationResult | null>(null);
 
   const evaluateMutation = useMutation({
-    mutationFn: (id: string) => api.evaluateQualityGate(id) as Promise<EvaluationResult>,
+    mutationFn: (id: string) => api.evaluateQualityGate(teamId, id) as Promise<EvaluationResult>,
     onSuccess: result => {
       setLastEvaluation(result);
-      setEvaluatingId(null);
-    },
-    onError: () => {
-      setEvaluatingId(null);
     },
   });
 
@@ -232,14 +265,11 @@ function GateCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => {
-                setEvaluatingId(gate.id);
-                evaluateMutation.mutate(gate.id);
-              }}
-              disabled={evaluatingId === gate.id}
+              onClick={() => evaluateMutation.mutate(gate.id)}
+              disabled={evaluateMutation.isPending}
               className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {evaluatingId === gate.id ? 'Evaluating...' : 'Evaluate'}
+              {evaluateMutation.isPending ? 'Evaluating...' : 'Evaluate'}
             </button>
             <button
               onClick={onEdit}
@@ -290,7 +320,7 @@ function GateCard({
 
       {isExpanded && (
         <div className="border-t bg-muted/20 p-5">
-          <EvaluationHistory gateId={gate.id} />
+          <EvaluationHistory teamId={teamId} gateId={gate.id} />
         </div>
       )}
     </div>
@@ -368,10 +398,10 @@ function EvaluationResultsDisplay({ evaluation }: { evaluation: EvaluationResult
   );
 }
 
-function EvaluationHistory({ gateId }: { gateId: string }) {
+function EvaluationHistory({ teamId, gateId }: { teamId: string; gateId: string }) {
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.qualityGates.evaluations(gateId),
-    queryFn: () => api.getQualityGateEvaluations(gateId),
+    queryKey: queryKeys.qualityGates.evaluations(teamId, gateId),
+    queryFn: () => api.getQualityGateEvaluations(teamId, gateId),
   });
 
   const evaluations = (data?.evaluations ?? []) as EvaluationResult[];
@@ -456,10 +486,12 @@ function rulesToDSL(rules: RuleForm[]): unknown[] {
 }
 
 function QualityGateForm({
+  teamId,
   gate,
   onSuccess,
   onCancel,
 }: {
+  teamId: string;
   gate: QualityGate | null;
   onSuccess: () => void;
   onCancel: () => void;
@@ -476,14 +508,14 @@ function QualityGateForm({
 
   const createMutation = useMutation({
     mutationFn: (data: { name: string; description: string; rules: unknown[] }) =>
-      api.createQualityGate(data),
+      api.createQualityGate(teamId, data),
     onSuccess: () => onSuccess(),
     onError: (err: Error) => setFormError(err.message),
   });
 
   const updateMutation = useMutation({
     mutationFn: (data: { name: string; description: string; rules: unknown[]; active: boolean }) =>
-      api.updateQualityGate(gate!.id, data),
+      api.updateQualityGate(teamId, gate!.id, data),
     onSuccess: () => onSuccess(),
     onError: (err: Error) => setFormError(err.message),
   });
