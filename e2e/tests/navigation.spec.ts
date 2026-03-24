@@ -12,9 +12,12 @@ test.describe('Navigation', () => {
     await expect(page.getByRole('heading', { name: 'ScaledTest' })).toBeVisible();
   });
 
-  test('nav shows sign in link when not authenticated', async ({ page }) => {
+  test('login page hides sidebar when not authenticated', async ({ page }) => {
     await page.goto('/login');
-    await expect(page.getByRole('link', { name: 'Sign In' })).toBeVisible();
+    // Auth pages use centered AuthLayout, which has no sidebar
+    await expect(page.getByRole('heading', { name: 'ScaledTest' })).toBeVisible();
+    // Sidebar should not be visible
+    await expect(page.locator('aside')).not.toBeVisible();
   });
 
   test('protected routes redirect to login', async ({ page }) => {
