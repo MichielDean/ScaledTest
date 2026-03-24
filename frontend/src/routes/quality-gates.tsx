@@ -68,7 +68,7 @@ export function QualityGatesPage() {
   const teamId = teamsQuery.data?.teams?.[0]?.id;
 
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.qualityGates.all,
+    queryKey: queryKeys.qualityGates.all(teamId ?? ''),
     queryFn: () => api.getQualityGates(teamId!),
     enabled: !!teamId,
   });
@@ -79,7 +79,7 @@ export function QualityGatesPage() {
     mutationFn: (id: string) => api.deleteQualityGate(teamId!, id),
     onSuccess: () => {
       setConfirmDelete(null);
-      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all });
+      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
     },
   });
 
@@ -95,7 +95,28 @@ export function QualityGatesPage() {
 
   function handleFormSuccess() {
     handleFormClose();
-    void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
+  }
+
+  if (teamsQuery.isLoading) {
+    return (
+      <div className="p-6">
+        <p className="text-sm text-muted-foreground">Loading teams...</p>
+      </div>
+    );
+  }
+
+  if (!teamId) {
+    return (
+      <div className="p-6">
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center">
+          <h3 className="font-semibold text-lg mb-1">No team found</h3>
+          <p className="text-muted-foreground text-sm">
+            You need to be a member of a team to manage quality gates.
+          </p>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -379,7 +400,7 @@ function EvaluationResultsDisplay({ evaluation }: { evaluation: EvaluationResult
 
 function EvaluationHistory({ teamId, gateId }: { teamId: string; gateId: string }) {
   const { data, isLoading, error } = useQuery({
-    queryKey: queryKeys.qualityGates.evaluations(gateId),
+    queryKey: queryKeys.qualityGates.evaluations(teamId, gateId),
     queryFn: () => api.getQualityGateEvaluations(teamId, gateId),
   });
 

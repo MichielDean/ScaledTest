@@ -15,9 +15,9 @@ export const queryKeys = {
     durationDistribution: ['analytics', 'duration-distribution'] as const,
   },
   qualityGates: {
-    all: ['quality-gates'] as const,
-    detail: (id: string) => ['quality-gates', id] as const,
-    evaluations: (id: string) => ['quality-gates', id, 'evaluations'] as const,
+    all: (teamId: string) => ['quality-gates', teamId] as const,
+    detail: (teamId: string, id: string) => ['quality-gates', teamId, id] as const,
+    evaluations: (teamId: string, id: string) => ['quality-gates', teamId, id, 'evaluations'] as const,
   },
   teams: {
     all: ['teams'] as const,

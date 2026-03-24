@@ -30,12 +30,12 @@ describe('QualityGatesPage', () => {
     vi.mocked(api.getTeams).mockResolvedValue({ teams: [TEAM] });
   });
 
-  it('renders the heading and new gate button', () => {
+  it('renders the heading and new gate button', async () => {
     vi.mocked(api.getQualityGates).mockResolvedValue({ quality_gates: [], total: 0 });
 
     renderWithClient(<QualityGatesPage />);
 
-    expect(screen.getByRole('heading', { name: 'Quality Gates' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Quality Gates' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Quality Gate' })).toBeInTheDocument();
   });
 
@@ -184,6 +184,15 @@ describe('QualityGatesPage', () => {
     await waitFor(() => {
       expect(api.evaluateQualityGate).toHaveBeenCalledWith('t1', 'g1');
     });
+  });
+
+  it('shows no team found message when getTeams returns empty array', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue({ teams: [] });
+
+    renderWithClient(<QualityGatesPage />);
+
+    expect(await screen.findByText('No team found')).toBeInTheDocument();
+    expect(api.getQualityGates).not.toHaveBeenCalled();
   });
 
   it('shows evaluation result badge after evaluation', async () => {
