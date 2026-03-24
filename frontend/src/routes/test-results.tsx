@@ -6,8 +6,7 @@ import { queryKeys } from '../lib/query-keys';
 
 interface Report {
   id: string;
-  name: string;
-  tool_name?: string;
+  tool_name: string;
   tool_version?: string;
   passed: number;
   failed: number;
@@ -56,8 +55,7 @@ export function TestResultsPage() {
     const q = search.toLowerCase();
     return reports.filter(
       r =>
-        r.name.toLowerCase().includes(q) ||
-        r.tool_name?.toLowerCase().includes(q) ||
+        r.tool_name.toLowerCase().includes(q) ||
         r.id.toLowerCase().includes(q)
     );
   }, [reports, search]);
@@ -134,7 +132,7 @@ export function TestResultsPage() {
                     {isExpanded ? '\u25BC' : '\u25B6'}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="font-semibold truncate">{report.name}</p>
+                    <p className="font-semibold truncate">{report.tool_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 font-mono">
                       {report.tool_name && <span>{report.tool_name}</span>}
                       {report.tool_version && <span> v{report.tool_version}</span>}
