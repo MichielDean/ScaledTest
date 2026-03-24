@@ -363,22 +363,7 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	out := map[string]interface{}{
-		"id":          rpt.ID,
-		"team_id":     rpt.TeamID,
-		"tool_name":   rpt.ToolName,
-		"tool_version": rpt.ToolVersion,
-		"summary":     rpt.Summary,
-		"created_at":  rpt.CreatedAt,
-		"name":        computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
-	}
-	if rpt.ExecutionID != nil {
-		out["execution_id"] = *rpt.ExecutionID
-	}
-	if len(rpt.Environment) > 0 {
-		out["environment"] = rpt.Environment
-	}
-	JSON(w, http.StatusOK, out)
+	JSON(w, http.StatusOK, buildGetReportResponse(rpt))
 }
 
 // Delete handles DELETE /api/v1/reports/{reportID}.
@@ -683,6 +668,30 @@ func flattenReportForList(rpt model.TestReport) map[string]interface{} {
 		out["failed"] = s.Failed
 		out["skipped"] = s.Skipped
 		out["pending"] = s.Pending
+	}
+	return out
+}
+
+// buildGetReportResponse returns the JSON map for the GetReport API response.
+// Optional fields (tool_version, execution_id, environment) are omitted when empty,
+// matching the omitempty contract of the original struct serialization.
+func buildGetReportResponse(rpt model.TestReport) map[string]interface{} {
+	out := map[string]interface{}{
+		"id":         rpt.ID,
+		"team_id":    rpt.TeamID,
+		"tool_name":  rpt.ToolName,
+		"summary":    rpt.Summary,
+		"created_at": rpt.CreatedAt,
+		"name":       computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
+	}
+	if rpt.ToolVersion != "" {
+		out["tool_version"] = rpt.ToolVersion
+	}
+	if rpt.ExecutionID != nil {
+		out["execution_id"] = *rpt.ExecutionID
+	}
+	if len(rpt.Environment) > 0 {
+		out["environment"] = rpt.Environment
 	}
 	return out
 }
