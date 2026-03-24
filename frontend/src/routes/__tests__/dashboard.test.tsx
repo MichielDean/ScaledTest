@@ -264,29 +264,37 @@ describe('DashboardPage', () => {
     expect(screen.getByText('5')).toBeInTheDocument();
   });
 
-  it('recent reports table: View link renders with correct href for the report', async () => {
-    vi.mocked(api.getReports).mockResolvedValue({
-      reports: [
-        {
-          id: 'r-abc123',
-          tool_name: 'E2E Suite',
-          passed: 10,
-          failed: 2,
-          skipped: 0,
-          created_at: '2026-01-20T12:00:00Z',
-        },
-      ],
-      total: 1,
+  describe('recent reports table: row interactions', () => {
+    beforeEach(async () => {
+      vi.mocked(api.getReports).mockResolvedValue({
+        reports: [
+          {
+            id: 'r-abc123',
+            tool_name: 'E2E Suite',
+            passed: 10,
+            failed: 2,
+            skipped: 0,
+            created_at: '2026-01-20T12:00:00Z',
+          },
+        ],
+        total: 1,
+      });
+      vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+      vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+      vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+      renderWithClient(<DashboardPage />);
+      await screen.findByText('E2E Suite');
     });
-    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
-    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
-    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
 
-    renderWithClient(<DashboardPage />);
+    it('View link renders with correct href for the report', () => {
+      const link = screen.getByRole('link', { name: /view/i });
+      expect(link).toHaveAttribute('href', '/reports?report=r-abc123');
+    });
 
-    await screen.findByText('E2E Suite');
-    const link = screen.getByRole('link', { name: /view/i });
-    expect(link).toHaveAttribute('href', '/reports?report=r-abc123');
+    it('clicking a row calls navigate with /reports and report id', () => {
+      fireEvent.click(screen.getByText('E2E Suite'));
+      expect(mockNavigate).toHaveBeenCalledWith({ to: '/reports', search: { report: 'r-abc123' } });
+    });
   });
 
   it('flaky tests count card: shows count of flaky tests', async () => {
@@ -308,29 +316,4 @@ describe('DashboardPage', () => {
     expect(await screen.findByText('5')).toBeInTheDocument();
   });
 
-  it('recent reports table: clicking a row calls navigate with /reports and report id', async () => {
-    vi.mocked(api.getReports).mockResolvedValue({
-      reports: [
-        {
-          id: 'r-abc123',
-          tool_name: 'E2E Suite',
-          passed: 10,
-          failed: 2,
-          skipped: 0,
-          created_at: '2026-01-20T12:00:00Z',
-        },
-      ],
-      total: 1,
-    });
-    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
-    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
-    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
-
-    renderWithClient(<DashboardPage />);
-
-    await screen.findByText('E2E Suite');
-    fireEvent.click(screen.getByText('E2E Suite'));
-
-    expect(mockNavigate).toHaveBeenCalledWith({ to: '/reports', search: { report: 'r-abc123' } });
-  });
 });
