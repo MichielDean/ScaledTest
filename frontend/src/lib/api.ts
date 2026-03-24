@@ -165,19 +165,21 @@ export const api = {
   getDurationDistribution: () => fetchAPI('/api/v1/analytics/duration-distribution'),
 
   // Quality Gates
-  getQualityGates: () =>
-    fetchAPI<{ quality_gates: unknown[]; total: number }>('/api/v1/quality-gates'),
-  getQualityGate: (id: string) => fetchAPI(`/api/v1/quality-gates/${id}`),
-  createQualityGate: (data: unknown) =>
-    fetchAPI('/api/v1/quality-gates', { method: 'POST', body: JSON.stringify(data) }),
-  updateQualityGate: (id: string, data: unknown) =>
-    fetchAPI(`/api/v1/quality-gates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
-  deleteQualityGate: (id: string) => fetchAPI(`/api/v1/quality-gates/${id}`, { method: 'DELETE' }),
-  evaluateQualityGate: (id: string) =>
-    fetchAPI(`/api/v1/quality-gates/${id}/evaluate`, { method: 'POST' }),
-  getQualityGateEvaluations: (id: string, limit = 20) =>
+  getQualityGates: (teamId: string) =>
+    fetchAPI<{ quality_gates: unknown[]; total: number }>(`/api/v1/teams/${teamId}/quality-gates`),
+  getQualityGate: (teamId: string, id: string) =>
+    fetchAPI(`/api/v1/teams/${teamId}/quality-gates/${id}`),
+  createQualityGate: (teamId: string, data: unknown) =>
+    fetchAPI(`/api/v1/teams/${teamId}/quality-gates`, { method: 'POST', body: JSON.stringify(data) }),
+  updateQualityGate: (teamId: string, id: string, data: unknown) =>
+    fetchAPI(`/api/v1/teams/${teamId}/quality-gates/${id}`, { method: 'PUT', body: JSON.stringify(data) }),
+  deleteQualityGate: (teamId: string, id: string) =>
+    fetchAPI(`/api/v1/teams/${teamId}/quality-gates/${id}`, { method: 'DELETE' }),
+  evaluateQualityGate: (teamId: string, id: string) =>
+    fetchAPI(`/api/v1/teams/${teamId}/quality-gates/${id}/evaluate`, { method: 'POST' }),
+  getQualityGateEvaluations: (teamId: string, id: string, limit = 20) =>
     fetchAPI<{ evaluations: unknown[]; total: number }>(
-      `/api/v1/quality-gates/${id}/evaluations?limit=${limit}`
+      `/api/v1/teams/${teamId}/quality-gates/${id}/evaluations?limit=${limit}`
     ),
 
   // Teams
