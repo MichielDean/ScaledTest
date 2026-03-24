@@ -146,7 +146,7 @@ export function TestResultsPage() {
                     <span className="text-success font-medium">{passed} passed</span>
                     <span className="text-destructive font-medium">{failed} failed</span>
                     <span className="text-warning font-medium">{skipped} skipped</span>
-                    <span className="font-mono text-muted-foreground">{passRate}%</span>
+                    <span className="font-mono text-muted-foreground">{passRate === '—' ? '—' : `${passRate}%`}</span>
                   </div>
                 </button>
 

@@ -77,6 +77,15 @@ describe('TestResultsPage', () => {
     expect(screen.getByText('1 skipped')).toBeInTheDocument();
   });
 
+  it('renders pass rate as "—" without percent sign when all test counts are zero', async () => {
+    const zeroReport = { ...mockReport, passed: 0, failed: 0, skipped: 0, pending: 0 };
+    vi.mocked(api.getReports).mockResolvedValue({ reports: [zeroReport], total: 1 });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('Jest');
+    expect(screen.queryByText('—%')).not.toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
   it('renders search input', () => {
     renderWithClient(<TestResultsPage />);
     expect(
