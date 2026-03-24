@@ -1668,7 +1668,7 @@
           "id": { "type": "string", "format": "uuid" },
           "team_id": { "type": "string", "format": "uuid" },
           "execution_id": { "type": "string", "format": "uuid" },
-          "name": { "type": "string" },
+          "name": { "type": "string", "description": "Computed display name derived from tool_name and tool_version (e.g., 'playwright v1.50.1', 'jest', or 'Report <short-id>' if tool_name is empty)" },
           "tool_name": { "type": "string" },
           "tool_version": { "type": "string" },
           "passed": { "type": "integer" },
