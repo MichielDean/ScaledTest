@@ -46,6 +46,11 @@ type ReportsHandler struct {
 	Webhooks           *webhook.Notifier
 	GitHubStatusPoster githubStatusPoster // nil when GitHub integration is disabled
 	BaseURL            string             // used to construct target URLs in GitHub statuses
+	// AllowBackdate permits callers to supply a ?created_at=<RFC3339> query
+	// parameter to override the report ingestion timestamp. This must only be
+	// enabled in controlled test environments (e.g. when ST_DISABLE_RATE_LIMIT
+	// is true) — never in production.
+	AllowBackdate bool
 }
 
 // List handles GET /api/v1/reports.
@@ -173,7 +178,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 
 	reportID := uuid.New().String()
-	now := time.Now()
+	now := h.resolveReportTime(r)
 
 	// Validate execution_id as UUID and verify team ownership if provided
 	var execIDPtr *string
@@ -238,7 +243,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			resID, res.ReportID, res.TeamID, res.Name, res.Status,
 			res.DurationMs, nullString(res.Message), nullString(res.Trace),
 			nullString(res.FilePath), nullString(res.Suite),
-			res.Tags, res.Retry, res.Flaky, res.CreatedAt)
+			res.Tags, res.Retry, res.Flaky, now)
 		if err != nil {
 			Error(w, http.StatusInternalServerError, "failed to store test result")
 			return
@@ -678,6 +683,21 @@ func buildGetReportResponse(rpt model.TestReport) map[string]interface{} {
 		out["environment"] = rpt.Environment
 	}
 	return out
+}
+
+// resolveReportTime returns the timestamp to use for a new report.
+// When h.AllowBackdate is true and the request contains a valid RFC3339
+// created_at query parameter, that time is used instead of time.Now().
+// An invalid or absent parameter always falls back to time.Now().
+func (h *ReportsHandler) resolveReportTime(r *http.Request) time.Time {
+	if h.AllowBackdate {
+		if raw := r.URL.Query().Get("created_at"); raw != "" {
+			if t, err := time.Parse(time.RFC3339, raw); err == nil {
+				return t
+			}
+		}
+	}
+	return time.Now()
 }
 
 // nullString returns a *string that is nil for empty strings.

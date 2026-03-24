@@ -1722,3 +1722,61 @@ func TestBuildGetReportResponse_IncludesNameAndOmitsEmptyToolVersion(t *testing.
 		}
 	})
 }
+
+func TestResolveReportTime_AllowBackdateFalse_IgnoresParam(t *testing.T) {
+	// When AllowBackdate is false, the created_at query param must be ignored
+	// and the returned time must be within a small window of time.Now().
+	h := &ReportsHandler{AllowBackdate: false}
+	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=2020-01-01T00:00:00Z", nil)
+
+	before := time.Now()
+	got := h.resolveReportTime(r)
+	after := time.Now()
+
+	if got.Before(before) || got.After(after) {
+		t.Errorf("resolveReportTime with AllowBackdate=false: got %v, want time between %v and %v", got, before, after)
+	}
+}
+
+func TestResolveReportTime_AllowBackdateTrue_ValidDate(t *testing.T) {
+	// When AllowBackdate is true and a valid RFC3339 created_at is supplied,
+	// that time must be returned unchanged.
+	h := &ReportsHandler{AllowBackdate: true}
+	want := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=2024-01-15T12:00:00Z", nil)
+
+	got := h.resolveReportTime(r)
+	if !got.Equal(want) {
+		t.Errorf("resolveReportTime with valid date: got %v, want %v", got, want)
+	}
+}
+
+func TestResolveReportTime_AllowBackdateTrue_InvalidFormat(t *testing.T) {
+	// When AllowBackdate is true but the created_at value is malformed, the
+	// method must fall back to time.Now() without error.
+	h := &ReportsHandler{AllowBackdate: true}
+	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=not-a-date", nil)
+
+	before := time.Now()
+	got := h.resolveReportTime(r)
+	after := time.Now()
+
+	if got.Before(before) || got.After(after) {
+		t.Errorf("resolveReportTime with invalid date: got %v, expected current time", got)
+	}
+}
+
+func TestResolveReportTime_AllowBackdateTrue_NoParam(t *testing.T) {
+	// When AllowBackdate is true but no created_at param is present, the method
+	// must return time.Now().
+	h := &ReportsHandler{AllowBackdate: true}
+	r := httptest.NewRequest("POST", "/api/v1/reports", nil)
+
+	before := time.Now()
+	got := h.resolveReportTime(r)
+	after := time.Now()
+
+	if got.Before(before) || got.After(after) {
+		t.Errorf("resolveReportTime with no param: got %v, expected current time", got)
+	}
+}
