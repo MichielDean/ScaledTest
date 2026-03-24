@@ -644,7 +644,7 @@ func flattenReportForList(rpt model.TestReport) map[string]interface{} {
 	}
 	var s model.ReportSummary
 	if err := json.Unmarshal(rpt.Summary, &s); err == nil {
-		out["tests"] = s.Tests
+		out["test_count"] = s.Tests
 		out["passed"] = s.Passed
 		out["failed"] = s.Failed
 		out["skipped"] = s.Skipped

@@ -114,7 +114,7 @@ export function TestResultsPage() {
         <div className="space-y-3">
           {filteredReports.map(report => {
             const isExpanded = expandedReportId === report.id;
-            const total = report.passed + report.failed + report.skipped + (report.pending ?? 0);
+            const total = (report.passed || 0) + (report.failed || 0) + (report.skipped || 0) + (report.pending ?? 0);
             const passRate = total > 0 ? ((report.passed / total) * 100).toFixed(1) : '—';
 
             return (
@@ -134,16 +134,15 @@ export function TestResultsPage() {
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{report.tool_name}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 font-mono">
-                      {report.tool_name && <span>{report.tool_name}</span>}
-                      {report.tool_version && <span> v{report.tool_version}</span>}
+                      {report.tool_version && <span>v{report.tool_version}</span>}
                       {' \u00B7 '}
                       {formatDate(report.created_at)}
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-3 text-xs">
-                    <span className="text-success font-medium">{report.passed} passed</span>
-                    <span className="text-destructive font-medium">{report.failed} failed</span>
-                    <span className="text-warning font-medium">{report.skipped} skipped</span>
+                    <span className="text-success font-medium">{report.passed || 0} passed</span>
+                    <span className="text-destructive font-medium">{report.failed || 0} failed</span>
+                    <span className="text-warning font-medium">{report.skipped || 0} skipped</span>
                     <span className="font-mono text-muted-foreground">{passRate}%</span>
                   </div>
                 </button>

@@ -1491,7 +1491,7 @@ func TestFlattenReportForList_PromotesSummaryFields(t *testing.T) {
 		field string
 		want  interface{}
 	}{
-		{"tests", 10},
+		{"test_count", 10},
 		{"passed", 8},
 		{"failed", 1},
 		{"skipped", 1},
@@ -1520,7 +1520,7 @@ func TestFlattenReportForList_ZeroCounts(t *testing.T) {
 
 	out := flattenReportForList(rpt)
 
-	for _, field := range []string{"tests", "passed", "failed", "skipped"} {
+	for _, field := range []string{"test_count", "passed", "failed", "skipped"} {
 		if out[field] != 0 {
 			t.Errorf("flattenReportForList zero-counts %q = %v, want 0", field, out[field])
 		}
@@ -1541,7 +1541,7 @@ func TestFlattenReportForList_InvalidSummary_OmitsCounts(t *testing.T) {
 		t.Errorf("flattenReportForList id = %v, want report-3", out["id"])
 	}
 	// count fields must be absent when summary is unparseable
-	for _, field := range []string{"tests", "passed", "failed", "skipped"} {
+	for _, field := range []string{"test_count", "passed", "failed", "skipped"} {
 		if _, ok := out[field]; ok {
 			t.Errorf("flattenReportForList invalid summary: field %q should be absent", field)
 		}
