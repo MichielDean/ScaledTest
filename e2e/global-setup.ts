@@ -209,12 +209,17 @@ async function createSeedAPIToken(
 /**
  * Submit representative CTRF reports so the dashboard and analytics views
  * render real data rather than empty states. Three reports are spread across
- * the last three days to populate the pass-rate trend chart.
+ * three distinct calendar days (today, yesterday, 2 days ago) so the
+ * pass-rate trend chart has multiple data points.
  *
- * Report 1 (3 days ago): mostly-passing, includes a flaky test and a failed
- *   test with a message and trace.
- * Report 2 (2 days ago): higher failure rate — gives the trend chart a dip.
- * Report 3 (today):      near-perfect — shows an improvement trend.
+ * The server's ?created_at= backdating parameter is used to pin each report
+ * to noon UTC on its respective date. This parameter is only accepted when
+ * ST_DISABLE_RATE_LIMIT=true, which is set in the E2E environment.
+ *
+ * Pass rates are intentionally varied:
+ *   Report 1 (2 days ago): 50% pass rate (6/12 passed)  — dip
+ *   Report 2 (yesterday):  75% pass rate (6/8  passed)  — recovery
+ *   Report 3 (today):      ~92% pass rate (11/12 passed) — improvement
  */
 async function seedCTRFReports(baseURL: string, apiToken: string): Promise<void> {
   const headers = {
@@ -224,147 +229,177 @@ async function seedCTRFReports(baseURL: string, apiToken: string): Promise<void>
   const now = Date.now();
   const dayMs = 24 * 60 * 60 * 1000;
 
-  const reports = [
-    // ── Report 1: mostly-passing, 3 days ago ──────────────────────────────────
+  // Returns an RFC3339 timestamp pinned to noon UTC on a given number of days ago.
+  // Using noon UTC ensures the date is unambiguous regardless of the server timezone.
+  const backdateISO = (daysAgo: number): string => {
+    const d = new Date(now - daysAgo * dayMs);
+    d.setUTCHours(12, 0, 0, 0);
+    return d.toISOString();
+  };
+
+  const reports: Array<{ daysAgo: number; body: Record<string, unknown> }> = [
+    // ── Report 1: low pass rate, 2 days ago ───────────────────────────────────
     {
-      results: {
-        tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
-        summary: {
-          tests: 12,
-          passed: 10,
-          failed: 1,
-          skipped: 1,
-          pending: 0,
-          other: 0,
-          start: now - 3 * dayMs - 300_000,
-          stop: now - 3 * dayMs,
+      daysAgo: 2,
+      body: {
+        results: {
+          tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
+          summary: {
+            tests: 12,
+            passed: 6,
+            failed: 5,
+            skipped: 1,
+            pending: 0,
+            other: 0,
+            start: now - 2 * dayMs - 300_000,
+            stop: now - 2 * dayMs,
+          },
+          tests: [
+            { name: 'login renders correctly', status: 'passed', duration: 1200 },
+            { name: 'dashboard loads stat cards', status: 'passed', duration: 850 },
+            { name: 'analytics trends chart renders', status: 'passed', duration: 920 },
+            { name: 'team settings save', status: 'passed', duration: 430 },
+            { name: 'report submission returns 201', status: 'passed', duration: 310 },
+            { name: 'API token auth is enforced', status: 'passed', duration: 420 },
+            {
+              name: 'flaky network timeout test',
+              status: 'failed',
+              duration: 4200,
+              message: 'Expected worker to complete within 3s but timed out after 4.2s',
+              trace:
+                'Error: Timeout 3000ms exceeded.\n  at Worker.waitForCompletion (worker.ts:142)\n  at Context.<anonymous> (execution.spec.ts:87)',
+            },
+            {
+              name: 'parallel worker coordination fails under load',
+              status: 'failed',
+              duration: 4500,
+              message: 'Expected worker to complete within 3s but timed out after 4.5s',
+              trace:
+                'Error: Timeout 3000ms exceeded.\n  at Worker.waitForCompletion (worker.ts:142)\n  at Context.<anonymous> (execution.spec.ts:87)',
+            },
+            {
+              name: 'quality gate evaluation passes',
+              status: 'failed',
+              duration: 1200,
+              message: 'AssertionError: expected pass rate 0.5 to be >= 0.8',
+              trace:
+                'at QualityGateEvaluator.evaluate (quality.go:98)\n  at TestQualityGatePass (quality_test.go:45)',
+            },
+            {
+              name: 'user invitation flow completes',
+              status: 'failed',
+              duration: 2100,
+              message: 'Error: invitation email not delivered within timeout',
+            },
+            {
+              name: 'webhook delivery succeeds',
+              status: 'failed',
+              duration: 1800,
+              message: 'Error: webhook delivery returned 500',
+            },
+            { name: 'admin user management list renders', status: 'skipped', duration: 0 },
+          ],
+          environment: { appName: 'ScaledTest', branchName: 'main' },
         },
-        tests: [
-          { name: 'login renders correctly', status: 'passed', duration: 1200 },
-          { name: 'dashboard loads stat cards', status: 'passed', duration: 850 },
-          { name: 'analytics trends chart renders', status: 'passed', duration: 920 },
-          { name: 'team settings save', status: 'passed', duration: 430 },
-          { name: 'report submission returns 201', status: 'passed', duration: 310 },
-          { name: 'quality gate evaluation passes', status: 'passed', duration: 560 },
-          { name: 'user invitation flow completes', status: 'passed', duration: 780 },
-          { name: 'webhook delivery succeeds', status: 'passed', duration: 690 },
-          { name: 'API token auth is enforced', status: 'passed', duration: 420 },
-          {
-            name: 'flaky network timeout test',
-            status: 'passed',
-            duration: 2100,
-            flaky: true,
-            retry: 1,
-          },
-          {
-            name: 'parallel worker coordination fails under load',
-            status: 'failed',
-            duration: 4200,
-            message: 'Expected worker to complete within 3s but timed out after 4.2s',
-            trace:
-              'Error: Timeout 3000ms exceeded.\n  at Worker.waitForCompletion (worker.ts:142)\n  at Context.<anonymous> (execution.spec.ts:87)',
-          },
-          { name: 'admin user management list renders', status: 'skipped', duration: 0 },
-        ],
-        environment: { appName: 'ScaledTest', branchName: 'main' },
       },
     },
 
-    // ── Report 2: higher failure rate, 2 days ago ─────────────────────────────
+    // ── Report 2: recovering pass rate, yesterday ──────────────────────────────
     {
-      results: {
-        tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
-        summary: {
-          tests: 8,
-          passed: 5,
-          failed: 2,
-          skipped: 1,
-          pending: 0,
-          other: 0,
-          start: now - 2 * dayMs - 240_000,
-          stop: now - 2 * dayMs,
+      daysAgo: 1,
+      body: {
+        results: {
+          tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
+          summary: {
+            tests: 8,
+            passed: 6,
+            failed: 1,
+            skipped: 1,
+            pending: 0,
+            other: 0,
+            start: now - dayMs - 240_000,
+            stop: now - dayMs,
+          },
+          tests: [
+            { name: 'login renders correctly', status: 'passed', duration: 1100 },
+            { name: 'dashboard loads stat cards', status: 'passed', duration: 790 },
+            { name: 'analytics trends chart renders', status: 'passed', duration: 880 },
+            { name: 'report submission returns 201', status: 'passed', duration: 280 },
+            { name: 'API token auth is enforced', status: 'passed', duration: 390 },
+            { name: 'team settings save', status: 'passed', duration: 415 },
+            {
+              name: 'parallel worker coordination fails under load',
+              status: 'failed',
+              duration: 4500,
+              message: 'Expected worker to complete within 3s but timed out after 4.5s',
+              trace:
+                'Error: Timeout 3000ms exceeded.\n  at Worker.waitForCompletion (worker.ts:142)\n  at Context.<anonymous> (execution.spec.ts:87)',
+            },
+            { name: 'admin user management list renders', status: 'skipped', duration: 0 },
+          ],
+          environment: { appName: 'ScaledTest', branchName: 'feat/fix-worker' },
         },
-        tests: [
-          { name: 'login renders correctly', status: 'passed', duration: 1100 },
-          { name: 'dashboard loads stat cards', status: 'passed', duration: 790 },
-          { name: 'analytics trends chart renders', status: 'passed', duration: 880 },
-          { name: 'report submission returns 201', status: 'passed', duration: 280 },
-          { name: 'API token auth is enforced', status: 'passed', duration: 390 },
-          {
-            name: 'parallel worker coordination fails under load',
-            status: 'failed',
-            duration: 4500,
-            message: 'Expected worker to complete within 3s but timed out after 4.5s',
-            trace:
-              'Error: Timeout 3000ms exceeded.\n  at Worker.waitForCompletion (worker.ts:142)\n  at Context.<anonymous> (execution.spec.ts:87)',
-          },
-          {
-            name: 'quality gate evaluation passes',
-            status: 'failed',
-            duration: 1200,
-            message: 'AssertionError: expected pass rate 0.625 to be >= 0.8',
-            trace:
-              'at QualityGateEvaluator.evaluate (quality.go:98)\n  at TestQualityGatePass (quality_test.go:45)',
-          },
-          { name: 'admin user management list renders', status: 'skipped', duration: 0 },
-        ],
-        environment: { appName: 'ScaledTest', branchName: 'feat/quality-gates' },
       },
     },
 
-    // ── Report 3: near-perfect, today ─────────────────────────────────────────
+    // ── Report 3: near-perfect pass rate, today ────────────────────────────────
     {
-      results: {
-        tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
-        summary: {
-          tests: 12,
-          passed: 11,
-          failed: 0,
-          skipped: 1,
-          pending: 0,
-          other: 0,
-          start: now - 60_000,
-          stop: now,
+      daysAgo: 0,
+      body: {
+        results: {
+          tool: { name: 'E2E-Seed-Suite', version: '1.0.0' },
+          summary: {
+            tests: 12,
+            passed: 11,
+            failed: 0,
+            skipped: 1,
+            pending: 0,
+            other: 0,
+            start: now - 60_000,
+            stop: now,
+          },
+          tests: [
+            { name: 'login renders correctly', status: 'passed', duration: 1050 },
+            { name: 'dashboard loads stat cards', status: 'passed', duration: 810 },
+            { name: 'analytics trends chart renders', status: 'passed', duration: 900 },
+            { name: 'team settings save', status: 'passed', duration: 410 },
+            { name: 'report submission returns 201', status: 'passed', duration: 295 },
+            { name: 'quality gate evaluation passes', status: 'passed', duration: 540 },
+            { name: 'user invitation flow completes', status: 'passed', duration: 720 },
+            { name: 'webhook delivery succeeds', status: 'passed', duration: 660 },
+            { name: 'API token auth is enforced', status: 'passed', duration: 400 },
+            {
+              name: 'flaky network timeout test',
+              status: 'passed',
+              duration: 1950,
+              flaky: true,
+              retry: 1,
+            },
+            {
+              name: 'parallel worker coordination fails under load',
+              status: 'passed',
+              duration: 2800,
+            },
+            { name: 'admin user management list renders', status: 'skipped', duration: 0 },
+          ],
+          environment: { appName: 'ScaledTest', branchName: 'main' },
         },
-        tests: [
-          { name: 'login renders correctly', status: 'passed', duration: 1050 },
-          { name: 'dashboard loads stat cards', status: 'passed', duration: 810 },
-          { name: 'analytics trends chart renders', status: 'passed', duration: 900 },
-          { name: 'team settings save', status: 'passed', duration: 410 },
-          { name: 'report submission returns 201', status: 'passed', duration: 295 },
-          { name: 'quality gate evaluation passes', status: 'passed', duration: 540 },
-          { name: 'user invitation flow completes', status: 'passed', duration: 720 },
-          { name: 'webhook delivery succeeds', status: 'passed', duration: 660 },
-          { name: 'API token auth is enforced', status: 'passed', duration: 400 },
-          {
-            name: 'flaky network timeout test',
-            status: 'passed',
-            duration: 1950,
-            flaky: true,
-            retry: 1,
-          },
-          {
-            name: 'parallel worker coordination fails under load',
-            status: 'passed',
-            duration: 2800,
-          },
-          { name: 'admin user management list renders', status: 'skipped', duration: 0 },
-        ],
-        environment: { appName: 'ScaledTest', branchName: 'main' },
       },
     },
   ];
 
-  for (const report of reports) {
-    const res = await fetch(`${baseURL}/api/v1/reports`, {
+  for (const { daysAgo, body } of reports) {
+    const createdAt = encodeURIComponent(backdateISO(daysAgo));
+    const url = `${baseURL}/api/v1/reports?created_at=${createdAt}`;
+    const res = await fetch(url, {
       method: 'POST',
       headers,
-      body: JSON.stringify(report),
+      body: JSON.stringify(body),
       signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
     });
     if (!res.ok) {
-      const body = await res.text();
-      throw new Error(`Failed to seed CTRF report: ${res.status} — ${body}`);
+      const responseBody = await res.text();
+      throw new Error(`Failed to seed CTRF report: ${res.status} — ${responseBody}`);
     }
   }
 }

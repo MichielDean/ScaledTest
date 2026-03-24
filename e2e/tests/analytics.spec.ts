@@ -30,6 +30,9 @@ test.describe('Analytics', () => {
     expect(trendsRes.ok()).toBeTruthy();
     const trends = await trendsRes.json();
     expect(trends.trends).toBeDefined();
+    // global-setup seeds reports across 3 distinct dates so the trend chart
+    // must have more than one data point (not a single collapsed bucket).
+    expect(trends.trends.length).toBeGreaterThan(1);
 
     // Query flaky tests API
     const flakyRes = await request.get('/api/v1/analytics/flaky-tests', {

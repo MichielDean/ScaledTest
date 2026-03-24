@@ -1722,3 +1722,41 @@ func TestBuildGetReportResponse_IncludesNameAndOmitsEmptyToolVersion(t *testing.
 		}
 	})
 }
+
+func TestResolveReportTime_AllowBackdateTrue_ValidDate(t *testing.T) {
+	// When AllowBackdate is true and a valid RFC3339 created_at is supplied,
+	// that time must be returned unchanged.
+	h := &ReportsHandler{AllowBackdate: true}
+	want := time.Date(2024, 1, 15, 12, 0, 0, 0, time.UTC)
+	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=2024-01-15T12:00:00Z", nil)
+
+	got := h.resolveReportTime(r)
+	if !got.Equal(want) {
+		t.Errorf("resolveReportTime with valid date: got %v, want %v", got, want)
+	}
+}
+
+func TestResolveReportTime_FallsBackToNow(t *testing.T) {
+	// All three cases below must return time.Now() rather than the param value.
+	cases := []struct {
+		name          string
+		allowBackdate bool
+		url           string
+	}{
+		{"backdate disabled, param present", false, "/api/v1/reports?created_at=2020-01-01T00:00:00Z"},
+		{"backdate enabled, invalid format", true, "/api/v1/reports?created_at=not-a-date"},
+		{"backdate enabled, no param", true, "/api/v1/reports"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &ReportsHandler{AllowBackdate: tc.allowBackdate}
+			r := httptest.NewRequest("POST", tc.url, nil)
+			before := time.Now()
+			got := h.resolveReportTime(r)
+			after := time.Now()
+			if got.Before(before) || got.After(after) {
+				t.Errorf("expected current time, got %v", got)
+			}
+		})
+	}
+}
