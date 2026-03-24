@@ -5,6 +5,7 @@ import { api } from '../../lib/api';
 
 vi.mock('../../lib/api', () => ({
   api: {
+    getTeams: vi.fn(),
     getQualityGates: vi.fn(),
     createQualityGate: vi.fn(),
     updateQualityGate: vi.fn(),
@@ -13,6 +14,8 @@ vi.mock('../../lib/api', () => ({
     getQualityGateEvaluations: vi.fn(),
   },
 }));
+
+const TEAM = { id: 't1', name: 'Alpha Team' };
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -24,14 +27,15 @@ function renderWithClient(ui: React.ReactElement) {
 describe('QualityGatesPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.mocked(api.getTeams).mockResolvedValue({ teams: [TEAM] });
   });
 
-  it('renders the heading and new gate button', () => {
+  it('renders the heading and new gate button', async () => {
     vi.mocked(api.getQualityGates).mockResolvedValue({ quality_gates: [], total: 0 });
 
     renderWithClient(<QualityGatesPage />);
 
-    expect(screen.getByRole('heading', { name: 'Quality Gates' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Quality Gates' })).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'New Quality Gate' })).toBeInTheDocument();
   });
 
@@ -69,6 +73,35 @@ describe('QualityGatesPage', () => {
     expect(screen.getByRole('button', { name: 'Delete' })).toBeInTheDocument();
   });
 
+  it('fetches quality gates using the team-scoped endpoint', async () => {
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'CI Gate',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+
+    renderWithClient(<QualityGatesPage />);
+
+    // Gate name renders — no skeleton stuck state
+    expect(await screen.findByText('CI Gate')).toBeInTheDocument();
+    // Skeleton elements are gone
+    expect(screen.queryByTestId('skeleton')).not.toBeInTheDocument();
+    // API was called with the correct team-scoped teamId
+    await waitFor(() => {
+      expect(api.getQualityGates).toHaveBeenCalledWith('t1');
+    });
+  });
+
   it('opens create form when New Quality Gate is clicked', async () => {
     vi.mocked(api.getQualityGates).mockResolvedValue({ quality_gates: [], total: 0 });
 
@@ -97,7 +130,7 @@ describe('QualityGatesPage', () => {
     expect(await screen.findByText('Name is required.')).toBeInTheDocument();
   });
 
-  it('calls createQualityGate on form submit', async () => {
+  it('calls createQualityGate with teamId on form submit', async () => {
     vi.mocked(api.getQualityGates).mockResolvedValue({ quality_gates: [], total: 0 });
     vi.mocked(api.createQualityGate).mockResolvedValue({ id: 'new-gate' });
 
@@ -114,10 +147,11 @@ describe('QualityGatesPage', () => {
 
     await waitFor(() => {
       expect(api.createQualityGate).toHaveBeenCalledTimes(1);
+      expect(api.createQualityGate).toHaveBeenCalledWith('t1', expect.any(Object));
     });
   });
 
-  it('calls evaluateQualityGate when Evaluate button is clicked', async () => {
+  it('calls evaluateQualityGate with teamId when Evaluate button is clicked', async () => {
     vi.mocked(api.getQualityGates).mockResolvedValue({
       quality_gates: [
         {
@@ -148,8 +182,17 @@ describe('QualityGatesPage', () => {
     fireEvent.click(evalBtn);
 
     await waitFor(() => {
-      expect(api.evaluateQualityGate).toHaveBeenCalledWith('g1');
+      expect(api.evaluateQualityGate).toHaveBeenCalledWith('t1', 'g1');
     });
+  });
+
+  it('shows no team found message when getTeams returns empty array', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue({ teams: [] });
+
+    renderWithClient(<QualityGatesPage />);
+
+    expect(await screen.findByText('No team found')).toBeInTheDocument();
+    expect(api.getQualityGates).not.toHaveBeenCalled();
   });
 
   it('shows evaluation result badge after evaluation', async () => {
