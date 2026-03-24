@@ -1,6 +1,7 @@
 import { ProfilePage } from './profile';
 import { createRootRoute, createRoute, redirect } from '@tanstack/react-router';
 import { RootLayout } from '../components/layout/root-layout';
+import { AuthLayout } from '../components/layout/auth-layout';
 import { DashboardPage } from './dashboard';
 import { LoginPage } from './login';
 import { RegisterPage } from './register';
@@ -22,117 +23,133 @@ function requireAuth() {
   }
 }
 
-const rootRoute = createRootRoute({
+const rootRoute = createRootRoute();
+
+// Pathless layout route: authenticated app shell with sidebar
+const appLayoutRoute = createRoute({
+  getParentRoute: () => rootRoute,
+  id: 'app',
   component: RootLayout,
 });
 
-const indexRoute = createRoute({
+// Pathless layout route: unauthenticated pages (no sidebar)
+const authLayoutRoute = createRoute({
   getParentRoute: () => rootRoute,
+  id: 'auth',
+  component: AuthLayout,
+});
+
+const indexRoute = createRoute({
+  getParentRoute: () => appLayoutRoute,
   path: '/',
   beforeLoad: requireAuth,
   component: DashboardPage,
 });
 
 const loginRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/login',
   component: LoginPage,
 });
 
 const registerRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/register',
   component: RegisterPage,
 });
 
 const oauthCallbackRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => authLayoutRoute,
   path: '/auth/callback',
   component: OAuthCallbackPage,
 });
 
+const invitationAcceptRoute = createRoute({
+  getParentRoute: () => authLayoutRoute,
+  path: '/invitations/$token',
+  component: AcceptInvitationPage,
+});
+
 const reportsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/reports',
   beforeLoad: requireAuth,
   component: TestResultsPage,
 });
 
 const reportsCompareRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/reports/compare',
   beforeLoad: requireAuth,
   component: ReportsComparePage,
 });
 
 const executionsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/executions',
   beforeLoad: requireAuth,
   component: ExecutionsPage,
 });
 
 const analyticsRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/analytics',
   beforeLoad: requireAuth,
   component: AnalyticsPage,
 });
 
 const qualityGatesRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/quality-gates',
   beforeLoad: requireAuth,
   component: QualityGatesPage,
 });
 
 const webhooksRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/webhooks',
   beforeLoad: requireAuth,
   component: WebhooksPage,
 });
 
 const shardingRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/sharding',
   beforeLoad: requireAuth,
   component: ShardingPage,
 });
 
 const adminRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/admin',
   beforeLoad: requireAuth,
   component: AdminPage,
 });
 
-const invitationAcceptRoute = createRoute({
-  getParentRoute: () => rootRoute,
-  path: '/invitations/$token',
-  component: AcceptInvitationPage,
-});
-
 const profileRoute = createRoute({
-  getParentRoute: () => rootRoute,
+  getParentRoute: () => appLayoutRoute,
   path: '/profile',
   beforeLoad: requireAuth,
   component: ProfilePage,
 });
 
 export const routeTree = rootRoute.addChildren([
-  indexRoute,
-  loginRoute,
-  registerRoute,
-  oauthCallbackRoute,
-  reportsRoute,
-  reportsCompareRoute,
-  executionsRoute,
-  analyticsRoute,
-  qualityGatesRoute,
-  webhooksRoute,
-  shardingRoute,
-  adminRoute,
-  invitationAcceptRoute,
-  profileRoute,
+  appLayoutRoute.addChildren([
+    indexRoute,
+    reportsRoute,
+    reportsCompareRoute,
+    executionsRoute,
+    analyticsRoute,
+    qualityGatesRoute,
+    webhooksRoute,
+    shardingRoute,
+    adminRoute,
+    profileRoute,
+  ]),
+  authLayoutRoute.addChildren([
+    loginRoute,
+    registerRoute,
+    oauthCallbackRoute,
+    invitationAcceptRoute,
+  ]),
 ]);
