@@ -55,6 +55,22 @@ export function AdminPage() {
   );
 }
 
+function RoleBadge({ role }: { role: string }) {
+  let cls = '';
+  if (role === 'owner') {
+    cls = 'bg-primary/10 text-primary border border-primary/20';
+  } else if (role === 'maintainer') {
+    cls = 'bg-accent/10 text-accent border border-accent/20';
+  } else {
+    cls = 'bg-muted text-muted-foreground border border-border';
+  }
+  return (
+    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${cls}`}>
+      {role}
+    </span>
+  );
+}
+
 function UsersSection() {
   const { data, isLoading } = useQuery({
     queryKey: queryKeys.admin.users(),
@@ -71,31 +87,21 @@ function UsersSection() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left p-3 font-medium">Email</th>
-                <th className="text-left p-3 font-medium">Display Name</th>
-                <th className="text-left p-3 font-medium">Role</th>
-                <th className="text-left p-3 font-medium">Created</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Email</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Display Name</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Role</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Created</th>
               </tr>
             </thead>
             <tbody>
               {(data?.users ?? []).map(u => (
-                <tr key={u.id} className="border-t">
+                <tr key={u.id} className="border-t hover:bg-muted/30 transition-colors">
                   <td className="p-3">{u.email}</td>
                   <td className="p-3">{u.display_name}</td>
                   <td className="p-3">
-                    <span
-                      className={`inline-block rounded px-2 py-0.5 text-xs font-medium ${
-                        u.role === 'owner'
-                          ? 'bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300'
-                          : u.role === 'maintainer'
-                            ? 'bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300'
-                            : 'bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300'
-                      }`}
-                    >
-                      {u.role}
-                    </span>
+                    <RoleBadge role={u.role} />
                   </td>
-                  <td className="p-3 text-muted-foreground">
+                  <td className="p-3 font-mono text-xs text-muted-foreground">
                     {new Date(u.created_at).toLocaleDateString()}
                   </td>
                 </tr>
@@ -137,7 +143,7 @@ function AuditLogSection() {
     <section>
       <h2 className="text-lg font-semibold mb-4">Audit Log</h2>
       <div className="flex items-center gap-2 mb-4">
-        <label htmlFor="audit-action-filter" className="text-sm font-medium">
+        <label htmlFor="audit-action-filter" className="text-sm font-medium text-foreground">
           Filter by action
         </label>
         <select
@@ -147,7 +153,7 @@ function AuditLogSection() {
             setActionFilter(e.target.value);
             setOffset(0);
           }}
-          className="rounded-md border bg-background px-3 py-1.5 text-sm"
+          className="rounded-md border border-border bg-muted px-3 py-1.5 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
         >
           <option value="">All actions</option>
           <option value="report.submitted">report.submitted</option>
@@ -168,27 +174,27 @@ function AuditLogSection() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-3 font-medium">Actor</th>
-                  <th className="text-left p-3 font-medium">Action</th>
-                  <th className="text-left p-3 font-medium">Resource Type</th>
-                  <th className="text-left p-3 font-medium">Resource ID</th>
-                  <th className="text-left p-3 font-medium">Team</th>
-                  <th className="text-left p-3 font-medium">Timestamp</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Actor</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Action</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Resource Type</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Resource ID</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Team</th>
+                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Timestamp</th>
                 </tr>
               </thead>
               <tbody>
                 {entries.map(e => (
-                  <tr key={e.id} className="border-t">
+                  <tr key={e.id} className="border-t hover:bg-muted/30 transition-colors">
                     <td className="p-3">{e.actor_email}</td>
                     <td className="p-3 font-mono text-xs">{e.action}</td>
                     <td className="p-3 text-muted-foreground">{e.resource_type ?? '—'}</td>
-                    <td className="p-3 text-muted-foreground font-mono text-xs">
+                    <td className="p-3 font-mono text-xs text-muted-foreground">
                       {e.resource_id ?? '—'}
                     </td>
-                    <td className="p-3 text-muted-foreground font-mono text-xs">
+                    <td className="p-3 font-mono text-xs text-muted-foreground">
                       {e.team_id ?? '—'}
                     </td>
-                    <td className="p-3 text-muted-foreground">
+                    <td className="p-3 font-mono text-xs text-muted-foreground">
                       {new Date(e.created_at).toLocaleString()}
                     </td>
                   </tr>
@@ -213,14 +219,14 @@ function AuditLogSection() {
               <button
                 onClick={() => setOffset(o => Math.max(0, o - AUDIT_PAGE_SIZE))}
                 disabled={!hasPrev}
-                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-50 hover:bg-muted transition-colors text-foreground"
               >
                 Previous
               </button>
               <button
                 onClick={() => setOffset(o => o + AUDIT_PAGE_SIZE)}
                 disabled={!hasNext}
-                className="rounded-md border px-3 py-1.5 text-sm disabled:opacity-50"
+                className="rounded-md border border-border px-3 py-1.5 text-sm disabled:opacity-50 hover:bg-muted transition-colors text-foreground"
               >
                 Next
               </button>
@@ -265,13 +271,13 @@ function TeamsSection() {
           value={newTeamName}
           onChange={e => setNewTeamName(e.target.value)}
           placeholder="New team name"
-          className="rounded-md border bg-background px-3 py-2 text-sm"
+          className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
           required
         />
         <button
           type="submit"
           disabled={createTeam.isPending}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground disabled:opacity-50"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 transition-colors"
         >
           {createTeam.isPending ? 'Creating...' : 'Create Team'}
         </button>
@@ -283,15 +289,15 @@ function TeamsSection() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left p-3 font-medium">Name</th>
-                <th className="text-left p-3 font-medium">Created</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Name</th>
+                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Created</th>
               </tr>
             </thead>
             <tbody>
               {(data?.teams ?? []).map(t => (
-                <tr key={t.id} className="border-t">
+                <tr key={t.id} className="border-t hover:bg-muted/30 transition-colors">
                   <td className="p-3 font-medium">{t.name}</td>
-                  <td className="p-3 text-muted-foreground">
+                  <td className="p-3 font-mono text-xs text-muted-foreground">
                     {new Date(t.created_at).toLocaleDateString()}
                   </td>
                 </tr>

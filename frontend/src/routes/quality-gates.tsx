@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
@@ -101,7 +102,7 @@ export function QualityGatesPage() {
               setShowForm(true);
             }
           }}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
         >
           {showForm ? 'Cancel' : 'New Quality Gate'}
         </button>
@@ -127,15 +128,16 @@ export function QualityGatesPage() {
       )}
 
       {error && (
-        <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-red-800">
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/30 bg-destructive/10 p-4 text-destructive">
+          <AlertCircle size={16} />
           Failed to load quality gates: {(error as Error).message}
         </div>
       )}
 
       {!isLoading && !error && qualityGates.length === 0 && (
-        <div className="rounded-lg border border-dashed bg-card p-12 text-center">
-          <div className="text-4xl mb-3">&#x1F6E1;</div>
-          <h3 className="font-semibold text-lg mb-1">No quality gates yet</h3>
+        <div className="rounded-lg border border-dashed bg-card p-12 text-center flex flex-col items-center gap-3">
+          <ShieldCheck size={48} className="text-muted-foreground/50" />
+          <h3 className="font-semibold text-lg mb-1 text-muted-foreground">No quality gates yet</h3>
           <p className="text-muted-foreground text-sm">
             Create a quality gate to define pass/fail criteria for your test results.
           </p>
@@ -206,11 +208,13 @@ function GateCard({
       <div className="p-5">
         <div className="flex items-start justify-between gap-4">
           <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 flex-wrap">
               <h3 className="font-semibold text-lg truncate">{gate.name}</h3>
               <span
                 className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${
-                  gate.active ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-500'
+                  gate.active
+                    ? 'bg-success/10 text-success border border-success/20'
+                    : 'bg-muted text-muted-foreground border border-border'
                 }`}
               >
                 {gate.active ? 'Active' : 'Inactive'}
@@ -233,13 +237,13 @@ function GateCard({
                 evaluateMutation.mutate(gate.id);
               }}
               disabled={evaluatingId === gate.id}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
               {evaluatingId === gate.id ? 'Evaluating...' : 'Evaluate'}
             </button>
             <button
               onClick={onEdit}
-              className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
             >
               Edit
             </button>
@@ -248,13 +252,13 @@ function GateCard({
                 <button
                   onClick={onConfirmDelete}
                   disabled={deleteIsPending}
-                  className="rounded-md bg-red-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-red-700 disabled:opacity-50 transition-colors"
+                  className="rounded-md bg-destructive px-3 py-1.5 text-sm font-medium text-destructive-foreground hover:bg-destructive/90 disabled:opacity-50 transition-colors"
                 >
                   {deleteIsPending ? 'Deleting...' : 'Confirm'}
                 </button>
                 <button
                   onClick={onCancelDelete}
-                  className="rounded-md border border-gray-300 bg-white px-3 py-1.5 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+                  className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted transition-colors"
                 >
                   Cancel
                 </button>
@@ -262,7 +266,7 @@ function GateCard({
             ) : (
               <button
                 onClick={onDelete}
-                className="rounded-md border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-600 hover:bg-red-50 transition-colors"
+                className="rounded-md border border-destructive/30 bg-card px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/10 transition-colors"
               >
                 Delete
               </button>
@@ -278,14 +282,14 @@ function GateCard({
 
         <button
           onClick={onToggleExpand}
-          className="mt-3 text-sm text-blue-600 hover:text-blue-700 font-medium"
+          className="mt-3 text-sm text-primary hover:text-accent font-medium transition-colors"
         >
           {isExpanded ? 'Hide History' : 'View History'}
         </button>
       </div>
 
       {isExpanded && (
-        <div className="border-t bg-gray-50 p-5">
+        <div className="border-t bg-muted/20 p-5">
           <EvaluationHistory gateId={gate.id} />
         </div>
       )}
@@ -297,14 +301,16 @@ function PassFailBadge({ passed }: { passed: boolean }) {
   return (
     <span
       className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-semibold ${
-        passed ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+        passed
+          ? 'bg-success/10 text-success border border-success/20'
+          : 'bg-destructive/10 text-destructive border border-destructive/20'
       }`}
     >
-      <span
-        className={`inline-block h-1.5 w-1.5 rounded-full ${
-          passed ? 'bg-green-500' : 'bg-red-500'
-        }`}
-      />
+      {passed ? (
+        <CheckCircle2 size={10} />
+      ) : (
+        <AlertCircle size={10} />
+      )}
       {passed ? 'Passed' : 'Failed'}
     </span>
   );
@@ -316,10 +322,10 @@ function RuleChip({ type, threshold }: { type: string; threshold?: number }) {
   const hasThreshold = ruleInfo?.hasThreshold ?? false;
 
   return (
-    <span className="inline-flex items-center gap-1.5 rounded-md border bg-white px-2 py-1 text-xs text-gray-600">
-      <span className="font-medium">{label}</span>
+    <span className="inline-flex items-center gap-1.5 rounded-md border border-border bg-muted px-2 py-1 text-xs text-muted-foreground">
+      <span className="font-medium text-foreground">{label}</span>
       {hasThreshold && threshold !== undefined && (
-        <span className="text-gray-400">
+        <span className="text-muted-foreground/70">
           {type === 'pass_rate' ? `${threshold}%` : String(threshold)}
         </span>
       )}
@@ -331,27 +337,27 @@ function EvaluationResultsDisplay({ evaluation }: { evaluation: EvaluationResult
   const results = evaluation.details?.results ?? [];
 
   return (
-    <div className="rounded-md border bg-white overflow-hidden">
-      <div className="px-4 py-2 border-b bg-gray-50 flex items-center justify-between">
+    <div className="rounded-md border border-border bg-muted/30 overflow-hidden">
+      <div className="px-4 py-2 border-b border-border bg-muted/50 flex items-center justify-between">
         <span className="text-sm font-medium">Evaluation Results</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-xs text-muted-foreground font-mono">
           {new Date(evaluation.created_at).toLocaleString()}
         </span>
       </div>
-      <div className="divide-y">
+      <div className="divide-y divide-border">
         {results.map((result, i) => (
           <div key={i} className="px-4 py-2.5 flex items-center justify-between">
             <div className="flex items-center gap-2">
-              <span
-                className={`inline-block h-2 w-2 rounded-full ${
-                  result.passed ? 'bg-green-500' : 'bg-red-500'
-                }`}
-              />
+              {result.passed ? (
+                <CheckCircle2 size={14} className="text-success shrink-0" />
+              ) : (
+                <AlertCircle size={14} className="text-destructive shrink-0" />
+              )}
               <span className="text-sm font-medium">{ruleLabelShort(result.type)}</span>
             </div>
             <div className="flex items-center gap-4 text-sm">
               <span className="text-muted-foreground">{result.message}</span>
-              <span className={`font-medium ${result.passed ? 'text-green-600' : 'text-red-600'}`}>
+              <span className={`font-medium ${result.passed ? 'text-success' : 'text-destructive'}`}>
                 {result.passed ? 'PASS' : 'FAIL'}
               </span>
             </div>
@@ -376,7 +382,7 @@ function EvaluationHistory({ gateId }: { gateId: string }) {
 
   if (error) {
     return (
-      <p className="text-sm text-red-600">Failed to load history: {(error as Error).message}</p>
+      <p className="text-sm text-destructive">Failed to load history: {(error as Error).message}</p>
     );
   }
 
@@ -395,15 +401,15 @@ function EvaluationHistory({ gateId }: { gateId: string }) {
         {evaluations.map(evaluation => (
           <div
             key={evaluation.id}
-            className="rounded-md border bg-white p-3 flex items-center justify-between"
+            className="rounded-md border border-border bg-card p-3 flex items-center justify-between"
           >
             <div className="flex items-center gap-3">
               <PassFailBadge passed={evaluation.passed} />
-              <span className="text-xs text-muted-foreground">
+              <span className="font-mono text-xs text-muted-foreground">
                 Report: {evaluation.report_id.slice(0, 8)}...
               </span>
             </div>
-            <span className="text-xs text-muted-foreground">
+            <span className="font-mono text-xs text-muted-foreground">
               {new Date(evaluation.created_at).toLocaleString()}
             </span>
           </div>
@@ -544,7 +550,7 @@ function QualityGateForm({
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
-          <label htmlFor="qg-name" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="qg-name" className="block text-sm font-medium text-foreground mb-1">
             Name
           </label>
           <input
@@ -553,11 +559,11 @@ function QualityGateForm({
             value={name}
             onChange={e => setName(e.target.value)}
             placeholder="e.g. Release Readiness"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
         <div>
-          <label htmlFor="qg-description" className="block text-sm font-medium text-gray-700 mb-1">
+          <label htmlFor="qg-description" className="block text-sm font-medium text-foreground mb-1">
             Description
           </label>
           <input
@@ -566,7 +572,7 @@ function QualityGateForm({
             value={description}
             onChange={e => setDescription(e.target.value)}
             placeholder="e.g. Must pass before deploying to production"
-            className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+            className="w-full rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground placeholder:text-muted-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
           />
         </div>
       </div>
@@ -578,9 +584,9 @@ function QualityGateForm({
             type="checkbox"
             checked={active}
             onChange={e => setActive(e.target.checked)}
-            className="h-4 w-4 rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="h-4 w-4 rounded border-border text-primary focus:ring-primary/30"
           />
-          <label htmlFor="qg-active" className="text-sm text-gray-700">
+          <label htmlFor="qg-active" className="text-sm text-foreground">
             Active
           </label>
         </div>
@@ -588,11 +594,11 @@ function QualityGateForm({
 
       <div className="space-y-3">
         <div className="flex items-center justify-between">
-          <span className="text-sm font-medium text-gray-700">Rules</span>
+          <span className="text-sm font-medium text-foreground">Rules</span>
           <button
             type="button"
             onClick={addRule}
-            className="text-sm text-blue-600 hover:text-blue-700 font-medium"
+            className="text-sm text-primary hover:text-accent font-medium transition-colors"
           >
             + Add Rule
           </button>
@@ -605,7 +611,7 @@ function QualityGateForm({
               <select
                 value={rule.type}
                 onChange={e => updateRule(index, 'type', e.target.value)}
-                className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
               >
                 {RULE_TYPES.map(rt => (
                   <option key={rt.value} value={rt.value}>
@@ -619,14 +625,14 @@ function QualityGateForm({
                   value={rule.threshold}
                   onChange={e => updateRule(index, 'threshold', e.target.value)}
                   placeholder={ruleInfo.placeholder}
-                  className="w-28 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+                  className="w-28 rounded-md border border-border bg-muted px-3 py-2 text-sm text-foreground focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30"
                 />
               )}
               <button
                 type="button"
                 onClick={() => removeRule(index)}
                 disabled={rules.length <= 1}
-                className="text-red-500 hover:text-red-700 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium"
+                className="text-destructive hover:text-destructive/80 disabled:opacity-30 disabled:cursor-not-allowed text-sm font-medium transition-colors"
               >
                 Remove
               </button>
@@ -635,13 +641,18 @@ function QualityGateForm({
         })}
       </div>
 
-      {formError && <p className="text-sm text-red-600">{formError}</p>}
+      {formError && (
+        <p className="flex items-center gap-1.5 text-sm text-destructive">
+          <AlertCircle size={13} />
+          {formError}
+        </p>
+      )}
 
       <div className="flex items-center gap-3">
         <button
           type="submit"
           disabled={isPending}
-          className="rounded-md bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
         >
           {isPending
             ? gate
@@ -654,7 +665,7 @@ function QualityGateForm({
         <button
           type="button"
           onClick={onCancel}
-          className="rounded-md border border-gray-300 px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+          className="rounded-md border border-border px-4 py-2 text-sm font-medium text-foreground hover:bg-muted transition-colors"
         >
           Cancel
         </button>
