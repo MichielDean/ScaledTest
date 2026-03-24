@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { StatusBadge } from './dashboard';
 
 interface DurationEntry {
   id: string;
@@ -140,21 +141,6 @@ export function ShardingPage() {
         )}
       </div>
     </div>
-  );
-}
-
-function StatusBadge({ status }: { status: string }) {
-  const colors =
-    status === 'passed'
-      ? 'bg-green-100 text-green-700'
-      : status === 'failed'
-        ? 'bg-red-100 text-red-700'
-        : 'bg-gray-100 text-gray-600';
-
-  return (
-    <span className={`inline-block rounded-full px-2 py-0.5 text-xs font-medium ${colors}`}>
-      {status || 'unknown'}
-    </span>
   );
 }
 

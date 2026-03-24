@@ -61,6 +61,14 @@ interface FlakyTestsResponse {
   flaky_tests: FlakyTest[];
 }
 
+const CHART_TOOLTIP_STYLE = {
+  backgroundColor: 'var(--color-card)',
+  border: '1px solid var(--color-border)',
+  borderRadius: '6px',
+  color: 'var(--color-foreground)',
+  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
+};
+
 // ---------------------------------------------------------------------------
 // Dashboard page
 // ---------------------------------------------------------------------------
@@ -156,13 +164,7 @@ export function DashboardPage() {
               <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} unit="%" />
               <Tooltip
                 formatter={(v: number) => [`${v.toFixed(1)}%`, 'Pass Rate']}
-                contentStyle={{
-                  backgroundColor: 'var(--color-card)',
-                  border: '1px solid var(--color-border)',
-                  borderRadius: '6px',
-                  color: 'var(--color-foreground)',
-                  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
-                }}
+                contentStyle={CHART_TOOLTIP_STYLE}
               />
               <Line
                 type="monotone"
