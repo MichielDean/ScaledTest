@@ -1562,3 +1562,163 @@ func TestFlattenReportForList_InvalidSummary_OmitsCounts(t *testing.T) {
 		}
 	}
 }
+
+func TestComputeReportName(t *testing.T) {
+	tests := []struct {
+		id          string
+		toolName    string
+		toolVersion string
+		want        string
+	}{
+		{"abc12345-0000-0000-0000-000000000000", "playwright", "1.50.1", "playwright v1.50.1"},
+		{"abc12345-0000-0000-0000-000000000000", "jest", "29.0.0", "jest v29.0.0"},
+		{"abc12345-0000-0000-0000-000000000000", "jest", "", "jest"},
+		{"abc12345-0000-0000-0000-000000000000", "", "", "Report abc12345"},
+		{"short", "", "", "Report short"},
+	}
+	for _, tt := range tests {
+		got := computeReportName(tt.id, tt.toolName, tt.toolVersion)
+		if got != tt.want {
+			t.Errorf("computeReportName(%q, %q, %q) = %q, want %q",
+				tt.id, tt.toolName, tt.toolVersion, got, tt.want)
+		}
+	}
+}
+
+func TestFlattenReportForList_IncludesComputedName(t *testing.T) {
+	summary := json.RawMessage(`{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0}`)
+	tests := []struct {
+		desc     string
+		rpt      model.TestReport
+		wantName string
+	}{
+		{
+			"tool name and version",
+			model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				ToolName: "playwright", ToolVersion: "1.50.1", Summary: summary,
+			},
+			"playwright v1.50.1",
+		},
+		{
+			"tool name only",
+			model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				ToolName: "jest", Summary: summary,
+			},
+			"jest",
+		},
+		{
+			"no tool name falls back to short id",
+			model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				Summary: summary,
+			},
+			"Report abc12345",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			out := flattenReportForList(tt.rpt)
+			if out["name"] != tt.wantName {
+				t.Errorf("flattenReportForList name = %v, want %q", out["name"], tt.wantName)
+			}
+		})
+	}
+}
+
+// ---------------------------------------------------------------------------
+// buildGetReportResponse tests
+// ---------------------------------------------------------------------------
+
+func TestBuildGetReportResponse_IncludesNameAndOmitsEmptyToolVersion(t *testing.T) {
+	execID := "exec-42"
+	tests := []struct {
+		desc            string
+		rpt             model.TestReport
+		wantName        string
+		wantToolVersion bool // true if tool_version should appear in output
+	}{
+		{
+			desc: "tool name and version present",
+			rpt: model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				ToolName: "playwright", ToolVersion: "1.50.1",
+				Summary: json.RawMessage(`{}`),
+			},
+			wantName:        "playwright v1.50.1",
+			wantToolVersion: true,
+		},
+		{
+			desc: "tool name only — tool_version omitted",
+			rpt: model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				ToolName: "jest", ToolVersion: "",
+				Summary: json.RawMessage(`{}`),
+			},
+			wantName:        "jest",
+			wantToolVersion: false,
+		},
+		{
+			desc: "no tool name — fallback to short id",
+			rpt: model.TestReport{
+				ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+				Summary: json.RawMessage(`{}`),
+			},
+			wantName:        "Report abc12345",
+			wantToolVersion: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.desc, func(t *testing.T) {
+			out := buildGetReportResponse(tt.rpt)
+
+			if out["name"] != tt.wantName {
+				t.Errorf("name = %v, want %q", out["name"], tt.wantName)
+			}
+			_, hasToolVersion := out["tool_version"]
+			if hasToolVersion != tt.wantToolVersion {
+				t.Errorf("tool_version present = %v, want %v", hasToolVersion, tt.wantToolVersion)
+			}
+		})
+	}
+
+	// execution_id is included only when set
+	t.Run("execution_id included when set", func(t *testing.T) {
+		rpt := model.TestReport{
+			ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+			ToolName: "jest", ExecutionID: &execID,
+			Summary: json.RawMessage(`{}`),
+		}
+		out := buildGetReportResponse(rpt)
+		if out["execution_id"] != execID {
+			t.Errorf("execution_id = %v, want %q", out["execution_id"], execID)
+		}
+	})
+
+	// execution_id omitted when nil
+	t.Run("execution_id omitted when nil", func(t *testing.T) {
+		rpt := model.TestReport{
+			ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+			ToolName: "jest",
+			Summary:  json.RawMessage(`{}`),
+		}
+		out := buildGetReportResponse(rpt)
+		if _, ok := out["execution_id"]; ok {
+			t.Error("execution_id should be absent when nil")
+		}
+	})
+
+	// environment omitted when empty
+	t.Run("environment omitted when empty", func(t *testing.T) {
+		rpt := model.TestReport{
+			ID: "abc12345-0000-0000-0000-000000000000", TeamID: "team-1",
+			ToolName: "jest",
+			Summary:  json.RawMessage(`{}`),
+		}
+		out := buildGetReportResponse(rpt)
+		if _, ok := out["environment"]; ok {
+			t.Error("environment should be absent when empty")
+		}
+	})
+}
