@@ -141,6 +141,17 @@ curl -X POST "https://your-instance/api/v1/reports?github_owner=acme&github_repo
 
 The status is posted asynchronously (best-effort) and does not affect the HTTP response.
 
+**Report backdating (test environments only):** When `ST_DISABLE_RATE_LIMIT=true`, you can pass a `created_at` query parameter (RFC3339 format) to override the report ingestion timestamp. This is useful for seeding historical data or testing trend analytics:
+
+```bash
+curl -X POST "https://your-instance/api/v1/reports?created_at=2024-03-15T12:00:00Z" \
+  -H "Authorization: Bearer sct_your_token" \
+  -H "Content-Type: application/json" \
+  -d @ctrf-report.json
+```
+
+**⚠️ Never use `created_at` in production.** This parameter is only accepted when `ST_DISABLE_RATE_LIMIT=true` (test environments only) and has no effect when the flag is false.
+
 ### Invitations
 
 Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
