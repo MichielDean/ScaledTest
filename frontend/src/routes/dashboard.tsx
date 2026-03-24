@@ -23,6 +23,7 @@ interface Report {
   passed: number;
   failed: number;
   skipped: number;
+  pending?: number;
   created_at: string;
 }
 
@@ -102,7 +103,7 @@ export function DashboardPage() {
     const reports = reportsQuery.data?.reports;
     if (!reports || reports.length === 0) return undefined;
     const totalPassed = reports.reduce((s, r) => s + (r.passed || 0), 0);
-    const totalTests = reports.reduce((s, r) => s + (r.passed || 0) + (r.failed || 0) + (r.skipped || 0), 0);
+    const totalTests = reports.reduce((s, r) => s + (r.passed || 0) + (r.failed || 0) + (r.skipped || 0) + (r.pending ?? 0), 0);
     if (totalTests === 0) return undefined;
     return ((totalPassed / totalTests) * 100).toFixed(1);
   })();
