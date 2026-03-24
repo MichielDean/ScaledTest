@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Clock, Zap, BarChart2 } from 'lucide-react';
 import { api } from '../lib/api';
@@ -43,6 +43,14 @@ export function TestResultsPage() {
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
   const [expandedTestIdx, setExpandedTestIdx] = useState<number | null>(null);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const reportId = params.get('report');
+    if (reportId) {
+      setExpandedReportId(reportId);
+    }
+  }, []);
 
   const { data, isLoading, error } = useQuery({
     queryKey: queryKeys.reports.all,

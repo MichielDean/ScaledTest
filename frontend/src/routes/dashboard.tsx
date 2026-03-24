@@ -9,7 +9,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
-import { BarChart2, Play, TrendingUp, Zap } from 'lucide-react';
+import { BarChart2, ChevronRight, Play, TrendingUp, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
@@ -199,16 +199,25 @@ export function DashboardPage() {
                     <th className="pb-2 pr-4 pt-2 text-muted-foreground text-xs uppercase tracking-wider font-medium">Failed</th>
                     <th className="pb-2 pr-4 pt-2 text-muted-foreground text-xs uppercase tracking-wider font-medium">Skipped</th>
                     <th className="pb-2 pt-2 text-muted-foreground text-xs uppercase tracking-wider font-medium">Date</th>
+                    <th className="pb-2 pt-2 pl-2"><span className="sr-only">Actions</span></th>
                   </tr>
                 </thead>
                 <tbody>
                   {recentReports.map(r => (
-                    <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                    <tr key={r.id} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors cursor-pointer">
                       <td className="py-2 pr-4 pl-2 font-medium truncate max-w-[200px]">{r.tool_name}</td>
                       <td className="py-2 pr-4 text-success">{r.passed}</td>
                       <td className="py-2 pr-4 text-destructive">{r.failed}</td>
                       <td className="py-2 pr-4 text-warning">{r.skipped}</td>
                       <td className="py-2 font-mono text-xs text-muted-foreground">{formatDate(r.created_at)}</td>
+                      <td className="py-2 pl-2 text-right">
+                        <a
+                          href={`/reports?report=${r.id}`}
+                          className="inline-flex items-center gap-0.5 text-xs text-primary hover:underline"
+                        >
+                          View <ChevronRight size={12} aria-hidden="true" />
+                        </a>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
