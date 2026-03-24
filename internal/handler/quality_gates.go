@@ -433,14 +433,17 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	previousFailed := fetchPreviousFailedTests(r.Context(), h.DB, teamID, req.ReportID)
+
 	// Build report data for evaluation
 	data := &quality.ReportData{
-		TotalTests:         summary.Tests,
-		PassedTests:        summary.Passed,
-		FailedTests:        summary.Failed,
-		SkippedTests:       summary.Skipped,
-		TotalDurationMs:    totalDurationMs,
-		CurrentFailedTests: currentFailed,
+		TotalTests:          summary.Tests,
+		PassedTests:         summary.Passed,
+		FailedTests:         summary.Failed,
+		SkippedTests:        summary.Skipped,
+		TotalDurationMs:     totalDurationMs,
+		CurrentFailedTests:  currentFailed,
+		PreviousFailedTests: previousFailed,
 	}
 
 	evalResult, err := quality.Evaluate(gate.Rules, data)

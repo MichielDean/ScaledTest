@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/quality"
 )
 
 func withClaimsRole(r *http.Request, role string) *http.Request {
@@ -417,6 +419,53 @@ func TestQualityGatesListEvaluationsWithoutDB(t *testing.T) {
 	}
 	if !strings.Contains(w.Body.String(), `"evaluations"`) {
 		t.Errorf("ListEvaluations body missing evaluations key: %s", w.Body.String())
+	}
+}
+
+// TestEvaluate_NoNewFailures_NewFailureDetected verifies that the no_new_failures
+// rule fails when the current report introduces a test failure not present in the
+// prior report. This covers the case fixed by populating PreviousFailedTests in
+// the Evaluate handler.
+func TestEvaluate_NoNewFailures_NewFailureDetected(t *testing.T) {
+	// Given: report 1 had test-a failing; report 2 introduces test-b as a new failure.
+	rules := json.RawMessage(`[{"type":"no_new_failures"}]`)
+	data := &quality.ReportData{
+		PreviousFailedTests: map[string]bool{"test-a": true},
+		CurrentFailedTests:  map[string]bool{"test-a": true, "test-b": true},
+	}
+
+	// When: the gate is evaluated against report 2.
+	result, err := quality.Evaluate(rules, data)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+
+	// Then: the gate must fail because test-b is a new failure.
+	if result.Passed {
+		t.Error("expected gate to fail — test-b is a new failure not present in prior report")
+	}
+}
+
+// TestEvaluate_NoNewFailures_NoNewFailuresPass verifies that the no_new_failures
+// rule passes when the current report has no failures beyond those already present
+// in the prior report.
+func TestEvaluate_NoNewFailures_NoNewFailuresPass(t *testing.T) {
+	// Given: report 1 had test-a failing; report 2 still has only test-a failing.
+	rules := json.RawMessage(`[{"type":"no_new_failures"}]`)
+	data := &quality.ReportData{
+		PreviousFailedTests: map[string]bool{"test-a": true},
+		CurrentFailedTests:  map[string]bool{"test-a": true},
+	}
+
+	// When: the gate is evaluated against report 2.
+	result, err := quality.Evaluate(rules, data)
+	if err != nil {
+		t.Fatalf("Evaluate() error: %v", err)
+	}
+
+	// Then: the gate must pass — no new failures were introduced.
+	if !result.Passed {
+		t.Error("expected gate to pass — test-a was already failing in the prior report")
 	}
 }
 
