@@ -5,6 +5,7 @@ import { queryKeys } from '../lib/query-keys';
 import { useAuthStore } from '../stores/auth-store';
 
 const AUDIT_PAGE_SIZE = 20;
+const TH_CLASS = 'text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium';
 
 interface AuditLogEntry {
   id: string;
@@ -87,10 +88,10 @@ function UsersSection() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Email</th>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Display Name</th>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Role</th>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Created</th>
+                <th className={TH_CLASS}>Email</th>
+                <th className={TH_CLASS}>Display Name</th>
+                <th className={TH_CLASS}>Role</th>
+                <th className={TH_CLASS}>Created</th>
               </tr>
             </thead>
             <tbody>
@@ -174,12 +175,12 @@ function AuditLogSection() {
             <table className="w-full text-sm">
               <thead className="bg-muted/50">
                 <tr>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Actor</th>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Action</th>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Resource Type</th>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Resource ID</th>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Team</th>
-                  <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Timestamp</th>
+                  <th className={TH_CLASS}>Actor</th>
+                  <th className={TH_CLASS}>Action</th>
+                  <th className={TH_CLASS}>Resource Type</th>
+                  <th className={TH_CLASS}>Resource ID</th>
+                  <th className={TH_CLASS}>Team</th>
+                  <th className={TH_CLASS}>Timestamp</th>
                 </tr>
               </thead>
               <tbody>
@@ -289,8 +290,8 @@ function TeamsSection() {
           <table className="w-full text-sm">
             <thead className="bg-muted/50">
               <tr>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Name</th>
-                <th className="text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium">Created</th>
+                <th className={TH_CLASS}>Name</th>
+                <th className={TH_CLASS}>Created</th>
               </tr>
             </thead>
             <tbody>
