@@ -1471,3 +1471,79 @@ func TestCreateReport_GitHubStatus_WithoutExecutionID_LinksToReport(t *testing.T
 		t.Errorf("targetURL %q should not link to execution when no execution_id", call.TargetURL)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// flattenReportForList tests
+// ---------------------------------------------------------------------------
+
+func TestFlattenReportForList_PromotesSummaryFields(t *testing.T) {
+	rpt := model.TestReport{
+		ID:        "report-1",
+		TeamID:    "team-1",
+		ToolName:  "jest",
+		Summary:   json.RawMessage(`{"tests":10,"passed":8,"failed":1,"skipped":1,"pending":0,"other":0}`),
+		CreatedAt: time.Date(2024, 1, 1, 0, 0, 0, 0, time.UTC),
+	}
+
+	out := flattenReportForList(rpt)
+
+	cases := []struct {
+		field string
+		want  interface{}
+	}{
+		{"tests", 10},
+		{"passed", 8},
+		{"failed", 1},
+		{"skipped", 1},
+	}
+	for _, tc := range cases {
+		if out[tc.field] != tc.want {
+			t.Errorf("flattenReportForList %q = %v, want %v", tc.field, out[tc.field], tc.want)
+		}
+	}
+
+	// summary blob must still be present
+	if out["summary"] == nil {
+		t.Error("flattenReportForList: summary field should be preserved")
+	}
+	if out["id"] != "report-1" {
+		t.Errorf("flattenReportForList id = %v, want report-1", out["id"])
+	}
+}
+
+func TestFlattenReportForList_ZeroCounts(t *testing.T) {
+	rpt := model.TestReport{
+		ID:       "report-2",
+		TeamID:   "team-1",
+		Summary:  json.RawMessage(`{"tests":0,"passed":0,"failed":0,"skipped":0,"pending":0,"other":0}`),
+	}
+
+	out := flattenReportForList(rpt)
+
+	for _, field := range []string{"tests", "passed", "failed", "skipped"} {
+		if out[field] != 0 {
+			t.Errorf("flattenReportForList zero-counts %q = %v, want 0", field, out[field])
+		}
+	}
+}
+
+func TestFlattenReportForList_InvalidSummary_OmitsCounts(t *testing.T) {
+	rpt := model.TestReport{
+		ID:      "report-3",
+		TeamID:  "team-1",
+		Summary: json.RawMessage(`not-valid-json`),
+	}
+
+	out := flattenReportForList(rpt)
+
+	// id must still be present
+	if out["id"] != "report-3" {
+		t.Errorf("flattenReportForList id = %v, want report-3", out["id"])
+	}
+	// count fields must be absent when summary is unparseable
+	for _, field := range []string{"tests", "passed", "failed", "skipped"} {
+		if _, ok := out[field]; ok {
+			t.Errorf("flattenReportForList invalid summary: field %q should be absent", field)
+		}
+	}
+}

@@ -104,7 +104,7 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 	defer rows.Close()
 
-	reports := []model.TestReport{}
+	flatReports := make([]map[string]interface{}, 0)
 	for rows.Next() {
 		var rpt model.TestReport
 		if err := rows.Scan(
@@ -114,7 +114,7 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 			Error(w, http.StatusInternalServerError, "failed to scan report")
 			return
 		}
-		reports = append(reports, rpt)
+		flatReports = append(flatReports, flattenReportForList(rpt))
 	}
 	if err := rows.Err(); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to iterate reports")
@@ -122,7 +122,7 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"reports": reports,
+		"reports": flatReports,
 		"total":   total,
 	})
 }
@@ -618,6 +618,38 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	})
+}
+
+// flattenReportForList returns a map representation of a TestReport with
+// summary count fields (tests, passed, failed, skipped) promoted to the top
+// level alongside the raw summary blob, for the ListReports API response.
+// If the summary cannot be parsed the count fields are omitted rather than
+// returning zero values that could mask the underlying issue.
+func flattenReportForList(rpt model.TestReport) map[string]interface{} {
+	out := map[string]interface{}{
+		"id":         rpt.ID,
+		"team_id":    rpt.TeamID,
+		"tool_name":  rpt.ToolName,
+		"summary":    rpt.Summary,
+		"created_at": rpt.CreatedAt,
+	}
+	if rpt.ToolVersion != "" {
+		out["tool_version"] = rpt.ToolVersion
+	}
+	if rpt.ExecutionID != nil {
+		out["execution_id"] = *rpt.ExecutionID
+	}
+	if len(rpt.Environment) > 0 {
+		out["environment"] = rpt.Environment
+	}
+	var s model.ReportSummary
+	if err := json.Unmarshal(rpt.Summary, &s); err == nil {
+		out["tests"] = s.Tests
+		out["passed"] = s.Passed
+		out["failed"] = s.Failed
+		out["skipped"] = s.Skipped
+	}
+	return out
 }
 
 // nullString returns a *string that is nil for empty strings.
