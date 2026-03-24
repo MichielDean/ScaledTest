@@ -204,17 +204,12 @@ function GateCard({
   onCancelDelete: () => void;
   deleteIsPending: boolean;
 }) {
-  const [evaluatingId, setEvaluatingId] = useState<string | null>(null);
   const [lastEvaluation, setLastEvaluation] = useState<EvaluationResult | null>(null);
 
   const evaluateMutation = useMutation({
     mutationFn: (id: string) => api.evaluateQualityGate(teamId, id) as Promise<EvaluationResult>,
     onSuccess: result => {
       setLastEvaluation(result);
-      setEvaluatingId(null);
-    },
-    onError: () => {
-      setEvaluatingId(null);
     },
   });
 
@@ -249,14 +244,11 @@ function GateCard({
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <button
-              onClick={() => {
-                setEvaluatingId(gate.id);
-                evaluateMutation.mutate(gate.id);
-              }}
-              disabled={evaluatingId === gate.id}
+              onClick={() => evaluateMutation.mutate(gate.id)}
+              disabled={evaluateMutation.isPending}
               className="rounded-md border border-border bg-card px-3 py-1.5 text-sm font-medium text-foreground hover:bg-muted disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {evaluatingId === gate.id ? 'Evaluating...' : 'Evaluate'}
+              {evaluateMutation.isPending ? 'Evaluating...' : 'Evaluate'}
             </button>
             <button
               onClick={onEdit}
