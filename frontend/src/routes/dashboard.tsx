@@ -20,7 +20,6 @@ import { queryKeys } from '../lib/query-keys';
 interface Report {
   id: string;
   tool_name: string;
-  tests: number;
   passed: number;
   failed: number;
   skipped: number;
