@@ -14,6 +14,7 @@ import {
 import { TrendingUp, Zap, Clock, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { CHART_TOOLTIP_STYLE } from './dashboard';
 
 interface TrendPoint {
   date: string;
@@ -52,14 +53,6 @@ interface ErrorAnalysisResponse {
 interface DurationDistributionResponse {
   distribution: DurationBucket[];
 }
-
-const CHART_TOOLTIP_STYLE = {
-  backgroundColor: 'var(--color-card)',
-  border: '1px solid var(--color-border)',
-  borderRadius: '6px',
-  color: 'var(--color-foreground)',
-  boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
-};
 
 export function AnalyticsPage() {
   const trendsQuery = useQuery({

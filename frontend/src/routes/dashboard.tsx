@@ -61,7 +61,7 @@ interface FlakyTestsResponse {
   flaky_tests: FlakyTest[];
 }
 
-const CHART_TOOLTIP_STYLE = {
+export const CHART_TOOLTIP_STYLE = {
   backgroundColor: 'var(--color-card)',
   border: '1px solid var(--color-border)',
   borderRadius: '6px',
