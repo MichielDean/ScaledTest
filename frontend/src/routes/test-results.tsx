@@ -114,8 +114,11 @@ export function TestResultsPage() {
         <div className="space-y-3">
           {filteredReports.map(report => {
             const isExpanded = expandedReportId === report.id;
-            const total = (report.passed || 0) + (report.failed || 0) + (report.skipped || 0) + (report.pending ?? 0);
-            const passRate = total > 0 ? (((report.passed || 0) / total) * 100).toFixed(1) : '—';
+            const passed = report.passed || 0;
+            const failed = report.failed || 0;
+            const skipped = report.skipped || 0;
+            const total = passed + failed + skipped + (report.pending ?? 0);
+            const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : '—';
 
             return (
               <div key={report.id} className="rounded-lg border bg-card overflow-hidden">
@@ -140,9 +143,9 @@ export function TestResultsPage() {
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-3 text-xs">
-                    <span className="text-success font-medium">{report.passed || 0} passed</span>
-                    <span className="text-destructive font-medium">{report.failed || 0} failed</span>
-                    <span className="text-warning font-medium">{report.skipped || 0} skipped</span>
+                    <span className="text-success font-medium">{passed} passed</span>
+                    <span className="text-destructive font-medium">{failed} failed</span>
+                    <span className="text-warning font-medium">{skipped} skipped</span>
                     <span className="font-mono text-muted-foreground">{passRate}%</span>
                   </div>
                 </button>
