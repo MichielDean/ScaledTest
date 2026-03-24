@@ -883,10 +883,13 @@ func TestBuildReportData_WithPreviousFailedTests(t *testing.T) {
 }
 
 func TestFetchPreviousFailedTests_NilDB(t *testing.T) {
-	// When DB is nil, fetchPreviousFailedTests must return nil gracefully.
-	result := fetchPreviousFailedTests(context.Background(), nil, "team-1", "report-1")
+	// When DB is nil, fetchPreviousFailedTests must return (nil, nil) gracefully.
+	result, err := fetchPreviousFailedTests(context.Background(), nil, "team-1", "report-1")
+	if err != nil {
+		t.Errorf("expected nil error when DB is nil, got %v", err)
+	}
 	if result != nil {
-		t.Errorf("expected nil when DB is nil, got %v", result)
+		t.Errorf("expected nil map when DB is nil, got %v", result)
 	}
 }
 

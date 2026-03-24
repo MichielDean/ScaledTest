@@ -5,105 +5,13 @@ package integration
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 	"time"
 
-	"github.com/go-chi/chi/v5"
-
-	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/handler"
-	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/testutil"
 )
-
-// insertQGReport inserts a test_reports row at the given time and returns its ID.
-// Tests are inserted individually via insertQGResult.
-func insertQGReport(t *testing.T, ctx context.Context, tdb *TestDB, teamID string, total, passed, failed int, createdAt time.Time) string {
-	t.Helper()
-	summary, _ := json.Marshal(map[string]int{
-		"tests":   total,
-		"passed":  passed,
-		"failed":  failed,
-		"skipped": 0,
-	})
-	var id string
-	err := tdb.Pool.QueryRow(ctx,
-		`INSERT INTO test_reports (team_id, tool_name, summary, raw, created_at)
-		 VALUES ($1, 'jest', $2, '{"results":{"tool":{"name":"jest"}}}'::jsonb, $3)
-		 RETURNING id`,
-		teamID, summary, createdAt,
-	).Scan(&id)
-	if err != nil {
-		t.Fatalf("insertQGReport: %v", err)
-	}
-	return id
-}
-
-// insertQGResult inserts a single test_results row for quality gate tests.
-func insertQGResult(t *testing.T, ctx context.Context, tdb *TestDB, reportID, teamID, name, status string) {
-	t.Helper()
-	_, err := tdb.Pool.Exec(ctx,
-		`INSERT INTO test_results (report_id, team_id, name, status, duration_ms, flaky)
-		 VALUES ($1, $2, $3, $4, 100, false)`,
-		reportID, teamID, name, status,
-	)
-	if err != nil {
-		t.Fatalf("insertQGResult %s/%s: %v", name, status, err)
-	}
-}
-
-// insertNoNewFailuresGateForTeam inserts a quality gate with a single
-// no_new_failures rule and returns its ID.
-func insertNoNewFailuresGateForTeam(t *testing.T, ctx context.Context, tdb *TestDB, teamID string) string {
-	t.Helper()
-	var id string
-	err := tdb.Pool.QueryRow(ctx,
-		`INSERT INTO quality_gates (team_id, name, rules)
-		 VALUES ($1, 'No New Failures Gate', '[{"type":"no_new_failures"}]'::jsonb)
-		 RETURNING id`,
-		teamID,
-	).Scan(&id)
-	if err != nil {
-		t.Fatalf("insertNoNewFailuresGateForTeam: %v", err)
-	}
-	return id
-}
-
-// postEvaluateQG calls QualityGatesHandler.Evaluate via httptest with the given
-// team, gate, and report IDs, and returns the response recorder.
-func postEvaluateQG(t *testing.T, tdb *TestDB, teamID, gateID, reportID string) *httptest.ResponseRecorder {
-	t.Helper()
-
-	h := &handler.QualityGatesHandler{
-		Store: store.NewQualityGateStore(tdb.Pool),
-		DB:    tdb.Pool,
-	}
-
-	body := fmt.Sprintf(`{"report_id":%q}`, reportID)
-	req := httptest.NewRequest(http.MethodPost,
-		"/api/v1/teams/"+teamID+"/quality-gates/"+gateID+"/evaluate",
-		strings.NewReader(body))
-	req.Header.Set("Content-Type", "application/json")
-
-	rctx := chi.NewRouteContext()
-	rctx.URLParams.Add("teamID", teamID)
-	rctx.URLParams.Add("gateID", gateID)
-	reqCtx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	reqCtx = auth.SetClaims(reqCtx, &auth.Claims{
-		UserID: "user-1",
-		Email:  "test@example.com",
-		Role:   "owner",
-		TeamID: teamID,
-	})
-	req = req.WithContext(reqCtx)
-
-	w := httptest.NewRecorder()
-	h.Evaluate(w, req)
-	return w
-}
 
 // assertEvalResponse decodes the response body and fails the test if the HTTP
 // status or the "passed" field do not match expectations.
@@ -159,22 +67,22 @@ func TestQualityGateEvaluate_NoNewFailures_EndToEnd(t *testing.T) {
 	// Step 1/2: Create team and insert two test reports.
 	//
 	// Report A (prior): test1=pass, test2=fail
-	reportAID := insertQGReport(t, ctx, tdb, teamID, 2, 1, 1, now.Add(-4*time.Minute))
-	insertQGResult(t, ctx, tdb, reportAID, teamID, "test1", "passed")
-	insertQGResult(t, ctx, tdb, reportAID, teamID, "test2", "failed")
+	reportAID := testutil.InsertQGReport(t, ctx, tdb.Pool, teamID, 2, 1, 1, now.Add(-4*time.Minute))
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportAID, teamID, "test1", "passed")
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportAID, teamID, "test2", "failed")
 
 	// Report B (current): test1=fail, test2=fail, test3=fail — test3 is a new failure
-	reportBID := insertQGReport(t, ctx, tdb, teamID, 3, 0, 3, now.Add(-2*time.Minute))
-	insertQGResult(t, ctx, tdb, reportBID, teamID, "test1", "failed")
-	insertQGResult(t, ctx, tdb, reportBID, teamID, "test2", "failed")
-	insertQGResult(t, ctx, tdb, reportBID, teamID, "test3", "failed")
+	reportBID := testutil.InsertQGReport(t, ctx, tdb.Pool, teamID, 3, 0, 3, now.Add(-2*time.Minute))
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportBID, teamID, "test1", "failed")
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportBID, teamID, "test2", "failed")
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportBID, teamID, "test3", "failed")
 
 	// Step 3: Create quality gate with no_new_failures rule.
-	gateID := insertNoNewFailuresGateForTeam(t, ctx, tdb, teamID)
+	gateID := testutil.InsertNoNewFailuresGate(t, ctx, tdb.Pool, teamID)
 
 	// Steps 4–5: POST /evaluate against report B; assert response passed=false.
 	// Prior report is A: {test2} failing. test1 and test3 are new → gate fails.
-	w := postEvaluateQG(t, tdb, teamID, gateID, reportBID)
+	w := testutil.PostEvaluateQG(t, tdb.Pool, teamID, gateID, reportBID)
 	assertEvalResponse(t, w, false, "report B")
 
 	// Step 6: Assert the stored evaluation record in DB reflects passed=false.
@@ -184,11 +92,11 @@ func TestQualityGateEvaluate_NoNewFailures_EndToEnd(t *testing.T) {
 	// Report C: test1=pass, test2=fail — only test2 fails, which was in A and in B.
 	// Prior report for C is B (most recent before C). B has {test1, test2, test3}
 	// failing; test2 is already in that set → no new failures → gate passes.
-	reportCID := insertQGReport(t, ctx, tdb, teamID, 2, 1, 1, now)
-	insertQGResult(t, ctx, tdb, reportCID, teamID, "test1", "passed")
-	insertQGResult(t, ctx, tdb, reportCID, teamID, "test2", "failed")
+	reportCID := testutil.InsertQGReport(t, ctx, tdb.Pool, teamID, 2, 1, 1, now)
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportCID, teamID, "test1", "passed")
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportCID, teamID, "test2", "failed")
 
-	wC := postEvaluateQG(t, tdb, teamID, gateID, reportCID)
+	wC := testutil.PostEvaluateQG(t, tdb.Pool, teamID, gateID, reportCID)
 	assertEvalResponse(t, wC, true, "report C")
 	assertStoredEvaluation(t, ctx, tdb, gateID, reportCID, true, "report C stored")
 }
@@ -212,13 +120,13 @@ func TestQualityGateEvaluate_NoNewFailures_FirstReport_NoBaseline(t *testing.T) 
 	teamID := tdb.CreateTeam(t, "QG Evaluate No Baseline Team")
 
 	// Insert the only report for this team — no prior report exists.
-	reportID := insertQGReport(t, ctx, tdb, teamID, 2, 1, 1, time.Now())
-	insertQGResult(t, ctx, tdb, reportID, teamID, "test1", "passed")
-	insertQGResult(t, ctx, tdb, reportID, teamID, "test2", "failed")
+	reportID := testutil.InsertQGReport(t, ctx, tdb.Pool, teamID, 2, 1, 1, time.Now())
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportID, teamID, "test1", "passed")
+	testutil.InsertQGResult(t, ctx, tdb.Pool, reportID, teamID, "test2", "failed")
 
-	gateID := insertNoNewFailuresGateForTeam(t, ctx, tdb, teamID)
+	gateID := testutil.InsertNoNewFailuresGate(t, ctx, tdb.Pool, teamID)
 
-	w := postEvaluateQG(t, tdb, teamID, gateID, reportID)
+	w := testutil.PostEvaluateQG(t, tdb.Pool, teamID, gateID, reportID)
 
 	// No prior report → fetchPreviousFailedTests returns nil → evalNoNewFailures
 	// counts test2 as a new failure → passed=false.

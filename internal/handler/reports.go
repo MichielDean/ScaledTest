@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -687,7 +688,11 @@ func (h *ReportsHandler) evaluateQualityGates(
 		return nil
 	}
 
-	previousFailed := fetchPreviousFailedTests(r.Context(), h.DB, teamID, reportID)
+	previousFailed, prevErr := fetchPreviousFailedTests(r.Context(), h.DB, teamID, reportID)
+	if prevErr != nil {
+		log.Warn().Err(prevErr).Str("team_id", teamID).Str("report_id", reportID).
+			Msg("failed to fetch previous failures for quality gate evaluation; proceeding with empty baseline")
+	}
 	data := buildReportData(report, results, previousFailed)
 
 	gateResp := &QualityGateResponse{Passed: true}
@@ -736,10 +741,12 @@ func (h *ReportsHandler) evaluateQualityGates(
 
 // fetchPreviousFailedTests returns the set of failed test names from the most
 // recent prior report for the given team (excluding currentReportID). Returns
-// nil if the DB is unavailable, no prior report exists, or it had no failures.
-func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, currentReportID string) map[string]bool {
+// (nil, nil) if no prior report exists or the prior report had no failures.
+// Returns a non-nil error on DB errors so callers can distinguish transient
+// failures from the legitimate "no baseline" case.
+func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, currentReportID string) (map[string]bool, error) {
 	if pool == nil {
-		return nil
+		return nil, nil
 	}
 
 	var prevReportID string
@@ -748,7 +755,10 @@ func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, curren
 		teamID, currentReportID,
 	).Scan(&prevReportID)
 	if err != nil {
-		return nil
+		if errors.Is(err, pgx.ErrNoRows) {
+			return nil, nil // no prior report — not an error
+		}
+		return nil, fmt.Errorf("fetch previous report: %w", err)
 	}
 
 	rows, err := pool.Query(ctx,
@@ -756,7 +766,7 @@ func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, curren
 		prevReportID,
 	)
 	if err != nil {
-		return nil
+		return nil, fmt.Errorf("fetch previous failures: %w", err)
 	}
 	defer rows.Close()
 
@@ -764,17 +774,17 @@ func fetchPreviousFailedTests(ctx context.Context, pool *db.Pool, teamID, curren
 	for rows.Next() {
 		var name string
 		if err := rows.Scan(&name); err != nil {
-			continue
+			return nil, fmt.Errorf("scan previous failure: %w", err)
 		}
 		failed[name] = true
 	}
 	if err := rows.Err(); err != nil {
-		return nil
+		return nil, fmt.Errorf("iterate previous failures: %w", err)
 	}
 	if len(failed) == 0 {
-		return nil
+		return nil, nil
 	}
-	return failed
+	return failed, nil
 }
 
 // buildReportData constructs quality.ReportData from a CTRF report, its
