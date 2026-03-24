@@ -131,4 +131,103 @@ describe('DashboardPage', () => {
 
     expect(await screen.findByTestId('line-chart')).toBeInTheDocument();
   });
+
+  it('StatCard: renders correct numeric value when data is loaded', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({ reports: [], total: 42 });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    expect(await screen.findByText('42')).toBeInTheDocument();
+  });
+
+  it('StatCard: renders loading skeleton while query is in-flight', () => {
+    vi.mocked(api.getReports).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.getExecutions).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.getTrends).mockReturnValue(new Promise(() => {}));
+    vi.mocked(api.getFlakyTests).mockReturnValue(new Promise(() => {}));
+
+    const { container } = renderWithClient(<DashboardPage />);
+
+    expect(container.querySelectorAll('.animate-pulse').length).toBeGreaterThan(0);
+  });
+
+  it('passRate: computes 90.0% when 9 tests passed and 1 failed', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [{ id: 'r1', name: 'Suite', passed: 9, failed: 1, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
+      total: 1,
+    });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    expect(await screen.findByText('90.0%')).toBeInTheDocument();
+  });
+
+  it('passRate: shows "—" when reports array is empty (NaN guard)', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({ reports: [], total: 0 });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    await screen.findByText('No reports yet.');
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('passRate: shows "—" when all test counts are zero (NaN guard)', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [{ id: 'r1', name: 'Empty Suite', passed: 0, failed: 0, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
+      total: 1,
+    });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    await screen.findByText('Empty Suite');
+    expect(screen.getByText('—')).toBeInTheDocument();
+  });
+
+  it('recent reports table: renders rows with correct passed/failed/skipped values', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [{ id: 'r1', name: 'E2E Suite', passed: 47, failed: 13, skipped: 5, created_at: '2026-01-01T00:00:00Z' }],
+      total: 1,
+    });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    await screen.findByText('E2E Suite');
+    expect(screen.getByText('47')).toBeInTheDocument();
+    expect(screen.getByText('13')).toBeInTheDocument();
+    expect(screen.getByText('5')).toBeInTheDocument();
+  });
+
+  it('flaky tests count card: shows count of flaky tests', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({ reports: [], total: 0 });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({
+      flaky_tests: [
+        { name: 'should render login form', flake_rate: 0.15 },
+        { name: 'should submit registration', flake_rate: 0.08 },
+        { name: 'should navigate to dashboard', flake_rate: 0.22 },
+        { name: 'should load user profile', flake_rate: 0.11 },
+        { name: 'should display analytics chart', flake_rate: 0.19 },
+      ],
+    });
+
+    renderWithClient(<DashboardPage />);
+
+    expect(await screen.findByText('5')).toBeInTheDocument();
+  });
 });
