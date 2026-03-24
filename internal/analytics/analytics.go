@@ -1,15 +1,38 @@
 package analytics
 
-import "time"
+import (
+	"encoding/json"
+	"time"
+)
 
 // TrendPoint represents a single data point in a pass/fail trend over time.
 type TrendPoint struct {
-	Date    time.Time `json:"date"`
-	Total   int       `json:"total"`
-	Passed  int       `json:"passed"`
-	Failed  int       `json:"failed"`
-	Skipped int       `json:"skipped"`
-	PassRate float64  `json:"pass_rate"`
+	Date     time.Time `json:"-"`
+	Total    int       `json:"total"`
+	Passed   int       `json:"passed"`
+	Failed   int       `json:"failed"`
+	Skipped  int       `json:"skipped"`
+	PassRate float64   `json:"pass_rate"`
+}
+
+// MarshalJSON implements json.Marshaler, serializing Date as YYYY-MM-DD.
+func (tp TrendPoint) MarshalJSON() ([]byte, error) {
+	type alias struct {
+		Date     string  `json:"date"`
+		Total    int     `json:"total"`
+		Passed   int     `json:"passed"`
+		Failed   int     `json:"failed"`
+		Skipped  int     `json:"skipped"`
+		PassRate float64 `json:"pass_rate"`
+	}
+	return json.Marshal(alias{
+		Date:     tp.Date.Format("2006-01-02"),
+		Total:    tp.Total,
+		Passed:   tp.Passed,
+		Failed:   tp.Failed,
+		Skipped:  tp.Skipped,
+		PassRate: tp.PassRate,
+	})
 }
 
 // FlakyTest represents a test detected as flaky (alternating pass/fail).
