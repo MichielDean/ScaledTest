@@ -52,6 +52,13 @@ async function waitForSelects() {
   return screen.getAllByRole('combobox') as [HTMLSelectElement, HTMLSelectElement];
 }
 
+async function selectReportsAndCompare() {
+  const [baseSelect, headSelect] = await waitForSelects();
+  fireEvent.change(baseSelect, { target: { value: 'report-001' } });
+  fireEvent.change(headSelect, { target: { value: 'report-002' } });
+  fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+}
+
 describe('ReportsComparePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -116,10 +123,7 @@ describe('ReportsComparePage', () => {
       diff: cleanDiff,
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     await waitFor(() => {
       expect(vi.mocked(api.compareReports)).toHaveBeenCalledWith('report-001', 'report-002');
     });
@@ -132,10 +136,7 @@ describe('ReportsComparePage', () => {
       diff: cleanDiff,
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByText('No regressions detected')).toBeInTheDocument();
   });
 
@@ -149,10 +150,7 @@ describe('ReportsComparePage', () => {
       },
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByText('Base Tests')).toBeInTheDocument();
     expect(screen.getByText('Head Tests')).toBeInTheDocument();
     expect(screen.getByText('New Failures')).toBeInTheDocument();
@@ -171,10 +169,7 @@ describe('ReportsComparePage', () => {
       },
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByRole('heading', { name: 'New Failures' })).toBeInTheDocument();
     expect(screen.getByText('login should succeed')).toBeInTheDocument();
   });
@@ -191,10 +186,7 @@ describe('ReportsComparePage', () => {
       },
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByText('Fixed Tests')).toBeInTheDocument();
     expect(screen.getByText('checkout should complete')).toBeInTheDocument();
   });
@@ -202,10 +194,7 @@ describe('ReportsComparePage', () => {
   it('shows compare error message when API call fails', async () => {
     vi.mocked(api.compareReports).mockRejectedValue(new Error('Comparison failed'));
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByText('Comparison failed')).toBeInTheDocument();
   });
 
@@ -216,10 +205,7 @@ describe('ReportsComparePage', () => {
       diff: cleanDiff,
     });
     renderWithClient(<ReportsComparePage />);
-    const [baseSelect, headSelect] = await waitForSelects();
-    fireEvent.change(baseSelect, { target: { value: 'report-001' } });
-    fireEvent.change(headSelect, { target: { value: 'report-002' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Compare' }));
+    await selectReportsAndCompare();
     expect(await screen.findByText('Export diff as JSON')).toBeInTheDocument();
   });
 });

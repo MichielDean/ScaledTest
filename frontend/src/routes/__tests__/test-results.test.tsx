@@ -29,6 +29,14 @@ function renderWithClient(ui: React.ReactElement) {
   return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
 }
 
+const detailedReport = {
+  ...mockReport,
+  tests: [
+    { name: 'should render homepage', status: 'passed' as const, duration: 120 },
+    { name: 'should handle 404', status: 'failed' as const, duration: 300, message: 'Expected 404' },
+  ],
+};
+
 describe('TestResultsPage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -140,13 +148,6 @@ describe('TestResultsPage', () => {
   });
 
   it('renders individual test names when detail is loaded', async () => {
-    const detailedReport = {
-      ...mockReport,
-      tests: [
-        { name: 'should render homepage', status: 'passed' as const, duration: 120 },
-        { name: 'should handle 404', status: 'failed' as const, duration: 300, message: 'Expected 404' },
-      ],
-    };
     vi.mocked(api.getReports).mockResolvedValue({ reports: [mockReport], total: 1 });
     vi.mocked(api.getReport).mockResolvedValue({ report: detailedReport });
     renderWithClient(<TestResultsPage />);
@@ -159,13 +160,6 @@ describe('TestResultsPage', () => {
   });
 
   it('filters test results to only failed tests when Failed button is clicked', async () => {
-    const detailedReport = {
-      ...mockReport,
-      tests: [
-        { name: 'should render homepage', status: 'passed' as const, duration: 120 },
-        { name: 'should handle 404', status: 'failed' as const, duration: 300 },
-      ],
-    };
     vi.mocked(api.getReports).mockResolvedValue({ reports: [mockReport], total: 1 });
     vi.mocked(api.getReport).mockResolvedValue({ report: detailedReport });
     renderWithClient(<TestResultsPage />);
