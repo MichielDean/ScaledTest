@@ -1,13 +1,13 @@
-import { formatTrendDate } from '../dashboard';
+import { formatDateShort } from '../../lib/date';
 
-describe('formatTrendDate', () => {
+describe('formatDateShort', () => {
   describe('valid YYYY-MM-DD input', () => {
     it('formats a standard date as Mon D using local date (no UTC offset)', () => {
       const expected = new Date(2026, 2, 24).toLocaleDateString(undefined, {
         month: 'short',
         day: 'numeric',
       });
-      expect(formatTrendDate('2026-03-24')).toBe(expected);
+      expect(formatDateShort('2026-03-24')).toBe(expected);
     });
 
     it('formats a date with single-digit month correctly', () => {
@@ -15,7 +15,7 @@ describe('formatTrendDate', () => {
         month: 'short',
         day: 'numeric',
       });
-      expect(formatTrendDate('2026-01-05')).toBe(expected);
+      expect(formatDateShort('2026-01-05')).toBe(expected);
     });
 
     it('formats a date with single-digit day correctly', () => {
@@ -23,25 +23,25 @@ describe('formatTrendDate', () => {
         month: 'short',
         day: 'numeric',
       });
-      expect(formatTrendDate('2026-12-01')).toBe(expected);
+      expect(formatDateShort('2026-12-01')).toBe(expected);
     });
   });
 
   describe('malformed input — returns original string', () => {
     it('returns original string when fewer than 3 parts (YYYY-MM)', () => {
-      expect(formatTrendDate('2026-03')).toBe('2026-03');
+      expect(formatDateShort('2026-03')).toBe('2026-03');
     });
 
     it('returns original string when only year provided', () => {
-      expect(formatTrendDate('2026')).toBe('2026');
+      expect(formatDateShort('2026')).toBe('2026');
     });
 
     it('returns original string when more than 3 parts', () => {
-      expect(formatTrendDate('2026-03-24-extra')).toBe('2026-03-24-extra');
+      expect(formatDateShort('2026-03-24-extra')).toBe('2026-03-24-extra');
     });
 
     it('returns empty string when input is empty', () => {
-      expect(formatTrendDate('')).toBe('');
+      expect(formatDateShort('')).toBe('');
     });
   });
 });

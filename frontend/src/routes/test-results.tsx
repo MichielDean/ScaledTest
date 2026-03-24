@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, Clock, Zap, BarChart2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { formatDate } from '../lib/date';
 
 interface Report {
   id: string;
@@ -335,18 +336,6 @@ function TestStatusIcon({ status }: { status: string }) {
     return <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 bg-warning" />;
   }
   return <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 bg-muted-foreground" />;
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
 }
 
 function formatDuration(ms: number): string {
