@@ -65,6 +65,13 @@ describe('OAuthCallbackPage', () => {
     expect(mockNavigate).toHaveBeenCalledWith({ to: '/' });
   });
 
+  it('clears token from URL after successful authentication to prevent token leakage', () => {
+    const token = makeJWT({ sub: 'u1', email: 'user@example.com' });
+    window.history.pushState({}, '', `/auth/callback?token=${token}`);
+    render(<OAuthCallbackPage />);
+    expect(window.location.search).toBe('');
+  });
+
   it('shows Authentication Error heading when error param is in URL', () => {
     window.history.pushState({}, '', '/auth/callback?error=access_denied');
     render(<OAuthCallbackPage />);
