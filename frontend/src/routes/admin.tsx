@@ -12,6 +12,7 @@ interface AuditLogEntry {
   actor_id: string;
   actor_email: string;
   team_id: string | null;
+  team_name: string | null;
   action: string;
   resource_type: string | null;
   resource_id: string | null;
@@ -190,10 +191,12 @@ function AuditLogSection() {
                     <td className="p-3 font-mono text-xs">{e.action}</td>
                     <td className="p-3 text-muted-foreground">{e.resource_type ?? '—'}</td>
                     <td className="p-3 font-mono text-xs text-muted-foreground">
-                      {e.resource_id ?? '—'}
+                      {e.resource_id
+                        ? <span title={e.resource_id}>{e.resource_id.slice(0, 8)}…</span>
+                        : '—'}
                     </td>
-                    <td className="p-3 font-mono text-xs text-muted-foreground">
-                      {e.team_id ?? '—'}
+                    <td className="p-3 text-muted-foreground">
+                      {e.team_name ?? '—'}
                     </td>
                     <td className="p-3 font-mono text-xs text-muted-foreground">
                       {new Date(e.created_at).toLocaleString()}

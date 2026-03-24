@@ -92,39 +92,40 @@ func (s *AuditStore) List(ctx context.Context, f AuditListFilter) ([]model.Audit
 	idx := 1
 
 	if f.Action != "" {
-		where += " AND action = $" + strconv.Itoa(idx)
+		where += " AND a.action = $" + strconv.Itoa(idx)
 		args = append(args, f.Action)
 		idx++
 	}
 	if f.ResourceType != "" {
-		where += " AND resource_type = $" + strconv.Itoa(idx)
+		where += " AND a.resource_type = $" + strconv.Itoa(idx)
 		args = append(args, f.ResourceType)
 		idx++
 	}
 	if f.ActorID != "" {
-		where += " AND actor_id = $" + strconv.Itoa(idx)
+		where += " AND a.actor_id = $" + strconv.Itoa(idx)
 		args = append(args, f.ActorID)
 		idx++
 	}
 	if f.Since != nil {
-		where += " AND created_at >= $" + strconv.Itoa(idx)
+		where += " AND a.created_at >= $" + strconv.Itoa(idx)
 		args = append(args, *f.Since)
 		idx++
 	}
 	if f.Until != nil {
-		where += " AND created_at <= $" + strconv.Itoa(idx)
+		where += " AND a.created_at <= $" + strconv.Itoa(idx)
 		args = append(args, *f.Until)
 		idx++
 	}
 
 	var total int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_logs"+where, args...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_logs a"+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count audit logs: %w", err)
 	}
 
-	query := `SELECT id, actor_id, actor_email, team_id, action, resource_type, resource_id, metadata, created_at
-	          FROM audit_logs` + where +
-		" ORDER BY created_at DESC, id DESC" +
+	query := `SELECT a.id, a.actor_id, a.actor_email, a.team_id, t.name, a.action, a.resource_type, a.resource_id, a.metadata, a.created_at
+	          FROM audit_logs a
+	          LEFT JOIN teams t ON t.id = a.team_id` + where +
+		" ORDER BY a.created_at DESC, a.id DESC" +
 		" LIMIT $" + strconv.Itoa(idx) + " OFFSET $" + strconv.Itoa(idx+1)
 	args = append(args, f.Limit, f.Offset)
 
@@ -138,7 +139,7 @@ func (s *AuditStore) List(ctx context.Context, f AuditListFilter) ([]model.Audit
 	for rows.Next() {
 		var e model.AuditLog
 		if err := rows.Scan(
-			&e.ID, &e.ActorID, &e.ActorEmail, &e.TeamID, &e.Action,
+			&e.ID, &e.ActorID, &e.ActorEmail, &e.TeamID, &e.TeamName, &e.Action,
 			&e.ResourceType, &e.ResourceID, &e.Metadata, &e.CreatedAt,
 		); err != nil {
 			return nil, 0, fmt.Errorf("scan audit log: %w", err)
