@@ -32,7 +32,6 @@ test.describe('Analytics', () => {
     expect(trends.trends).toBeDefined();
     // global-setup seeds reports across 3 distinct dates so the trend chart
     // must have more than one data point (not a single collapsed bucket).
-    expect(Array.isArray(trends.trends)).toBeTruthy();
     expect(trends.trends.length).toBeGreaterThan(1);
 
     // Query flaky tests API

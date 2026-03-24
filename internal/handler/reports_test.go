@@ -1723,21 +1723,6 @@ func TestBuildGetReportResponse_IncludesNameAndOmitsEmptyToolVersion(t *testing.
 	})
 }
 
-func TestResolveReportTime_AllowBackdateFalse_IgnoresParam(t *testing.T) {
-	// When AllowBackdate is false, the created_at query param must be ignored
-	// and the returned time must be within a small window of time.Now().
-	h := &ReportsHandler{AllowBackdate: false}
-	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=2020-01-01T00:00:00Z", nil)
-
-	before := time.Now()
-	got := h.resolveReportTime(r)
-	after := time.Now()
-
-	if got.Before(before) || got.After(after) {
-		t.Errorf("resolveReportTime with AllowBackdate=false: got %v, want time between %v and %v", got, before, after)
-	}
-}
-
 func TestResolveReportTime_AllowBackdateTrue_ValidDate(t *testing.T) {
 	// When AllowBackdate is true and a valid RFC3339 created_at is supplied,
 	// that time must be returned unchanged.
@@ -1751,32 +1736,27 @@ func TestResolveReportTime_AllowBackdateTrue_ValidDate(t *testing.T) {
 	}
 }
 
-func TestResolveReportTime_AllowBackdateTrue_InvalidFormat(t *testing.T) {
-	// When AllowBackdate is true but the created_at value is malformed, the
-	// method must fall back to time.Now() without error.
-	h := &ReportsHandler{AllowBackdate: true}
-	r := httptest.NewRequest("POST", "/api/v1/reports?created_at=not-a-date", nil)
-
-	before := time.Now()
-	got := h.resolveReportTime(r)
-	after := time.Now()
-
-	if got.Before(before) || got.After(after) {
-		t.Errorf("resolveReportTime with invalid date: got %v, expected current time", got)
+func TestResolveReportTime_FallsBackToNow(t *testing.T) {
+	// All three cases below must return time.Now() rather than the param value.
+	cases := []struct {
+		name          string
+		allowBackdate bool
+		url           string
+	}{
+		{"backdate disabled, param present", false, "/api/v1/reports?created_at=2020-01-01T00:00:00Z"},
+		{"backdate enabled, invalid format", true, "/api/v1/reports?created_at=not-a-date"},
+		{"backdate enabled, no param", true, "/api/v1/reports"},
 	}
-}
-
-func TestResolveReportTime_AllowBackdateTrue_NoParam(t *testing.T) {
-	// When AllowBackdate is true but no created_at param is present, the method
-	// must return time.Now().
-	h := &ReportsHandler{AllowBackdate: true}
-	r := httptest.NewRequest("POST", "/api/v1/reports", nil)
-
-	before := time.Now()
-	got := h.resolveReportTime(r)
-	after := time.Now()
-
-	if got.Before(before) || got.After(after) {
-		t.Errorf("resolveReportTime with no param: got %v, expected current time", got)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			h := &ReportsHandler{AllowBackdate: tc.allowBackdate}
+			r := httptest.NewRequest("POST", tc.url, nil)
+			before := time.Now()
+			got := h.resolveReportTime(r)
+			after := time.Now()
+			if got.Before(before) || got.After(after) {
+				t.Errorf("expected current time, got %v", got)
+			}
+		})
 	}
 }
