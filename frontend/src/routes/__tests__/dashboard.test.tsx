@@ -182,7 +182,7 @@ describe('DashboardPage', () => {
 
   it('passRate: computes 90.0% when 9 tests passed and 1 failed', async () => {
     vi.mocked(api.getReports).mockResolvedValue({
-      reports: [{ id: 'r1', name: 'Suite', passed: 9, failed: 1, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
+      reports: [{ id: 'r1', tool_name: 'Suite', passed: 9, failed: 1, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
       total: 1,
     });
     vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
@@ -208,7 +208,7 @@ describe('DashboardPage', () => {
 
   it('passRate: shows "—" when all test counts are zero (NaN guard)', async () => {
     vi.mocked(api.getReports).mockResolvedValue({
-      reports: [{ id: 'r1', name: 'Empty Suite', passed: 0, failed: 0, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
+      reports: [{ id: 'r1', tool_name: 'Empty Suite', passed: 0, failed: 0, skipped: 0, created_at: '2026-01-01T00:00:00Z' }],
       total: 1,
     });
     vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
@@ -223,7 +223,7 @@ describe('DashboardPage', () => {
 
   it('recent reports table: renders rows with correct passed/failed/skipped values', async () => {
     vi.mocked(api.getReports).mockResolvedValue({
-      reports: [{ id: 'r1', name: 'E2E Suite', passed: 47, failed: 13, skipped: 5, created_at: '2026-01-01T00:00:00Z' }],
+      reports: [{ id: 'r1', tool_name: 'E2E Suite', passed: 47, failed: 13, skipped: 5, created_at: '2026-01-01T00:00:00Z' }],
       total: 1,
     });
     vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
