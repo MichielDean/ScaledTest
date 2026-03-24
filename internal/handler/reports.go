@@ -644,23 +644,7 @@ func computeReportName(id, toolName, toolVersion string) string {
 // If the summary cannot be parsed the count fields are omitted rather than
 // returning zero values that could mask the underlying issue.
 func flattenReportForList(rpt model.TestReport) map[string]interface{} {
-	out := map[string]interface{}{
-		"id":         rpt.ID,
-		"team_id":    rpt.TeamID,
-		"tool_name":  rpt.ToolName,
-		"summary":    rpt.Summary,
-		"created_at": rpt.CreatedAt,
-		"name":       computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
-	}
-	if rpt.ToolVersion != "" {
-		out["tool_version"] = rpt.ToolVersion
-	}
-	if rpt.ExecutionID != nil {
-		out["execution_id"] = *rpt.ExecutionID
-	}
-	if len(rpt.Environment) > 0 {
-		out["environment"] = rpt.Environment
-	}
+	out := buildGetReportResponse(rpt)
 	var s model.ReportSummary
 	if err := json.Unmarshal(rpt.Summary, &s); err == nil {
 		out["test_count"] = s.Tests
