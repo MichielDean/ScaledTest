@@ -1,7 +1,9 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from '../dashboard';
 import { api } from '../../lib/api';
+
+const mockNavigate = vi.fn();
 
 vi.mock('@tanstack/react-router', () => ({
   Link: ({
@@ -24,7 +26,7 @@ vi.mock('@tanstack/react-router', () => ({
       </a>
     );
   },
-  useNavigate: () => vi.fn(),
+  useNavigate: () => mockNavigate,
 }));
 
 vi.mock('../../lib/api', () => ({
@@ -304,5 +306,31 @@ describe('DashboardPage', () => {
     renderWithClient(<DashboardPage />);
 
     expect(await screen.findByText('5')).toBeInTheDocument();
+  });
+
+  it('recent reports table: clicking a row calls navigate with /reports and report id', async () => {
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [
+        {
+          id: 'r-abc123',
+          tool_name: 'E2E Suite',
+          passed: 10,
+          failed: 2,
+          skipped: 0,
+          created_at: '2026-01-20T12:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.getExecutions).mockResolvedValue({ executions: [], total: 0 });
+    vi.mocked(api.getTrends).mockResolvedValue({ trends: [] });
+    vi.mocked(api.getFlakyTests).mockResolvedValue({ flaky_tests: [] });
+
+    renderWithClient(<DashboardPage />);
+
+    await screen.findByText('E2E Suite');
+    fireEvent.click(screen.getByText('E2E Suite'));
+
+    expect(mockNavigate).toHaveBeenCalledWith({ to: '/reports', search: { report: 'r-abc123' } });
   });
 });
