@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
+import { AlertCircle, CheckCircle2, Clock, Zap, BarChart2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
@@ -72,7 +73,7 @@ export function TestResultsPage() {
           value={search}
           onChange={e => setSearch(e.target.value)}
           placeholder="Search reports by name, tool, or ID..."
-          className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm focus:border-blue-500 focus:outline-none focus:ring-1 focus:ring-blue-500"
+          className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground"
         />
         <div className="flex gap-1">
           {(['all', 'passed', 'failed', 'skipped'] as const).map(s => (
@@ -81,8 +82,8 @@ export function TestResultsPage() {
               onClick={() => setStatusFilter(s)}
               className={`rounded-md px-3 py-2 text-xs font-medium transition-colors ${
                 statusFilter === s
-                  ? 'bg-blue-600 text-white'
-                  : 'bg-muted text-muted-foreground hover:bg-muted/80'
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted text-muted-foreground hover:bg-muted/80 hover:text-foreground'
               }`}
             >
               {s.charAt(0).toUpperCase() + s.slice(1)}
@@ -92,10 +93,16 @@ export function TestResultsPage() {
       </div>
 
       {isLoading && <p className="text-muted-foreground">Loading reports...</p>}
-      {error && <p className="text-red-600">Failed to load: {(error as Error).message}</p>}
+      {error && (
+        <p className="text-destructive flex items-center gap-1.5">
+          <AlertCircle size={14} />
+          Failed to load: {(error as Error).message}
+        </p>
+      )}
 
       {!isLoading && !error && filteredReports.length === 0 && (
-        <div className="rounded-lg border bg-card p-12 text-center">
+        <div className="rounded-lg border bg-card p-12 text-center flex flex-col items-center gap-3">
+          <BarChart2 size={48} className="text-muted-foreground/50" />
           <p className="text-muted-foreground">
             {reports.length === 0
               ? 'No test reports yet. Submit a CTRF report to get started.'
@@ -128,7 +135,7 @@ export function TestResultsPage() {
                   </span>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold truncate">{report.name}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
+                    <p className="text-xs text-muted-foreground mt-0.5 font-mono">
                       {report.tool_name && <span>{report.tool_name}</span>}
                       {report.tool_version && <span> v{report.tool_version}</span>}
                       {' \u00B7 '}
@@ -136,10 +143,10 @@ export function TestResultsPage() {
                     </p>
                   </div>
                   <div className="shrink-0 flex items-center gap-3 text-xs">
-                    <span className="text-green-600 font-medium">{report.passed} passed</span>
-                    <span className="text-red-600 font-medium">{report.failed} failed</span>
-                    <span className="text-yellow-600 font-medium">{report.skipped} skipped</span>
-                    <span className="text-muted-foreground">{passRate}%</span>
+                    <span className="text-success font-medium">{report.passed} passed</span>
+                    <span className="text-destructive font-medium">{report.failed} failed</span>
+                    <span className="text-warning font-medium">{report.skipped} skipped</span>
+                    <span className="font-mono text-muted-foreground">{passRate}%</span>
                   </div>
                 </button>
 
@@ -231,19 +238,21 @@ function ReportDetail({
                   <div className="flex-1 min-w-0">
                     <p className="truncate font-medium">{test.name}</p>
                     {test.suite && (
-                      <p className="text-xs text-muted-foreground truncate">{test.suite}</p>
+                      <p className="text-xs text-muted-foreground truncate font-mono">{test.suite}</p>
                     )}
                   </div>
                   <div className="shrink-0 flex items-center gap-2">
                     {test.flaky && (
-                      <span className="rounded-full bg-orange-100 text-orange-800 px-2 py-0.5 text-xs font-medium">
+                      <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 text-xs font-medium">
+                        <Zap size={10} />
                         flaky
                       </span>
                     )}
                     {test.retry !== undefined && test.retry > 0 && (
                       <span className="text-xs text-muted-foreground">retry {test.retry}</span>
                     )}
-                    <span className="text-xs text-muted-foreground font-mono">
+                    <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+                      <Clock size={10} />
                       {formatDuration(test.duration)}
                     </span>
                   </div>
@@ -255,7 +264,7 @@ function ReportDetail({
                       {test.file_path && (
                         <div>
                           <span className="text-muted-foreground">File</span>
-                          <p className="font-mono mt-0.5 truncate">{test.file_path}</p>
+                          <p className="font-mono mt-0.5 truncate text-foreground">{test.file_path}</p>
                         </div>
                       )}
                       {test.tags && test.tags.length > 0 && (
@@ -263,7 +272,7 @@ function ReportDetail({
                           <span className="text-muted-foreground">Tags</span>
                           <div className="flex flex-wrap gap-1 mt-0.5">
                             {test.tags.map(tag => (
-                              <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs">
+                              <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
                                 {tag}
                               </span>
                             ))}
@@ -274,7 +283,7 @@ function ReportDetail({
                     {test.message && (
                       <div>
                         <span className="text-xs text-muted-foreground">Message</span>
-                        <pre className="mt-1 text-xs bg-red-50 text-red-800 rounded p-3 overflow-x-auto whitespace-pre-wrap">
+                        <pre className="mt-1 text-xs bg-destructive/10 text-destructive rounded p-3 overflow-x-auto whitespace-pre-wrap border border-destructive/20">
                           {test.message}
                         </pre>
                       </div>
@@ -282,7 +291,7 @@ function ReportDetail({
                     {test.trace && (
                       <div>
                         <span className="text-xs text-muted-foreground">Stack Trace</span>
-                        <pre className="mt-1 text-xs bg-gray-50 text-gray-700 rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto">
+                        <pre className="mt-1 text-xs bg-muted text-muted-foreground rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto border border-border">
                           {test.trace}
                         </pre>
                       </div>
@@ -299,18 +308,16 @@ function ReportDetail({
 }
 
 function TestStatusIcon({ status }: { status: string }) {
-  const styles: Record<string, string> = {
-    passed: 'bg-green-500',
-    failed: 'bg-red-500',
-    skipped: 'bg-yellow-500',
-    pending: 'bg-gray-400',
-    other: 'bg-gray-400',
-  };
-  return (
-    <span
-      className={`inline-block h-2.5 w-2.5 rounded-full shrink-0 ${styles[status] ?? styles.other}`}
-    />
-  );
+  if (status === 'passed') {
+    return <CheckCircle2 size={14} className="text-success shrink-0" />;
+  }
+  if (status === 'failed') {
+    return <AlertCircle size={14} className="text-destructive shrink-0" />;
+  }
+  if (status === 'skipped' || status === 'pending') {
+    return <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 bg-warning" />;
+  }
+  return <span className="inline-block h-2.5 w-2.5 rounded-full shrink-0 bg-muted-foreground" />;
 }
 
 function formatDate(iso: string): string {

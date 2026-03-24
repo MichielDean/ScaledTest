@@ -11,8 +11,10 @@ import {
   ResponsiveContainer,
   Cell,
 } from 'recharts';
+import { TrendingUp, Zap, Clock, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { CHART_TOOLTIP_STYLE } from './dashboard';
 
 interface TrendPoint {
   date: string;
@@ -88,18 +90,21 @@ export function AnalyticsPage() {
         {trendsQuery.isLoading ? (
           <LoadingPlaceholder />
         ) : trends.length === 0 ? (
-          <EmptyState message="No trend data available yet." />
+          <EmptyState message="No trend data available yet." icon={TrendingUp} />
         ) : (
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trends}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="date" tick={{ fontSize: 12 }} />
-              <YAxis domain={[0, 100]} tick={{ fontSize: 12 }} unit="%" />
-              <Tooltip formatter={(v: number) => [`${v.toFixed(1)}%`, 'Pass Rate']} />
+              <CartesianGrid stroke="#1f2937" strokeDasharray="4 4" />
+              <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+              <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} unit="%" />
+              <Tooltip
+                formatter={(v: number) => [`${v.toFixed(1)}%`, 'Pass Rate']}
+                contentStyle={CHART_TOOLTIP_STYLE}
+              />
               <Line
                 type="monotone"
                 dataKey="pass_rate"
-                stroke="#22c55e"
+                stroke="#60a5fa"
                 strokeWidth={2}
                 dot={{ r: 3 }}
                 activeDot={{ r: 5 }}
@@ -116,7 +121,7 @@ export function AnalyticsPage() {
           {flakyQuery.isLoading ? (
             <LoadingPlaceholder />
           ) : flakyTests.length === 0 ? (
-            <EmptyState message="No flaky tests detected." />
+            <EmptyState message="No flaky tests detected." icon={Zap} />
           ) : (
             <div className="space-y-3">
               {flakyTests.map((test, i) => (
@@ -130,7 +135,7 @@ export function AnalyticsPage() {
                   <div className="shrink-0 flex items-center gap-2">
                     <div className="w-24 h-2 rounded-full bg-muted overflow-hidden">
                       <div
-                        className="h-full rounded-full bg-orange-500"
+                        className="h-full rounded-full bg-warning"
                         style={{ width: `${Math.min(test.flake_rate * 100, 100)}%` }}
                       />
                     </div>
@@ -150,14 +155,14 @@ export function AnalyticsPage() {
           {durationQuery.isLoading ? (
             <LoadingPlaceholder />
           ) : distribution.length === 0 ? (
-            <EmptyState message="No duration data available." />
+            <EmptyState message="No duration data available." icon={Clock} />
           ) : (
             <ResponsiveContainer width="100%" height={240}>
               <BarChart data={distribution}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="range" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
+                <CartesianGrid stroke="#1f2937" strokeDasharray="4 4" />
+                <XAxis dataKey="range" tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <YAxis tick={{ fill: '#9ca3af', fontSize: 11 }} />
+                <Tooltip contentStyle={CHART_TOOLTIP_STYLE} />
                 <Bar dataKey="count" radius={[4, 4, 0, 0]}>
                   {distribution.map((_, index) => (
                     <Cell key={index} fill={index % 2 === 0 ? '#3b82f6' : '#60a5fa'} />
@@ -175,34 +180,34 @@ export function AnalyticsPage() {
         {errorsQuery.isLoading ? (
           <LoadingPlaceholder />
         ) : errors.length === 0 ? (
-          <EmptyState message="No errors recorded." />
+          <EmptyState message="No errors recorded." icon={AlertCircle} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b text-left text-muted-foreground">
-                  <th className="pb-2 pr-4">Error Message</th>
-                  <th className="pb-2 pr-4 w-20">Count</th>
-                  <th className="pb-2 w-32">Last Seen</th>
+                <tr className="bg-muted/50 text-left">
+                  <th className="pb-2 pr-4 pt-2 pl-2 text-muted-foreground text-xs uppercase tracking-wider font-medium">Error Message</th>
+                  <th className="pb-2 pr-4 pt-2 text-muted-foreground text-xs uppercase tracking-wider font-medium w-20">Count</th>
+                  <th className="pb-2 pt-2 text-muted-foreground text-xs uppercase tracking-wider font-medium w-32">Last Seen</th>
                 </tr>
               </thead>
               <tbody>
                 {errors.map((err, i) => (
-                  <tr key={i} className="border-b last:border-b-0">
-                    <td className="py-3 pr-4">
+                  <tr key={i} className="border-b last:border-b-0 hover:bg-muted/30 transition-colors">
+                    <td className="py-3 pr-4 pl-2">
                       <p
-                        className="font-mono text-xs text-red-700 truncate max-w-[500px]"
+                        className="font-mono text-xs text-destructive truncate max-w-[500px]"
                         title={err.message}
                       >
                         {err.message}
                       </p>
                     </td>
                     <td className="py-3 pr-4">
-                      <span className="inline-block rounded-full bg-red-100 text-red-800 px-2 py-0.5 text-xs font-medium">
+                      <span className="inline-block rounded-full bg-destructive/10 text-destructive border border-destructive/20 px-2 py-0.5 text-xs font-medium">
                         {err.count}
                       </span>
                     </td>
-                    <td className="py-3 text-muted-foreground text-xs">
+                    <td className="py-3 font-mono text-xs text-muted-foreground">
                       {formatDate(err.last_seen)}
                     </td>
                   </tr>
@@ -222,9 +227,18 @@ function LoadingPlaceholder() {
   );
 }
 
-function EmptyState({ message }: { message: string }) {
+function EmptyState({
+  message,
+  icon: Icon,
+}: {
+  message: string;
+  icon?: React.ComponentType<{ size?: number; className?: string }>;
+}) {
   return (
-    <div className="h-64 flex items-center justify-center text-muted-foreground">{message}</div>
+    <div className="h-64 flex flex-col items-center justify-center gap-3 text-muted-foreground">
+      {Icon && <Icon size={48} className="text-muted-foreground/50" />}
+      <span>{message}</span>
+    </div>
   );
 }
 
