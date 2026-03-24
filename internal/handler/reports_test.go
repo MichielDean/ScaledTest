@@ -1495,6 +1495,7 @@ func TestFlattenReportForList_PromotesSummaryFields(t *testing.T) {
 		{"passed", 8},
 		{"failed", 1},
 		{"skipped", 1},
+		{"pending", 0},
 	}
 	for _, tc := range cases {
 		if out[tc.field] != tc.want {
@@ -1520,10 +1521,24 @@ func TestFlattenReportForList_ZeroCounts(t *testing.T) {
 
 	out := flattenReportForList(rpt)
 
-	for _, field := range []string{"test_count", "passed", "failed", "skipped"} {
+	for _, field := range []string{"test_count", "passed", "failed", "skipped", "pending"} {
 		if out[field] != 0 {
 			t.Errorf("flattenReportForList zero-counts %q = %v, want 0", field, out[field])
 		}
+	}
+}
+
+func TestFlattenReportForList_PromotesPendingCount(t *testing.T) {
+	rpt := model.TestReport{
+		ID:      "report-4",
+		TeamID:  "team-1",
+		Summary: json.RawMessage(`{"tests":5,"passed":3,"failed":1,"skipped":0,"pending":1,"other":0}`),
+	}
+
+	out := flattenReportForList(rpt)
+
+	if out["pending"] != 1 {
+		t.Errorf("flattenReportForList pending = %v, want 1", out["pending"])
 	}
 }
 
@@ -1541,7 +1556,7 @@ func TestFlattenReportForList_InvalidSummary_OmitsCounts(t *testing.T) {
 		t.Errorf("flattenReportForList id = %v, want report-3", out["id"])
 	}
 	// count fields must be absent when summary is unparseable
-	for _, field := range []string{"test_count", "passed", "failed", "skipped"} {
+	for _, field := range []string{"test_count", "passed", "failed", "skipped", "pending"} {
 		if _, ok := out[field]; ok {
 			t.Errorf("flattenReportForList invalid summary: field %q should be absent", field)
 		}

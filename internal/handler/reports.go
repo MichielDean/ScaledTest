@@ -621,8 +621,8 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 }
 
 // flattenReportForList returns a map representation of a TestReport with
-// summary count fields (tests, passed, failed, skipped) promoted to the top
-// level alongside the raw summary blob, for the ListReports API response.
+// summary count fields (tests, passed, failed, skipped, pending) promoted to
+// the top level alongside the raw summary blob, for the ListReports API response.
 // If the summary cannot be parsed the count fields are omitted rather than
 // returning zero values that could mask the underlying issue.
 func flattenReportForList(rpt model.TestReport) map[string]interface{} {
@@ -648,6 +648,7 @@ func flattenReportForList(rpt model.TestReport) map[string]interface{} {
 		out["passed"] = s.Passed
 		out["failed"] = s.Failed
 		out["skipped"] = s.Skipped
+		out["pending"] = s.Pending
 	}
 	return out
 }
