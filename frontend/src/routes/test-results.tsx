@@ -52,14 +52,27 @@ export function TestResultsPage() {
   const reports = data?.reports ?? [];
 
   const filteredReports = useMemo(() => {
-    if (!search.trim()) return reports;
-    const q = search.toLowerCase();
-    return reports.filter(
-      r =>
-        r.tool_name.toLowerCase().includes(q) ||
-        r.id.toLowerCase().includes(q)
-    );
-  }, [reports, search]);
+    let result = reports;
+
+    if (statusFilter === 'failed') {
+      result = result.filter(r => r.failed > 0);
+    } else if (statusFilter === 'passed') {
+      result = result.filter(r => r.failed === 0 && r.passed > 0);
+    } else if (statusFilter === 'skipped') {
+      result = result.filter(r => r.skipped > 0);
+    }
+
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter(
+        r =>
+          r.tool_name.toLowerCase().includes(q) ||
+          r.id.toLowerCase().includes(q)
+      );
+    }
+
+    return result;
+  }, [reports, search, statusFilter]);
 
   return (
     <div className="p-6 space-y-6">
@@ -74,7 +87,8 @@ export function TestResultsPage() {
           placeholder="Search reports by name, tool, or ID..."
           className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground"
         />
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground shrink-0 mr-1" title="Filters both the report list and tests within expanded reports">Filter reports & tests:</span>
           {(['all', 'passed', 'failed', 'skipped'] as const).map(s => (
             <button
               key={s}
@@ -105,7 +119,7 @@ export function TestResultsPage() {
           <p className="text-muted-foreground">
             {reports.length === 0
               ? 'No test reports yet. Submit a CTRF report to get started.'
-              : 'No reports match your search.'}
+              : 'No reports match your search or filter.'}
           </p>
         </div>
       )}
@@ -115,9 +129,9 @@ export function TestResultsPage() {
         <div className="space-y-3">
           {filteredReports.map(report => {
             const isExpanded = expandedReportId === report.id;
-            const passed = report.passed || 0;
-            const failed = report.failed || 0;
-            const skipped = report.skipped || 0;
+            const passed = report.passed;
+            const failed = report.failed;
+            const skipped = report.skipped;
             const total = passed + failed + skipped + (report.pending ?? 0);
             const passRate = total > 0 ? ((passed / total) * 100).toFixed(1) : '—';
 
