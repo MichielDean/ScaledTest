@@ -115,7 +115,7 @@ export function TestResultsPage() {
           {filteredReports.map(report => {
             const isExpanded = expandedReportId === report.id;
             const total = (report.passed || 0) + (report.failed || 0) + (report.skipped || 0) + (report.pending ?? 0);
-            const passRate = total > 0 ? ((report.passed / total) * 100).toFixed(1) : '—';
+            const passRate = total > 0 ? (((report.passed || 0) / total) * 100).toFixed(1) : '—';
 
             return (
               <div key={report.id} className="rounded-lg border bg-card overflow-hidden">
