@@ -142,7 +142,7 @@ export function QualityGatesPage() {
         </button>
       </div>
 
-      {showForm && teamId && (
+      {showForm && (
         <QualityGateForm
           teamId={teamId}
           gate={editingGate}
@@ -184,7 +184,7 @@ export function QualityGatesPage() {
           {qualityGates.map(gate => (
             <GateCard
               key={gate.id}
-              teamId={teamId!}
+              teamId={teamId}
               gate={gate}
               isExpanded={expandedGate === gate.id}
               onToggleExpand={() => setExpandedGate(prev => (prev === gate.id ? null : gate.id))}
