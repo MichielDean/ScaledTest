@@ -118,7 +118,7 @@ func (s *AuditStore) List(ctx context.Context, f AuditListFilter) ([]model.Audit
 	}
 
 	var total int
-	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_logs a LEFT JOIN teams t ON t.id = a.team_id"+where, args...).Scan(&total); err != nil {
+	if err := s.pool.QueryRow(ctx, "SELECT COUNT(*) FROM audit_logs a"+where, args...).Scan(&total); err != nil {
 		return nil, 0, fmt.Errorf("count audit logs: %w", err)
 	}
 
