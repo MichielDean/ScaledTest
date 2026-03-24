@@ -79,7 +79,7 @@ export const CHART_TOOLTIP_STYLE = {
 export function formatTrendDate(dateStr: string): string {
   const parts = dateStr.split('-').map(Number);
   if (parts.length !== 3) return dateStr;
-  const [year, month, day] = parts;
+  const [year, month, day] = parts as [number, number, number];
   return new Date(year, month - 1, day).toLocaleDateString(undefined, {
     month: 'short',
     day: 'numeric',
