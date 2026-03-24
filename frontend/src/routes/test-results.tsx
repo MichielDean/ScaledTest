@@ -41,7 +41,9 @@ type StatusFilter = 'all' | 'passed' | 'failed' | 'skipped' | 'pending';
 export function TestResultsPage() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [expandedReportId, setExpandedReportId] = useState<string | null>(null);
+  const [expandedReportId, setExpandedReportId] = useState<string | null>(
+    () => new URLSearchParams(window.location.search).get('report'),
+  );
   const [expandedTestIdx, setExpandedTestIdx] = useState<number | null>(null);
 
   const { data, isLoading, error } = useQuery({
