@@ -178,8 +178,13 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `PUT` | `/api/v1/executions/{id}/status` | Update execution status |
 | `GET` | `/api/v1/analytics/trends` | Pass-rate trends |
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
+| `GET` | `/api/v1/teams/{id}/quality-gates` | List quality gates |
 | `POST` | `/api/v1/teams/{id}/quality-gates` | Create quality gate |
+| `GET` | `/api/v1/teams/{id}/quality-gates/{gid}` | Get quality gate |
+| `PUT` | `/api/v1/teams/{id}/quality-gates/{gid}` | Update quality gate |
+| `DELETE` | `/api/v1/teams/{id}/quality-gates/{gid}` | Delete quality gate |
 | `POST` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluate` | Evaluate gate |
+| `GET` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluations` | List gate evaluations |
 | `GET` | `/api/v1/teams/{id}/webhooks` | List webhooks for a team |
 | `POST` | `/api/v1/teams/{id}/webhooks` | Create webhook (maintainer+) |
 | `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
