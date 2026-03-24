@@ -426,12 +426,6 @@ function ruleLabelShort(type: string): string {
 
 function parseRules(rules: unknown): RuleForm[] {
   if (!rules) return [];
-  if (Array.isArray(rules)) {
-    return rules.map(r => ({
-      type: r.type ?? 'pass_rate',
-      threshold: r.threshold ?? r.params?.threshold ?? r.params?.threshold_ms ?? 0,
-    }));
-  }
   try {
     const parsed = typeof rules === 'string' ? JSON.parse(rules) : rules;
     if (Array.isArray(parsed)) {

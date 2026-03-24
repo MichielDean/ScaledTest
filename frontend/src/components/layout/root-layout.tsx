@@ -12,6 +12,9 @@ import {
 } from 'lucide-react';
 import { useAuth } from '../../hooks/use-auth';
 
+const NAV_LINK_CLASS =
+  'flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors [&.active]:text-primary [&.active]:bg-primary/10 [&.active]:font-medium';
+
 const NAV_ITEMS = [
   { to: '/', id: 'nav-dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   { to: '/reports', id: 'nav-reports', icon: BarChart2, label: 'Reports' },
@@ -48,7 +51,7 @@ export function RootLayout() {
                   <Link
                     to={to}
                     id={id}
-                    className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors [&.active]:text-primary [&.active]:bg-primary/10 [&.active]:font-medium"
+                    className={NAV_LINK_CLASS}
                   >
                     <Icon size={16} className="shrink-0" />
                     {label}
@@ -60,7 +63,7 @@ export function RootLayout() {
                   <Link
                     to="/admin"
                     id="nav-admin"
-                    className="flex items-center gap-3 px-3 py-2 rounded-md text-sm text-muted-foreground hover:text-foreground hover:bg-muted transition-colors [&.active]:text-primary [&.active]:bg-primary/10 [&.active]:font-medium"
+                    className={NAV_LINK_CLASS}
                   >
                     <Settings size={16} className="shrink-0" />
                     Admin

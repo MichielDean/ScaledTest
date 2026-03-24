@@ -308,8 +308,6 @@ export function StatusBadge({ status }: { status: string }) {
     cls = 'bg-destructive/10 text-destructive border border-destructive/20';
   } else if (s === 'pending' || s === 'running' || s === 'flaky') {
     cls = 'bg-warning/10 text-warning border border-warning/20';
-  } else if (s === 'cancelled' || s === 'skipped') {
-    cls = 'bg-muted text-muted-foreground border border-border';
   } else {
     cls = 'bg-muted text-muted-foreground border border-border';
   }
