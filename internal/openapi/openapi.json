@@ -2039,6 +2039,7 @@
           "actor_id": { "type": "string", "format": "uuid" },
           "actor_email": { "type": "string" },
           "team_id": { "type": "string", "format": "uuid" },
+          "team_name": { "type": "string" },
           "action": { "type": "string" },
           "resource_type": { "type": "string" },
           "resource_id": { "type": "string" },

@@ -80,3 +80,50 @@ func TestListAuditLog_HappyPath(t *testing.T) {
 		t.Errorf("invalid actor_id: expected 400, got %d", w3.Code)
 	}
 }
+
+func TestListAuditLog_TeamNamePresent(t *testing.T) {
+	tdb := Setup(t)
+	ctx := context.Background()
+
+	// Create a team and log an audit entry scoped to it.
+	teamID := tdb.CreateTeam(t, "E2E Team")
+	actorID := "00000000-0000-0000-0000-000000000002"
+	auditStore := store.NewAuditStore(tdb.Pool)
+	auditStore.Log(ctx, store.Entry{
+		ActorID:      actorID,
+		ActorEmail:   "actor@example.com",
+		TeamID:       teamID,
+		Action:       "report.submitted",
+		ResourceType: "report",
+		ResourceID:   "res-1",
+	})
+
+	h := &handler.AdminHandler{AuditStore: auditStore}
+	req := httptest.NewRequest("GET", "/api/v1/admin/audit-log?limit=10&offset=0", nil)
+	w := httptest.NewRecorder()
+	h.ListAuditLog(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListAuditLog: got %d, want 200; body: %s", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		AuditLog []map[string]interface{} `json:"audit_log"`
+		Total    int                      `json:"total"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if len(resp.AuditLog) == 0 {
+		t.Fatal("expected at least one audit log entry")
+	}
+
+	entry := resp.AuditLog[0]
+	teamName, ok := entry["team_name"]
+	if !ok {
+		t.Fatal("team_name field missing from audit log entry")
+	}
+	if teamName != "E2E Team" {
+		t.Errorf("team_name: got %q, want %q", teamName, "E2E Team")
+	}
+}
