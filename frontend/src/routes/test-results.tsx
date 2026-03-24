@@ -55,11 +55,11 @@ export function TestResultsPage() {
     let result = reports;
 
     if (statusFilter === 'failed') {
-      result = result.filter(r => (r.failed || 0) > 0);
+      result = result.filter(r => r.failed > 0);
     } else if (statusFilter === 'passed') {
-      result = result.filter(r => (r.failed || 0) === 0 && (r.passed || 0) > 0);
+      result = result.filter(r => r.failed === 0 && r.passed > 0);
     } else if (statusFilter === 'skipped') {
-      result = result.filter(r => (r.skipped || 0) > 0);
+      result = result.filter(r => r.skipped > 0);
     }
 
     if (search.trim()) {
@@ -88,7 +88,7 @@ export function TestResultsPage() {
           className="flex-1 rounded-md border border-border bg-muted px-3 py-2 text-sm focus:border-primary focus:outline-none focus:ring-1 focus:ring-primary/30 text-foreground placeholder:text-muted-foreground"
         />
         <div className="flex items-center gap-1">
-          <span className="text-xs text-muted-foreground shrink-0 mr-1" title="Filters both the report list and tests within expanded reports">Filter reports &amp; tests:</span>
+          <span className="text-xs text-muted-foreground shrink-0 mr-1" title="Filters both the report list and tests within expanded reports">Filter reports & tests:</span>
           {(['all', 'passed', 'failed', 'skipped'] as const).map(s => (
             <button
               key={s}
