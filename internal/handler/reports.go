@@ -691,7 +691,8 @@ func (h *ReportsHandler) evaluateQualityGates(
 	previousFailed, prevErr := fetchPreviousFailedTests(r.Context(), h.DB, teamID, reportID)
 	if prevErr != nil {
 		log.Warn().Err(prevErr).Str("team_id", teamID).Str("report_id", reportID).
-			Msg("failed to fetch previous failures for quality gate evaluation; proceeding with empty baseline")
+			Msg("failed to fetch previous failures for quality gate evaluation; skipping gate evaluation")
+		return nil
 	}
 	data := buildReportData(report, results, previousFailed)
 
