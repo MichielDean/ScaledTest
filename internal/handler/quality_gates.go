@@ -433,7 +433,11 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previousFailed := fetchPreviousFailedTests(r.Context(), h.DB, teamID, req.ReportID)
+	previousFailed, err := fetchPreviousFailedTests(r.Context(), h.DB, teamID, req.ReportID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch previous failures")
+		return
+	}
 
 	// Build report data for evaluation
 	data := &quality.ReportData{
