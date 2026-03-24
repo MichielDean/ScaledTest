@@ -216,7 +216,7 @@ Quality gates are created with a `rules` array. Each rule uses a `{type, params}
 |-----------|--------|-------------|
 | `pass_rate` | `{"threshold": <float>}` | Pass rate % must be ≥ threshold |
 | `zero_failures` | none | No failed tests allowed |
-| `no_new_failures` | none | No failures that weren't in the previous run |
+| `no_new_failures` | none | No failures that weren't in the previous run. Passes automatically when no prior report exists (no baseline to compare against). |
 | `max_duration` | `{"threshold_ms": <int>}` | Total suite duration must be ≤ threshold |
 | `max_flaky_count` | `{"threshold": <int>}` | Number of flaky tests must be ≤ threshold |
 | `min_test_count` | `{"threshold": <int>}` | Total tests must be ≥ threshold |
