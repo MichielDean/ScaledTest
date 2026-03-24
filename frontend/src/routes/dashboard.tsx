@@ -19,6 +19,7 @@ import { queryKeys } from '../lib/query-keys';
 
 interface Report {
   id: string;
+  name: string;
   tool_name: string;
   passed: number;
   failed: number;

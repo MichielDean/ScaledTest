@@ -363,7 +363,22 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	JSON(w, http.StatusOK, rpt)
+	out := map[string]interface{}{
+		"id":          rpt.ID,
+		"team_id":     rpt.TeamID,
+		"tool_name":   rpt.ToolName,
+		"tool_version": rpt.ToolVersion,
+		"summary":     rpt.Summary,
+		"created_at":  rpt.CreatedAt,
+		"name":        computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
+	}
+	if rpt.ExecutionID != nil {
+		out["execution_id"] = *rpt.ExecutionID
+	}
+	if len(rpt.Environment) > 0 {
+		out["environment"] = rpt.Environment
+	}
+	JSON(w, http.StatusOK, out)
 }
 
 // Delete handles DELETE /api/v1/reports/{reportID}.
@@ -620,6 +635,24 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// computeReportName derives a display name for a report.
+// If toolName is set, it returns "toolName" or "toolName vX.Y.Z" when
+// toolVersion is also set. If toolName is empty it falls back to
+// "Report <short-id>" using the first 8 characters of the report ID.
+func computeReportName(id, toolName, toolVersion string) string {
+	if toolName != "" {
+		if toolVersion != "" {
+			return toolName + " v" + toolVersion
+		}
+		return toolName
+	}
+	short := id
+	if len(id) > 8 {
+		short = id[:8]
+	}
+	return "Report " + short
+}
+
 // flattenReportForList returns a map representation of a TestReport with
 // summary count fields (tests, passed, failed, skipped, pending) promoted to
 // the top level alongside the raw summary blob, for the ListReports API response.
@@ -632,6 +665,7 @@ func flattenReportForList(rpt model.TestReport) map[string]interface{} {
 		"tool_name":  rpt.ToolName,
 		"summary":    rpt.Summary,
 		"created_at": rpt.CreatedAt,
+		"name":       computeReportName(rpt.ID, rpt.ToolName, rpt.ToolVersion),
 	}
 	if rpt.ToolVersion != "" {
 		out["tool_version"] = rpt.ToolVersion
