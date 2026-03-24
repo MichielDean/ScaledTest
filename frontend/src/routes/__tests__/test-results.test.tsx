@@ -302,4 +302,36 @@ describe('TestResultsPage — report-level status filtering', () => {
 
     expect(screen.getByText('No reports match your search or filter.')).toBeInTheDocument();
   });
+
+  it('applies status filter and search term together, showing only reports matching both', async () => {
+    const anotherFailedReport = {
+      ...mockReport,
+      id: 'rpt-fail2',
+      tool_name: 'CypressSuite',
+      passed: 1,
+      failed: 3,
+      skipped: 0,
+    };
+    vi.mocked(api.getReports).mockResolvedValue({
+      reports: [passedOnlyReport, failedReport, anotherFailedReport],
+      total: 3,
+    });
+    renderWithClient(<TestResultsPage />);
+    await screen.findByText('PassSuite');
+
+    // Apply 'Failed' status filter — PassSuite should disappear
+    fireEvent.click(screen.getByRole('button', { name: 'Failed' }));
+    expect(screen.queryByText('PassSuite')).not.toBeInTheDocument();
+    expect(screen.getByText('FailSuite')).toBeInTheDocument();
+    expect(screen.getByText('CypressSuite')).toBeInTheDocument();
+
+    // Also apply search term — only CypressSuite matches 'cypress' among the failed reports
+    fireEvent.change(screen.getByPlaceholderText('Search reports by name, tool, or ID...'), {
+      target: { value: 'cypress' },
+    });
+
+    expect(screen.getByText('CypressSuite')).toBeInTheDocument();
+    expect(screen.queryByText('FailSuite')).not.toBeInTheDocument();
+    expect(screen.queryByText('PassSuite')).not.toBeInTheDocument();
+  });
 });
