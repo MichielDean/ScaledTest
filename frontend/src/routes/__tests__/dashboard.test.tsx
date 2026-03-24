@@ -3,6 +3,30 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { DashboardPage } from '../dashboard';
 import { api } from '../../lib/api';
 
+vi.mock('@tanstack/react-router', () => ({
+  Link: ({
+    children,
+    to,
+    search,
+    onClick,
+    className,
+  }: {
+    children: React.ReactNode;
+    to: string;
+    search?: Record<string, string>;
+    onClick?: React.MouseEventHandler<HTMLAnchorElement>;
+    className?: string;
+  }) => {
+    const searchStr = search ? '?' + new URLSearchParams(search).toString() : '';
+    return (
+      <a href={to + searchStr} onClick={onClick} className={className}>
+        {children}
+      </a>
+    );
+  },
+  useNavigate: () => vi.fn(),
+}));
+
 vi.mock('../../lib/api', () => ({
   api: {
     getReports: vi.fn(),

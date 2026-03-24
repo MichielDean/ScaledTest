@@ -198,6 +198,19 @@ describe('TestResultsPage', () => {
       screen.queryByText('No individual test results available for this report.')
     ).not.toBeInTheDocument();
   });
+
+  it('auto-expands report matching ?report=<id> query param on mount', async () => {
+    window.history.pushState({}, '', '?report=rpt-001');
+    vi.mocked(api.getReports).mockResolvedValue({ reports: [mockReport], total: 1 });
+    vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
+
+    renderWithClient(<TestResultsPage />);
+
+    const expandBtn = await screen.findByRole('button', { name: /jest/i });
+    expect(expandBtn).toHaveAttribute('aria-expanded', 'true');
+
+    window.history.pushState({}, '', '/');
+  });
 });
 
 describe('TestResultsPage — report-level status filtering', () => {
