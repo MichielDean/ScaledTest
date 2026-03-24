@@ -170,6 +170,7 @@ type AuditLog struct {
 	ActorID      string          `json:"actor_id"`
 	ActorEmail   string          `json:"actor_email"`
 	TeamID       *string         `json:"team_id,omitempty"`
+	TeamName     *string         `json:"team_name,omitempty"`
 	Action       string          `json:"action"`
 	ResourceType *string         `json:"resource_type,omitempty"`
 	ResourceID   *string         `json:"resource_id,omitempty"`
