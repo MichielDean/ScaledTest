@@ -36,7 +36,7 @@ type triageStorer interface {
 }
 
 // reportData abstracts the pool-level queries on test_reports and test_results.
-// The production implementation is pgxReportData; tests use stubReportData.
+// The production implementation is pgxReportData; tests use fakeReportData.
 type reportData interface {
 	fetchFailuresAndEnv(ctx context.Context, teamID, reportID string) ([]FailureDetail, reportEnv, error)
 	fetchPreviousFailures(ctx context.Context, teamID, reportID string) ([]string, error)
@@ -125,7 +125,6 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	// Mark the report as triage-pending so it's immediately queryable.
 	r.data.setTriageStatus(ctx, teamID, reportID, "pending")
 
-	// Step 2: Fetch failures and report environment.
 	failures, env, err := r.data.fetchFailuresAndEnv(ctx, teamID, reportID)
 	if err != nil {
 		r.failTriage(ctx, teamID, triageID, reportID, err.Error())
@@ -141,20 +140,16 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 		return nil
 	}
 
-	// Step 4: Build enriched input.
 	input := r.buildInput(ctx, teamID, reportID, failures, env)
-
-	// Step 5: Run the triage engine.
 	output, triageErr := r.engine.Triage(ctx, input)
 
-	// Step 6: Persist clusters and classifications (even on engine error — we
+	// Persist clusters and classifications even on engine error — we
 	// persist the fallback output so partial results are available).
 	if persistErr := r.persistOutput(ctx, teamID, triageID, output); persistErr != nil {
 		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error())
 		return fmt.Errorf("triage: persist output: %w", persistErr)
 	}
 
-	// Step 7: Finalize the triage record status.
 	if triageErr != nil {
 		r.failTriage(ctx, teamID, triageID, reportID, triageErr.Error())
 		// Return nil — the error is captured in the record, not a job-level failure.
@@ -239,8 +234,7 @@ func (r *Runner) persistOutput(ctx context.Context, teamID, triageID string, out
 		if err != nil {
 			return fmt.Errorf("create cluster[%d]: %w", i, err)
 		}
-		id := c.ID
-		clusterIDs[i] = &id
+		clusterIDs[i] = &c.ID
 	}
 
 	// Insert per-failure classifications.

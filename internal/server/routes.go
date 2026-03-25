@@ -128,6 +128,8 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// OAuth configs
 	oauthCfgs := auth.NewOAuthConfigs(cfg.BaseURL, cfg.OAuthGitHubClientID, cfg.OAuthGitHubClientSecret, cfg.OAuthGoogleClientID, cfg.OAuthGoogleClientSecret)
 
+	ghClient := ghclient.New(cfg.GitHubToken)
+
 	// Triage runner — wires LLM triage into the report ingest pipeline.
 	// Gracefully disabled when LLM credentials are not configured.
 	var triageEnqueuer triage.Enqueuer
@@ -142,7 +144,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			triageStore := store.NewTriageStore(dbPool)
 			historyRdr := store.NewDBHistoryReader(dbPool)
 			prevFinder := store.NewDBPreviousRunFinder(dbPool)
-			diffEnricher := analytics.NewGitDiffEnricher(prevFinder, ghclient.New(cfg.GitHubToken))
+			diffEnricher := analytics.NewGitDiffEnricher(prevFinder, ghClient)
 			engine := triage.NewEngine(llmProvider)
 			triageEnqueuer = triage.NewRunner(dbPool, engine, triageStore, historyRdr, diffEnricher)
 			log.Info().Str("llm_provider", cfg.LLMProvider).Msg("triage enabled")
@@ -160,7 +162,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		AuditStore:         auditStore,
 		QualityGateStore:   qgStore,
 		Webhooks:           whNotifier,
-		GitHubStatusPoster: ghclient.New(cfg.GitHubToken),
+		GitHubStatusPoster: ghClient,
 		BaseURL:            cfg.BaseURL,
 		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
