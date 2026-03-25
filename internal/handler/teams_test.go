@@ -15,7 +15,6 @@ import (
 	"github.com/scaledtest/scaledtest/internal/model"
 )
 
-
 var testClaims = &auth.Claims{
 	UserID: "user-1",
 	Email:  "test@example.com",

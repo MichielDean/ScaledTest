@@ -423,5 +423,3 @@ func (h *TeamsHandler) getUserTeamRole(ctx context.Context, userID, teamID strin
 		userID, teamID).Scan(&role)
 	return role, err
 }
-
-
