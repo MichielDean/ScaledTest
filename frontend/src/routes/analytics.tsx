@@ -14,7 +14,8 @@ import {
 import { TrendingUp, Zap, Clock, AlertCircle } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import { CHART_TOOLTIP_STYLE, formatTrendDate } from './dashboard';
+import { CHART_TOOLTIP_STYLE } from './dashboard';
+import { formatDate, formatDateShort } from '../lib/date';
 
 interface TrendPoint {
   date: string;
@@ -95,7 +96,7 @@ export function AnalyticsPage() {
           <ResponsiveContainer width="100%" height={300}>
             <LineChart data={trends}>
               <CartesianGrid stroke="#1f2937" strokeDasharray="4 4" />
-              <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={formatTrendDate} />
+              <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={formatDateShort} />
               <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} unit="%" />
               <Tooltip
                 formatter={(v: number) => [`${v.toFixed(1)}%`, 'Pass Rate']}
@@ -240,16 +241,4 @@ function EmptyState({
       <span>{message}</span>
     </div>
   );
-}
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
 }

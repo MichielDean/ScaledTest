@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { formatDateTime } from '../lib/date';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -70,10 +71,6 @@ interface ReportsListResponse {
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleString();
 }
 
 // ---------------------------------------------------------------------------
@@ -267,7 +264,7 @@ export function ReportsComparePage() {
               <option value="">Select base report...</option>
               {reports.map(r => (
                 <option key={r.id} value={r.id} disabled={r.id === headID}>
-                  {r.tool_name || 'Unknown'} — {formatDate(r.created_at)} ({r.id.slice(0, 8)})
+                  {r.tool_name || 'Unknown'} — {formatDateTime(r.created_at)} ({r.id.slice(0, 8)})
                 </option>
               ))}
             </select>
@@ -285,7 +282,7 @@ export function ReportsComparePage() {
               <option value="">Select head report...</option>
               {reports.map(r => (
                 <option key={r.id} value={r.id} disabled={r.id === baseID}>
-                  {r.tool_name || 'Unknown'} — {formatDate(r.created_at)} ({r.id.slice(0, 8)})
+                  {r.tool_name || 'Unknown'} — {formatDateTime(r.created_at)} ({r.id.slice(0, 8)})
                 </option>
               ))}
             </select>
@@ -323,7 +320,7 @@ export function ReportsComparePage() {
                 Base
               </p>
               <p className="font-semibold">{base.tool_name || 'Unknown'}</p>
-              <p className="text-sm text-muted-foreground">{formatDate(base.created_at)}</p>
+              <p className="text-sm text-muted-foreground">{formatDateTime(base.created_at)}</p>
               <p className="text-xs font-mono text-muted-foreground mt-1">{base.id}</p>
             </div>
             <div className="bg-card border border-border rounded-lg p-4">
@@ -331,7 +328,7 @@ export function ReportsComparePage() {
                 Head
               </p>
               <p className="font-semibold">{head.tool_name || 'Unknown'}</p>
-              <p className="text-sm text-muted-foreground">{formatDate(head.created_at)}</p>
+              <p className="text-sm text-muted-foreground">{formatDateTime(head.created_at)}</p>
               <p className="text-xs font-mono text-muted-foreground mt-1">{head.id}</p>
             </div>
           </div>

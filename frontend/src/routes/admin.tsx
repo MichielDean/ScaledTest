@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { useAuthStore } from '../stores/auth-store';
+import { formatDate, formatDateTime } from '../lib/date';
 
 const AUDIT_PAGE_SIZE = 20;
 const TH_CLASS = 'text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium';
@@ -104,7 +105,7 @@ function UsersSection() {
                     <RoleBadge role={u.role} />
                   </td>
                   <td className="p-3 font-mono text-xs text-muted-foreground">
-                    {new Date(u.created_at).toLocaleDateString()}
+                    {formatDate(u.created_at)}
                   </td>
                 </tr>
               ))}
@@ -199,7 +200,7 @@ function AuditLogSection() {
                       {e.team_name ?? '—'}
                     </td>
                     <td className="p-3 font-mono text-xs text-muted-foreground">
-                      {new Date(e.created_at).toLocaleString()}
+                      {formatDateTime(e.created_at)}
                     </td>
                   </tr>
                 ))}
@@ -302,7 +303,7 @@ function TeamsSection() {
                 <tr key={t.id} className="border-t hover:bg-muted/30 transition-colors">
                   <td className="p-3 font-medium">{t.name}</td>
                   <td className="p-3 font-mono text-xs text-muted-foreground">
-                    {new Date(t.created_at).toLocaleDateString()}
+                    {formatDate(t.created_at)}
                   </td>
                 </tr>
               ))}

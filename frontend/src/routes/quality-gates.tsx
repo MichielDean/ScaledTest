@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { formatDateTime } from '../lib/date';
 
 const RULE_TYPES = [
   { value: 'pass_rate', label: 'Pass Rate (%)', placeholder: '95', hasThreshold: true },
@@ -371,7 +372,7 @@ function EvaluationResultsDisplay({ evaluation }: { evaluation: EvaluationResult
       <div className="px-4 py-2 border-b border-border bg-muted/50 flex items-center justify-between">
         <span className="text-sm font-medium">Evaluation Results</span>
         <span className="text-xs text-muted-foreground font-mono">
-          {new Date(evaluation.created_at).toLocaleString()}
+          {formatDateTime(evaluation.created_at)}
         </span>
       </div>
       <div className="divide-y divide-border">
@@ -440,7 +441,7 @@ function EvaluationHistory({ teamId, gateId }: { teamId: string; gateId: string 
               </span>
             </div>
             <span className="font-mono text-xs text-muted-foreground">
-              {new Date(evaluation.created_at).toLocaleString()}
+              {formatDateTime(evaluation.created_at)}
             </span>
           </div>
         ))}
