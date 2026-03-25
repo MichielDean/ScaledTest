@@ -762,12 +762,11 @@ func TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer(t *testing.T) 
 // the 'owner' role and all subsequent users receive 'maintainer'.
 func TestRegister_RoleAssignment(t *testing.T) {
 	tests := []struct {
-		name     string
-		dbRole   string
-		wantRole string
+		name string
+		role string
 	}{
-		{"first user becomes owner", "owner", "owner"},
-		{"subsequent user becomes maintainer", "maintainer", "maintainer"},
+		{"first user becomes owner", "owner"},
+		{"subsequent user becomes maintainer", "maintainer"},
 	}
 
 	for _, tc := range tests {
@@ -787,7 +786,7 @@ func TestRegister_RoleAssignment(t *testing.T) {
 						// INSERT ... RETURNING id, role
 						return &mockRow{scanFn: func(dest ...any) error {
 							*(dest[0].(*string)) = "user-uuid"
-							*(dest[1].(*string)) = tc.dbRole
+							*(dest[1].(*string)) = tc.role
 							return nil
 						}}
 					default:
@@ -823,8 +822,8 @@ func TestRegister_RoleAssignment(t *testing.T) {
 			if !ok {
 				t.Fatal("missing 'user' field in response")
 			}
-			if role := user["role"]; role != tc.wantRole {
-				t.Errorf("role = %q, want %q", role, tc.wantRole)
+			if role := user["role"]; role != tc.role {
+				t.Errorf("role = %q, want %q", role, tc.role)
 			}
 		})
 	}
