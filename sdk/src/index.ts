@@ -94,20 +94,36 @@ export interface Execution {
   completed_at?: string;
 }
 
+export interface QualityGateRule {
+  type: string;
+  params?: Record<string, unknown>;
+}
+
 export interface QualityGate {
   id: string;
   name: string;
   team_id: string;
-  rules: Array<{ type: string; threshold: number }>;
+  description?: string;
+  rules: QualityGateRule[];
+  enabled: boolean;
   created_at: string;
+  updated_at: string;
 }
 
 export interface QualityGateEvaluation {
   id: string;
-  quality_gate_id: string;
+  gate_id: string;
+  report_id: string;
   passed: boolean;
   details: unknown;
   created_at: string;
+}
+
+export interface UserProfile {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
 }
 
 export interface TrendPoint {
@@ -128,102 +144,6 @@ export interface FlakyTest {
 export interface Team {
   id: string;
   name: string;
-  created_at: string;
-}
-
-export interface Webhook {
-  id: string;
-  team_id: string;
-  url: string;
-  events: string[];
-  enabled: boolean;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface WebhookDelivery {
-  id: string;
-  webhook_id: string;
-  url: string;
-  event_type: string;
-  attempt: number;
-  status_code: number;
-  error?: string;
-  duration_ms: number;
-  payload?: unknown;
-  delivered_at: string;
-}
-
-export interface WebhookDeliveryRetryResult {
-  success: boolean;
-  status_code: number;
-  attempt: number;
-  duration_ms: number;
-  error?: string;
-}
-
-export interface Invitation {
-  id: string;
-  team_id: string;
-  email: string;
-  role: string;
-  invited_by: string;
-  accepted_at?: string;
-  expires_at: string;
-  created_at: string;
-}
-
-export interface InvitationPreview {
-  email: string;
-  role: string;
-  team_name: string;
-  expires_at: string;
-}
-
-export interface InvitationAcceptResult {
-  message: string;
-  user_id: string;
-  team_id: string;
-  role: string;
-}
-
-export interface APIToken {
-  id: string;
-  team_id: string;
-  user_id: string;
-  name: string;
-  prefix: string;
-  last_used_at?: string;
-  created_at: string;
-}
-
-export interface CreateTokenResult {
-  token: string;
-  id: string;
-  name: string;
-  prefix: string;
-  created_at: string;
-}
-
-export interface AdminUser {
-  id: string;
-  email: string;
-  display_name: string;
-  role: string;
-  created_at: string;
-  updated_at: string;
-}
-
-export interface AuditLogEntry {
-  id: string;
-  actor_id: string;
-  actor_email: string;
-  team_id?: string;
-  team_name?: string;
-  action: string;
-  resource_type?: string;
-  resource_id?: string;
-  metadata?: unknown;
   created_at: string;
 }
 
@@ -309,6 +229,10 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/reports/${encodeURIComponent(id)}`);
   }
 
+  async deleteReport(id: string): Promise<{ id: string; deleted: boolean }> {
+    return this.request('DELETE', `/api/v1/reports/${encodeURIComponent(id)}`);
+  }
+
   // Executions
   async getExecutions(): Promise<{ executions: Execution[]; total: number }> {
     return this.request('GET', '/api/v1/executions');
@@ -319,6 +243,10 @@ export class ScaledTestClient {
   }
 
   async cancelExecution(id: string): Promise<void> {
+    await this.request('DELETE', `/api/v1/executions/${encodeURIComponent(id)}`);
+  }
+
+  async deleteExecution(id: string): Promise<void> {
     await this.request('DELETE', `/api/v1/executions/${encodeURIComponent(id)}`);
   }
 
@@ -347,9 +275,48 @@ export class ScaledTestClient {
   async createQualityGate(
     teamId: string,
     name: string,
-    rules: Array<{ type: string; threshold: number }>
+    rules: QualityGateRule[],
   ): Promise<QualityGate> {
     return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, { name, rules });
+  }
+
+  async getQualityGate(teamId: string, id: string): Promise<QualityGate> {
+    return this.request(
+      'GET',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}`
+    );
+  }
+
+  async updateQualityGate(
+    teamId: string,
+    id: string,
+    name: string,
+    rules: QualityGateRule[],
+    description?: string,
+    enabled?: boolean,
+  ): Promise<QualityGate> {
+    return this.request(
+      'PUT',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}`,
+      { name, rules, description, enabled },
+    );
+  }
+
+  async deleteQualityGate(teamId: string, id: string): Promise<void> {
+    await this.request(
+      'DELETE',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}`
+    );
+  }
+
+  async listEvaluations(
+    teamId: string,
+    gateId: string,
+  ): Promise<{ evaluations: QualityGateEvaluation[]; total: number }> {
+    return this.request(
+      'GET',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(gateId)}/evaluations`
+    );
   }
 
   async evaluateQualityGate(teamId: string, id: string): Promise<QualityGateEvaluation> {
@@ -368,83 +335,19 @@ export class ScaledTestClient {
     return this.request('POST', '/api/v1/teams', { name });
   }
 
-  // Webhooks (team-scoped)
-  async listWebhooks(teamId: string): Promise<{ webhooks: Webhook[]; total: number }> {
-    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`);
+  // User profile
+  async getMe(): Promise<UserProfile> {
+    return this.request('GET', '/api/v1/auth/me');
   }
 
-  async createWebhook(teamId: string, url: string, events: string[]): Promise<{ webhook: Webhook; secret: string }> {
-    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`, { url, events });
+  async updateProfile(displayName: string): Promise<UserProfile> {
+    return this.request('PATCH', '/api/v1/auth/me', { display_name: displayName });
   }
 
-  async getWebhook(teamId: string, webhookId: string): Promise<Webhook> {
-    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
-  }
-
-  async updateWebhook(
-    teamId: string,
-    webhookId: string,
-    updates: { url?: string; events?: string[]; enabled?: boolean }
-  ): Promise<Webhook> {
-    return this.request('PUT', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`, updates);
-  }
-
-  async deleteWebhook(teamId: string, webhookId: string): Promise<void> {
-    await this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
-  }
-
-  async listWebhookDeliveries(teamId: string, webhookId: string): Promise<{ deliveries: WebhookDelivery[]; total: number }> {
-    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}/deliveries`);
-  }
-
-  async retryWebhookDelivery(teamId: string, webhookId: string, deliveryId: string): Promise<WebhookDeliveryRetryResult> {
-    return this.request(
-      'POST',
-      `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}/deliveries/${encodeURIComponent(deliveryId)}/retry`
-    );
-  }
-
-  // Invitations (team-scoped)
-  async listInvitations(teamId: string): Promise<{ invitations: Invitation[] }> {
-    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations`);
-  }
-
-  async createInvitation(teamId: string, email: string, role: string): Promise<{ invitation: Invitation; token: string }> {
-    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations`, { email, role });
-  }
-
-  async revokeInvitation(teamId: string, invitationId: string): Promise<void> {
-    await this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations/${encodeURIComponent(invitationId)}`);
-  }
-
-  // Invitations (public — no auth required)
-  async previewInvitation(token: string): Promise<InvitationPreview> {
-    return this.request('GET', `/api/v1/invitations/${encodeURIComponent(token)}`);
-  }
-
-  async acceptInvitation(token: string, password: string, displayName: string): Promise<InvitationAcceptResult> {
-    return this.request('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`, { password, display_name: displayName });
-  }
-
-  // API Tokens (team-scoped)
-  async listTokens(teamId: string): Promise<{ tokens: APIToken[] }> {
-    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens`);
-  }
-
-  async createToken(teamId: string, name: string): Promise<CreateTokenResult> {
-    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens`, { name });
-  }
-
-  async deleteToken(teamId: string, tokenId: string): Promise<void> {
-    await this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens/${encodeURIComponent(tokenId)}`);
-  }
-
-  // Admin
-  async listUsers(): Promise<{ users: AdminUser[]; total: number }> {
-    return this.request('GET', '/api/v1/admin/users');
-  }
-
-  async listAuditLog(): Promise<{ audit_log: AuditLogEntry[]; total: number }> {
-    return this.request('GET', '/api/v1/admin/audit-log');
+  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
+    await this.request('POST', '/api/v1/auth/change-password', {
+      current_password: currentPassword,
+      new_password: newPassword,
+    });
   }
 }
