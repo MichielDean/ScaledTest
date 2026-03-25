@@ -222,11 +222,8 @@ func TestEngine_Triage_LLMError_ReturnsErrorAndFallback(t *testing.T) {
 
 func TestEngine_Triage_InvalidJSON_ReturnsErrorAndFallback(t *testing.T) {
 	failures := makeNFailures(3)
-	mock := llm.NewMock(json.RawMessage(`{"not": "the right schema", "malformed`))
-	// The mock returns valid Go value (raw bytes) but they aren't valid JSON for our schema.
-	// Let's make it proper invalid JSON.
-	mock2 := llm.NewMock(json.RawMessage(`{"summary": 123, "clusters": "wrong"}`))
-	e := NewEngine(mock2)
+	mock := llm.NewMock(json.RawMessage(`{"summary": 123, "clusters": "wrong"}`))
+	e := NewEngine(mock)
 
 	out, err := e.Triage(context.Background(), TriageInput{Failures: failures})
 
@@ -241,7 +238,6 @@ func TestEngine_Triage_InvalidJSON_ReturnsErrorAndFallback(t *testing.T) {
 			t.Errorf("fallback classification should be 'unknown', got %q", c.Classification)
 		}
 	}
-	_ = mock // suppress unused warning
 }
 
 func TestEngine_Triage_MissingClassifications_FilledAsUnknown(t *testing.T) {
