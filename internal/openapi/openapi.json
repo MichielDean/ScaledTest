@@ -1563,6 +1563,300 @@
           "403": { "$ref": "#/components/responses/Forbidden" }
         }
       }
+    },
+    "/api/v1/auth/me": {
+      "get": {
+        "operationId": "getMe",
+        "summary": "Get current user profile",
+        "description": "Returns the authenticated user's profile information.",
+        "tags": ["Auth"],
+        "responses": {
+          "200": {
+            "description": "Current user",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "email": { "type": "string", "format": "email" },
+                    "display_name": { "type": "string" },
+                    "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] }
+                  },
+                  "required": ["id", "email", "display_name", "role"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "patch": {
+        "operationId": "updateMe",
+        "summary": "Update current user profile",
+        "description": "Updates the display name of the authenticated user.",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/UpdateMeRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Updated user profile",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "string", "format": "uuid" },
+                    "email": { "type": "string", "format": "email" },
+                    "display_name": { "type": "string" },
+                    "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] }
+                  },
+                  "required": ["id", "email", "display_name", "role"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/auth/change-password": {
+      "post": {
+        "operationId": "changePassword",
+        "summary": "Change authenticated user's password",
+        "description": "Changes the password for the currently authenticated user. Requires the current password for verification.",
+        "tags": ["Auth"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/ChangePasswordRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Password changed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string", "example": "password changed" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/invitations": {
+      "get": {
+        "operationId": "listInvitations",
+        "summary": "List pending invitations for a team",
+        "tags": ["Invitations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" }
+        ],
+        "responses": {
+          "200": {
+            "description": "List of invitations",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitations": {
+                      "type": "array",
+                      "items": { "$ref": "#/components/schemas/Invitation" }
+                    }
+                  },
+                  "required": ["invitations"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "operationId": "createInvitation",
+        "summary": "Invite a user to a team",
+        "description": "Creates an invitation for the given email address. Requires maintainer or owner role. Sends an invitation email if SMTP is configured.",
+        "tags": ["Invitations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/CreateInvitationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "Invitation created",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "invitation": { "$ref": "#/components/schemas/Invitation" },
+                    "token": {
+                      "type": "string",
+                      "description": "Plain-text invitation token (shown once). Used to construct the accept URL."
+                    }
+                  },
+                  "required": ["invitation", "token"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" }
+        }
+      }
+    },
+    "/api/v1/teams/{teamID}/invitations/{invitationID}": {
+      "delete": {
+        "operationId": "revokeInvitation",
+        "summary": "Revoke a pending invitation",
+        "description": "Deletes a pending invitation. Requires maintainer or owner role.",
+        "tags": ["Invitations"],
+        "parameters": [
+          { "$ref": "#/components/parameters/TeamID" },
+          {
+            "name": "invitationID",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string", "format": "uuid" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation revoked",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": { "message": { "type": "string", "example": "invitation revoked" } },
+                  "required": ["message"]
+                }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "403": { "$ref": "#/components/responses/Forbidden" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/api/v1/invitations/{token}": {
+      "get": {
+        "operationId": "previewInvitation",
+        "summary": "Preview an invitation by token",
+        "description": "Returns invitation details (email, role, team name) for display on the accept page. Public endpoint — no authentication required.",
+        "tags": ["Invitations"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Plain-text invitation token from the invite email"
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Invitation preview",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": { "type": "string", "format": "email" },
+                    "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] },
+                    "team_name": { "type": "string" },
+                    "expires_at": { "type": "string", "format": "date-time" }
+                  },
+                  "required": ["email", "role", "team_name", "expires_at"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": {
+            "description": "Invitation expired or already accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
+    },
+    "/api/v1/invitations/{token}/accept": {
+      "post": {
+        "operationId": "acceptInvitation",
+        "summary": "Accept an invitation and create account",
+        "description": "Creates a new user account (or updates an existing one) and adds the user to the team. Public endpoint — no authentication required.",
+        "tags": ["Invitations"],
+        "security": [],
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "required": true,
+            "schema": { "type": "string" },
+            "description": "Plain-text invitation token from the invite email"
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/AcceptInvitationRequest" }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Invitation accepted, user created and added to team",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "message": { "type": "string", "example": "invitation accepted" },
+                    "user_id": { "type": "string", "format": "uuid" },
+                    "team_id": { "type": "string", "format": "uuid" },
+                    "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] }
+                  },
+                  "required": ["message", "user_id", "team_id", "role"]
+                }
+              }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "404": { "$ref": "#/components/responses/NotFound" },
+          "410": {
+            "description": "Invitation expired or already accepted",
+            "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+          }
+        }
+      }
     }
   },
   "components": {
@@ -2047,6 +2341,51 @@
           "created_at": { "type": "string", "format": "date-time" }
         },
         "required": ["id", "actor_id", "actor_email", "action", "created_at"]
+      },
+      "Invitation": {
+        "type": "object",
+        "properties": {
+          "id": { "type": "string", "format": "uuid" },
+          "team_id": { "type": "string", "format": "uuid" },
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] },
+          "invited_by": { "type": "string", "format": "uuid", "description": "User ID of the inviter" },
+          "accepted_at": { "type": ["string", "null"], "format": "date-time" },
+          "expires_at": { "type": "string", "format": "date-time" },
+          "created_at": { "type": "string", "format": "date-time" }
+        },
+        "required": ["id", "team_id", "email", "role", "invited_by", "expires_at", "created_at"]
+      },
+      "CreateInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "email": { "type": "string", "format": "email" },
+          "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] }
+        },
+        "required": ["email", "role"]
+      },
+      "AcceptInvitationRequest": {
+        "type": "object",
+        "properties": {
+          "password": { "type": "string", "minLength": 8, "maxLength": 72 },
+          "display_name": { "type": "string", "minLength": 1 }
+        },
+        "required": ["password", "display_name"]
+      },
+      "UpdateMeRequest": {
+        "type": "object",
+        "properties": {
+          "display_name": { "type": "string", "minLength": 1, "maxLength": 255 }
+        },
+        "required": ["display_name"]
+      },
+      "ChangePasswordRequest": {
+        "type": "object",
+        "properties": {
+          "current_password": { "type": "string" },
+          "new_password": { "type": "string", "minLength": 8, "maxLength": 72 }
+        },
+        "required": ["current_password", "new_password"]
       }
     }
   },
@@ -2060,6 +2399,7 @@
     { "name": "Quality Gates", "description": "Quality gate rules and evaluation" },
     { "name": "Webhooks", "description": "Webhook configuration and event delivery" },
     { "name": "Sharding", "description": "Test sharding and load balancing" },
-    { "name": "Admin", "description": "Administrative operations (owner only)" }
+    { "name": "Admin", "description": "Administrative operations (owner only)" },
+    { "name": "Invitations", "description": "Team invitation management" }
   ]
 }
