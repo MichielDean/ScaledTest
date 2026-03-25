@@ -807,11 +807,7 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enqueue the new triage job (best-effort — nil enqueuer is graceful degradation).
-	if h.TriageEnqueuer != nil {
-		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
-	}
-
+	h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
 	writePending(w)
 }
 
