@@ -170,9 +170,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:           whNotifier,
 		GitHubStatusPoster: ghClient,
 		BaseURL:            cfg.BaseURL,
-		TriageStore:        triageStore,
 		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
+	}
+	if triageStore != nil {
+		reportsH.TriageStore = triageStore
 	}
 	execH := &handler.ExecutionsHandler{
 		DB:          dbPool,
