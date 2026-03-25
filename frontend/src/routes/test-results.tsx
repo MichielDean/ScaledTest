@@ -217,7 +217,7 @@ function ReportDetail({
     <>
       {hasFailed && (
         <div className="border-t">
-          <TriageSummary reportId={report.id} hasFailed={true} />
+          <TriageSummary reportId={report.id} hasFailed={hasFailed} />
         </div>
       )}
 

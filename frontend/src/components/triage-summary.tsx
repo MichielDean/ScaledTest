@@ -100,82 +100,69 @@ export function TriageSummary({ reportId, hasFailed }: TriageSummaryProps) {
 
       {clusters.length > 0 && (
         <div className="space-y-2">
-          {clusters.map(cluster => {
-            const isExpanded = expandedClusterId === cluster.id;
-            return (
-              <div key={cluster.id} className="rounded-md border bg-card overflow-hidden">
-                <button
-                  onClick={() =>
-                    setExpandedClusterId(isExpanded ? null : cluster.id)
-                  }
-                  aria-expanded={isExpanded}
-                  className="w-full px-4 py-2.5 flex items-center gap-2 text-left text-sm hover:bg-muted/30 transition-colors"
-                >
-                  <span className="text-muted-foreground shrink-0" aria-hidden="true">
-                    {isExpanded ? '\u25BC' : '\u25B6'}
-                  </span>
-                  <span className="font-medium flex-1 min-w-0 truncate">
-                    {cluster.root_cause}
-                  </span>
-                  <span className="shrink-0 text-xs text-muted-foreground">
-                    {cluster.failures.length}{' '}
-                    {cluster.failures.length === 1 ? 'failure' : 'failures'}
-                  </span>
-                </button>
-
-                {isExpanded && (
-                  <div className="px-4 pb-3 pt-2 space-y-1.5 border-t">
-                    {cluster.failures.map(failure => (
-                      <div
-                        key={failure.test_result_id}
-                        className="flex items-center gap-2 text-sm"
-                      >
-                        <ClassificationBadge classification={failure.classification} />
-                        <span className="font-mono text-xs text-muted-foreground truncate">
-                          {failure.test_result_id}
-                        </span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+          {clusters.map(cluster => (
+            <CollapsibleFailureGroup
+              key={cluster.id}
+              label={cluster.root_cause}
+              failures={cluster.failures}
+              isExpanded={expandedClusterId === cluster.id}
+              onToggle={() =>
+                setExpandedClusterId(expandedClusterId === cluster.id ? null : cluster.id)
+              }
+            />
+          ))}
         </div>
       )}
 
       {unclusteredFailures.length > 0 && (
-        <div className="rounded-md border bg-card overflow-hidden">
-          <button
-            onClick={() => setUnclusteredExpanded(!unclusteredExpanded)}
-            aria-expanded={unclusteredExpanded}
-            className="w-full px-4 py-2.5 flex items-center gap-2 text-left text-sm hover:bg-muted/30 transition-colors"
-          >
-            <span className="text-muted-foreground shrink-0" aria-hidden="true">
-              {unclusteredExpanded ? '\u25BC' : '\u25B6'}
-            </span>
-            <span className="font-medium flex-1">Unclustered failures</span>
-            <span className="shrink-0 text-xs text-muted-foreground">
-              {unclusteredFailures.length}{' '}
-              {unclusteredFailures.length === 1 ? 'failure' : 'failures'}
-            </span>
-          </button>
+        <CollapsibleFailureGroup
+          label="Unclustered failures"
+          failures={unclusteredFailures}
+          isExpanded={unclusteredExpanded}
+          onToggle={() => setUnclusteredExpanded(!unclusteredExpanded)}
+        />
+      )}
+    </div>
+  );
+}
 
-          {unclusteredExpanded && (
-            <div className="px-4 pb-3 pt-2 space-y-1.5 border-t">
-              {unclusteredFailures.map(failure => (
-                <div
-                  key={failure.test_result_id}
-                  className="flex items-center gap-2 text-sm"
-                >
-                  <ClassificationBadge classification={failure.classification} />
-                  <span className="font-mono text-xs text-muted-foreground truncate">
-                    {failure.test_result_id}
-                  </span>
-                </div>
-              ))}
+function CollapsibleFailureGroup({
+  label,
+  failures,
+  isExpanded,
+  onToggle,
+}: {
+  label: string;
+  failures: TriageFailure[];
+  isExpanded: boolean;
+  onToggle: () => void;
+}) {
+  return (
+    <div className="rounded-md border bg-card overflow-hidden">
+      <button
+        onClick={onToggle}
+        aria-expanded={isExpanded}
+        className="w-full px-4 py-2.5 flex items-center gap-2 text-left text-sm hover:bg-muted/30 transition-colors"
+      >
+        <span className="text-muted-foreground shrink-0" aria-hidden="true">
+          {isExpanded ? '▼' : '▶'}
+        </span>
+        <span className="font-medium flex-1 min-w-0 truncate">{label}</span>
+        <span className="shrink-0 text-xs text-muted-foreground">
+          {failures.length} {failures.length === 1 ? 'failure' : 'failures'}
+        </span>
+      </button>
+
+      {isExpanded && (
+        <div className="px-4 pb-3 pt-2 space-y-1.5 border-t">
+          {failures.map(failure => (
+            <div key={failure.test_result_id} className="flex items-center gap-2 text-sm">
+              <ClassificationBadge classification={failure.classification} />
+              <span className="font-mono text-xs text-muted-foreground truncate">
+                {failure.test_result_id}
+              </span>
             </div>
-          )}
+          ))}
         </div>
       )}
     </div>
