@@ -58,7 +58,7 @@ type UserResponse struct {
 // ChangePasswordRequest is the request body for changing the authenticated user's password.
 type ChangePasswordRequest struct {
 	CurrentPassword string `json:"current_password" validate:"required"`
-	NewPassword     string `json:"new_password" validate:"required,min=8"`
+	NewPassword     string `json:"new_password" validate:"required,min=8,max=72"`
 }
 
 // UpdateProfileRequest is the request body for updating the authenticated user's profile.
