@@ -6,6 +6,8 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **`GET /api/v1/reports` (ListReports) query parameter validation**: The `since` and `until` query parameters now return HTTP 400 with a clear error message when provided in a malformed format (not RFC3339). Previously, malformed dates were silently ignored, causing the endpoint to return all records instead of signaling a bad request. Empty string values for these parameters continue to be accepted and ignored as before.
+
 - **Test report `name` field in ListReports and GetReport responses**: Both `GET /api/v1/reports` and `GET /api/v1/reports/{reportID}` responses now include a computed `name` field. The name is derived from `tool_name` and `tool_version` (e.g., `"playwright v1.50.1"` or `"jest"`). If `tool_name` is empty, the name falls back to `"Report <short-id>"` using the first 8 characters of the report UUID. This eliminates blank report titles in the test-results list and dashboard recent reports table. The TypeScript SDK's `Report` interface has been updated to include the `name` field.
 
 - **`GET /api/v1/reports` (ListReports) response**: Summary count fields (`test_count`, `passed`, `failed`, `skipped`, `pending`) are now promoted to top-level fields alongside the raw `summary` blob. This eliminates NaN pass-rate calculations in the frontend, which previously relied on undefined fields. When the summary is unparseable, the flattened count fields are omitted gracefully rather than returning zero values. The TypeScript SDK's `Report` interface has been updated to reflect these optional top-level fields.
