@@ -18,7 +18,7 @@ spec:
         - name: scaledtest
           image: scaledtest:latest
           ports:
-            - containerPort: 3000
+            - containerPort: 8080
           env:
             - name: NODE_ENV
               value: production
@@ -43,5 +43,5 @@ spec:
     app.kubernetes.io/name: scaledtest
   ports:
     - port: 80
-      targetPort: 3000
+      targetPort: 8080
   type: ClusterIP
