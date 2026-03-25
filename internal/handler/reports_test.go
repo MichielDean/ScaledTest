@@ -11,6 +11,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/jackc/pgx/v5"
+
 	"github.com/scaledtest/scaledtest/internal/ctrf"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/webhook"
@@ -1840,6 +1842,476 @@ func (e *capTriageEnqueuer) count() int {
 	e.mu.Lock()
 	defer e.mu.Unlock()
 	return len(e.calls)
+}
+
+// ---------------------------------------------------------------------------
+// GetTriage / RetryTriage handler tests
+// ---------------------------------------------------------------------------
+
+// fakeTriageStore is a test double for triageAccessor.
+type fakeTriageStore struct {
+	result                 *model.TriageResult
+	clusters               []model.TriageCluster
+	classifications        []model.TriageFailureClassification
+	getErr                 error
+	listClustersErr        error
+	listClassificationsErr error
+	forceResetResult       *model.TriageResult
+	forceResetErr          error
+}
+
+func (f *fakeTriageStore) GetByReportID(_ context.Context, _, _ string) (*model.TriageResult, error) {
+	return f.result, f.getErr
+}
+
+func (f *fakeTriageStore) ListClusters(_ context.Context, _, _ string) ([]model.TriageCluster, error) {
+	return f.clusters, f.listClustersErr
+}
+
+func (f *fakeTriageStore) ListClassifications(_ context.Context, _, _ string) ([]model.TriageFailureClassification, error) {
+	return f.classifications, f.listClassificationsErr
+}
+
+func (f *fakeTriageStore) ForceReset(_ context.Context, _, _ string) (*model.TriageResult, error) {
+	return f.forceResetResult, f.forceResetErr
+}
+
+// --- GetTriage ---
+
+func TestGetTriage_Unauthorized(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("GetTriage without claims: got %d, want 401", w.Code)
+	}
+}
+
+func TestGetTriage_MissingReportID(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports//triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("GetTriage with empty reportID: got %d, want 400", w.Code)
+	}
+}
+
+func TestGetTriage_NoStore(t *testing.T) {
+	h := &ReportsHandler{TriageStore: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("GetTriage with nil TriageStore: got %d, want 503", w.Code)
+	}
+}
+
+func TestGetTriage_NotFound(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{getErr: fmt.Errorf("get triage result by report: %w", pgx.ErrNoRows)},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("GetTriage not found: got %d, want 404", w.Code)
+	}
+}
+
+func TestGetTriage_Pending_Returns202(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "pending"},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("GetTriage pending: got %d, want 202", w.Code)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["triage_status"] != "pending" {
+		t.Errorf("triage_status = %v, want pending", body["triage_status"])
+	}
+}
+
+func TestGetTriage_Complete_Returns200WithClusters(t *testing.T) {
+	summary := "2 failures due to DB timeout"
+	model_ := "gpt-4"
+	label := "infrastructure"
+	clusterID := "cluster-1"
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{
+				ID:       "triage-1",
+				Status:   "complete",
+				Summary:  &summary,
+				LLMModel: &model_,
+			},
+			clusters: []model.TriageCluster{
+				{ID: "cluster-1", TriageID: "triage-1", RootCause: "DB timeout", Label: &label},
+			},
+			classifications: []model.TriageFailureClassification{
+				{ID: "cls-1", TriageID: "triage-1", ClusterID: &clusterID, TestResultID: "tr-1", Classification: "new"},
+				{ID: "cls-2", TriageID: "triage-1", ClusterID: &clusterID, TestResultID: "tr-2", Classification: "regression"},
+			},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GetTriage complete: got %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["triage_status"] != "complete" {
+		t.Errorf("triage_status = %v, want complete", body["triage_status"])
+	}
+	if body["summary"] != summary {
+		t.Errorf("summary = %v, want %q", body["summary"], summary)
+	}
+	meta, _ := body["metadata"].(map[string]interface{})
+	if meta == nil {
+		t.Fatal("metadata missing from response")
+	}
+	if meta["model"] != model_ {
+		t.Errorf("metadata.model = %v, want %q", meta["model"], model_)
+	}
+	clusters, _ := body["clusters"].([]interface{})
+	if len(clusters) != 1 {
+		t.Fatalf("clusters len = %d, want 1", len(clusters))
+	}
+	cluster, _ := clusters[0].(map[string]interface{})
+	if cluster["root_cause"] != "DB timeout" {
+		t.Errorf("cluster root_cause = %v, want 'DB timeout'", cluster["root_cause"])
+	}
+	if cluster["label"] != label {
+		t.Errorf("cluster label = %v, want %q", cluster["label"], label)
+	}
+	failures, _ := cluster["failures"].([]interface{})
+	if len(failures) != 2 {
+		t.Errorf("cluster failures len = %d, want 2", len(failures))
+	}
+}
+
+func TestGetTriage_Failed_Returns200WithError(t *testing.T) {
+	errMsg := "LLM request timed out"
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "failed", ErrorMsg: &errMsg},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GetTriage failed: got %d, want 200", w.Code)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["triage_status"] != "failed" {
+		t.Errorf("triage_status = %v, want failed", body["triage_status"])
+	}
+	if body["error"] != errMsg {
+		t.Errorf("error = %v, want %q", body["error"], errMsg)
+	}
+}
+
+func TestGetTriage_ListClustersError_Returns500(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:          &model.TriageResult{ID: "triage-1", Status: "complete"},
+			listClustersErr: fmt.Errorf("db connection lost"),
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("GetTriage ListClusters error: got %d, want 500", w.Code)
+	}
+}
+
+func TestGetTriage_ListClassificationsError_Returns500(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:                 &model.TriageResult{ID: "triage-1", Status: "complete"},
+			listClassificationsErr: fmt.Errorf("db connection lost"),
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("GetTriage ListClassifications error: got %d, want 500", w.Code)
+	}
+}
+
+func TestGetTriage_UnclusteredClassifications_IncludedInResponse(t *testing.T) {
+	clusterID := "cluster-1"
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "complete"},
+			clusters: []model.TriageCluster{
+				{ID: "cluster-1", TriageID: "triage-1", RootCause: "flaky infra"},
+			},
+			classifications: []model.TriageFailureClassification{
+				// Belongs to cluster-1.
+				{ID: "cls-1", TriageID: "triage-1", ClusterID: &clusterID, TestResultID: "tr-1", Classification: "regression"},
+				// No cluster — ClusterID is nil (ON DELETE SET NULL).
+				{ID: "cls-2", TriageID: "triage-1", ClusterID: nil, TestResultID: "tr-2", Classification: "unknown"},
+			},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GetTriage with unclustered classifications: got %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+
+	// Cluster should carry its own classification.
+	clusters, _ := body["clusters"].([]interface{})
+	if len(clusters) != 1 {
+		t.Fatalf("clusters len = %d, want 1", len(clusters))
+	}
+	cluster, _ := clusters[0].(map[string]interface{})
+	failures, _ := cluster["failures"].([]interface{})
+	if len(failures) != 1 {
+		t.Errorf("cluster failures len = %d, want 1", len(failures))
+	}
+
+	// Unclustered classification must appear at top level.
+	unclustered, ok := body["unclustered_failures"].([]interface{})
+	if !ok || len(unclustered) != 1 {
+		t.Errorf("unclustered_failures = %v, want 1 entry", body["unclustered_failures"])
+	}
+}
+
+// --- RetryTriage ---
+
+func TestRetryTriage_Unauthorized(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/abc/triage/retry", nil)
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("RetryTriage without claims: got %d, want 401", w.Code)
+	}
+}
+
+func TestRetryTriage_MissingReportID(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports//triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("RetryTriage with empty reportID: got %d, want 400", w.Code)
+	}
+}
+
+func TestRetryTriage_NoStore(t *testing.T) {
+	h := &ReportsHandler{TriageStore: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/abc/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("RetryTriage with nil TriageStore: got %d, want 503", w.Code)
+	}
+}
+
+func TestRetryTriage_TriageNotFound_Returns404(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{getErr: fmt.Errorf("get triage result by report: %w", pgx.ErrNoRows)},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/abc/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("RetryTriage not found: got %d, want 404", w.Code)
+	}
+}
+
+func TestRetryTriage_AlreadyPending_Returns202(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "pending"},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/abc/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("RetryTriage already pending: got %d, want 202", w.Code)
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["triage_status"] != "pending" {
+		t.Errorf("triage_status = %v, want pending", body["triage_status"])
+	}
+}
+
+func TestRetryTriage_Complete_ResetsAndEnqueues(t *testing.T) {
+	enqueuer := &capTriageEnqueuer{}
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:           &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
+			forceResetResult: &model.TriageResult{ID: "triage-1", Status: "pending", ReportID: "report-1"},
+		},
+		TriageEnqueuer: enqueuer,
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/report-1/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "report-1")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("RetryTriage complete: got %d, want 202 (body: %s)", w.Code, w.Body.String())
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+	if body["triage_status"] != "pending" {
+		t.Errorf("triage_status = %v, want pending", body["triage_status"])
+	}
+	if enqueuer.count() != 1 {
+		t.Errorf("Enqueue call count = %d, want 1", enqueuer.count())
+	}
+}
+
+func TestRetryTriage_Failed_ResetsAndEnqueues(t *testing.T) {
+	enqueuer := &capTriageEnqueuer{}
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:           &model.TriageResult{ID: "triage-1", Status: "failed", ReportID: "report-1"},
+			forceResetResult: &model.TriageResult{ID: "triage-1", Status: "pending", ReportID: "report-1"},
+		},
+		TriageEnqueuer: enqueuer,
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/report-1/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "report-1")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("RetryTriage failed: got %d, want 202 (body: %s)", w.Code, w.Body.String())
+	}
+	if enqueuer.count() != 1 {
+		t.Errorf("Enqueue call count = %d, want 1", enqueuer.count())
+	}
+}
+
+func TestRetryTriage_NilEnqueuer_Returns503(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
+		},
+		TriageEnqueuer: nil,
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/report-1/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "report-1")
+
+	h.RetryTriage(w, r)
+
+	// When TriageEnqueuer is nil, ForceReset must NOT be called (it is destructive)
+	// and the handler must return 503 so the caller knows retry is unavailable.
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("RetryTriage nil enqueuer: got %d, want 503", w.Code)
+	}
+}
+
+func TestRetryTriage_ForceResetNoOp_Returns202WithoutEnqueue(t *testing.T) {
+	enqueuer := &capTriageEnqueuer{}
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:           &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
+			forceResetResult: nil, // concurrent retry already won the race — ForceReset is a no-op
+		},
+		TriageEnqueuer: enqueuer,
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/report-1/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "report-1")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("RetryTriage ForceReset no-op: got %d, want 202", w.Code)
+	}
+	if enqueuer.count() != 0 {
+		t.Errorf("Enqueue call count = %d, want 0 (no-op reset must not enqueue)", enqueuer.count())
+	}
 }
 
 // TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB verifies that the handler
