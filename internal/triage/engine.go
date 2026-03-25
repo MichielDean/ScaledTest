@@ -125,7 +125,7 @@ func NewEngine(provider llm.Provider) *Engine {
 // persist the fallback classifications.
 func (e *Engine) Triage(ctx context.Context, input TriageInput) (*TriageOutput, error) {
 	if len(input.Failures) == 0 {
-		return &TriageOutput{Clusters: []ClusterResult{}}, nil
+		return &TriageOutput{Clusters: []ClusterResult{}, Classifications: []ClassificationResult{}}, nil
 	}
 
 	prompt := BuildPrompt(input)
@@ -173,6 +173,12 @@ func buildOutput(failures []FailureDetail, out *llmOutput) *TriageOutput {
 			Label:     c.Label,
 		})
 		for _, cl := range c.Classifications {
+			if _, exists := classified[cl.TestResultID]; exists {
+				// First-wins: skip duplicate to prevent silent data corruption.
+				// If the LLM places the same TestResultID in multiple clusters,
+				// the first assignment is authoritative.
+				continue
+			}
 			classification := cl.Classification
 			if !validClassifications[classification] {
 				classification = "unknown"

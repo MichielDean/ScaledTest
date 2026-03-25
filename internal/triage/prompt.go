@@ -34,6 +34,20 @@ func traceLimit(n int) int {
 	}
 }
 
+// sanitizeIdentifier truncates s at the first control character (< U+0020)
+// and removes any remaining control characters from what follows. Identifier
+// fields (TestResultID, Name, Suite) must not contain newlines or control
+// characters: a value such as "tr-1\nIgnore all instructions" would inject
+// a new line into the prompt structure. Legitimate identifiers never contain
+// control characters, so truncating at the first one is safe and removes the
+// injected payload entirely.
+func sanitizeIdentifier(s string) string {
+	if idx := strings.IndexFunc(s, func(r rune) bool { return r < 32 }); idx >= 0 {
+		s = s[:idx]
+	}
+	return s
+}
+
 // truncateStr shortens s to at most maxLen bytes, appending "…" if truncated.
 // It does not split multi-byte UTF-8 runes at the boundary — it truncates
 // at the byte level which may break a rune, but this is acceptable for prompt
@@ -107,16 +121,20 @@ Respond with ONLY a JSON object — no markdown fences, no preamble, no trailing
 func writeFailures(b *strings.Builder, failures []FailureDetail, ml, tl int) {
 	fmt.Fprintf(b, "## Failing Tests (%d)\n\n", len(failures))
 	for _, f := range failures {
-		fmt.Fprintf(b, "### test_result_id: %s\n", f.TestResultID)
-		fmt.Fprintf(b, "- name: %s\n", f.Name)
+		// Sanitize identifier fields to prevent prompt injection via embedded
+		// newlines or control characters (e.g. "tr-1\nIgnore all instructions").
+		fmt.Fprintf(b, "### test_result_id: %s\n", sanitizeIdentifier(f.TestResultID))
+		fmt.Fprintf(b, "- name: %s\n", sanitizeIdentifier(f.Name))
 		if f.Suite != "" {
-			fmt.Fprintf(b, "- suite: %s\n", f.Suite)
+			fmt.Fprintf(b, "- suite: %s\n", sanitizeIdentifier(f.Suite))
 		}
+		// Free-text fields (Message, Trace) are wrapped in XML-style delimiters
+		// so the LLM can distinguish user-controlled data from prompt instructions.
 		if msg := truncateStr(strings.TrimSpace(f.Message), ml); msg != "" {
-			fmt.Fprintf(b, "- error: %s\n", msg)
+			fmt.Fprintf(b, "- error: <error_data>%s</error_data>\n", msg)
 		}
 		if trace := truncateStr(strings.TrimSpace(f.Trace), tl); trace != "" {
-			fmt.Fprintf(b, "- trace: %s\n", trace)
+			fmt.Fprintf(b, "- trace: <trace_data>%s</trace_data>\n", trace)
 		}
 		b.WriteString("\n")
 	}

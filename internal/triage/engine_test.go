@@ -395,6 +395,42 @@ func TestEngine_Triage_SendsPromptToProvider(t *testing.T) {
 	}
 }
 
+// ---- Engine.Triage empty input — nil/empty slice consistency ------------
+
+func TestEngine_Triage_EmptyFailures_ClassificationsIsNonNil(t *testing.T) {
+	mock := llm.NewMock(json.RawMessage(`{}`))
+	e := NewEngine(mock)
+
+	out, err := e.Triage(context.Background(), TriageInput{})
+
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	// Classifications must be a non-nil slice so that JSON marshals as [] not null.
+	if out.Classifications == nil {
+		t.Error("Classifications must be non-nil (empty slice) even for empty input — nil marshals as null")
+	}
+}
+
+func TestEngine_Triage_EmptyFailures_MarshalsClarificationsAsEmptyArray(t *testing.T) {
+	mock := llm.NewMock(json.RawMessage(`{}`))
+	e := NewEngine(mock)
+
+	out, _ := e.Triage(context.Background(), TriageInput{})
+
+	data, err := json.Marshal(out)
+	if err != nil {
+		t.Fatalf("marshal error: %v", err)
+	}
+	s := string(data)
+	if !strings.Contains(s, `"Classifications":[]`) {
+		t.Errorf("Classifications should serialize as [] not null; got %s", s)
+	}
+	if !strings.Contains(s, `"Clusters":[]`) {
+		t.Errorf("Clusters should serialize as [], got %s", s)
+	}
+}
+
 // ---- buildOutput (internal) unit tests ----------------------------------
 
 func TestBuildOutput_PreservesClusterOrder(t *testing.T) {
@@ -465,6 +501,47 @@ func TestBuildOutput_ClassificationIndicesMatchClusters(t *testing.T) {
 	}
 	if byID[failures[2].TestResultID].ClusterIndex != 1 {
 		t.Errorf("failures[2] should be in cluster 1, got %d", byID[failures[2].TestResultID].ClusterIndex)
+	}
+}
+
+func TestBuildOutput_DuplicateTestResultID_KeepsFirstAssignment(t *testing.T) {
+	failures := makeNFailures(2)
+	// LLM places failures[0] in both clusters — the second occurrence must be ignored.
+	out := llmOutput{
+		Summary: "duplicate test",
+		Clusters: []llmCluster{
+			{
+				RootCause: "first cluster",
+				Classifications: []llmClassification{
+					{TestResultID: failures[0].TestResultID, Classification: "new"},
+				},
+			},
+			{
+				RootCause: "second cluster",
+				Classifications: []llmClassification{
+					{TestResultID: failures[0].TestResultID, Classification: "flaky"}, // duplicate
+					{TestResultID: failures[1].TestResultID, Classification: "regression"},
+				},
+			},
+		},
+	}
+
+	result := buildOutput(failures, &out)
+
+	byID := map[string]ClassificationResult{}
+	for _, c := range result.Classifications {
+		byID[c.TestResultID] = c
+	}
+	// First-wins: failures[0] should retain cluster 0 / "new", not be overwritten.
+	if got := byID[failures[0].TestResultID].ClusterIndex; got != 0 {
+		t.Errorf("duplicate TestResultID: first cluster assignment should win (0), got %d", got)
+	}
+	if got := byID[failures[0].TestResultID].Classification; got != "new" {
+		t.Errorf("duplicate TestResultID: first classification should win ('new'), got %q", got)
+	}
+	// failures[1] should be unaffected.
+	if got := byID[failures[1].TestResultID].ClusterIndex; got != 1 {
+		t.Errorf("non-duplicate failures[1] should be in cluster 1, got %d", got)
 	}
 }
 
