@@ -216,6 +216,44 @@ type Webhook struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// TriageResult represents an LLM triage operation for a CI report.
+type TriageResult struct {
+	ID           string    `json:"id"`
+	TeamID       string    `json:"team_id"`
+	ReportID     string    `json:"report_id"`
+	Status       string    `json:"status"` // pending, complete, failed
+	Summary      *string   `json:"summary,omitempty"`
+	LLMProvider  *string   `json:"llm_provider,omitempty"`
+	LLMModel     *string   `json:"llm_model,omitempty"`
+	InputTokens  int       `json:"input_tokens"`
+	OutputTokens int       `json:"output_tokens"`
+	CostUSD      float64   `json:"cost_usd"`
+	ErrorMsg     *string   `json:"error_msg,omitempty"`
+	CreatedAt    time.Time `json:"created_at"`
+	UpdatedAt    time.Time `json:"updated_at"`
+}
+
+// TriageCluster represents a group of test failures sharing a root cause.
+type TriageCluster struct {
+	ID        string    `json:"id"`
+	TriageID  string    `json:"triage_id"`
+	TeamID    string    `json:"team_id"`
+	RootCause string    `json:"root_cause"`
+	Label     *string   `json:"label,omitempty"`
+	CreatedAt time.Time `json:"created_at"`
+}
+
+// TriageFailureClassification records the LLM classification of a single test failure.
+type TriageFailureClassification struct {
+	ID             string    `json:"id"`
+	TriageID       string    `json:"triage_id"`
+	ClusterID      *string   `json:"cluster_id,omitempty"`
+	TestResultID   string    `json:"test_result_id"`
+	TeamID         string    `json:"team_id"`
+	Classification string    `json:"classification"` // new, flaky, regression, unknown
+	CreatedAt      time.Time `json:"created_at"`
+}
+
 // Invitation represents a pending or accepted team invitation.
 type Invitation struct {
 	ID         string     `json:"id"`
