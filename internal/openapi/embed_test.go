@@ -104,7 +104,7 @@ func TestSpec_HasAuthProfilePaths(t *testing.T) {
 	})
 }
 
-func TestSpec_HasInvitationSchema(t *testing.T) {
+func TestSpec_HasNewComponentSchemas(t *testing.T) {
 	doc := specDoc(t)
 	components, ok := doc["components"].(map[string]interface{})
 	if !ok {
@@ -114,7 +114,15 @@ func TestSpec_HasInvitationSchema(t *testing.T) {
 	if !ok {
 		t.Fatal("missing components.schemas section")
 	}
-	if _, exists := schemas["Invitation"]; !exists {
-		t.Error("missing Invitation schema in components.schemas")
+	for _, name := range []string{
+		"Invitation",
+		"CreateInvitationRequest",
+		"AcceptInvitationRequest",
+		"UpdateMeRequest",
+		"ChangePasswordRequest",
+	} {
+		if _, exists := schemas[name]; !exists {
+			t.Errorf("missing schema in components.schemas: %s", name)
+		}
 	}
 }
