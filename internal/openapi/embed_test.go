@@ -48,3 +48,98 @@ func TestSpec_NotEmpty(t *testing.T) {
 		t.Fatal("embedded spec is empty")
 	}
 }
+
+func TestSpec_HasInvitationPaths(t *testing.T) {
+	var doc map[string]interface{}
+	if err := json.Unmarshal(spec, &doc); err != nil {
+		t.Fatalf("spec is not valid JSON: %v", err)
+	}
+
+	paths, ok := doc["paths"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing paths section")
+	}
+
+	requiredPaths := []struct {
+		path   string
+		method string
+	}{
+		{"/api/v1/teams/{teamID}/invitations", "post"},
+		{"/api/v1/teams/{teamID}/invitations", "get"},
+		{"/api/v1/teams/{teamID}/invitations/{invitationID}", "delete"},
+		{"/api/v1/invitations/{token}", "get"},
+		{"/api/v1/invitations/{token}/accept", "post"},
+	}
+
+	for _, rp := range requiredPaths {
+		pathItem, exists := paths[rp.path]
+		if !exists {
+			t.Errorf("missing path: %s", rp.path)
+			continue
+		}
+		methods, ok := pathItem.(map[string]interface{})
+		if !ok {
+			t.Errorf("path %s is not an object", rp.path)
+			continue
+		}
+		if _, has := methods[rp.method]; !has {
+			t.Errorf("missing method %s on path %s", rp.method, rp.path)
+		}
+	}
+}
+
+func TestSpec_HasAuthProfilePaths(t *testing.T) {
+	var doc map[string]interface{}
+	if err := json.Unmarshal(spec, &doc); err != nil {
+		t.Fatalf("spec is not valid JSON: %v", err)
+	}
+
+	paths, ok := doc["paths"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing paths section")
+	}
+
+	requiredPaths := []struct {
+		path   string
+		method string
+	}{
+		{"/api/v1/auth/me", "get"},
+		{"/api/v1/auth/me", "patch"},
+		{"/api/v1/auth/change-password", "post"},
+	}
+
+	for _, rp := range requiredPaths {
+		pathItem, exists := paths[rp.path]
+		if !exists {
+			t.Errorf("missing path: %s", rp.path)
+			continue
+		}
+		methods, ok := pathItem.(map[string]interface{})
+		if !ok {
+			t.Errorf("path %s is not an object", rp.path)
+			continue
+		}
+		if _, has := methods[rp.method]; !has {
+			t.Errorf("missing method %s on path %s", rp.method, rp.path)
+		}
+	}
+}
+
+func TestSpec_HasInvitationSchema(t *testing.T) {
+	var doc map[string]interface{}
+	if err := json.Unmarshal(spec, &doc); err != nil {
+		t.Fatalf("spec is not valid JSON: %v", err)
+	}
+
+	components, ok := doc["components"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components section")
+	}
+	schemas, ok := components["schemas"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components.schemas section")
+	}
+	if _, exists := schemas["Invitation"]; !exists {
+		t.Error("missing Invitation schema in components.schemas")
+	}
+}
