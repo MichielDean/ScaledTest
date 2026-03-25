@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-jnr8j
+## Item: sc-ofp9a
 
-**Title:** Audit log: emit events from teams, quality gates, webhooks, invitations
+**Title:** OpenAPI spec: add missing paths (invitations + auth profile endpoints)
 **Status:** in_progress
-**Priority:** 2
+**Priority:** 3
 
 ### Description
 
-The audit log currently only captures report and execution events. Team create/delete, quality gate create/update/delete, webhook create/update/delete, and invitation create/revoke/accept all emit zero audit events. Add AuditStore.Log calls to teams.go, quality_gates.go, webhooks.go, and invitations.go for all mutating operations. Each entry needs actor_id, actor_email, team_id, action (e.g. 'team.delete'), resource_type, and resource_id.
+internal/openapi/openapi.json is missing: all invitation endpoints (POST/GET /api/v1/teams/{teamID}/invitations, DELETE /api/v1/teams/{teamID}/invitations/{invitationID}, GET /api/v1/invitations/{token}, POST /api/v1/invitations/{token}/accept), GET /auth/me, PATCH /auth/me (update profile), POST /auth/change-password. All routes are wired in routes.go — just not documented in the spec. Add full request/response schemas for each.
 
 ## Current Step: delivery
 
