@@ -440,6 +440,15 @@ describe('webhooks', () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fa/webhooks/wh%2Fb`);
   });
+
+  it('retryWebhookDelivery encodes teamId, webhookId, and deliveryId', async () => {
+    const fetchMock = mockFetchOk({});
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.retryWebhookDelivery('team/a', 'wh/b', 'del/c');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fa/webhooks/wh%2Fb/deliveries/del%2Fc/retry`);
+  });
 });
 
 // ── Invitations ───────────────────────────────────────────────────────────────
@@ -504,13 +513,31 @@ describe('invitations', () => {
     expect((init as RequestInit).method).toBe('POST');
   });
 
-  it('invitation methods encode teamId and invitationId', async () => {
-    const fetchMock = mockFetchOk({ invitations: [] });
+  it('revokeInvitation encodes teamId and invitationId', async () => {
+    const fetchMock = mockFetchOk({});
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.listInvitations('team/special');
+    await client.revokeInvitation('team/a', 'inv/b');
 
-    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fspecial/invitations`);
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fa/invitations/inv%2Fb`);
+  });
+
+  it('previewInvitation encodes token path param', async () => {
+    const fetchMock = mockFetchOk({ email: 'user@example.com', role: 'member', team_name: 'my-team', expires_at: '' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.previewInvitation('tok/en');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/invitations/tok%2Fen`);
+  });
+
+  it('acceptInvitation encodes token path param', async () => {
+    const fetchMock = mockFetchOk({ message: 'accepted', user_id: 'u-1', team_id: 't-1', role: 'member' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.acceptInvitation('tok/en');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/invitations/tok%2Fen/accept`);
   });
 });
 
