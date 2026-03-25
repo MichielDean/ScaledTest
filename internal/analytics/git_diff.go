@@ -1,6 +1,7 @@
 package analytics
 
 import (
+	"container/list"
 	"context"
 	"sort"
 	"strings"
@@ -64,23 +65,89 @@ type PreviousRunFinder interface {
 	FindPreviousSuccessfulCommit(ctx context.Context, teamID, repository, branch, excludeReportID string) (string, error)
 }
 
+// defaultDiffCacheCap is the default maximum number of entries in the diff
+// result cache. Entries are evicted in LRU order when the cap is exceeded.
+const defaultDiffCacheCap = 512
+
+// diffCacheEntry is a single entry stored in diffLRU.
+type diffCacheEntry struct {
+	key string
+	val *GitDiffSummary
+}
+
+// diffLRU is a bounded LRU cache for GitDiffSummary values, safe for
+// concurrent use. When the capacity is exceeded, the least recently used
+// entry is evicted.
+type diffLRU struct {
+	mu    sync.Mutex
+	cap   int
+	items map[string]*list.Element
+	order *list.List
+}
+
+func newDiffLRU(cap int) *diffLRU {
+	return &diffLRU{
+		cap:   cap,
+		items: make(map[string]*list.Element, cap),
+		order: list.New(),
+	}
+}
+
+func (c *diffLRU) load(key string) (*GitDiffSummary, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	el, ok := c.items[key]
+	if !ok {
+		return nil, false
+	}
+	c.order.MoveToFront(el)
+	return el.Value.(*diffCacheEntry).val, true
+}
+
+func (c *diffLRU) store(key string, val *GitDiffSummary) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	if el, ok := c.items[key]; ok {
+		c.order.MoveToFront(el)
+		el.Value.(*diffCacheEntry).val = val
+		return
+	}
+	el := c.order.PushFront(&diffCacheEntry{key: key, val: val})
+	c.items[key] = el
+	if c.order.Len() > c.cap {
+		back := c.order.Back()
+		if back != nil {
+			c.order.Remove(back)
+			delete(c.items, back.Value.(*diffCacheEntry).key)
+		}
+	}
+}
+
 // GitDiffEnricher builds GitDiffSummary values for triage enrichment.
 //
 // It resolves the diff base via PreviousRunFinder, fetches file-level stats
 // via DiffFetcher, applies churn-based truncation, and caches results per
-// (teamID, repository, headSHA) to prevent redundant fetches.
+// (teamID, repository, headSHA) to prevent redundant fetches. The cache is
+// bounded; entries are evicted in LRU order when the capacity is exceeded.
 type GitDiffEnricher struct {
 	prevFinder PreviousRunFinder
 	fetcher    DiffFetcher // may be nil when GitHub integration is disabled
-	cache      sync.Map    // map[cacheKey]*GitDiffSummary
+	cache      *diffLRU
 }
 
 // NewGitDiffEnricher creates a GitDiffEnricher. fetcher may be nil; Enrich
 // will return empty summaries without error when it is.
 func NewGitDiffEnricher(prevFinder PreviousRunFinder, fetcher DiffFetcher) *GitDiffEnricher {
+	return newGitDiffEnricherWithCap(prevFinder, fetcher, defaultDiffCacheCap)
+}
+
+// newGitDiffEnricherWithCap creates a GitDiffEnricher with a specific cache
+// capacity. Intended for tests that need deterministic eviction behaviour.
+func newGitDiffEnricherWithCap(prevFinder PreviousRunFinder, fetcher DiffFetcher, cap int) *GitDiffEnricher {
 	return &GitDiffEnricher{
 		prevFinder: prevFinder,
 		fetcher:    fetcher,
+		cache:      newDiffLRU(cap),
 	}
 }
 
@@ -103,12 +170,12 @@ func (e *GitDiffEnricher) Enrich(ctx context.Context, q GitDiffQuery) (GitDiffSu
 	}
 
 	key := diffCacheKey(q.TeamID, q.Repository, q.HeadSHA)
-	if hit, ok := e.cache.Load(key); ok {
-		return *hit.(*GitDiffSummary), nil
+	if hit, ok := e.cache.load(key); ok {
+		return *hit, nil
 	}
 
 	cache := func(s GitDiffSummary) GitDiffSummary {
-		e.cache.Store(key, &s)
+		e.cache.store(key, &s)
 		return s
 	}
 
@@ -194,8 +261,8 @@ func ParseOwnerRepo(repository string) (owner, repo string, ok bool) {
 	// Strip .git suffix.
 	s = strings.TrimSuffix(s, ".git")
 
-	// Require exactly "owner/repo".
-	parts := strings.SplitN(s, "/", 2)
+	// Require exactly "owner/repo" — no extra path segments.
+	parts := strings.Split(s, "/")
 	if len(parts) != 2 || parts[0] == "" || parts[1] == "" {
 		return "", "", false
 	}

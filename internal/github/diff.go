@@ -36,6 +36,19 @@ func (c *Client) FetchDiff(ctx context.Context, owner, repo, baseSHA, headSHA st
 		return nil, nil
 	}
 
+	if !validOwnerRepo.MatchString(owner) {
+		return nil, fmt.Errorf("invalid github owner: %q", owner)
+	}
+	if !validOwnerRepo.MatchString(repo) {
+		return nil, fmt.Errorf("invalid github repo: %q", repo)
+	}
+	if !validSHA.MatchString(baseSHA) {
+		return nil, fmt.Errorf("invalid github base SHA: %q", baseSHA)
+	}
+	if !validSHA.MatchString(headSHA) {
+		return nil, fmt.Errorf("invalid github head SHA: %q", headSHA)
+	}
+
 	url := fmt.Sprintf("%s/repos/%s/%s/compare/%s...%s", c.APIURL, owner, repo, baseSHA, headSHA)
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {

@@ -227,6 +227,9 @@ func TestParseOwnerRepo(t *testing.T) {
 		{"only slash", "/", "", "", false},
 		{"empty owner", "/repo", "", "", false},
 		{"empty repo", "owner/", "", "", false},
+		{"extra path segments rejected", "owner/repo/extra", "", "", false},
+		{"github.com prefix with extra segment rejected", "github.com/owner/repo/extra", "", "", false},
+		{"https URL with extra segment rejected", "https://github.com/owner/repo/extra", "", "", false},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -442,5 +445,50 @@ func TestGitDiffEnricher_Enrich_DifferentQueryKeysDontShareCache(t *testing.T) {
 
 	if fetcher.count != 2 {
 		t.Errorf("FetchDiff called %d times, want 2 (different headSHAs must not share cache)", fetcher.count)
+	}
+}
+
+func TestGitDiffEnricher_Enrich_CacheEvictsLRUWhenFull(t *testing.T) {
+	// Create an enricher with capacity 2 to force LRU eviction.
+	fetcher := &callCountingFetcher{
+		onFetch: func() []FileDiffStat {
+			return []FileDiffStat{{Path: "x.go", Churn: 1}}
+		},
+	}
+	e := newGitDiffEnricherWithCap(
+		&stubPreviousRunFinder{sha: "base123"},
+		fetcher,
+		2,
+	)
+
+	q1 := GitDiffQuery{TeamID: "t1", Repository: "org/repo", HeadSHA: "sha-1"}
+	q2 := GitDiffQuery{TeamID: "t1", Repository: "org/repo", HeadSHA: "sha-2"}
+	q3 := GitDiffQuery{TeamID: "t1", Repository: "org/repo", HeadSHA: "sha-3"}
+
+	// Fill the cache to capacity (2 entries).
+	if _, err := e.Enrich(context.Background(), q1); err != nil {
+		t.Fatalf("q1: %v", err)
+	}
+	if _, err := e.Enrich(context.Background(), q2); err != nil {
+		t.Fatalf("q2: %v", err)
+	}
+	if fetcher.count != 2 {
+		t.Fatalf("expected 2 FetchDiff calls after filling cache, got %d", fetcher.count)
+	}
+
+	// Insert a third entry — exceeds cap, must evict the LRU entry (q1).
+	if _, err := e.Enrich(context.Background(), q3); err != nil {
+		t.Fatalf("q3: %v", err)
+	}
+	if fetcher.count != 3 {
+		t.Fatalf("expected 3 FetchDiff calls after inserting q3, got %d", fetcher.count)
+	}
+
+	// Re-enrich q1: it was the LRU victim, so FetchDiff must be called again.
+	if _, err := e.Enrich(context.Background(), q1); err != nil {
+		t.Fatalf("q1 re-enrich: %v", err)
+	}
+	if fetcher.count != 4 {
+		t.Errorf("FetchDiff called %d times after re-enriching evicted q1, want 4", fetcher.count)
 	}
 }

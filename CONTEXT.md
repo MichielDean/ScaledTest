@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-j755h
+## Item: sc-2g9qe
 
-**Title:** Define LLM triage result schema and DB migration
+**Title:** Build git diff context provider for triage enrichment
 **Status:** in_progress
 **Priority:** 2
 
 ### Description
 
-Design and implement the database schema for storing LLM triage results per CI run. Schema must capture: failure clusters (groups sharing a root cause), per-cluster root cause summary, per-failure classification (new/flaky/regression), overall triage summary text, LLM provider used, token cost metadata, and triage status (pending/complete/failed). Write and apply the migration. This is the foundational data contract all other triage work depends on.
+Implement a context enricher that, given a commit SHA and repo, fetches changed files and a condensed diff summary (file paths + churn stats, not full hunks) since the previous successful run. Output is a structured diff summary sized for safe LLM prompt inclusion. Must handle: missing repo access gracefully (return empty context, do not fail triage), large diffs (truncate to top-N files by churn), and per-run caching to avoid redundant fetches.
 
 ## Current Step: implement
 
@@ -23,27 +23,19 @@ Do not proceed to implementation until you have read and understood each issue.
 
 ### Issue 1 (from: reviewer)
 
-Finding: internal/store/triage.go:72-88 — Complete() lacks team_id scoping. The UPDATE uses WHERE id = $1 only, without AND team_id = $X. Every other UPDATE in the codebase (quality_gates, webhooks, invitations) includes team_id in the WHERE clause. This violates the project standard 'All data queries must be team-scoped (no cross-team data leaks)'. A caller with a known triage UUID can complete any team's triage result. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause, matching the pattern in QualityGateStore.Update(), WebhookStore.Update(), etc.
+Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. FetchDiff interpolates owner, repo, baseSHA, headSHA into URL without validation. PostStatus in the same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. User-controlled CTRF data flows through ParseOwnerRepo to these params. Fix: apply same validOwnerRepo/validSHA validation as PostStatus.
 
 ### Issue 2 (from: reviewer)
 
-Finding: internal/store/triage.go:90-106 — Fail() has the same missing team_id scoping as Complete(). UPDATE uses WHERE id = $1 only. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause.
+Finding 2: internal/analytics/git_diff.go:198 — ParseOwnerRepo allows slashes in repo component. strings.SplitN(s, "/", 2) means 'owner/repo/extra' yields repo='repo/extra' with ok=true, injecting extra path segments into FetchDiff URL. Fix: after SplitN, verify parts[1] contains no '/' or use strings.Split and require exactly 2 non-empty parts.
 
 ### Issue 3 (from: reviewer)
 
-Finding: internal/store/triage.go:124 — ListClusters() queries by triage_id only without team_id filtering. Every other List* method in the codebase (QualityGateStore.List, WebhookStore.List, InvitationStore.ListByTeam, DurationStore.GetByTeam) includes WHERE team_id = $X. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause.
+Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory leak). sync.Map cache has no eviction, TTL, or size limit. Every unique (teamID, repo, headSHA) tuple is cached permanently. For a long-running server with continuous deployments, this grows monotonically. Fix: use a bounded LRU cache or add TTL-based eviction.
 
 ### Issue 4 (from: reviewer)
 
-Finding: internal/store/triage.go:160 — ListClassifications() has the same missing team_id scoping as ListClusters(). Queries triage_failure_classifications by triage_id only. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause.
-
-### Issue 5 (from: reviewer)
-
-Finding: internal/db/migrations/000019_create_triage_results.up.sql:22 — idx_triage_results_report_id is redundant. The UNIQUE (report_id) constraint on line 18 already creates an implicit unique index on report_id. The explicit CREATE INDEX on line 22 creates a second, duplicate index on the same column, wasting write performance and storage. Fix: remove the CREATE INDEX idx_triage_results_report_id line.
-
-### Issue 6 (from: reviewer)
-
-♻ 5 findings. (1) CRITICAL: Complete() at triage.go:72 lacks team_id in WHERE clause — allows cross-team mutation. (2) CRITICAL: Fail() at triage.go:90 same missing team_id scoping. (3) ListClusters() at triage.go:124 queries without team_id filter — violates project standard. (4) ListClassifications() at triage.go:160 same missing team_id filter. (5) Migration up.sql:22 — idx_triage_results_report_id is redundant with the UNIQUE(report_id) constraint on line 18.
+♻ 3 findings. (1) SSRF: FetchDiff (github/diff.go:39) interpolates owner/repo/SHA into URL without validation — PostStatus in same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. (2) ParseOwnerRepo (analytics/git_diff.go:198) allows slashes in repo via SplitN limit 2, compounding finding 1. (3) Unbounded sync.Map cache (analytics/git_diff.go:75) with no eviction — memory leak on long-running servers.
 
 ---
 
@@ -51,19 +43,19 @@ Finding: internal/db/migrations/000019_create_triage_results.up.sql:22 — idx_t
 
 ### From: reviewer
 
-♻ 5 findings. (1) CRITICAL: Complete() at triage.go:72 lacks team_id in WHERE clause — allows cross-team mutation. (2) CRITICAL: Fail() at triage.go:90 same missing team_id scoping. (3) ListClusters() at triage.go:124 queries without team_id filter — violates project standard. (4) ListClassifications() at triage.go:160 same missing team_id filter. (5) Migration up.sql:22 — idx_triage_results_report_id is redundant with the UNIQUE(report_id) constraint on line 18.
+♻ 3 findings. (1) SSRF: FetchDiff (github/diff.go:39) interpolates owner/repo/SHA into URL without validation — PostStatus in same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. (2) ParseOwnerRepo (analytics/git_diff.go:198) allows slashes in repo via SplitN limit 2, compounding finding 1. (3) Unbounded sync.Map cache (analytics/git_diff.go:75) with no eviction — memory leak on long-running servers.
 
 ### From: reviewer
 
-Finding: internal/db/migrations/000019_create_triage_results.up.sql:22 — idx_triage_results_report_id is redundant. The UNIQUE (report_id) constraint on line 18 already creates an implicit unique index on report_id. The explicit CREATE INDEX on line 22 creates a second, duplicate index on the same column, wasting write performance and storage. Fix: remove the CREATE INDEX idx_triage_results_report_id line.
+Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory leak). sync.Map cache has no eviction, TTL, or size limit. Every unique (teamID, repo, headSHA) tuple is cached permanently. For a long-running server with continuous deployments, this grows monotonically. Fix: use a bounded LRU cache or add TTL-based eviction.
 
 ### From: reviewer
 
-Finding: internal/store/triage.go:160 — ListClassifications() has the same missing team_id scoping as ListClusters(). Queries triage_failure_classifications by triage_id only. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause.
+Finding 2: internal/analytics/git_diff.go:198 — ParseOwnerRepo allows slashes in repo component. strings.SplitN(s, "/", 2) means 'owner/repo/extra' yields repo='repo/extra' with ok=true, injecting extra path segments into FetchDiff URL. Fix: after SplitN, verify parts[1] contains no '/' or use strings.Split and require exactly 2 non-empty parts.
 
 ### From: reviewer
 
-Finding: internal/store/triage.go:124 — ListClusters() queries by triage_id only without team_id filtering. Every other List* method in the codebase (QualityGateStore.List, WebhookStore.List, InvitationStore.ListByTeam, DurationStore.GetByTeam) includes WHERE team_id = $X. Fix: add teamID parameter and AND team_id = $2 to the WHERE clause.
+Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. FetchDiff interpolates owner, repo, baseSHA, headSHA into URL without validation. PostStatus in the same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. User-controlled CTRF data flows through ParseOwnerRepo to these params. Fix: apply same validOwnerRepo/validSHA validation as PostStatus.
 
 <available_skills>
   <skill>
@@ -88,16 +80,16 @@ Finding: internal/store/triage.go:124 — ListClusters() queries by triage_id on
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-j755h
+    ct droplet pass sc-2g9qe
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-j755h
-    ct droplet recirculate sc-j755h --to implement
+    ct droplet recirculate sc-2g9qe
+    ct droplet recirculate sc-2g9qe --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-j755h
+    ct droplet block sc-2g9qe
 
 Add notes before signaling:
-    ct droplet note sc-j755h "What you did / found"
+    ct droplet note sc-2g9qe "What you did / found"
 
 The `ct` binary is on your PATH.

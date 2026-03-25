@@ -13,6 +13,12 @@ import (
 // Compile-time check: *Client implements analytics.DiffFetcher.
 var _ analytics.DiffFetcher = (*Client)(nil)
 
+// validBase and validHead are 7-char all-hex SHAs used across tests.
+const (
+	validBase = "abc1234"
+	validHead = "def5678"
+)
+
 func TestFetchDiff_Success_ReturnsSortedFileStats(t *testing.T) {
 	payload := compareResponse{
 		Files: []compareFile{
@@ -25,7 +31,7 @@ func TestFetchDiff_Success_ReturnsSortedFileStats(t *testing.T) {
 		if r.Method != http.MethodGet {
 			t.Errorf("method = %q, want GET", r.Method)
 		}
-		wantPath := "/repos/myorg/myrepo/compare/base123...head456"
+		wantPath := "/repos/myorg/myrepo/compare/" + validBase + "..." + validHead
 		if r.URL.Path != wantPath {
 			t.Errorf("path = %q, want %q", r.URL.Path, wantPath)
 		}
@@ -38,7 +44,7 @@ func TestFetchDiff_Success_ReturnsSortedFileStats(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "ghp_tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	files, err := c.FetchDiff(context.Background(), "myorg", "myrepo", "base123", "head456")
+	files, err := c.FetchDiff(context.Background(), "myorg", "myrepo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff: unexpected error: %v", err)
 	}
@@ -70,7 +76,7 @@ func TestFetchDiff_EmptyFileList_ReturnsEmpty(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	files, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	files, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff: unexpected error: %v", err)
 	}
@@ -86,7 +92,7 @@ func TestFetchDiff_404_ReturnsNilNil(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	files, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	files, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff: expected nil error for 404, got: %v", err)
 	}
@@ -102,7 +108,7 @@ func TestFetchDiff_403_ReturnsNilNil(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	files, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	files, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff: expected nil error for 403, got: %v", err)
 	}
@@ -118,7 +124,7 @@ func TestFetchDiff_500_ReturnsError(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	_, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	_, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err == nil {
 		t.Fatal("FetchDiff: expected error for 500, got nil")
 	}
@@ -126,7 +132,7 @@ func TestFetchDiff_500_ReturnsError(t *testing.T) {
 
 func TestFetchDiff_NilClient_ReturnsNilNil(t *testing.T) {
 	var c *Client
-	files, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	files, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff on nil client: unexpected error: %v", err)
 	}
@@ -150,7 +156,7 @@ func TestFetchDiff_ChurnFallsBackToAdditionsPlusDeletions(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	files, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head")
+	files, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead)
 	if err != nil {
 		t.Fatalf("FetchDiff: %v", err)
 	}
@@ -172,7 +178,7 @@ func TestFetchDiff_ContextCancelled_ReturnsError(t *testing.T) {
 	cancel()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	_, err := c.FetchDiff(ctx, "org", "repo", "base", "head")
+	_, err := c.FetchDiff(ctx, "org", "repo", validBase, validHead)
 	if err == nil {
 		t.Fatal("FetchDiff: expected error for cancelled context, got nil")
 	}
@@ -190,7 +196,7 @@ func TestFetchDiff_RequestHeaders(t *testing.T) {
 	defer srv.Close()
 
 	c := &Client{token: "tok", HTTPClient: srv.Client(), APIURL: srv.URL}
-	if _, err := c.FetchDiff(context.Background(), "org", "repo", "base", "head"); err != nil {
+	if _, err := c.FetchDiff(context.Background(), "org", "repo", validBase, validHead); err != nil {
 		t.Fatalf("FetchDiff: %v", err)
 	}
 
@@ -202,5 +208,39 @@ func TestFetchDiff_RequestHeaders(t *testing.T) {
 	}
 	if gotUserAgent != "ScaledTest/1.0" {
 		t.Errorf("User-Agent = %q, want ScaledTest/1.0", gotUserAgent)
+	}
+}
+
+// ---- Input validation tests ----
+
+func TestFetchDiff_InvalidOwner_ReturnsError(t *testing.T) {
+	c := &Client{token: "tok", HTTPClient: &http.Client{}, APIURL: "http://example.com"}
+	_, err := c.FetchDiff(context.Background(), "owner/evil", "repo", validBase, validHead)
+	if err == nil {
+		t.Fatal("FetchDiff: expected error for owner containing '/', got nil")
+	}
+}
+
+func TestFetchDiff_InvalidRepo_ReturnsError(t *testing.T) {
+	c := &Client{token: "tok", HTTPClient: &http.Client{}, APIURL: "http://example.com"}
+	_, err := c.FetchDiff(context.Background(), "owner", "re/po", validBase, validHead)
+	if err == nil {
+		t.Fatal("FetchDiff: expected error for repo containing '/', got nil")
+	}
+}
+
+func TestFetchDiff_InvalidBaseSHA_ReturnsError(t *testing.T) {
+	c := &Client{token: "tok", HTTPClient: &http.Client{}, APIURL: "http://example.com"}
+	_, err := c.FetchDiff(context.Background(), "owner", "repo", "not-a-sha", validHead)
+	if err == nil {
+		t.Fatal("FetchDiff: expected error for non-hex base SHA, got nil")
+	}
+}
+
+func TestFetchDiff_InvalidHeadSHA_ReturnsError(t *testing.T) {
+	c := &Client{token: "tok", HTTPClient: &http.Client{}, APIURL: "http://example.com"}
+	_, err := c.FetchDiff(context.Background(), "owner", "repo", validBase, "not-a-sha")
+	if err == nil {
+		t.Fatal("FetchDiff: expected error for non-hex head SHA, got nil")
 	}
 }
