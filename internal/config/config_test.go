@@ -25,6 +25,27 @@ func TestLoadDefaults(t *testing.T) {
 	}
 }
 
+func TestLoadLLMConfig(t *testing.T) {
+	os.Setenv("ST_LLM_PROVIDER", "openai")
+	os.Setenv("ST_LLM_COMMAND", "/usr/bin/fakecli")
+	t.Cleanup(func() {
+		os.Unsetenv("ST_LLM_PROVIDER")
+		os.Unsetenv("ST_LLM_COMMAND")
+	})
+
+	cfg, err := Load()
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+
+	if cfg.LLMProvider != "openai" {
+		t.Errorf("LLMProvider = %q, want %q", cfg.LLMProvider, "openai")
+	}
+	if cfg.LLMCommand != "/usr/bin/fakecli" {
+		t.Errorf("LLMCommand = %q, want %q", cfg.LLMCommand, "/usr/bin/fakecli")
+	}
+}
+
 func TestLoadFromEnv(t *testing.T) {
 	os.Setenv("ST_PORT", "9090")
 	os.Setenv("ST_LOG_LEVEL", "debug")
