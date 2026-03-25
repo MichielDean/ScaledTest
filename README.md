@@ -16,6 +16,8 @@ ScaledTest is built on a Go backend with a React SPA frontend.
 
 ## Quick Start
 
+> **Self-hosting?** See the [Getting Started deployment guide](docs/deployment/getting-started.md) for a complete walkthrough: choosing Docker Compose vs Kubernetes, setting required environment variables, registering your first user, and pointing a CI pipeline at your instance.
+
 ### Prerequisites
 
 - Go 1.25+

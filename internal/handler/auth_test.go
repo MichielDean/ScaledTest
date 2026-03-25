@@ -690,3 +690,141 @@ func TestGetMeUserNotFound(t *testing.T) {
 		t.Errorf("GetMe user not found: status = %d, want %d", w.Code, http.StatusUnauthorized)
 	}
 }
+
+// TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer verifies that when
+// the idx_users_single_owner unique partial index raises a 23505 violation (two
+// concurrent registrations both evaluating as the first user), the handler retries
+// with role='maintainer' and succeeds.
+func TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer(t *testing.T) {
+	callCount := 0
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			callCount++
+			switch callCount {
+			case 1:
+				// Email existence check
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*bool)) = false
+					return nil
+				}}
+			case 2:
+				// First INSERT attempt — simulate owner constraint violation
+				return &mockRow{scanFn: func(dest ...any) error {
+					return &pgconn.PgError{Code: "23505", ConstraintName: "idx_users_single_owner"}
+				}}
+			case 3:
+				// Retry INSERT as maintainer — succeeds
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*string)) = "user-uuid-1"
+					*(dest[1].(*string)) = "maintainer"
+					return nil
+				}}
+			default:
+				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("INSERT 1"), nil
+		},
+	}
+
+	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+
+	body := `{"email":"admin@example.com","password":"password123","display_name":"Admin"}`
+	req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Register on constraint violation: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("unmarshal response: %v", err)
+	}
+	user, ok := resp["user"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing 'user' field in response")
+	}
+	if role := user["role"]; role != "maintainer" {
+		t.Errorf("role = %q, want %q", role, "maintainer")
+	}
+	if callCount != 3 {
+		t.Errorf("expected 3 QueryRow calls (email check + first INSERT + retry), got %d", callCount)
+	}
+}
+
+// TestRegister_RoleAssignment verifies that the first registered user receives
+// the 'owner' role and all subsequent users receive 'maintainer'.
+func TestRegister_RoleAssignment(t *testing.T) {
+	tests := []struct {
+		name string
+		role string
+	}{
+		{"first user becomes owner", "owner"},
+		{"subsequent user becomes maintainer", "maintainer"},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			callCount := 0
+			mockDB := &mockAuthDB{
+				queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+					callCount++
+					switch callCount {
+					case 1:
+						// Email existence check → not taken
+						return &mockRow{scanFn: func(dest ...any) error {
+							*(dest[0].(*bool)) = false
+							return nil
+						}}
+					case 2:
+						// INSERT ... RETURNING id, role
+						return &mockRow{scanFn: func(dest ...any) error {
+							*(dest[0].(*string)) = "user-uuid"
+							*(dest[1].(*string)) = tc.role
+							return nil
+						}}
+					default:
+						t.Errorf("unexpected QueryRow call #%d", callCount)
+						return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
+					}
+				},
+				execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+					return pgconn.NewCommandTag("INSERT 1"), nil
+				},
+			}
+
+			jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+			h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+
+			body := `{"email":"user@example.com","password":"password123","display_name":"User"}`
+			req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
+			req.Header.Set("Content-Type", "application/json")
+			w := httptest.NewRecorder()
+
+			h.Register(w, req)
+
+			if w.Code != http.StatusCreated {
+				t.Fatalf("Register: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+			}
+
+			var resp map[string]interface{}
+			if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+				t.Fatalf("unmarshal response: %v", err)
+			}
+
+			user, ok := resp["user"].(map[string]interface{})
+			if !ok {
+				t.Fatal("missing 'user' field in response")
+			}
+			if role := user["role"]; role != tc.role {
+				t.Errorf("role = %q, want %q", role, tc.role)
+			}
+		})
+	}
+}

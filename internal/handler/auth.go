@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -246,17 +247,37 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
+	// Create user. The first user to register is assigned the 'owner' role so
+	// they have immediate access to admin endpoints; all subsequent users are
+	// assigned 'maintainer'. A unique partial index (idx_users_single_owner)
+	// enforces at most one owner at the database level. If two concurrent
+	// registrations both evaluate as the first user under READ COMMITTED, the
+	// second INSERT will violate the index (SQLSTATE 23505). In that case we
+	// retry explicitly as 'maintainer', which is correct because a committed
+	// owner row now exists.
 	var userID, role string
 	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, display_name)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO users (email, password_hash, display_name, role)
+		 SELECT $1, $2, $3,
+		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner'::text ELSE 'maintainer'::text END
 		 RETURNING id, role`,
 		req.Email, hash, req.DisplayName,
 	).Scan(&userID, &role)
 	if err != nil {
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_users_single_owner" {
+			// A concurrent registration claimed the owner role; retry as maintainer.
+			err = h.DB.QueryRow(r.Context(),
+				`INSERT INTO users (email, password_hash, display_name, role)
+				 VALUES ($1, $2, $3, 'maintainer')
+				 RETURNING id, role`,
+				req.Email, hash, req.DisplayName,
+			).Scan(&userID, &role)
+		}
+		if err != nil {
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	// Generate token pair and create session
