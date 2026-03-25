@@ -93,23 +93,23 @@ All API endpoints live under `/api/v1` and require a Bearer token (`Authorizatio
 
 ```bash
 # Register
-POST /auth/register         { "email", "password", "display_name" }
+POST /api/v1/auth/register         { "email", "password", "display_name" }
 
 # Login → returns { access_token, expires_at, user }
-POST /auth/login            { "email", "password" }
+POST /api/v1/auth/login            { "email", "password" }
 
 # Get current user profile (requires valid JWT)
-GET  /auth/me
+GET  /api/v1/auth/me
 
 # Update display name (requires valid JWT)
-PUT  /auth/profile          { "display_name" }
+PATCH /api/v1/auth/me              { "display_name" }
 
 # Change password (requires valid JWT; rate-limited to 10 req/min per IP)
-POST /auth/change-password  { "current_password", "new_password" }
+POST /api/v1/auth/change-password  { "current_password", "new_password" }
 
 # OAuth (if configured)
-GET /auth/github            # Redirects to GitHub
-GET /auth/google            # Redirects to Google
+GET /api/v1/auth/github            # Redirects to GitHub
+GET /api/v1/auth/google            # Redirects to Google
 ```
 
 ### CTRF Report Submission
@@ -184,8 +184,11 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 |--------|------|-------------|
 | `POST` | `/api/v1/reports` | Upload CTRF report |
 | `GET` | `/api/v1/reports` | List reports |
+| `GET` | `/api/v1/reports/{id}` | Get report |
+| `DELETE` | `/api/v1/reports/{id}` | Delete report |
 | `POST` | `/api/v1/executions` | Create test execution |
 | `GET` | `/api/v1/executions` | List executions |
+| `DELETE` | `/api/v1/executions/{id}` | Cancel/delete execution |
 | `PUT` | `/api/v1/executions/{id}/status` | Update execution status |
 | `GET` | `/api/v1/analytics/trends` | Pass-rate trends |
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
@@ -212,6 +215,9 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `GET` | `/api/v1/teams/{id}/tokens` | List API tokens |
 | `POST` | `/api/v1/teams/{id}/tokens` | Create API token |
 | `DELETE` | `/api/v1/teams/{id}/tokens/{tid}` | Delete API token |
+| `GET` | `/api/v1/auth/me` | Get current user profile |
+| `PATCH` | `/api/v1/auth/me` | Update user profile |
+| `POST` | `/api/v1/auth/change-password` | Change password |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
