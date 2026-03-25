@@ -7,7 +7,17 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
+
+// capAuditLogger captures audit log entries for unit tests.
+type capAuditLogger struct {
+	entries []store.Entry
+}
+
+func (c *capAuditLogger) Log(_ context.Context, e store.Entry) {
+	c.entries = append(c.entries, e)
+}
 
 // testWithClaims creates a request with auth claims in context.
 func testWithClaims(r *http.Request, claims *auth.Claims) *http.Request {

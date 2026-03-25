@@ -18,8 +18,12 @@ import (
 
 // mockInvitationStore is a test double for invitationStore.
 type mockInvitationStore struct {
-	inv *model.Invitation
-	err error
+	inv            *model.Invitation // returned by Create
+	err            error             // returned by Create
+	tokenInv       *model.Invitation // returned by GetByTokenHash
+	tokenErr       error             // returned by GetByTokenHash
+	acceptedUserID string            // returned by AcceptInvitation
+	acceptErr      error             // returned by AcceptInvitation
 }
 
 func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _, _ string, _ time.Time) (*model.Invitation, error) {
@@ -31,11 +35,15 @@ func (m *mockInvitationStore) ListByTeam(_ context.Context, _ string) ([]model.I
 }
 
 func (m *mockInvitationStore) GetByTokenHash(_ context.Context, _ string) (*model.Invitation, error) {
-	return nil, nil
+	return m.tokenInv, m.tokenErr
 }
 
 func (m *mockInvitationStore) Delete(_ context.Context, _, _ string) error {
 	return nil
+}
+
+func (m *mockInvitationStore) AcceptInvitation(_ context.Context, _, _, _, _, _, _ string) (string, error) {
+	return m.acceptedUserID, m.acceptErr
 }
 
 // mockMailer is a test double for mailer.Mailer.
@@ -404,5 +412,161 @@ func invClaims(userID, teamID, role string) *auth.Claims {
 		UserID: userID,
 		TeamID: teamID,
 		Role:   role,
+	}
+}
+
+// --- Audit logging tests ---
+
+func TestCreateInvitation_LogsAuditEvent(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-1",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	ms := &mockInvitationStore{inv: inv}
+	al := &capAuditLogger{}
+	h := &InvitationsHandler{
+		Store:      ms,
+		DB:         new(pgxpool.Pool),
+		AuditStore: al,
+	}
+
+	body := `{"email":"invitee@example.com","role":"readonly"}`
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-1/invitations", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "invitation.created" {
+		t.Errorf("audit action = %q, want %q", e.Action, "invitation.created")
+	}
+	if e.ResourceType != "invitation" {
+		t.Errorf("audit resource_type = %q, want %q", e.ResourceType, "invitation")
+	}
+	if e.ResourceID != "inv-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "inv-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
+	}
+}
+
+func TestCreateInvitation_NilAuditStore_NoPanic(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-2",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	h := &InvitationsHandler{
+		Store:      &mockInvitationStore{inv: inv},
+		DB:         new(pgxpool.Pool),
+		AuditStore: nil,
+	}
+
+	body := `{"email":"invitee@example.com","role":"readonly"}`
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-1/invitations", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with nil audit: got %d, want %d", w.Code, http.StatusCreated)
+	}
+}
+
+func TestRevokeInvitation_LogsAuditEvent(t *testing.T) {
+	ms := &mockInvitationStore{}
+	al := &capAuditLogger{}
+	h := &InvitationsHandler{Store: ms, AuditStore: al}
+
+	r := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/invitations/inv-1", nil)
+	r = testWithClaimsAndParams(r, invClaims("user-1", "team-1", "owner"), map[string]string{
+		"teamID":       "team-1",
+		"invitationID": "inv-1",
+	})
+	w := httptest.NewRecorder()
+
+	h.Revoke(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Revoke: got %d: %s", w.Code, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "invitation.revoked" {
+		t.Errorf("audit action = %q, want %q", e.Action, "invitation.revoked")
+	}
+	if e.ResourceType != "invitation" {
+		t.Errorf("audit resource_type = %q, want %q", e.ResourceType, "invitation")
+	}
+	if e.ResourceID != "inv-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "inv-1")
+	}
+}
+
+func TestAcceptInvitation_LogsAuditEvent(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-1",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	ms := &mockInvitationStore{tokenInv: inv, acceptedUserID: "new-user-1"}
+	al := &capAuditLogger{}
+	h := &InvitationsHandler{Store: ms, AuditStore: al}
+
+	body := `{"password":"password123","display_name":"Test User"}`
+	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Accept(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Accept: got %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "invitation.accepted" {
+		t.Errorf("audit action = %q, want %q", e.Action, "invitation.accepted")
+	}
+	if e.ResourceType != "invitation" {
+		t.Errorf("audit resource_type = %q, want %q", e.ResourceType, "invitation")
+	}
+	if e.ResourceID != "inv-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "inv-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
+	}
+	if e.ActorID != "new-user-1" {
+		t.Errorf("audit actor_id = %q, want %q", e.ActorID, "new-user-1")
 	}
 }

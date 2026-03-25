@@ -82,6 +82,49 @@ func (s *InvitationStore) Accept(ctx context.Context, id string) error {
 	return nil
 }
 
+// AcceptInvitation atomically creates or updates the user, adds team membership,
+// and marks the invitation as accepted. Returns the user ID of the created/updated user.
+func (s *InvitationStore) AcceptInvitation(ctx context.Context, invID, email, passwordHash, displayName, role, teamID string) (string, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return "", fmt.Errorf("begin transaction: %w", err)
+	}
+	defer tx.Rollback(ctx)
+
+	var userID string
+	err = tx.QueryRow(ctx,
+		`INSERT INTO users (email, password_hash, display_name, role)
+		 VALUES ($1, $2, $3, $4)
+		 ON CONFLICT (email) DO UPDATE SET updated_at = now()
+		 RETURNING id`,
+		email, passwordHash, displayName, role,
+	).Scan(&userID)
+	if err != nil {
+		return "", fmt.Errorf("upsert user: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`INSERT INTO user_teams (user_id, team_id, role)
+		 VALUES ($1, $2, $3)
+		 ON CONFLICT (user_id, team_id) DO UPDATE SET role = $3`,
+		userID, teamID, role,
+	)
+	if err != nil {
+		return "", fmt.Errorf("upsert team membership: %w", err)
+	}
+
+	_, err = tx.Exec(ctx,
+		`UPDATE invitations SET accepted_at = now() WHERE id = $1`, invID)
+	if err != nil {
+		return "", fmt.Errorf("mark invitation accepted: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return "", fmt.Errorf("commit: %w", err)
+	}
+	return userID, nil
+}
+
 // Delete removes an invitation (revoke).
 func (s *InvitationStore) Delete(ctx context.Context, teamID, id string) error {
 	tag, err := s.pool.Exec(ctx,
