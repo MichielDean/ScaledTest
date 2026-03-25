@@ -247,7 +247,7 @@ export class ScaledTestClient {
   }
 
   async deleteExecution(id: string): Promise<void> {
-    await this.request('DELETE', `/api/v1/executions/${encodeURIComponent(id)}`);
+    return this.cancelExecution(id);
   }
 
   // Analytics
