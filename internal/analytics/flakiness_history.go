@@ -75,10 +75,7 @@ func BuildFlakinessSummaries(query HistoryQuery, rows []TestHistoryRow) []TestFl
 	for _, name := range query.TestNames {
 		row, known := byName[name]
 		if !known {
-			summaries = append(summaries, TestFlakinessSummary{
-				TestName:   name,
-				HasHistory: false,
-			})
+			summaries = append(summaries, TestFlakinessSummary{TestName: name})
 			continue
 		}
 

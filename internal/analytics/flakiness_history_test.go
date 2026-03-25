@@ -285,10 +285,11 @@ func TestBuildFlakinessSummaries_SingleRunTest(t *testing.T) {
 	if s.FlipCount != 0 {
 		t.Errorf("FlipCount = %d, want 0 for single-run test", s.FlipCount)
 	}
-	if s.HasHistory {
-		if s.TotalRuns != 1 {
-			t.Errorf("TotalRuns = %d, want 1", s.TotalRuns)
-		}
+	if !s.HasHistory {
+		t.Error("HasHistory = false, want true for single-run test")
+	}
+	if s.TotalRuns != 1 {
+		t.Errorf("TotalRuns = %d, want 1", s.TotalRuns)
 	}
 }
 
