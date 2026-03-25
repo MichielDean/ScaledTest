@@ -73,12 +73,12 @@ func (s *TriageStore) Complete(ctx context.Context, teamID, triageID, summary, l
 	var t model.TriageResult
 	err := s.pool.QueryRow(ctx,
 		`UPDATE triage_results
-		 SET status = 'complete', summary = $2, llm_provider = $3, llm_model = $4,
-		     input_tokens = $5, output_tokens = $6, cost_usd = $7, updated_at = now()
-		 WHERE id = $1 AND team_id = $8
+		 SET status = 'complete', summary = $3, llm_provider = $4, llm_model = $5,
+		     input_tokens = $6, output_tokens = $7, cost_usd = $8, updated_at = now()
+		 WHERE id = $1 AND team_id = $2
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
-		triageID, summary, llmProvider, llmModel, inputTokens, outputTokens, costUSD, teamID).
+		triageID, teamID, summary, llmProvider, llmModel, inputTokens, outputTokens, costUSD).
 		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
 			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
@@ -92,11 +92,11 @@ func (s *TriageStore) Fail(ctx context.Context, teamID, triageID, errorMsg strin
 	var t model.TriageResult
 	err := s.pool.QueryRow(ctx,
 		`UPDATE triage_results
-		 SET status = 'failed', error_msg = $2, updated_at = now()
-		 WHERE id = $1 AND team_id = $3
+		 SET status = 'failed', error_msg = $3, updated_at = now()
+		 WHERE id = $1 AND team_id = $2
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
-		triageID, errorMsg, teamID).
+		triageID, teamID, errorMsg).
 		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
 			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
 	if err != nil {
