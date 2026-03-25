@@ -55,9 +55,9 @@ func New(cfg Config) (Provider, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 120 * time.Second
 	}
-	if cfg.MaxRetries == nil {
-		two := 2
-		cfg.MaxRetries = &two
+	maxRetries := 2
+	if cfg.MaxRetries != nil {
+		maxRetries = *cfg.MaxRetries
 	}
 
 	preset, ok := presets[cfg.Provider]
@@ -80,6 +80,6 @@ func New(cfg Config) (Provider, error) {
 		command:    cmd,
 		preset:     preset,
 		timeout:    cfg.Timeout,
-		maxRetries: *cfg.MaxRetries,
+		maxRetries: maxRetries,
 	}, nil
 }
