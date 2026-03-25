@@ -246,11 +246,15 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Create user
+	// Create user. The first user to register is assigned the 'owner' role so
+	// they have immediate access to admin endpoints; all subsequent users are
+	// assigned the default 'maintainer' role. The CASE expression is evaluated
+	// atomically within the INSERT so there is no race condition.
 	var userID, role string
 	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, display_name)
-		 VALUES ($1, $2, $3)
+		`INSERT INTO users (email, password_hash, display_name, role)
+		 VALUES ($1, $2, $3,
+		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner' ELSE 'maintainer' END)
 		 RETURNING id, role`,
 		req.Email, hash, req.DisplayName,
 	).Scan(&userID, &role)
