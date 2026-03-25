@@ -248,13 +248,20 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Create user. The first user to register is assigned the 'owner' role so
 	// they have immediate access to admin endpoints; all subsequent users are
-	// assigned the default 'maintainer' role. The CASE expression is evaluated
-	// atomically within the INSERT so there is no race condition.
+	// assigned 'maintainer'. The MATERIALIZED CTE acquires pg_advisory_xact_lock
+	// before evaluating NOT EXISTS, serialising concurrent first-user registrations
+	// within the same implicit transaction. Without this lock, two concurrent
+	// INSERTs under READ COMMITTED could both observe an empty users table and
+	// both claim the owner role.
 	var userID, role string
 	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, display_name, role)
-		 VALUES ($1, $2, $3,
-		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner' ELSE 'maintainer' END)
+		`WITH _lock AS MATERIALIZED (
+		   SELECT pg_advisory_xact_lock(hashtext('scaledtest_first_user_reg')::bigint)
+		 )
+		 INSERT INTO users (email, password_hash, display_name, role)
+		 SELECT $1, $2, $3,
+		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner'::text ELSE 'maintainer'::text END
+		 FROM _lock
 		 RETURNING id, role`,
 		req.Email, hash, req.DisplayName,
 	).Scan(&userID, &role)
