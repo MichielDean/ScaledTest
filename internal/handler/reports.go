@@ -736,6 +736,9 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 		"triage_status": result.Status,
 		"clusters":      clusterResp,
 	}
+	if unclustered := classByCluster[""]; len(unclustered) > 0 {
+		resp["unclustered_failures"] = unclustered
+	}
 	if result.Summary != nil {
 		resp["summary"] = *result.Summary
 	}
@@ -779,6 +782,12 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 	// Triage is already in-flight — return accepted without re-enqueuing.
 	if existing.Status == "pending" {
 		writePending(w)
+		return
+	}
+
+	// Prevent destructive reset when no job can be enqueued to regenerate the data.
+	if h.TriageEnqueuer == nil {
+		Error(w, http.StatusServiceUnavailable, "triage not available")
 		return
 	}
 

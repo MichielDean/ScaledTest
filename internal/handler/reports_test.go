@@ -2087,6 +2087,53 @@ func TestGetTriage_ListClassificationsError_Returns500(t *testing.T) {
 	}
 }
 
+func TestGetTriage_UnclusteredClassifications_IncludedInResponse(t *testing.T) {
+	clusterID := "cluster-1"
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result: &model.TriageResult{ID: "triage-1", Status: "complete"},
+			clusters: []model.TriageCluster{
+				{ID: "cluster-1", TriageID: "triage-1", RootCause: "flaky infra"},
+			},
+			classifications: []model.TriageFailureClassification{
+				// Belongs to cluster-1.
+				{ID: "cls-1", TriageID: "triage-1", ClusterID: &clusterID, TestResultID: "tr-1", Classification: "regression"},
+				// No cluster — ClusterID is nil (ON DELETE SET NULL).
+				{ID: "cls-2", TriageID: "triage-1", ClusterID: nil, TestResultID: "tr-2", Classification: "unknown"},
+			},
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("GetTriage with unclustered classifications: got %d, want 200 (body: %s)", w.Code, w.Body.String())
+	}
+	var body map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&body)
+
+	// Cluster should carry its own classification.
+	clusters, _ := body["clusters"].([]interface{})
+	if len(clusters) != 1 {
+		t.Fatalf("clusters len = %d, want 1", len(clusters))
+	}
+	cluster, _ := clusters[0].(map[string]interface{})
+	failures, _ := cluster["failures"].([]interface{})
+	if len(failures) != 1 {
+		t.Errorf("cluster failures len = %d, want 1", len(failures))
+	}
+
+	// Unclustered classification must appear at top level.
+	unclustered, ok := body["unclustered_failures"].([]interface{})
+	if !ok || len(unclustered) != 1 {
+		t.Errorf("unclustered_failures = %v, want 1 entry", body["unclustered_failures"])
+	}
+}
+
 // --- RetryTriage ---
 
 func TestRetryTriage_Unauthorized(t *testing.T) {
@@ -2222,11 +2269,10 @@ func TestRetryTriage_Failed_ResetsAndEnqueues(t *testing.T) {
 	}
 }
 
-func TestRetryTriage_NilEnqueuer_StillReturns202(t *testing.T) {
+func TestRetryTriage_NilEnqueuer_Returns503(t *testing.T) {
 	h := &ReportsHandler{
 		TriageStore: &fakeTriageStore{
-			result:           &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
-			forceResetResult: &model.TriageResult{ID: "triage-1", Status: "pending", ReportID: "report-1"},
+			result: &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
 		},
 		TriageEnqueuer: nil,
 	}
@@ -2237,8 +2283,10 @@ func TestRetryTriage_NilEnqueuer_StillReturns202(t *testing.T) {
 
 	h.RetryTriage(w, r)
 
-	if w.Code != http.StatusAccepted {
-		t.Errorf("RetryTriage nil enqueuer: got %d, want 202", w.Code)
+	// When TriageEnqueuer is nil, ForceReset must NOT be called (it is destructive)
+	// and the handler must return 503 so the caller knows retry is unavailable.
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("RetryTriage nil enqueuer: got %d, want 503", w.Code)
 	}
 }
 
