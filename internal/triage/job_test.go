@@ -119,12 +119,15 @@ func (f *fakeTriageStore) failedCount() int {
 type fakeReportData struct {
 	mu sync.Mutex
 
-	failures     []FailureDetail
-	env          reportEnv
-	fetchErr     error
+	failures []FailureDetail
+	env      reportEnv
+	fetchErr error
 
 	prevFailures    []string
 	prevFailuresErr error
+	// lastPrevFailureRepo records the repository argument passed to
+	// fetchPreviousFailures so tests can assert scoping behaviour.
+	lastPrevFailureRepo string
 
 	statusCalls []statusCall
 }
@@ -138,7 +141,10 @@ func (d *fakeReportData) fetchFailuresAndEnv(_ context.Context, _, _ string) ([]
 	return d.failures, d.env, d.fetchErr
 }
 
-func (d *fakeReportData) fetchPreviousFailures(_ context.Context, _, _ string) ([]string, error) {
+func (d *fakeReportData) fetchPreviousFailures(_ context.Context, _, _, repository string) ([]string, error) {
+	d.mu.Lock()
+	d.lastPrevFailureRepo = repository
+	d.mu.Unlock()
 	return d.prevFailures, d.prevFailuresErr
 }
 
@@ -547,7 +553,7 @@ func TestRunner_Enqueue_IsNonBlocking(t *testing.T) {
 		finished:        finished,
 	}
 
-	r := &Runner{engine: NewEngine(provider), store: slowStore, data: data}
+	r := &Runner{engine: NewEngine(provider), store: slowStore, data: data, sem: make(chan struct{}, triageWorkerLimit)}
 
 	// When: Enqueue is called
 	before := time.Now()
@@ -631,4 +637,84 @@ func (c *countingClaimStore) CreateOrReset(_ context.Context, _, _ string) (*mod
 	r := c.results[c.idx]
 	c.idx++
 	return r, nil
+}
+
+// ---------------------------------------------------------------------------
+// Runner.Enqueue — bounded concurrency
+// ---------------------------------------------------------------------------
+
+func TestRunner_Enqueue_WhenSemaphoreIsFull_DropsJob(t *testing.T) {
+	// Given: a runner whose semaphore is already at capacity (1/1 slots taken)
+	store := newFakeStore(pendingResult("t-1"))
+	data := &fakeReportData{failures: makeNFailures(1)}
+	provider := llm.NewMock(validResponse(makeNFailures(1)))
+
+	sem := make(chan struct{}, 1)
+	sem <- struct{}{} // occupy the only slot
+
+	r := &Runner{engine: NewEngine(provider), store: store, data: data, sem: sem}
+
+	// When: Enqueue is called with the semaphore full
+	r.Enqueue("team-1", "report-1")
+
+	// Then: no goroutine was spawned — no status updates or store calls should occur
+	// (synchronous check is safe because the default branch in Enqueue ran inline)
+	if len(data.statusCalls) != 0 {
+		t.Errorf("dropped job must not trigger status updates; got %d", len(data.statusCalls))
+	}
+	if store.completedCount() != 0 {
+		t.Errorf("dropped job must not reach Complete; got %d calls", store.completedCount())
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Runner.run — fetchPreviousFailures repository scoping
+// ---------------------------------------------------------------------------
+
+func TestRunner_Run_FetchPreviousFailures_ScopedByRepository(t *testing.T) {
+	// Given: the report has a repository in its environment
+	const repo = "org/my-repo"
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env:      reportEnv{Repository: repo, Branch: "main"},
+	}
+	r := newTestRunner(store, data, validResponse(failures))
+
+	// When
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: fetchPreviousFailures was invoked with the repository so results are
+	// scoped to the correct project, not the entire team.
+	data.mu.Lock()
+	got := data.lastPrevFailureRepo
+	data.mu.Unlock()
+	if got != repo {
+		t.Errorf("fetchPreviousFailures repository = %q; want %q", got, repo)
+	}
+}
+
+func TestRunner_Run_FetchPreviousFailures_EmptyRepositoryWhenEnvAbsent(t *testing.T) {
+	// Given: the report has no repository in its environment (env is zero value)
+	failures := makeNFailures(1)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	r := newTestRunner(store, data, validResponse(failures))
+
+	// When
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: fetchPreviousFailures is still called (with empty repository),
+	// so previous failures are included when repository is unknown.
+	data.mu.Lock()
+	got := data.lastPrevFailureRepo
+	data.mu.Unlock()
+	if got != "" {
+		t.Errorf("fetchPreviousFailures repository = %q; want empty string when env has no repository", got)
+	}
 }

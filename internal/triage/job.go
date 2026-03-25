@@ -18,6 +18,11 @@ import (
 // jobTimeout is the maximum wall-clock time a single triage job may run.
 const jobTimeout = 5 * time.Minute
 
+// triageWorkerLimit is the maximum number of triage jobs that may run
+// concurrently. Calls to Enqueue beyond this limit are dropped with a warning
+// rather than spawning unbounded goroutines.
+const triageWorkerLimit = 10
+
 // Enqueuer submits a background triage job for a completed report.
 // Implementations must be non-blocking — the caller (report ingest handler)
 // must not be delayed by triage work.
@@ -39,7 +44,10 @@ type triageStorer interface {
 // The production implementation is pgxReportData; tests use fakeReportData.
 type reportData interface {
 	fetchFailuresAndEnv(ctx context.Context, teamID, reportID string) ([]FailureDetail, reportEnv, error)
-	fetchPreviousFailures(ctx context.Context, teamID, reportID string) ([]string, error)
+	// fetchPreviousFailures returns the failing test names from the most recent
+	// prior report for the same team and repository. repository may be empty,
+	// in which case no repository filter is applied.
+	fetchPreviousFailures(ctx context.Context, teamID, reportID, repository string) ([]string, error)
 	setTriageStatus(ctx context.Context, teamID, reportID, status string)
 }
 
@@ -63,12 +71,16 @@ type reportEnv struct {
 //
 // Job failure never propagates back to the HTTP response — the report ingest
 // always returns 201 regardless of triage outcome.
+//
+// Concurrency is bounded by triageWorkerLimit; Enqueue calls that exceed the
+// limit are dropped with a warning rather than spawning unbounded goroutines.
 type Runner struct {
 	engine       *Engine
 	store        triageStorer
 	data         reportData
 	historyRdr   analytics.HistoryReader
 	diffEnricher *analytics.GitDiffEnricher
+	sem          chan struct{} // bounded semaphore; capacity = triageWorkerLimit
 }
 
 // NewRunner constructs a Runner backed by a live pgxpool. historyRdr and
@@ -87,23 +99,36 @@ func NewRunner(
 		data:         &pgxReportData{pool: pool},
 		historyRdr:   historyRdr,
 		diffEnricher: diffEnricher,
+		sem:          make(chan struct{}, triageWorkerLimit),
 	}
 }
 
 // Enqueue launches a background goroutine that runs the triage job for the
 // given team/report. It returns immediately; errors are logged but do not
 // surface to the caller.
+//
+// Concurrency is bounded: if triageWorkerLimit jobs are already in flight the
+// new job is dropped with a warning log rather than spawning an extra goroutine.
 func (r *Runner) Enqueue(teamID, reportID string) {
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
-		defer cancel()
-		if err := r.run(ctx, teamID, reportID); err != nil {
-			log.Error().Err(err).
-				Str("team_id", teamID).
-				Str("report_id", reportID).
-				Msg("triage job error")
-		}
-	}()
+	select {
+	case r.sem <- struct{}{}:
+		go func() {
+			defer func() { <-r.sem }()
+			ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
+			defer cancel()
+			if err := r.run(ctx, teamID, reportID); err != nil {
+				log.Error().Err(err).
+					Str("team_id", teamID).
+					Str("report_id", reportID).
+					Msg("triage job error")
+			}
+		}()
+	default:
+		log.Warn().
+			Str("team_id", teamID).
+			Str("report_id", reportID).
+			Msg("triage: worker limit reached, triage job dropped")
+	}
 }
 
 // run executes the triage pipeline synchronously.
@@ -207,8 +232,9 @@ func (r *Runner) buildInput(ctx context.Context, teamID, reportID string, failur
 		}
 	}
 
-	// Previous run failures.
-	prevFailed, err := r.data.fetchPreviousFailures(ctx, teamID, reportID)
+	// Previous run failures — scoped to the same repository so cross-repo
+	// results from other projects in the team don't pollute the context.
+	prevFailed, err := r.data.fetchPreviousFailures(ctx, teamID, reportID, env.Repository)
 	if err != nil {
 		log.Warn().Err(err).Str("report_id", reportID).Msg("triage: previous failures unavailable")
 	} else {
@@ -301,11 +327,24 @@ func (d *pgxReportData) fetchFailuresAndEnv(ctx context.Context, teamID, reportI
 	return failures, env, rows.Err()
 }
 
-func (d *pgxReportData) fetchPreviousFailures(ctx context.Context, teamID, reportID string) ([]string, error) {
+func (d *pgxReportData) fetchPreviousFailures(ctx context.Context, teamID, reportID, repository string) ([]string, error) {
 	var prevReportID string
-	err := d.pool.QueryRow(ctx,
-		`SELECT id FROM test_reports WHERE team_id = $1 AND id != $2 ORDER BY created_at DESC LIMIT 1`,
-		teamID, reportID).Scan(&prevReportID)
+	var err error
+	// Scope by repository when available to avoid cross-project contamination.
+	if repository != "" {
+		err = d.pool.QueryRow(ctx,
+			`SELECT id FROM test_reports
+			 WHERE team_id = $1 AND id != $2
+			   AND environment->>'repository' = $3
+			 ORDER BY created_at DESC LIMIT 1`,
+			teamID, reportID, repository).Scan(&prevReportID)
+	} else {
+		err = d.pool.QueryRow(ctx,
+			`SELECT id FROM test_reports
+			 WHERE team_id = $1 AND id != $2
+			 ORDER BY created_at DESC LIMIT 1`,
+			teamID, reportID).Scan(&prevReportID)
+	}
 	if errors.Is(err, pgx.ErrNoRows) {
 		return nil, nil
 	}
@@ -313,9 +352,10 @@ func (d *pgxReportData) fetchPreviousFailures(ctx context.Context, teamID, repor
 		return nil, fmt.Errorf("fetch previous report: %w", err)
 	}
 
+	// team_id is required on every query touching user data (defense-in-depth).
 	rows, err := d.pool.Query(ctx,
-		`SELECT name FROM test_results WHERE report_id = $1 AND status = 'failed'`,
-		prevReportID)
+		`SELECT name FROM test_results WHERE report_id = $1 AND status = 'failed' AND team_id = $2`,
+		prevReportID, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("fetch previous failures: %w", err)
 	}
