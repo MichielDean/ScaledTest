@@ -32,6 +32,7 @@ test.describe('Sharding', () => {
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
+    const executionId = `e2e-test-${Date.now()}`;
 
     const planRes = await request.post('/api/v1/sharding/plan', {
       headers,
@@ -39,6 +40,7 @@ test.describe('Sharding', () => {
         test_names: TEST_NAMES,
         num_workers: 3,
         strategy: 'round_robin',
+        execution_id: executionId,
       },
     });
     expect(planRes.ok(), `Create plan failed: ${planRes.status()}`).toBeTruthy();
@@ -84,11 +86,12 @@ test.describe('Sharding', () => {
     const teamId = await getOrCreateTeam(request, session);
     const apiToken = await createAPIToken(request, session, teamId);
     const headers = tokenHeaders(apiToken);
+    const executionId = `e2e-test-${Date.now()}`;
 
     // Create an initial 3-worker plan
     const planRes = await request.post('/api/v1/sharding/plan', {
       headers,
-      data: { test_names: TEST_NAMES, num_workers: 3, strategy: 'round_robin' },
+      data: { test_names: TEST_NAMES, num_workers: 3, strategy: 'round_robin', execution_id: executionId },
     });
     expect(planRes.ok()).toBeTruthy();
     const plan = await planRes.json();
