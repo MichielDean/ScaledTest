@@ -2383,7 +2383,7 @@
         "type": "object",
         "properties": {
           "current_password": { "type": "string" },
-          "new_password": { "type": "string", "minLength": 8 }
+          "new_password": { "type": "string", "minLength": 8, "maxLength": 72 }
         },
         "required": ["current_password", "new_password"]
       }

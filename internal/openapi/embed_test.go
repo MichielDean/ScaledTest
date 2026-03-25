@@ -104,6 +104,37 @@ func TestSpec_HasAuthProfilePaths(t *testing.T) {
 	})
 }
 
+func TestSpec_ChangePasswordRequest_NewPassword_HasMaxLength72(t *testing.T) {
+	doc := specDoc(t)
+	components, ok := doc["components"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components section")
+	}
+	schemas, ok := components["schemas"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components.schemas section")
+	}
+	schema, ok := schemas["ChangePasswordRequest"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing ChangePasswordRequest schema")
+	}
+	props, ok := schema["properties"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing ChangePasswordRequest.properties")
+	}
+	newPw, ok := props["new_password"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing ChangePasswordRequest.properties.new_password")
+	}
+	maxLen, exists := newPw["maxLength"]
+	if !exists {
+		t.Fatal("ChangePasswordRequest.new_password is missing maxLength")
+	}
+	if maxLen != float64(72) {
+		t.Fatalf("expected maxLength 72, got %v", maxLen)
+	}
+}
+
 func TestSpec_HasNewComponentSchemas(t *testing.T) {
 	doc := specDoc(t)
 	components, ok := doc["components"].(map[string]interface{})
