@@ -186,6 +186,64 @@ func (s *TriageStore) CreateClassification(ctx context.Context, triageID string,
 	return &c, nil
 }
 
+// ForceReset resets a triage result from any terminal state (complete or failed)
+// back to pending so it can be re-run via the retry endpoint.
+//
+// Returns (result, nil) when the row was successfully reset.
+// Returns (nil, nil) when the row is already pending or does not exist for the team.
+// Returns (nil, err) on any database error.
+//
+// The reset runs inside a transaction: old triage_clusters and
+// triage_failure_classifications are deleted before the status is updated so
+// that a subsequent write does not mix old and new data (ON DELETE CASCADE only
+// fires on DELETE, not UPDATE).
+func (s *TriageStore) ForceReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("force reset triage: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback on early return is intentional
+
+	// Delete old clusters and classifications for this report's triage result,
+	// but only when the result is in a terminal state. If the result is pending
+	// or absent the subquery returns no rows and the DELETE is a no-op.
+	const terminalSubquery = `SELECT id FROM triage_results
+	     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')`
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM triage_clusters WHERE triage_id = (`+terminalSubquery+`)`,
+		reportID, teamID); err != nil {
+		return nil, fmt.Errorf("force reset triage: delete stale clusters: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM triage_failure_classifications WHERE triage_id = (`+terminalSubquery+`)`,
+		reportID, teamID); err != nil {
+		return nil, fmt.Errorf("force reset triage: delete stale classifications: %w", err)
+	}
+
+	var t model.TriageResult
+	err = scanTriageResult(tx.QueryRow(ctx,
+		`UPDATE triage_results
+		 SET status = 'pending', error_msg = NULL, summary = NULL,
+		     llm_provider = NULL, llm_model = NULL,
+		     input_tokens = 0, output_tokens = 0, cost_usd = 0, updated_at = now()
+		 WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
+		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
+		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
+		reportID, teamID), &t)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("force reset triage: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("force reset triage: commit: %w", err)
+	}
+	return &t, nil
+}
+
 // ListClassifications returns all failure classifications for a triage result, ordered by creation time.
 func (s *TriageStore) ListClassifications(ctx context.Context, teamID, triageID string) ([]model.TriageFailureClassification, error) {
 	rows, err := s.pool.Query(ctx,
