@@ -2,6 +2,7 @@ export const queryKeys = {
   reports: {
     all: ['reports'] as const,
     detail: (id: string) => ['reports', id] as const,
+    triage: (id: string) => ['reports', id, 'triage'] as const,
     compare: (base: string, head: string) => ['reports', 'compare', base, head] as const,
   },
   executions: {
