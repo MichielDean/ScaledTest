@@ -41,8 +41,9 @@ type QualityGateRule struct {
 
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
-	Store *store.QualityGateStore
-	DB    *db.Pool
+	Store      *store.QualityGateStore
+	DB         *db.Pool
+	AuditStore auditLogger
 }
 
 // CreateQualityGateRequest is the request body for creating a quality gate.
@@ -189,6 +190,18 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "quality_gate.created",
+			ResourceType: "quality_gate",
+			ResourceID:   gate.ID,
+			Metadata:     map[string]interface{}{"name": gate.Name},
+		})
+	}
+
 	JSON(w, http.StatusCreated, gate)
 }
 
@@ -279,6 +292,18 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "quality_gate.updated",
+			ResourceType: "quality_gate",
+			ResourceID:   gateID,
+			Metadata:     map[string]interface{}{"name": req.Name},
+		})
+	}
+
 	JSON(w, http.StatusOK, gate)
 }
 
@@ -313,6 +338,17 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.Store.Delete(r.Context(), teamID, gateID); err != nil {
 		Error(w, http.StatusNotFound, "quality gate not found")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "quality_gate.deleted",
+			ResourceType: "quality_gate",
+			ResourceID:   gateID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "quality gate deleted"})

@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/mailer"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 const invitationTokenBytes = 32
@@ -37,10 +38,11 @@ type invitationStore interface {
 
 // InvitationsHandler handles invitation endpoints.
 type InvitationsHandler struct {
-	Store   invitationStore
-	DB      *db.Pool
-	Mailer  mailer.Mailer
-	BaseURL string
+	Store      invitationStore
+	DB         *db.Pool
+	Mailer     mailer.Mailer
+	BaseURL    string
+	AuditStore auditLogger
 }
 
 // CreateInvitationRequest is the request body for creating an invitation.
@@ -99,6 +101,18 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create invitation")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "invitation.created",
+			ResourceType: "invitation",
+			ResourceID:   inv.ID,
+			Metadata:     map[string]interface{}{"email": req.Email, "role": req.Role},
+		})
 	}
 
 	inviteURL := h.BaseURL + "/invitations/" + token
@@ -290,6 +304,18 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      userID,
+			ActorEmail:   inv.Email,
+			TeamID:       inv.TeamID,
+			Action:       "invitation.accepted",
+			ResourceType: "invitation",
+			ResourceID:   inv.ID,
+			Metadata:     map[string]interface{}{"role": inv.Role},
+		})
+	}
+
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"message": "invitation accepted",
 		"user_id": userID,
@@ -326,6 +352,17 @@ func (h *InvitationsHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	if err := h.Store.Delete(r.Context(), teamID, invitationID); err != nil {
 		Error(w, http.StatusNotFound, "invitation not found")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "invitation.revoked",
+			ResourceType: "invitation",
+			ResourceID:   invitationID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "invitation revoked"})

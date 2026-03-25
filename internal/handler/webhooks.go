@@ -56,6 +56,7 @@ type WebhooksHandler struct {
 	Store         WebhookStoreProvider
 	DeliveryStore WebhookDeliveryStoreProvider
 	Dispatcher    WebhookSender
+	AuditStore    auditLogger
 }
 
 // CreateWebhookRequest is the request body for creating a webhook.
@@ -206,6 +207,18 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "webhook.created",
+			ResourceType: "webhook",
+			ResourceID:   webhook.ID,
+			Metadata:     map[string]interface{}{"url": webhook.URL},
+		})
+	}
+
 	// Return the plaintext secret once — it won't be shown again
 	JSON(w, http.StatusCreated, map[string]interface{}{
 		"webhook": webhook,
@@ -298,6 +311,18 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "webhook.updated",
+			ResourceType: "webhook",
+			ResourceID:   webhookID,
+			Metadata:     map[string]interface{}{"url": req.URL},
+		})
+	}
+
 	JSON(w, http.StatusOK, webhook)
 }
 
@@ -332,6 +357,17 @@ func (h *WebhooksHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err := h.Store.Delete(r.Context(), teamID, webhookID); err != nil {
 		Error(w, http.StatusNotFound, "webhook not found")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "webhook.deleted",
+			ResourceType: "webhook",
+			ResourceID:   webhookID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "webhook deleted"})

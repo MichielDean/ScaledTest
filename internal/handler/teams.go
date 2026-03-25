@@ -11,11 +11,13 @@ import (
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // TeamsHandler handles team management endpoints.
 type TeamsHandler struct {
-	DB *db.Pool
+	DB         *db.Pool
+	AuditStore auditLogger
 }
 
 // CreateTeamRequest is the request body for creating a team.
@@ -127,6 +129,17 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       team.ID,
+			Action:       "team.created",
+			ResourceType: "team",
+			ResourceID:   team.ID,
+		})
+	}
+
 	JSON(w, http.StatusCreated, team)
 }
 
@@ -211,6 +224,17 @@ func (h *TeamsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to delete team")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "team.deleted",
+			ResourceType: "team",
+			ResourceID:   teamID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "team deleted"})
@@ -335,13 +359,25 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "token.created",
+			ResourceType: "token",
+			ResourceID:   token.ID,
+			Metadata:     map[string]interface{}{"name": token.Name},
+		})
+	}
+
 	// Return the full token value — shown only once
 	JSON(w, http.StatusCreated, map[string]interface{}{
-		"token":       tokenResult.Token,
-		"id":          token.ID,
-		"name":        token.Name,
-		"prefix":      token.Prefix,
-		"created_at":  token.CreatedAt,
+		"token":      tokenResult.Token,
+		"id":         token.ID,
+		"name":       token.Name,
+		"prefix":     token.Prefix,
+		"created_at": token.CreatedAt,
 	})
 }
 
@@ -394,6 +430,17 @@ func (h *TeamsHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 	if tag.RowsAffected() == 0 {
 		Error(w, http.StatusNotFound, "token not found")
 		return
+	}
+
+	if h.AuditStore != nil {
+		h.AuditStore.Log(r.Context(), store.Entry{
+			ActorID:      claims.UserID,
+			ActorEmail:   claims.Email,
+			TeamID:       teamID,
+			Action:       "token.deleted",
+			ResourceType: "token",
+			ResourceID:   tokenID,
+		})
 	}
 
 	JSON(w, http.StatusOK, map[string]string{"message": "token revoked"})
