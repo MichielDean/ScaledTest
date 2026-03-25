@@ -2,8 +2,10 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
@@ -29,6 +31,37 @@ func scanTriageResult(row rowScanner, t *model.TriageResult) error {
 		&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
 		&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt,
 	)
+}
+
+// CreateOrReset inserts a new pending triage result for the report, or resets
+// a failed result back to pending so the job can be retried.
+//
+// Returns (result, nil) when a pending slot is successfully claimed — either a
+// fresh insert or a reset from 'failed'.
+//
+// Returns (nil, nil) when the row already exists in 'pending' or 'complete'
+// state; the caller should skip the job.
+//
+// Returns (nil, err) on any database error.
+func (s *TriageStore) CreateOrReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
+	var t model.TriageResult
+	err := scanTriageResult(s.pool.QueryRow(ctx,
+		`INSERT INTO triage_results (team_id, report_id)
+		 VALUES ($1, $2)
+		 ON CONFLICT (report_id) DO UPDATE
+		   SET status = 'pending', error_msg = NULL, summary = NULL, updated_at = now()
+		   WHERE triage_results.status = 'failed'
+		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
+		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
+		teamID, reportID), &t)
+	if errors.Is(err, pgx.ErrNoRows) {
+		// Row already exists in pending or complete state — no work to claim.
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("acquire triage slot: %w", err)
+	}
+	return &t, nil
 }
 
 // Create inserts a new triage result in pending state for the given report.
