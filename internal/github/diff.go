@@ -52,14 +52,12 @@ func (c *Client) FetchDiff(ctx context.Context, owner, repo, baseSHA, headSHA st
 	}
 	defer resp.Body.Close()
 
-	// Missing repo access is not a hard error — return nil so callers degrade gracefully.
-	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden {
-		io.Copy(io.Discard, resp.Body) //nolint:errcheck
-		return nil, nil
-	}
-
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
 		io.Copy(io.Discard, resp.Body) //nolint:errcheck
+		// Missing repo access is not a hard error — return nil so callers degrade gracefully.
+		if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusForbidden {
+			return nil, nil
+		}
 		return nil, fmt.Errorf("github compare API returned %d", resp.StatusCode)
 	}
 

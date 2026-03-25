@@ -41,7 +41,7 @@ func (f *DBPreviousRunFinder) FindPreviousSuccessfulCommit(ctx context.Context, 
 		ORDER BY created_at DESC
 		LIMIT 1`
 
-	args := []interface{}{teamID, repository}
+	args := []any{teamID, repository}
 	branchClause := ""
 	excludeClause := ""
 
