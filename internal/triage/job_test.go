@@ -987,10 +987,10 @@ func TestRunner_Run_WhenTriageGitHubStatusEnabled_PostsCommitStatus(t *testing.T
 	data := &fakeReportData{
 		failures: failures,
 		env: reportEnv{
-			Repository:          "org/repo",
-			Commit:              "abc123",
-			Branch:              "main",
-			TriageGitHubStatus:  true,
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			Branch:             "main",
+			TriageGitHubStatus: true,
 		},
 	}
 	poster := newFakeStatusPoster()
