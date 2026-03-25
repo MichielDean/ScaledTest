@@ -202,7 +202,7 @@ jobs:
           go run ./cmd/server &
           echo "Waiting for server..."
           for i in {1..20}; do
-            curl -sf http://localhost:3000/api/v1/health && break || sleep 2
+            curl -sf http://localhost:3000/health && break || sleep 2
           done
 
       - name: Install Playwright
