@@ -19,18 +19,27 @@ func NewTriageStore(pool *pgxpool.Pool) *TriageStore {
 	return &TriageStore{pool: pool}
 }
 
+// rowScanner is satisfied by pgx.Row (returned by QueryRow).
+type rowScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanTriageResult(row rowScanner, t *model.TriageResult) error {
+	return row.Scan(
+		&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
+		&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt,
+	)
+}
+
 // Create inserts a new triage result in pending state for the given report.
 func (s *TriageStore) Create(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
 	var t model.TriageResult
-	err := s.pool.QueryRow(ctx,
+	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`INSERT INTO triage_results (team_id, report_id)
 		 VALUES ($1, $2)
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
-		teamID, reportID).
-		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
-			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
+		teamID, reportID), &t); err != nil {
 		return nil, fmt.Errorf("create triage result: %w", err)
 	}
 	return &t, nil
@@ -39,14 +48,11 @@ func (s *TriageStore) Create(ctx context.Context, teamID, reportID string) (*mod
 // Get returns a triage result by ID, scoped to team.
 func (s *TriageStore) Get(ctx context.Context, teamID, triageID string) (*model.TriageResult, error) {
 	var t model.TriageResult
-	err := s.pool.QueryRow(ctx,
+	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`SELECT id, team_id, report_id, status, summary, llm_provider, llm_model,
 		        input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at
 		 FROM triage_results WHERE id = $1 AND team_id = $2`,
-		triageID, teamID).
-		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
-			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
+		triageID, teamID), &t); err != nil {
 		return nil, fmt.Errorf("get triage result: %w", err)
 	}
 	return &t, nil
@@ -55,14 +61,11 @@ func (s *TriageStore) Get(ctx context.Context, teamID, triageID string) (*model.
 // GetByReportID returns the triage result for a specific report, scoped to team.
 func (s *TriageStore) GetByReportID(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
 	var t model.TriageResult
-	err := s.pool.QueryRow(ctx,
+	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`SELECT id, team_id, report_id, status, summary, llm_provider, llm_model,
 		        input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at
 		 FROM triage_results WHERE report_id = $1 AND team_id = $2`,
-		reportID, teamID).
-		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
-			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
+		reportID, teamID), &t); err != nil {
 		return nil, fmt.Errorf("get triage result by report: %w", err)
 	}
 	return &t, nil
@@ -71,17 +74,14 @@ func (s *TriageStore) GetByReportID(ctx context.Context, teamID, reportID string
 // Complete transitions a triage result to complete status with LLM metadata and token costs.
 func (s *TriageStore) Complete(ctx context.Context, teamID, triageID, summary, llmProvider, llmModel string, inputTokens, outputTokens int, costUSD float64) (*model.TriageResult, error) {
 	var t model.TriageResult
-	err := s.pool.QueryRow(ctx,
+	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`UPDATE triage_results
 		 SET status = 'complete', summary = $3, llm_provider = $4, llm_model = $5,
 		     input_tokens = $6, output_tokens = $7, cost_usd = $8, updated_at = now()
 		 WHERE id = $1 AND team_id = $2
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
-		triageID, teamID, summary, llmProvider, llmModel, inputTokens, outputTokens, costUSD).
-		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
-			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
+		triageID, teamID, summary, llmProvider, llmModel, inputTokens, outputTokens, costUSD), &t); err != nil {
 		return nil, fmt.Errorf("complete triage result: %w", err)
 	}
 	return &t, nil
@@ -90,16 +90,13 @@ func (s *TriageStore) Complete(ctx context.Context, teamID, triageID, summary, l
 // Fail transitions a triage result to failed status with an error message.
 func (s *TriageStore) Fail(ctx context.Context, teamID, triageID, errorMsg string) (*model.TriageResult, error) {
 	var t model.TriageResult
-	err := s.pool.QueryRow(ctx,
+	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`UPDATE triage_results
 		 SET status = 'failed', error_msg = $3, updated_at = now()
 		 WHERE id = $1 AND team_id = $2
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
-		triageID, teamID, errorMsg).
-		Scan(&t.ID, &t.TeamID, &t.ReportID, &t.Status, &t.Summary, &t.LLMProvider, &t.LLMModel,
-			&t.InputTokens, &t.OutputTokens, &t.CostUSD, &t.ErrorMsg, &t.CreatedAt, &t.UpdatedAt)
-	if err != nil {
+		triageID, teamID, errorMsg), &t); err != nil {
 		return nil, fmt.Errorf("fail triage result: %w", err)
 	}
 	return &t, nil
