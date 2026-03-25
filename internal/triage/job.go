@@ -184,7 +184,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 
 	failures, env, err := r.data.fetchFailuresAndEnv(ctx, teamID, reportID)
 	if err != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, err.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, err.Error(), reportEnv{})
 		return fmt.Errorf("triage: fetch failures: %w", err)
 	}
 
@@ -205,12 +205,12 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	// Persist clusters and classifications even on engine error — we
 	// persist the fallback output so partial results are available.
 	if persistErr := r.persistOutput(ctx, teamID, triageID, output); persistErr != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error(), env)
 		return fmt.Errorf("triage: persist output: %w", persistErr)
 	}
 
 	if triageErr != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, triageErr.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, triageErr.Error(), env)
 		// Return nil — the error is captured in the record, not a job-level failure.
 		return nil
 	}
@@ -404,12 +404,46 @@ func (r *Runner) maybePostTriageGitHubStatus(env reportEnv, reportID, summary st
 // failTriage marks the triage record as failed and updates the report status.
 // Errors are logged rather than returned — the outer run() must not fail
 // because the failure-recording step itself failed.
-func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, errMsg string) {
+// If env contains GitHub status configuration, an "error" commit status is posted.
+func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, errMsg string, env reportEnv) {
 	if _, err := r.store.Fail(ctx, teamID, triageID, errMsg); err != nil {
 		log.Error().Err(err).Str("triage_id", triageID).Msg("triage: failed to record failure")
 	}
 	r.data.setTriageStatus(ctx, teamID, reportID, "failed")
 	r.notifyTriageComplete(teamID, reportID, "failed", "", 0, 0, 0)
+	r.maybePostTriageGitHubStatusError(env, reportID)
+}
+
+// maybePostTriageGitHubStatusError fires a GitHub "error" commit status in a
+// background goroutine when the per-report flag is set and the integration is
+// configured. Called when triage fails so PRs receive feedback rather than
+// hanging without a ci/triage status.
+func (r *Runner) maybePostTriageGitHubStatusError(env reportEnv, reportID string) {
+	if !env.TriageGitHubStatus || r.statusPoster == nil {
+		return
+	}
+	owner, repo, ok := analytics.ParseOwnerRepo(env.Repository)
+	if !ok || env.Commit == "" {
+		return
+	}
+
+	var targetURL string
+	if r.baseURL != "" {
+		targetURL = r.baseURL + "/reports/" + reportID
+	}
+
+	poster := r.statusPoster
+	commit := env.Commit
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := poster.PostStatus(ctx, owner, repo, commit, "error", "Triage failed — see run for details", "ci/triage", targetURL); err != nil {
+			log.Error().Err(err).
+				Str("report_id", reportID).
+				Str("sha", commit).
+				Msg("triage: failed to post GitHub commit error status")
+		}
+	}()
 }
 
 // ---------------------------------------------------------------------------

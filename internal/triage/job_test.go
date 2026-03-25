@@ -29,14 +29,15 @@ type fakeTriageStore struct {
 	createOrResetResult *model.TriageResult
 	createOrResetErr    error
 
-	// completeErr / failErr inject errors for those transitions.
-	completeErr error
-	failErr     error
+	// completeErr / failErr / createClusterErr inject errors for those transitions.
+	completeErr      error
+	failErr          error
+	createClusterErr error
 
 	// recorded calls
-	completeCalls []string // triageIDs
-	failCalls     []failCall
-	clusters      []clusterCall
+	completeCalls   []string // triageIDs
+	failCalls       []failCall
+	clusters        []clusterCall
 	classifications []classifCall
 }
 
@@ -83,6 +84,9 @@ func (f *fakeTriageStore) Fail(_ context.Context, _, triageID, errMsg string) (*
 func (f *fakeTriageStore) CreateCluster(_ context.Context, triageID, _ /*teamID*/, rootCause string, _ *string) (*model.TriageCluster, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.createClusterErr != nil {
+		return nil, f.createClusterErr
+	}
 	id := fmt.Sprintf("cluster-%d", len(f.clusters)+1)
 	f.clusters = append(f.clusters, clusterCall{triageID: triageID, rootCause: rootCause})
 	return &model.TriageCluster{ID: id, TriageID: triageID, RootCause: rootCause}, nil
@@ -1352,5 +1356,93 @@ func TestTriageStatusDescription_ShortSummaryPassedThrough(t *testing.T) {
 	got := triageStatusDescription(summary, 2)
 	if got != summary {
 		t.Errorf("got %q; want %q", got, summary)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// failTriage + GitHub status interaction
+// ---------------------------------------------------------------------------
+
+func TestRunner_Run_WhenEngineFails_WithGitHubStatusEnabled_PostsErrorStatus(t *testing.T) {
+	// Given: LLM errors, but env has TriageGitHubStatus=true
+	failures := makeNFailures(2)
+	provider := llm.NewMock(nil)
+	provider.SetError(errors.New("service unavailable"))
+
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := &Runner{
+		engine:       NewEngine(provider),
+		store:        store,
+		data:         data,
+		sem:          make(chan struct{}, triageWorkerLimit),
+		statusPoster: poster,
+		baseURL:      "https://example.com",
+	}
+
+	// When: triage runs and engine fails
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: an "error" commit status is posted so the PR receives feedback
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "error" {
+		t.Errorf("state = %q; want %q", call.state, "error")
+	}
+	if call.sha != "abc123" {
+		t.Errorf("sha = %q; want %q", call.sha, "abc123")
+	}
+	if call.statusContext != "ci/triage" {
+		t.Errorf("statusContext = %q; want %q", call.statusContext, "ci/triage")
+	}
+}
+
+func TestRunner_Run_WhenPersistFails_WithGitHubStatusEnabled_PostsErrorStatus(t *testing.T) {
+	// Given: persist (CreateCluster) errors, but env has TriageGitHubStatus=true
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	store.createClusterErr = errors.New("db connection lost")
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "deadbeef",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+	r.baseURL = "https://example.com"
+
+	// When: triage runs and persist fails
+	_ = r.run(context.Background(), "team-1", "report-1")
+
+	// Then: an "error" commit status is posted
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "error" {
+		t.Errorf("state = %q; want %q", call.state, "error")
+	}
+	if call.sha != "deadbeef" {
+		t.Errorf("sha = %q; want %q", call.sha, "deadbeef")
 	}
 }

@@ -181,6 +181,26 @@ func TestCreateReport_NoDB_WithExecutionID(t *testing.T) {
 	}
 }
 
+func TestCreateReport_NoDB_WithTriageGitHubStatus(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":0,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"failed","duration":50}]}}`
+	r := httptest.NewRequest("POST", "/api/v1/reports?triage_github_status=true", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with triage_github_status=true: got %d, want %d", w.Code, http.StatusCreated)
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["triage_github_status"] != true {
+		t.Errorf("triage_github_status = %v, want true", resp["triage_github_status"])
+	}
+}
+
 func TestGetReport_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()

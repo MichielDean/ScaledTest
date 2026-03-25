@@ -196,6 +196,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctrf.Sanitize(report)
 
 	executionID := r.URL.Query().Get("execution_id")
+	triageGitHubStatus := r.URL.Query().Get("triage_github_status") == "true"
 
 	if h.DB == nil {
 		// Fallback for no-DB mode: accept but don't persist
@@ -206,6 +207,9 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if executionID != "" {
 			resp["execution_id"] = executionID
+		}
+		if triageGitHubStatus {
+			resp["triage_github_status"] = true
 		}
 		JSON(w, http.StatusCreated, resp)
 		h.maybePostGitHubStatus(r, report.Results.Summary, "", executionID)
@@ -255,8 +259,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	defer tx.Rollback(r.Context())
-
-	triageGitHubStatus := r.URL.Query().Get("triage_github_status") == "true"
 
 	// Insert report
 	_, err = tx.Exec(r.Context(),
@@ -324,6 +326,9 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if executionID != "" {
 		resp["execution_id"] = executionID
+	}
+	if triageGitHubStatus {
+		resp["triage_github_status"] = true
 	}
 
 	// Evaluate quality gates for this team
