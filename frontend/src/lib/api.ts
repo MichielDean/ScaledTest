@@ -141,6 +141,7 @@ export const api = {
   submitReport: (data: unknown) =>
     fetchAPI('/api/v1/reports', { method: 'POST', body: JSON.stringify(data) }),
   getReport: (id: string) => fetchAPI(`/api/v1/reports/${id}`),
+  getTriage: (reportId: string) => fetchAPI(`/api/v1/reports/${reportId}/triage`),
   compareReports: (base: string, head: string) =>
     fetchAPI(
       `/api/v1/reports/compare?base=${encodeURIComponent(base)}&head=${encodeURIComponent(head)}`
