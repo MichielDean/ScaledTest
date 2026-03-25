@@ -41,6 +41,13 @@ type Config struct {
 
 	GitHubToken string `koanf:"github_token"`
 
+	// LLMProvider selects the LLM backend: "anthropic" (default) or "openai".
+	// Set via ST_LLM_PROVIDER.
+	LLMProvider string `koanf:"llm_provider"`
+	// LLMCommand overrides the LLM CLI binary path.
+	// Set via ST_LLM_COMMAND. Intended for test environments only.
+	LLMCommand string `koanf:"llm_command"`
+
 	// DisableRateLimit bypasses all rate-limit middleware when true.
 	// Set ST_DISABLE_RATE_LIMIT=true only in controlled test environments.
 	// WARNING: disabling rate limiting removes brute-force protection on auth endpoints.
