@@ -67,6 +67,19 @@ func specPaths(t *testing.T) map[string]interface{} {
 	return paths
 }
 
+func specSchemas(t *testing.T) map[string]interface{} {
+	t.Helper()
+	components, ok := specDoc(t)["components"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components section")
+	}
+	schemas, ok := components["schemas"].(map[string]interface{})
+	if !ok {
+		t.Fatal("missing components.schemas section")
+	}
+	return schemas
+}
+
 func assertPathMethods(t *testing.T, paths map[string]interface{}, checks []struct{ path, method string }) {
 	t.Helper()
 	for _, c := range checks {
@@ -105,16 +118,7 @@ func TestSpec_HasAuthProfilePaths(t *testing.T) {
 }
 
 func TestSpec_ChangePasswordRequest_NewPassword_HasMaxLength72(t *testing.T) {
-	doc := specDoc(t)
-	components, ok := doc["components"].(map[string]interface{})
-	if !ok {
-		t.Fatal("missing components section")
-	}
-	schemas, ok := components["schemas"].(map[string]interface{})
-	if !ok {
-		t.Fatal("missing components.schemas section")
-	}
-	schema, ok := schemas["ChangePasswordRequest"].(map[string]interface{})
+	schema, ok := specSchemas(t)["ChangePasswordRequest"].(map[string]interface{})
 	if !ok {
 		t.Fatal("missing ChangePasswordRequest schema")
 	}
@@ -136,15 +140,7 @@ func TestSpec_ChangePasswordRequest_NewPassword_HasMaxLength72(t *testing.T) {
 }
 
 func TestSpec_HasNewComponentSchemas(t *testing.T) {
-	doc := specDoc(t)
-	components, ok := doc["components"].(map[string]interface{})
-	if !ok {
-		t.Fatal("missing components section")
-	}
-	schemas, ok := components["schemas"].(map[string]interface{})
-	if !ok {
-		t.Fatal("missing components.schemas section")
-	}
+	schemas := specSchemas(t)
 	for _, name := range []string{
 		"Invitation",
 		"CreateInvitationRequest",
