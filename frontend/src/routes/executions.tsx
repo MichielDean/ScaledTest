@@ -10,6 +10,7 @@ import {
   type WorkerStatus,
 } from '../stores/execution-store';
 import { StatusBadge } from './dashboard';
+import { formatDateTime } from '../lib/date';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -137,7 +138,7 @@ function ExecutionList({
             <span className="font-mono text-xs truncate max-w-[180px]">{exec.command}</span>
             <StatusBadge status={exec.status} />
           </div>
-          <p className="text-xs text-muted-foreground mt-1">{formatDate(exec.created_at)}</p>
+          <p className="text-xs text-muted-foreground mt-1">{formatDateTime(exec.created_at)}</p>
         </button>
       ))}
     </div>
@@ -374,19 +375,6 @@ function TestStatusIcon({ status }: { status: string }) {
 // ---------------------------------------------------------------------------
 // Shared Helpers
 // ---------------------------------------------------------------------------
-
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-    });
-  } catch {
-    return iso;
-  }
-}
 
 function formatETA(seconds: number): string {
   if (seconds < 60) return `${Math.round(seconds)}s`;

@@ -1,45 +1,20 @@
 # Context
 
-## Item: sc-7qtb9
+## Item: sc-uq877
 
-**Title:** E2E global-setup: spread seeded CTRF reports across multiple dates for trend chart
+**Title:** Consistent date formatting across the entire frontend
 **Status:** in_progress
-**Priority:** 2
+**Priority:** 3
 
 ### Description
 
-The pass rate trend chart requires multiple data points across different dates to be meaningful. Currently all seeded reports in global-setup.ts are submitted in the same run with the same timestamp, so the analytics trends query collapses them into a single bucket and the trend chart shows one point with no visible trend line. Fix: when seeding CTRF reports in global-setup.ts, backdate the created_at timestamps by submitting reports that cover at least 3 distinct dates (e.g. today, yesterday, 2 days ago). If the reports API does not accept a created_at override, add a test-only backdating mechanism (e.g. a direct DB insert via the seed script, or a query param that is only accepted when ST_DISABLE_RATE_LIMIT is true). Seed reports should have varying pass rates (e.g. 100%, 75%, 50%) so the trend line actually shows movement. Add an E2E assertion that the trend chart contains more than one data point.
+Date formatting is inconsistent across the application: the Users/Teams tables on the Admin page show '3/24/2026' (toLocaleDateString with no options), the Audit Log shows '3/24/2026, 7:49:03 PM' (date + time), the Analytics trend chart shows raw ISO 8601 timestamps, and the Test Reports page uses 'Mar 24, 2026' (month/day/year with abbreviated month). Fix: create a shared date formatting utility in frontend/src/lib/utils.ts (or a new frontend/src/lib/date.ts) exporting: (1) formatDate(iso: string): string — 'Mar 24, 2026' for date-only display; (2) formatDateTime(iso: string): string — 'Mar 24, 2026, 7:49 PM' for timestamps with time; (3) formatDateShort(iso: string): string — 'Mar 24' for chart axis labels. Replace all inline date formatting across admin.tsx, analytics.tsx, dashboard.tsx, test-results.tsx, and any other routes with calls to these shared formatters. Add unit tests for all three formatters covering edge cases (invalid date, midnight UTC boundary).
 
-## Current Step: docs
+## Current Step: implement
 
 - **Type:** agent
-- **Role:** docs_writer
+- **Role:** implementer
 - **Context:** full_codebase
-
-## ⚠️ REVISION REQUIRED — Fix these issues before anything else
-
-This droplet was recirculated. The following issues were found and **must** be fixed.
-Do not proceed to implementation until you have read and understood each issue.
-
-### Issue 1 (from: reviewer)
-
-No findings. Security: AllowBackdate properly gated on DisableRateLimit (test-only). Logic: summary counts match test arrays, MarshalJSON alias pattern correct, TrendPoint never unmarshaled so json:"-" safe. Error handling: resolveReportTime falls back to time.Now() on invalid/absent param. Tests: good coverage for resolveReportTime (4 cases) and MarshalJSON (3 cases) plus E2E assertion.
-
----
-
-## Recent Step Notes
-
-### From: reviewer
-
-No findings. Security: AllowBackdate properly gated on DisableRateLimit (test-only). Logic: summary counts match test arrays, MarshalJSON alias pattern correct, TrendPoint never unmarshaled so json:"-" safe. Error handling: resolveReportTime falls back to time.Now() on invalid/absent param. Tests: good coverage for resolveReportTime (4 cases) and MarshalJSON (3 cases) plus E2E assertion.
-
-### From: simplifier
-
-Simplified: (1) consolidated 3 near-identical 'falls back to time.Now()' tests in reports_test.go into one table-driven test (TestResolveReportTime_FallsBackToNow), reducing 45 lines to 23; (2) removed redundant Array.isArray assertion in analytics.spec.ts — toBeDefined() above and toBeGreaterThan(1) below already cover it. Tests: all 22 packages pass.
-
-### From: implementer
-
-Implemented AllowBackdate on ReportsHandler gated on DisableRateLimit. Added resolveReportTime method that parses ?created_at=<RFC3339> when enabled. Updated test result timestamps to use the same resolved time. Wired AllowBackdate:cfg.DisableRateLimit in routes.go. Updated global-setup.ts to backdate seed reports to today/yesterday/2-days-ago at noon UTC with varying pass rates (92%/75%/50%). Added E2E assertion that trends.trends.length > 1. Added 4 unit tests for resolveReportTime. All go tests pass.
 
 <available_skills>
   <skill>
@@ -52,6 +27,11 @@ Implemented AllowBackdate on ReportsHandler gated on DisableRateLimit. Added res
     <description>---</description>
     <location>/home/lobsterdog/.cistern/skills/cistern-git/SKILL.md</location>
   </skill>
+  <skill>
+    <name>cistern-github</name>
+    <description>---</description>
+    <location>/home/lobsterdog/.cistern/skills/cistern-github/SKILL.md</location>
+  </skill>
 </available_skills>
 
 ## Signaling Completion
@@ -59,16 +39,16 @@ Implemented AllowBackdate on ReportsHandler gated on DisableRateLimit. Added res
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-7qtb9
+    ct droplet pass sc-uq877
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-7qtb9
-    ct droplet recirculate sc-7qtb9 --to implement
+    ct droplet recirculate sc-uq877
+    ct droplet recirculate sc-uq877 --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-7qtb9
+    ct droplet block sc-uq877
 
 Add notes before signaling:
-    ct droplet note sc-7qtb9 "What you did / found"
+    ct droplet note sc-uq877 "What you did / found"
 
 The `ct` binary is on your PATH.

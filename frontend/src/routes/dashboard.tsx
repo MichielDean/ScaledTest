@@ -13,6 +13,7 @@ import {
 import { BarChart2, ChevronRight, Play, TrendingUp, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { formatDate, formatDateShort } from '../lib/date';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -71,20 +72,6 @@ export const CHART_TOOLTIP_STYLE = {
   color: 'var(--color-foreground)',
   boxShadow: '0 4px 6px -1px rgba(0,0,0,0.3)',
 };
-
-/**
- * Formats a YYYY-MM-DD date string as 'Mon D' (e.g. "Mar 24") for chart X-axis labels.
- * Parses as local date to avoid UTC-midnight off-by-one issues.
- */
-export function formatTrendDate(dateStr: string): string {
-  const parts = dateStr.split('-').map(Number);
-  if (parts.length !== 3) return dateStr;
-  const [year, month, day] = parts as [number, number, number];
-  return new Date(year, month - 1, day).toLocaleDateString(undefined, {
-    month: 'short',
-    day: 'numeric',
-  });
-}
 
 // ---------------------------------------------------------------------------
 // Dashboard page
@@ -178,7 +165,7 @@ export function DashboardPage() {
           <ResponsiveContainer width="100%" height={280}>
             <LineChart data={trendData}>
               <CartesianGrid stroke="#1f2937" strokeDasharray="4 4" />
-              <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={formatTrendDate} />
+              <XAxis dataKey="date" tick={{ fill: '#9ca3af', fontSize: 11 }} tickFormatter={formatDateShort} />
               <YAxis domain={[0, 100]} tick={{ fill: '#9ca3af', fontSize: 11 }} unit="%" />
               <Tooltip
                 formatter={(v: number) => [`${v.toFixed(1)}%`, 'Pass Rate']}
@@ -353,14 +340,3 @@ export function StatusBadge({ status }: { status: string }) {
   );
 }
 
-function formatDate(iso: string): string {
-  try {
-    return new Date(iso).toLocaleDateString(undefined, {
-      month: 'short',
-      day: 'numeric',
-      year: 'numeric',
-    });
-  } catch {
-    return iso;
-  }
-}

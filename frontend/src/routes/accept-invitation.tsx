@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from '@tanstack/react-router';
 import { api } from '../lib/api';
+import { formatDateTime } from '../lib/date';
 
 interface InvitationPreview {
   email: string;
@@ -122,7 +123,7 @@ export function AcceptInvitationPage() {
           </div>
           <div>
             <span className="font-medium">Expires: </span>
-            <span>{new Date(preview!.expires_at).toLocaleString()}</span>
+            <span>{formatDateTime(preview!.expires_at)}</span>
           </div>
         </div>
 

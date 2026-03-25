@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tanstack/react-query';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
+import { formatDate } from '../lib/date';
 
 const WEBHOOK_EVENTS = [
   { value: 'report.submitted', label: 'Report Submitted' },
@@ -233,7 +234,7 @@ export function WebhooksPage() {
                     ))}
                   </div>
                   <p className="text-xs text-muted-foreground mt-2">
-                    Created {new Date(webhook.created_at).toLocaleDateString()}
+                    Created {formatDate(webhook.created_at)}
                   </p>
                 </div>
                 <div className="flex items-center gap-2 shrink-0">
