@@ -113,6 +113,14 @@ test.describe('Analytics', () => {
       .filter({ has: page.getByRole('heading', { name: 'Duration Distribution' }) });
     await expect(durationSection.locator('svg').first()).toBeVisible();
 
+    // Flaky Tests — either the empty-state text or a list of flaky test items
+    const flakySection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Flaky Tests' }) });
+    await expect(
+      flakySection.getByText('No flaky tests detected.').or(flakySection.locator('.space-y-3 > div').first()),
+    ).toBeVisible();
+
     // Authenticated navigation is present
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
