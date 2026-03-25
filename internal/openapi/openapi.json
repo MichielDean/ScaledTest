@@ -2350,7 +2350,7 @@
           "email": { "type": "string", "format": "email" },
           "role": { "type": "string", "enum": ["readonly", "maintainer", "owner"] },
           "invited_by": { "type": "string", "format": "uuid", "description": "User ID of the inviter" },
-          "accepted_at": { "type": "string", "format": "date-time", "nullable": true },
+          "accepted_at": { "type": ["string", "null"], "format": "date-time" },
           "expires_at": { "type": "string", "format": "date-time" },
           "created_at": { "type": "string", "format": "date-time" }
         },
