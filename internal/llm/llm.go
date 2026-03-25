@@ -41,8 +41,9 @@ type Config struct {
 	Timeout time.Duration
 
 	// MaxRetries is the number of additional attempts after the first failure.
-	// Defaults to 2 (3 total attempts) when zero.
-	MaxRetries int
+	// Defaults to 2 (3 total attempts) when nil.
+	// Set to a pointer to 0 to disable retries (1 total attempt).
+	MaxRetries *int
 }
 
 // New creates a Provider from cfg.
@@ -54,8 +55,9 @@ func New(cfg Config) (Provider, error) {
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 120 * time.Second
 	}
-	if cfg.MaxRetries == 0 {
-		cfg.MaxRetries = 2
+	if cfg.MaxRetries == nil {
+		two := 2
+		cfg.MaxRetries = &two
 	}
 
 	preset, ok := presets[cfg.Provider]
@@ -78,6 +80,6 @@ func New(cfg Config) (Provider, error) {
 		command:    cmd,
 		preset:     preset,
 		timeout:    cfg.Timeout,
-		maxRetries: cfg.MaxRetries,
+		maxRetries: *cfg.MaxRetries,
 	}, nil
 }

@@ -19,6 +19,9 @@ func TestMain(m *testing.M) {
 	os.Exit(m.Run())
 }
 
+// intPtr returns a pointer to n, used to set Config.MaxRetries in tests.
+func intPtr(n int) *int { return &n }
+
 // writeFakeScript writes a shell script to dir/<name>, makes it executable,
 // and returns its path.
 func writeFakeScript(t *testing.T, dir, name, body string) string {
@@ -173,7 +176,7 @@ func TestCLIProvider_Analyze_ReturnsErrorWhenOutputNotJSON(t *testing.T) {
 	dir := t.TempDir()
 	cmd := writeFakeScript(t, dir, "fakecli", `echo 'this is not json at all'`)
 
-	p, err := New(Config{Provider: "anthropic", Command: cmd, MaxRetries: 0})
+	p, err := New(Config{Provider: "anthropic", Command: cmd, MaxRetries: intPtr(0)})
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
@@ -209,7 +212,7 @@ echo '{"succeeded":true}'
 	p, err := New(Config{
 		Provider:   "anthropic",
 		Command:    cmd,
-		MaxRetries: 2,
+		MaxRetries: intPtr(2),
 		Timeout:    10 * time.Second,
 	})
 	if err != nil {
@@ -239,7 +242,7 @@ func TestCLIProvider_Analyze_ReturnsErrorAfterAllRetriesExhausted(t *testing.T) 
 	p, err := New(Config{
 		Provider:   "anthropic",
 		Command:    cmd,
-		MaxRetries: 2,
+		MaxRetries: intPtr(2),
 		Timeout:    10 * time.Second,
 	})
 	if err != nil {
@@ -255,6 +258,43 @@ func TestCLIProvider_Analyze_ReturnsErrorAfterAllRetriesExhausted(t *testing.T) 
 	}
 }
 
+func TestCLIProvider_Analyze_ZeroRetries_MakesExactlyOneAttempt(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+
+	dir := t.TempDir()
+	countFile := filepath.Join(dir, "count")
+	os.WriteFile(countFile, []byte("0"), 0644)
+
+	script := fmt.Sprintf(`
+COUNT=$(cat %s 2>/dev/null || echo 0)
+COUNT=$((COUNT+1))
+echo $COUNT > %s
+echo "always fails" >&2
+exit 1
+`, countFile, countFile)
+	cmd := writeFakeScript(t, dir, "fakecli", script)
+
+	p, err := New(Config{
+		Provider:   "anthropic",
+		Command:    cmd,
+		MaxRetries: intPtr(0),
+		Timeout:    10 * time.Second,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	_, err = p.Analyze(context.Background(), "prompt")
+	if err == nil {
+		t.Fatal("expected error")
+	}
+
+	data, _ := os.ReadFile(countFile)
+	if strings.TrimSpace(string(data)) != "1" {
+		t.Fatalf("expected exactly 1 attempt, got count=%s", strings.TrimSpace(string(data)))
+	}
+}
+
 func TestCLIProvider_Analyze_RespectsContextDeadline(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
@@ -266,7 +306,7 @@ func TestCLIProvider_Analyze_RespectsContextDeadline(t *testing.T) {
 	p, err := New(Config{
 		Provider:   "anthropic",
 		Command:    cmd,
-		MaxRetries: 0,
+		MaxRetries: intPtr(0),
 		Timeout:    30 * time.Second,
 	})
 	if err != nil {
