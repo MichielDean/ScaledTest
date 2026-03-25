@@ -11,16 +11,19 @@ import (
 	"github.com/rs/cors"
 	"github.com/rs/zerolog/log"
 
+	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/config"
 	"github.com/scaledtest/scaledtest/internal/db"
 	ghclient "github.com/scaledtest/scaledtest/internal/github"
 	"github.com/scaledtest/scaledtest/internal/handler"
 	"github.com/scaledtest/scaledtest/internal/k8s"
+	"github.com/scaledtest/scaledtest/internal/llm"
 	"github.com/scaledtest/scaledtest/internal/mailer"
 	"github.com/scaledtest/scaledtest/internal/openapi"
 	"github.com/scaledtest/scaledtest/internal/spa"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/triage"
 	"github.com/scaledtest/scaledtest/internal/webhook"
 	"github.com/scaledtest/scaledtest/internal/ws"
 )
@@ -125,6 +128,27 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// OAuth configs
 	oauthCfgs := auth.NewOAuthConfigs(cfg.BaseURL, cfg.OAuthGitHubClientID, cfg.OAuthGitHubClientSecret, cfg.OAuthGoogleClientID, cfg.OAuthGoogleClientSecret)
 
+	// Triage runner — wires LLM triage into the report ingest pipeline.
+	// Gracefully disabled when LLM credentials are not configured.
+	var triageEnqueuer triage.Enqueuer
+	if dbPool != nil {
+		llmProvider, llmErr := llm.New(llm.Config{
+			Provider: cfg.LLMProvider,
+			Command:  cfg.LLMCommand,
+		})
+		if llmErr != nil {
+			log.Warn().Err(llmErr).Msg("LLM not available — triage disabled")
+		} else {
+			triageStore := store.NewTriageStore(dbPool)
+			historyRdr := store.NewDBHistoryReader(dbPool)
+			prevFinder := store.NewDBPreviousRunFinder(dbPool)
+			diffEnricher := analytics.NewGitDiffEnricher(prevFinder, ghclient.New(cfg.GitHubToken))
+			engine := triage.NewEngine(llmProvider)
+			triageEnqueuer = triage.NewRunner(dbPool, engine, triageStore, historyRdr, diffEnricher)
+			log.Info().Str("llm_provider", cfg.LLMProvider).Msg("triage enabled")
+		}
+	}
+
 	// Handlers
 	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
 	authH := &handler.AuthHandler{JWT: jwtMgr}
@@ -138,6 +162,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:           whNotifier,
 		GitHubStatusPoster: ghclient.New(cfg.GitHubToken),
 		BaseURL:            cfg.BaseURL,
+		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
 	}
 	execH := &handler.ExecutionsHandler{

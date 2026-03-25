@@ -22,6 +22,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/store"
+	"github.com/scaledtest/scaledtest/internal/triage"
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
@@ -46,6 +47,9 @@ type ReportsHandler struct {
 	Webhooks           *webhook.Notifier
 	GitHubStatusPoster githubStatusPoster // nil when GitHub integration is disabled
 	BaseURL            string             // used to construct target URLs in GitHub statuses
+	// TriageEnqueuer schedules background LLM triage for each ingested report.
+	// When nil, triage is disabled (e.g. no LLM credentials configured).
+	TriageEnqueuer triage.Enqueuer
 	// AllowBackdate permits callers to supply a ?created_at=<RFC3339> query
 	// parameter to override the report ingestion timestamp. This must only be
 	// enabled in controlled test environments (e.g. when ST_DISABLE_RATE_LIMIT
@@ -289,6 +293,12 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if err := tx.Commit(r.Context()); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to commit report")
 		return
+	}
+
+	// Enqueue async triage — non-blocking, best-effort. Must be called after
+	// the transaction commits so the triage job can read the persisted rows.
+	if h.TriageEnqueuer != nil {
+		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
 	}
 
 	resp := map[string]interface{}{
