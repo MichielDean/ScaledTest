@@ -671,20 +671,8 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 // with root cause, label, and failure classifications), overall summary, and
 // metadata (model, generated_at). Returns 202 Accepted while triage is pending.
 func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	reportID := chi.URLParam(r, "reportID")
-	if reportID == "" {
-		Error(w, http.StatusBadRequest, "missing report ID")
-		return
-	}
-
-	if h.TriageStore == nil {
-		Error(w, http.StatusServiceUnavailable, "triage not available")
+	claims, reportID, ok := h.triagePrecheck(w, r)
+	if !ok {
 		return
 	}
 
@@ -699,15 +687,11 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// While triage is still running, return 202 with minimal body.
 	if result.Status == "pending" {
-		JSON(w, http.StatusAccepted, map[string]interface{}{
-			"triage_status": "pending",
-		})
+		writePending(w)
 		return
 	}
 
-	// Fetch clusters and per-failure classifications.
 	clusters, err := h.TriageStore.ListClusters(r.Context(), claims.TeamID, result.ID)
 	if err != nil {
 		log.Error().Err(err).Str("triage_id", result.ID).Msg("failed to list triage clusters")
@@ -735,7 +719,6 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Build cluster response objects with embedded failure lists.
 	clusterResp := make([]map[string]interface{}, 0, len(clusters))
 	for _, c := range clusters {
 		cr := map[string]interface{}{
@@ -760,7 +743,6 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 		resp["error"] = *result.ErrorMsg
 	}
 
-	// Metadata block.
 	meta := map[string]interface{}{
 		"generated_at": result.UpdatedAt,
 	}
@@ -778,20 +760,8 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 // triage record exists for the report. Returns 202 immediately if triage is
 // already pending (idempotent).
 func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	reportID := chi.URLParam(r, "reportID")
-	if reportID == "" {
-		Error(w, http.StatusBadRequest, "missing report ID")
-		return
-	}
-
-	if h.TriageStore == nil {
-		Error(w, http.StatusServiceUnavailable, "triage not available")
+	claims, reportID, ok := h.triagePrecheck(w, r)
+	if !ok {
 		return
 	}
 
@@ -808,9 +778,7 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 
 	// Triage is already in-flight — return accepted without re-enqueuing.
 	if existing.Status == "pending" {
-		JSON(w, http.StatusAccepted, map[string]interface{}{
-			"triage_status": "pending",
-		})
+		writePending(w)
 		return
 	}
 
@@ -826,9 +794,7 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
 	}
 
-	JSON(w, http.StatusAccepted, map[string]interface{}{
-		"triage_status": "pending",
-	})
+	writePending(w)
 }
 
 // failuresOrEmpty returns the slice if non-nil, otherwise an empty slice, so
@@ -838,6 +804,32 @@ func failuresOrEmpty(failures []map[string]string) []map[string]string {
 		return []map[string]string{}
 	}
 	return failures
+}
+
+// triagePrecheck validates auth, reportID, and store availability for triage
+// endpoints. Returns ok=false (with the error already written to w) if any
+// check fails.
+func (h *ReportsHandler) triagePrecheck(w http.ResponseWriter, r *http.Request) (claims *auth.Claims, reportID string, ok bool) {
+	claims = auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return nil, "", false
+	}
+	reportID = chi.URLParam(r, "reportID")
+	if reportID == "" {
+		Error(w, http.StatusBadRequest, "missing report ID")
+		return nil, "", false
+	}
+	if h.TriageStore == nil {
+		Error(w, http.StatusServiceUnavailable, "triage not available")
+		return nil, "", false
+	}
+	return claims, reportID, true
+}
+
+// writePending writes a 202 Accepted response with triage_status=pending.
+func writePending(w http.ResponseWriter) {
+	JSON(w, http.StatusAccepted, map[string]interface{}{"triage_status": "pending"})
 }
 
 // computeReportName derives a display name for a report.
