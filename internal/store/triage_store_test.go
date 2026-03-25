@@ -147,6 +147,25 @@ func TestTriageStore_GetByReportID_ReturnsCorrectTriage(t *testing.T) {
 	}
 }
 
+func TestTriageStore_GetByReportID_TeamIsolation(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamA := tdb.CreateTeam(t, "triage-byreport-iso-a")
+	teamB := tdb.CreateTeam(t, "triage-byreport-iso-b")
+	reportA := createTestReport(t, tdb, teamA)
+	s := store.NewTriageStore(tdb.Pool)
+
+	if _, err := s.Create(ctx, teamA, reportA); err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Team B cannot see team A's triage by report ID
+	_, err := s.GetByReportID(ctx, teamB, reportA)
+	if err == nil {
+		t.Error("expected error when team B queries team A triage by report ID, got nil")
+	}
+}
+
 func TestTriageStore_Complete_SetsStatusAndMetadata(t *testing.T) {
 	tdb := integration.Setup(t)
 	ctx := context.Background()

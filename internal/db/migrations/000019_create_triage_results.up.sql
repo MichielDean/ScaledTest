@@ -47,7 +47,6 @@ CREATE TABLE triage_failure_classifications (
     UNIQUE (triage_id, test_result_id)
 );
 
-CREATE INDEX idx_triage_failure_cls_triage_id      ON triage_failure_classifications (triage_id);
 CREATE INDEX idx_triage_failure_cls_cluster_id     ON triage_failure_classifications (cluster_id);
 CREATE INDEX idx_triage_failure_cls_test_result_id ON triage_failure_classifications (test_result_id);
 CREATE INDEX idx_triage_failure_cls_classification ON triage_failure_classifications (triage_id, classification);
