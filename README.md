@@ -18,7 +18,7 @@ ScaledTest is built on a Go backend with a React SPA frontend.
 
 ### Prerequisites
 
-- Go 1.23+
+- Go 1.25+
 - Node.js 22+
 - PostgreSQL 16+
 
