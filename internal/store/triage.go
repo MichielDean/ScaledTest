@@ -204,25 +204,21 @@ func (s *TriageStore) ForceReset(ctx context.Context, teamID, reportID string) (
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck // rollback on early return is intentional
 
-	// Delete old clusters and classifications that belong to the triage result
-	// for this report, but only when the result is in a terminal state. If the
-	// result is pending or absent the subquery returns no rows and the DELETE is
-	// a no-op.
-	for _, q := range []string{
-		`DELETE FROM triage_clusters
-		 WHERE triage_id = (
-		     SELECT id FROM triage_results
-		     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
-		 )`,
-		`DELETE FROM triage_failure_classifications
-		 WHERE triage_id = (
-		     SELECT id FROM triage_results
-		     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
-		 )`,
-	} {
-		if _, err := tx.Exec(ctx, q, reportID, teamID); err != nil {
-			return nil, fmt.Errorf("force reset triage: delete stale data: %w", err)
-		}
+	// Delete old clusters and classifications for this report's triage result,
+	// but only when the result is in a terminal state. If the result is pending
+	// or absent the subquery returns no rows and the DELETE is a no-op.
+	const terminalSubquery = `SELECT id FROM triage_results
+	     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')`
+
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM triage_clusters WHERE triage_id = (`+terminalSubquery+`)`,
+		reportID, teamID); err != nil {
+		return nil, fmt.Errorf("force reset triage: delete stale clusters: %w", err)
+	}
+	if _, err := tx.Exec(ctx,
+		`DELETE FROM triage_failure_classifications WHERE triage_id = (`+terminalSubquery+`)`,
+		reportID, teamID); err != nil {
+		return nil, fmt.Errorf("force reset triage: delete stale classifications: %w", err)
 	}
 
 	var t model.TriageResult
