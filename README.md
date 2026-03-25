@@ -11,6 +11,7 @@ ScaledTest is built on a Go backend with a React SPA frontend.
 - **Single binary**: serves the embedded SPA via `go:embed`
 - **K8s Job management**: distributed test execution across parallel workers
 - **Quality gates**: rule DSL for pass-rate thresholds and failure limits
+- **LLM-powered triage**: automatic failure clustering and root cause analysis on ingested reports
 - **WebSocket hub**: real-time execution status streaming
 - **OAuth 2.0**: GitHub and Google login (plus email/password)
 
@@ -150,6 +151,8 @@ curl -X POST "https://your-instance/api/v1/reports?github_owner=acme&github_repo
 ```
 
 The status is posted asynchronously (best-effort) and does not affect the HTTP response.
+
+**Automatic test failure triage (optional):** When `ST_LLM_PROVIDER` is configured, ScaledTest automatically enqueues a background triage job for each ingested report. The job invokes the LLM provider to analyze failing tests, cluster them by root cause, and provide enriched context (flakiness history, git diff, previous failures in the same repository). Triage runs asynchronously after the HTTP response is sent and failures do not affect the report's status. The triage result and status are queryable via the test results API.
 
 **Report backdating (test environments only):** When `ST_DISABLE_RATE_LIMIT=true`, you can pass a `created_at` query parameter (RFC3339 format) to override the report ingestion timestamp. This is useful for seeding historical data or testing trend analytics:
 

@@ -1814,3 +1814,67 @@ func TestResolveReportTime_FallsBackToNow(t *testing.T) {
 		})
 	}
 }
+
+// ---------------------------------------------------------------------------
+// TriageEnqueuer integration with ReportsHandler.Create
+// ---------------------------------------------------------------------------
+
+// capTriageEnqueuer records Enqueue calls for test assertions.
+type capTriageEnqueuer struct {
+	mu    sync.Mutex
+	calls []enqueueCall
+}
+
+type enqueueCall struct {
+	teamID   string
+	reportID string
+}
+
+func (e *capTriageEnqueuer) Enqueue(teamID, reportID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	e.calls = append(e.calls, enqueueCall{teamID: teamID, reportID: reportID})
+}
+
+func (e *capTriageEnqueuer) count() int {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	return len(e.calls)
+}
+
+// TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB verifies that the handler
+// does not panic when TriageEnqueuer is nil (triage disabled).
+func TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB(t *testing.T) {
+	h := &ReportsHandler{DB: nil, TriageEnqueuer: nil}
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	// Should not panic.
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with nil TriageEnqueuer (no-DB): got %d, want %d", w.Code, http.StatusCreated)
+	}
+}
+
+// TestCreateReport_TriageEnqueuer_NotCalledOnNoDB verifies that Enqueue is
+// not invoked when there is no database (no persistent report to triage).
+func TestCreateReport_TriageEnqueuer_NotCalledOnNoDB(t *testing.T) {
+	enqueuer := &capTriageEnqueuer{}
+	h := &ReportsHandler{DB: nil, TriageEnqueuer: enqueuer}
+	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("unexpected status: %d", w.Code)
+	}
+	if enqueuer.count() != 0 {
+		t.Errorf("Enqueue should not be called in no-DB mode; got %d calls", enqueuer.count())
+	}
+}
