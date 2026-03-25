@@ -28,6 +28,7 @@ var validWebhookEvents = map[string]bool{
 	"gate.failed":         true,
 	"execution.completed": true,
 	"execution.failed":    true,
+	"run.triage_complete": true,
 }
 
 // WebhookStoreProvider is the store interface needed by WebhooksHandler.
@@ -79,7 +80,7 @@ func validateWebhookEvents(events []string) error {
 	}
 	for i, event := range events {
 		if !validWebhookEvents[event] {
-			return fmt.Errorf("events[%d]: unsupported event %q (supported: report.submitted, gate.failed, execution.completed, execution.failed)", i, event)
+			return fmt.Errorf("events[%d]: unsupported event %q (supported: report.submitted, gate.failed, execution.completed, execution.failed, run.triage_complete)", i, event)
 		}
 	}
 	return nil
