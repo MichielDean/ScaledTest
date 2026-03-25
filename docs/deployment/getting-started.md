@@ -165,12 +165,13 @@ for full details.
 
 Open a browser and navigate to your instance URL (e.g. `http://localhost:3000`).
 The registration page is available at `/register`. The first registered user
-becomes the instance's initial owner.
+is automatically assigned the `owner` role, giving full access to admin
+endpoints. All subsequent users are assigned the `maintainer` role.
 
 Using the API directly:
 
 ```bash
-curl -s -X POST http://localhost:3000/api/v1/auth/register \
+curl -s -X POST http://localhost:3000/auth/register \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"changeme","display_name":"Admin"}'
 ```
@@ -178,7 +179,7 @@ curl -s -X POST http://localhost:3000/api/v1/auth/register \
 ### Log in and get a JWT
 
 ```bash
-curl -s -X POST http://localhost:3000/api/v1/auth/login \
+curl -s -X POST http://localhost:3000/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"admin@example.com","password":"changeme"}' | jq .
 # → { "access_token": "eyJ...", "expires_at": "...", "user": {...} }
