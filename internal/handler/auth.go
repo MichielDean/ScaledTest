@@ -2,6 +2,7 @@ package handler
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"time"
@@ -248,26 +249,35 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 	// Create user. The first user to register is assigned the 'owner' role so
 	// they have immediate access to admin endpoints; all subsequent users are
-	// assigned 'maintainer'. The MATERIALIZED CTE acquires pg_advisory_xact_lock
-	// before evaluating NOT EXISTS, serialising concurrent first-user registrations
-	// within the same implicit transaction. Without this lock, two concurrent
-	// INSERTs under READ COMMITTED could both observe an empty users table and
-	// both claim the owner role.
+	// assigned 'maintainer'. A unique partial index (idx_users_single_owner)
+	// enforces at most one owner at the database level. If two concurrent
+	// registrations both evaluate as the first user under READ COMMITTED, the
+	// second INSERT will violate the index (SQLSTATE 23505). In that case we
+	// retry explicitly as 'maintainer', which is correct because a committed
+	// owner row now exists.
 	var userID, role string
 	err = h.DB.QueryRow(r.Context(),
-		`WITH _lock AS MATERIALIZED (
-		   SELECT pg_advisory_xact_lock(hashtext('scaledtest_first_user_reg')::bigint)
-		 )
-		 INSERT INTO users (email, password_hash, display_name, role)
+		`INSERT INTO users (email, password_hash, display_name, role)
 		 SELECT $1, $2, $3,
 		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner'::text ELSE 'maintainer'::text END
-		 FROM _lock
 		 RETURNING id, role`,
 		req.Email, hash, req.DisplayName,
 	).Scan(&userID, &role)
 	if err != nil {
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_users_single_owner" {
+			// A concurrent registration claimed the owner role; retry as maintainer.
+			err = h.DB.QueryRow(r.Context(),
+				`INSERT INTO users (email, password_hash, display_name, role)
+				 VALUES ($1, $2, $3, 'maintainer')
+				 RETURNING id, role`,
+				req.Email, hash, req.DisplayName,
+			).Scan(&userID, &role)
+		}
+		if err != nil {
+			Error(w, http.StatusInternalServerError, "internal error")
+			return
+		}
 	}
 
 	// Generate token pair and create session
