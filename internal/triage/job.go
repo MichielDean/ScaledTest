@@ -360,10 +360,10 @@ func triageStatusDescription(summary string, newCount int) string {
 	if idx := strings.IndexByte(summary, '\n'); idx >= 0 {
 		line = summary[:idx]
 	}
-	// Truncate to 140 chars with ellipsis if needed.
+	// Truncate to 140 chars with ellipsis if needed (GitHub limit is 140).
 	runes := []rune(line)
 	if len(runes) > 140 {
-		line = string(runes[:140]) + "…"
+		line = string(runes[:139]) + "…"
 	}
 	return line
 }
