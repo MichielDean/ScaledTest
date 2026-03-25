@@ -502,15 +502,19 @@ describe('invitations', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
-  it('acceptInvitation sends POST /api/v1/invitations/{token}/accept', async () => {
+  it('acceptInvitation sends POST /api/v1/invitations/{token}/accept with password and display_name', async () => {
     const fetchMock = mockFetchOk({ message: 'accepted', user_id: 'u-1', team_id: 't-1', role: 'member' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.acceptInvitation('inv_abc123');
+    await client.acceptInvitation('inv_abc123', 'secret123', 'Alice');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/invitations/inv_abc123/accept`);
     expect((init as RequestInit).method).toBe('POST');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({
+      password: 'secret123',
+      display_name: 'Alice',
+    });
   });
 
   it('revokeInvitation encodes teamId and invitationId', async () => {
@@ -535,7 +539,7 @@ describe('invitations', () => {
     const fetchMock = mockFetchOk({ message: 'accepted', user_id: 'u-1', team_id: 't-1', role: 'member' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.acceptInvitation('tok/en');
+    await client.acceptInvitation('tok/en', 'secret', 'Alice');
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/invitations/tok%2Fen/accept`);
   });
@@ -703,7 +707,7 @@ describe('endpoint alignment with routes.go', () => {
       case 'POST /api/v1/teams/{teamID}/invitations': await client.createInvitation('team-1', 'u@example.com', 'member'); break;
       case 'DELETE /api/v1/teams/{teamID}/invitations/{invitationID}': await client.revokeInvitation('team-1', 'inv-1'); break;
       case 'GET /api/v1/invitations/{token}': await client.previewInvitation('inv_tok'); break;
-      case 'POST /api/v1/invitations/{token}/accept': await client.acceptInvitation('inv_tok'); break;
+      case 'POST /api/v1/invitations/{token}/accept': await client.acceptInvitation('inv_tok', 'secret', 'Alice'); break;
       case 'GET /api/v1/teams/{teamID}/tokens': await client.listTokens('team-1'); break;
       case 'POST /api/v1/teams/{teamID}/tokens': await client.createToken('team-1', 'ci'); break;
       case 'DELETE /api/v1/teams/{teamID}/tokens/{tokenID}': await client.deleteToken('team-1', 'tok-1'); break;

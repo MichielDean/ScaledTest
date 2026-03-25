@@ -422,8 +422,8 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/invitations/${encodeURIComponent(token)}`);
   }
 
-  async acceptInvitation(token: string): Promise<InvitationAcceptResult> {
-    return this.request('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`);
+  async acceptInvitation(token: string, password: string, displayName: string): Promise<InvitationAcceptResult> {
+    return this.request('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`, { password, display_name: displayName });
   }
 
   // API Tokens (team-scoped)
