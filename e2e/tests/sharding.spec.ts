@@ -136,6 +136,7 @@ test.describe('Sharding', () => {
 
     await loginViaUI(page);
     await page.getByRole('link', { name: 'Sharding' }).click();
+    await page.waitForURL('/sharding');
 
     // Page structure
     await expect(page.getByRole('heading', { name: 'Test Sharding' })).toBeVisible();

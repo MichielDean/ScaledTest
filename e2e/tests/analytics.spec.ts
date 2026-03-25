@@ -72,6 +72,7 @@ test.describe('Analytics', () => {
 
     await loginViaUI(page);
     await page.getByRole('link', { name: 'Analytics' }).click();
+    await page.waitForURL('/analytics');
 
     // Page heading
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
