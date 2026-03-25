@@ -159,7 +159,7 @@ func TestTriageStore_Complete_SetsStatusAndMetadata(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	updated, err := s.Complete(ctx, triage.ID, "3 failures: 1 new regression, 2 flaky tests", "anthropic", "claude-sonnet-4-6", 1500, 800, 0.002340)
+	updated, err := s.Complete(ctx, teamID, triage.ID, "3 failures: 1 new regression, 2 flaky tests", "anthropic", "claude-sonnet-4-6", 1500, 800, 0.002340)
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -198,7 +198,7 @@ func TestTriageStore_Fail_SetsStatusAndErrorMsg(t *testing.T) {
 		t.Fatalf("Create: %v", err)
 	}
 
-	updated, err := s.Fail(ctx, triage.ID, "LLM API rate limit exceeded")
+	updated, err := s.Fail(ctx, teamID, triage.ID, "LLM API rate limit exceeded")
 	if err != nil {
 		t.Fatalf("Fail: %v", err)
 	}
@@ -274,7 +274,7 @@ func TestTriageStore_ListClusters_ReturnsClustersForTriage(t *testing.T) {
 	s.CreateCluster(ctx, triageA.ID, teamID, "Root cause 2", nil)
 	s.CreateCluster(ctx, triageB.ID, teamID, "Root cause 3", nil)
 
-	clusters, err := s.ListClusters(ctx, triageA.ID)
+	clusters, err := s.ListClusters(ctx, teamID, triageA.ID)
 	if err != nil {
 		t.Fatalf("ListClusters: %v", err)
 	}
@@ -283,7 +283,7 @@ func TestTriageStore_ListClusters_ReturnsClustersForTriage(t *testing.T) {
 	}
 
 	// Other triage's clusters are not returned
-	otherClusters, err := s.ListClusters(ctx, triageB.ID)
+	otherClusters, err := s.ListClusters(ctx, teamID, triageB.ID)
 	if err != nil {
 		t.Fatalf("ListClusters other triage: %v", err)
 	}
@@ -377,11 +377,100 @@ func TestTriageStore_ListClassifications_ReturnsAllForTriage(t *testing.T) {
 	s.CreateClassification(ctx, triage.ID, nil, resultID1, teamID, "new")
 	s.CreateClassification(ctx, triage.ID, nil, resultID2, teamID, "flaky")
 
-	clsList, err := s.ListClassifications(ctx, triage.ID)
+	clsList, err := s.ListClassifications(ctx, teamID, triage.ID)
 	if err != nil {
 		t.Fatalf("ListClassifications: %v", err)
 	}
 	if len(clsList) != 2 {
 		t.Errorf("ListClassifications returned %d, want 2", len(clsList))
+	}
+}
+
+func TestTriageStore_Complete_TeamIsolation(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamA := tdb.CreateTeam(t, "triage-complete-iso-a")
+	teamB := tdb.CreateTeam(t, "triage-complete-iso-b")
+	reportA := createTestReport(t, tdb, teamA)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamA, reportA)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Team B cannot complete team A's triage
+	_, err = s.Complete(ctx, teamB, triage.ID, "summary", "anthropic", "claude-sonnet-4-6", 100, 50, 0.001)
+	if err == nil {
+		t.Error("expected error when team B completes team A triage, got nil")
+	}
+}
+
+func TestTriageStore_Fail_TeamIsolation(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamA := tdb.CreateTeam(t, "triage-fail-iso-a")
+	teamB := tdb.CreateTeam(t, "triage-fail-iso-b")
+	reportA := createTestReport(t, tdb, teamA)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamA, reportA)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	// Team B cannot fail team A's triage
+	_, err = s.Fail(ctx, teamB, triage.ID, "some error")
+	if err == nil {
+		t.Error("expected error when team B fails team A triage, got nil")
+	}
+}
+
+func TestTriageStore_ListClusters_TeamIsolation(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamA := tdb.CreateTeam(t, "triage-listclusters-iso-a")
+	teamB := tdb.CreateTeam(t, "triage-listclusters-iso-b")
+	reportA := createTestReport(t, tdb, teamA)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triageA, err := s.Create(ctx, teamA, reportA)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	s.CreateCluster(ctx, triageA.ID, teamA, "Root cause A", nil)
+
+	// Team B querying team A's triage clusters sees nothing
+	clusters, err := s.ListClusters(ctx, teamB, triageA.ID)
+	if err != nil {
+		t.Fatalf("ListClusters with wrong team: %v", err)
+	}
+	if len(clusters) != 0 {
+		t.Errorf("ListClusters with wrong team returned %d clusters, want 0", len(clusters))
+	}
+}
+
+func TestTriageStore_ListClassifications_TeamIsolation(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamA := tdb.CreateTeam(t, "triage-listcls-iso-a")
+	teamB := tdb.CreateTeam(t, "triage-listcls-iso-b")
+	reportA := createTestReport(t, tdb, teamA)
+	resultA := createTestResult(t, tdb, reportA, teamA)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triageA, err := s.Create(ctx, teamA, reportA)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+	s.CreateClassification(ctx, triageA.ID, nil, resultA, teamA, "flaky")
+
+	// Team B querying team A's triage classifications sees nothing
+	clsList, err := s.ListClassifications(ctx, teamB, triageA.ID)
+	if err != nil {
+		t.Fatalf("ListClassifications with wrong team: %v", err)
+	}
+	if len(clsList) != 0 {
+		t.Errorf("ListClassifications with wrong team returned %d, want 0", len(clsList))
 	}
 }

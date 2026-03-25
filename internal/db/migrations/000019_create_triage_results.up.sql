@@ -17,9 +17,8 @@ CREATE TABLE triage_results (
     UNIQUE (report_id)
 );
 
-CREATE INDEX idx_triage_results_team_id   ON triage_results (team_id);
-CREATE INDEX idx_triage_results_report_id ON triage_results (report_id);
-CREATE INDEX idx_triage_results_status    ON triage_results (status);
+CREATE INDEX idx_triage_results_team_id ON triage_results (team_id);
+CREATE INDEX idx_triage_results_status  ON triage_results (status);
 
 -- triage_clusters: groups of test failures sharing a common root cause
 CREATE TABLE triage_clusters (
