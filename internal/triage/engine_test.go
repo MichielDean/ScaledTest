@@ -423,11 +423,11 @@ func TestEngine_Triage_EmptyFailures_MarshalsClarificationsAsEmptyArray(t *testi
 		t.Fatalf("marshal error: %v", err)
 	}
 	s := string(data)
-	if !strings.Contains(s, `"Classifications":[]`) {
-		t.Errorf("Classifications should serialize as [] not null; got %s", s)
+	if !strings.Contains(s, `"classifications":[]`) {
+		t.Errorf("classifications should serialize as [] not null; got %s", s)
 	}
-	if !strings.Contains(s, `"Clusters":[]`) {
-		t.Errorf("Clusters should serialize as [], got %s", s)
+	if !strings.Contains(s, `"clusters":[]`) {
+		t.Errorf("clusters should serialize as [], got %s", s)
 	}
 }
 

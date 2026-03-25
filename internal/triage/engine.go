@@ -67,24 +67,24 @@ type TriageInput struct {
 // ClusterResult is one root-cause group returned by the engine.
 type ClusterResult struct {
 	// RootCause is a concise description of the shared failure cause.
-	RootCause string
+	RootCause string `json:"root_cause"`
 
 	// Label is an optional short identifier for the cluster (may be empty).
-	Label string
+	Label string `json:"label"`
 }
 
 // ClassificationResult holds the engine's verdict for one failing test.
 type ClassificationResult struct {
 	// TestResultID matches the corresponding FailureDetail.TestResultID.
-	TestResultID string
+	TestResultID string `json:"test_result_id"`
 
 	// ClusterIndex is the zero-based index into TriageOutput.Clusters that
 	// this failure belongs to. -1 means the failure was not assigned to any
 	// cluster (only possible in fallback mode or when the LLM omits it).
-	ClusterIndex int
+	ClusterIndex int `json:"cluster_index"`
 
 	// Classification is one of: "new", "flaky", "regression", "unknown".
-	Classification string
+	Classification string `json:"classification"`
 }
 
 // TriageOutput is the parsed, validated result produced by the engine for
@@ -92,15 +92,15 @@ type ClassificationResult struct {
 type TriageOutput struct {
 	// Summary is a 1–3 sentence human-readable description of the overall
 	// failure pattern. On error it contains a description of the failure.
-	Summary string
+	Summary string `json:"summary"`
 
 	// Clusters is the ordered list of root-cause groups identified by the LLM.
 	// Empty in fallback mode.
-	Clusters []ClusterResult
+	Clusters []ClusterResult `json:"clusters"`
 
 	// Classifications holds one entry per input FailureDetail in the same
 	// order as TriageInput.Failures. Always len(input.Failures) long.
-	Classifications []ClassificationResult
+	Classifications []ClassificationResult `json:"classifications"`
 }
 
 // Engine constructs triage prompts, invokes the LLM, and parses the response

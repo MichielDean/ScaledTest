@@ -149,11 +149,11 @@ func writeFlakinessHistory(b *strings.Builder, history []analytics.TestFlakiness
 	b.WriteString("|------|------|-------|-------------|-------------|\n")
 	for _, h := range history {
 		if !h.HasHistory {
-			fmt.Fprintf(b, "| %s | 0 | — | — | no history |\n", h.TestName)
+			fmt.Fprintf(b, "| %s | 0 | — | — | no history |\n", sanitizeIdentifier(h.TestName))
 			continue
 		}
 		fmt.Fprintf(b, "| %s | %d | %.0f%% | %.2f | %s |\n",
-			h.TestName, h.TotalRuns, h.PassRate, h.FlakyScore, h.LastStatus)
+			sanitizeIdentifier(h.TestName), h.TotalRuns, h.PassRate, h.FlakyScore, h.LastStatus)
 	}
 	b.WriteString("\n")
 }
@@ -186,7 +186,7 @@ func writePreviousFailures(b *strings.Builder, prev []string) {
 	b.WriteString("## Previous Run Failures\n\n")
 	b.WriteString("These tests also failed in the preceding run (may indicate regressions or persistent failures):\n\n")
 	for _, name := range prev {
-		fmt.Fprintf(b, "- %s\n", name)
+		fmt.Fprintf(b, "- %s\n", sanitizeIdentifier(name))
 	}
 	b.WriteString("\n")
 }
