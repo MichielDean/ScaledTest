@@ -152,7 +152,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			prevFinder := store.NewDBPreviousRunFinder(dbPool)
 			diffEnricher := analytics.NewGitDiffEnricher(prevFinder, ghClient)
 			engine := triage.NewEngine(llmProvider)
-			triageEnqueuer = triage.NewRunner(dbPool, engine, triageStore, historyRdr, diffEnricher)
+			runner := triage.NewRunner(dbPool, engine, triageStore, historyRdr, diffEnricher)
+			if ghClient != nil {
+				runner.SetStatusPoster(ghClient, cfg.BaseURL)
+			}
+			triageEnqueuer = runner
 			log.Info().Str("llm_provider", cfg.LLMProvider).Msg("triage enabled")
 		}
 	}

@@ -259,6 +259,72 @@ jobs:
           if-no-files-found: ignore
 ```
 
+## GitHub Commit Status Checks
+
+When you upload a report, ScaledTest can automatically post a commit status check to GitHub (context: `ci/triage`) with the triage analysis results. This provides inline feedback on PRs and commits without requiring users to navigate to the dashboard.
+
+**Note:** This feature requires the GitHub integration to be configured. Contact your ScaledTest administrator to enable it.
+
+### Using the SDK
+
+Pass `triage_github_status: true` when uploading:
+
+```typescript
+import { ScaledTestClient } from "@scaledtest/sdk";
+import { readFileSync } from "fs";
+
+const report = JSON.parse(readFileSync("ctrf-report.json", "utf-8"));
+
+const client = new ScaledTestClient({
+  baseUrl: process.env.SCALEDTEST_URL!,
+  token: process.env.SCALEDTEST_API_TOKEN!,
+});
+
+await client.uploadReport({
+  report,
+  triageGithubStatus: true  // Enable GitHub commit status
+});
+```
+
+### Using `curl`
+
+Add the `triage_github_status=true` query parameter:
+
+```yaml
+- name: Upload CTRF report to ScaledTest with GitHub status
+  if: always()
+  env:
+    SCALEDTEST_URL: ${{ secrets.SCALEDTEST_URL }}
+    SCALEDTEST_API_TOKEN: ${{ secrets.SCALEDTEST_API_TOKEN }}
+  run: |
+    if [ ! -f ctrf-report.json ]; then
+      echo "No CTRF report found"
+      exit 1
+    fi
+
+    curl -s -X POST \
+      "$SCALEDTEST_URL/api/v1/reports?triage_github_status=true" \
+      -H "Authorization: Bearer $SCALEDTEST_API_TOKEN" \
+      -H "Content-Type: application/json" \
+      -d @ctrf-report.json | jq .
+```
+
+### What Appears in GitHub
+
+After triage completes (typically within seconds), you'll see a commit status check:
+
+- **Status context:** `ci/triage` (matches the check suite for other CI checks)
+- **Description:** Triage summary, e.g., "Tests: 150 | Passed: 145 | Failed: 5"
+- **Target URL:** Links directly to the test report in ScaledTest
+- **Status state:**
+  - ✅ **success** — All tests passed or triage completed successfully
+  - ❌ **failure** — Tests failed after triage analysis
+  - ⚠️ **error** — Triage analysis itself failed (e.g., malformed report)
+
+### Behavior on Triage Failure
+
+If triage fails (e.g., due to invalid test data), a status with state `error` and description "Triage failed — see run for details" is posted. This allows developers to see that analysis was attempted but encountered an error, without requiring them to dig into logs.
+
 ## Telegram CI Health Notifications
 
 ScaledTest's main-branch workflow posts a summary of every `go test` run to a Telegram chat. See [Telegram CI notifications](telegram-notifications.md) for setup instructions, environment variable reference, and message format details.
@@ -367,6 +433,12 @@ Uploads a CTRF test report.
 - `execution_id` _(optional)_ — UUID of an existing execution to link this
   report to. When supplied, the GitHub commit status links to the execution
   page and includes the execution ID in its description.
+- `triage_github_status` _(optional)_ — When set to `true` (or any non-empty
+  value), the report automatically posts a GitHub commit status check after
+  triage analysis completes. The status includes the triage summary (pass/fail
+  count, etc.) as a one-line description and links to the ScaledTest dashboard.
+  Requires GitHub integration to be configured. If triage fails, an "error"
+  status is posted with a failure message. Defaults to `false`.
 
 **Headers:**
 - `Authorization: Bearer sct_<token>`

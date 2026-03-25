@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"testing"
 	"time"
@@ -28,14 +29,15 @@ type fakeTriageStore struct {
 	createOrResetResult *model.TriageResult
 	createOrResetErr    error
 
-	// completeErr / failErr inject errors for those transitions.
-	completeErr error
-	failErr     error
+	// completeErr / failErr / createClusterErr inject errors for those transitions.
+	completeErr      error
+	failErr          error
+	createClusterErr error
 
 	// recorded calls
-	completeCalls []string // triageIDs
-	failCalls     []failCall
-	clusters      []clusterCall
+	completeCalls   []string // triageIDs
+	failCalls       []failCall
+	clusters        []clusterCall
 	classifications []classifCall
 }
 
@@ -82,6 +84,9 @@ func (f *fakeTriageStore) Fail(_ context.Context, _, triageID, errMsg string) (*
 func (f *fakeTriageStore) CreateCluster(_ context.Context, triageID, _ /*teamID*/, rootCause string, _ *string) (*model.TriageCluster, error) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
+	if f.createClusterErr != nil {
+		return nil, f.createClusterErr
+	}
 	id := fmt.Sprintf("cluster-%d", len(f.clusters)+1)
 	f.clusters = append(f.clusters, clusterCall{triageID: triageID, rootCause: rootCause})
 	return &model.TriageCluster{ID: id, TriageID: triageID, RootCause: rootCause}, nil
@@ -913,5 +918,531 @@ func TestRunner_Run_WithNoNotifier_DoesNotPanic(t *testing.T) {
 	// When/Then: no panic
 	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// fakeStatusPoster — fake for githubStatusPoster interface
+// ---------------------------------------------------------------------------
+
+type statusPostCall struct {
+	owner, repo, sha, state, description, statusContext, targetURL string
+}
+
+type fakeStatusPoster struct {
+	mu      sync.Mutex
+	calls   []statusPostCall
+	postErr error
+	done    chan struct{}
+	once    sync.Once
+}
+
+func newFakeStatusPoster() *fakeStatusPoster {
+	return &fakeStatusPoster{done: make(chan struct{})}
+}
+
+func (f *fakeStatusPoster) PostStatus(_ context.Context, owner, repo, sha, state, desc, ctx, url string) error {
+	f.mu.Lock()
+	f.calls = append(f.calls, statusPostCall{
+		owner: owner, repo: repo, sha: sha,
+		state: state, description: desc,
+		statusContext: ctx, targetURL: url,
+	})
+	f.mu.Unlock()
+	f.once.Do(func() { close(f.done) })
+	return f.postErr
+}
+
+func (f *fakeStatusPoster) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+func (f *fakeStatusPoster) lastCall() (statusPostCall, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.calls) == 0 {
+		return statusPostCall{}, false
+	}
+	return f.calls[len(f.calls)-1], true
+}
+
+func (f *fakeStatusPoster) waitForCall(t *testing.T, timeout time.Duration) {
+	t.Helper()
+	select {
+	case <-f.done:
+	case <-time.After(timeout):
+		t.Fatal("timed out waiting for GitHub status post")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// GitHub commit status — happy path and guard conditions
+// ---------------------------------------------------------------------------
+
+func TestRunner_Run_WhenTriageGitHubStatusEnabled_PostsCommitStatus(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			Branch:             "main",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+	r.baseURL = "https://example.com"
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	if poster.callCount() != 1 {
+		t.Fatalf("want 1 PostStatus call; got %d", poster.callCount())
+	}
+	call, _ := poster.lastCall()
+	if call.owner != "org" {
+		t.Errorf("owner = %q; want %q", call.owner, "org")
+	}
+	if call.repo != "repo" {
+		t.Errorf("repo = %q; want %q", call.repo, "repo")
+	}
+	if call.sha != "abc123" {
+		t.Errorf("sha = %q; want %q", call.sha, "abc123")
+	}
+}
+
+func TestRunner_Run_WhenTriageGitHubStatusDisabled_DoesNotPostCommitStatus(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: false,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+	r.baseURL = "https://example.com"
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Allow any goroutine to run.
+	time.Sleep(50 * time.Millisecond)
+	if poster.callCount() != 0 {
+		t.Errorf("want 0 PostStatus calls when flag disabled; got %d", poster.callCount())
+	}
+}
+
+func TestRunner_Run_WhenStatusPosterNil_DoesNotPostCommitStatus(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	r := newTestRunner(store, data, validResponse(failures))
+	// r.statusPoster is nil by default
+
+	// Should not panic
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunner_Run_WhenRepositoryMissing_DoesNotPostCommitStatus(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "", // missing
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if poster.callCount() != 0 {
+		t.Errorf("want 0 PostStatus calls when repository is missing; got %d", poster.callCount())
+	}
+}
+
+func TestRunner_Run_WhenCommitMissing_DoesNotPostCommitStatus(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "", // missing
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	time.Sleep(50 * time.Millisecond)
+	if poster.callCount() != 0 {
+		t.Errorf("want 0 PostStatus calls when commit is missing; got %d", poster.callCount())
+	}
+}
+
+func TestRunner_Run_WithNewFailures_PostsFailureStatus(t *testing.T) {
+	failures := makeNFailures(3)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures)) // validResponse classifies all as "new"
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "failure" {
+		t.Errorf("state = %q; want %q", call.state, "failure")
+	}
+}
+
+func TestRunner_Run_WithNoNewFailures_PostsSuccessStatus(t *testing.T) {
+	// Build a response that classifies all failures as "flaky" (not "new")
+	failures := makeNFailures(2)
+	cls := make([]llmClassification, len(failures))
+	for i, f := range failures {
+		cls[i] = llmClassification{TestResultID: f.TestResultID, Classification: "flaky"}
+	}
+	out := llmOutput{
+		Summary: "All flaky tests.",
+		Clusters: []llmCluster{
+			{RootCause: "flaky", Classifications: cls},
+		},
+	}
+	data2, _ := json.Marshal(out)
+
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, data2)
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "success" {
+		t.Errorf("state = %q; want %q", call.state, "success")
+	}
+}
+
+func TestRunner_Run_WhenStatusPosterErrors_JobSucceeds(t *testing.T) {
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	poster.postErr = errors.New("GitHub API error")
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+
+	err := r.run(context.Background(), "team-1", "report-1")
+
+	// Job must succeed even if status posting fails
+	if err != nil {
+		t.Fatalf("job should succeed even when status poster errors; got %v", err)
+	}
+	// The triage should still complete
+	if store.completedCount() != 1 {
+		t.Errorf("want 1 Complete call; got %d", store.completedCount())
+	}
+	// Wait for the goroutine to finish
+	poster.waitForCall(t, 2*time.Second)
+}
+
+func TestRunner_Run_NoFailures_WhenGitHubStatusEnabled_PostsSuccessStatus(t *testing.T) {
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: nil,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, nil)
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "success" {
+		t.Errorf("state = %q; want %q", call.state, "success")
+	}
+}
+
+func TestRunner_Run_GithubStatus_UsesCorrectContext(t *testing.T) {
+	failures := makeNFailures(1)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "sha1",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.statusContext != "ci/triage" {
+		t.Errorf("statusContext = %q; want %q", call.statusContext, "ci/triage")
+	}
+}
+
+func TestRunner_Run_GithubStatus_UsesCorrectTargetURL(t *testing.T) {
+	failures := makeNFailures(1)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "sha1",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+	r.baseURL = "https://app.example.com"
+
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	want := "https://app.example.com/reports/report-1"
+	if call.targetURL != want {
+		t.Errorf("targetURL = %q; want %q", call.targetURL, want)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// triageStatusDescription helper
+// ---------------------------------------------------------------------------
+
+func TestTriageStatusDescription_EmptySummaryNoNewFailures(t *testing.T) {
+	got := triageStatusDescription("", 0)
+	want := "Triage complete — no new failures"
+	if got != want {
+		t.Errorf("got %q; want %q", got, want)
+	}
+}
+
+func TestTriageStatusDescription_EmptySummaryWithNewFailures(t *testing.T) {
+	got := triageStatusDescription("", 3)
+	want := "Triage: 3 new failure(s) detected"
+	if got != want {
+		t.Errorf("got %q; want %q", got, want)
+	}
+}
+
+func TestTriageStatusDescription_FirstLineOfMultiLineSummary(t *testing.T) {
+	summary := "First line of summary.\nSecond line.\nThird line."
+	got := triageStatusDescription(summary, 0)
+	want := "First line of summary."
+	if got != want {
+		t.Errorf("got %q; want %q", got, want)
+	}
+}
+
+func TestTriageStatusDescription_TruncatesLongSummary(t *testing.T) {
+	// Build a single-line summary longer than 140 chars
+	long := strings.Repeat("a", 145)
+	got := triageStatusDescription(long, 0)
+	if len([]rune(got)) > 140 {
+		t.Errorf("description too long: len=%d, got %q", len(got), got)
+	}
+	if !strings.HasSuffix(got, "…") {
+		t.Errorf("truncated description should end with '…'; got %q", got)
+	}
+}
+
+func TestTriageStatusDescription_ShortSummaryPassedThrough(t *testing.T) {
+	summary := "Short summary."
+	got := triageStatusDescription(summary, 2)
+	if got != summary {
+		t.Errorf("got %q; want %q", got, summary)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// failTriage + GitHub status interaction
+// ---------------------------------------------------------------------------
+
+func TestRunner_Run_WhenEngineFails_WithGitHubStatusEnabled_PostsErrorStatus(t *testing.T) {
+	// Given: LLM errors, but env has TriageGitHubStatus=true
+	failures := makeNFailures(2)
+	provider := llm.NewMock(nil)
+	provider.SetError(errors.New("service unavailable"))
+
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "abc123",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := &Runner{
+		engine:       NewEngine(provider),
+		store:        store,
+		data:         data,
+		sem:          make(chan struct{}, triageWorkerLimit),
+		statusPoster: poster,
+		baseURL:      "https://example.com",
+	}
+
+	// When: triage runs and engine fails
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: an "error" commit status is posted so the PR receives feedback
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "error" {
+		t.Errorf("state = %q; want %q", call.state, "error")
+	}
+	if call.sha != "abc123" {
+		t.Errorf("sha = %q; want %q", call.sha, "abc123")
+	}
+	if call.statusContext != "ci/triage" {
+		t.Errorf("statusContext = %q; want %q", call.statusContext, "ci/triage")
+	}
+}
+
+func TestRunner_Run_WhenPersistFails_WithGitHubStatusEnabled_PostsErrorStatus(t *testing.T) {
+	// Given: persist (CreateCluster) errors, but env has TriageGitHubStatus=true
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	store.createClusterErr = errors.New("db connection lost")
+	data := &fakeReportData{
+		failures: failures,
+		env: reportEnv{
+			Repository:         "org/repo",
+			Commit:             "deadbeef",
+			TriageGitHubStatus: true,
+		},
+	}
+	poster := newFakeStatusPoster()
+	r := newTestRunner(store, data, validResponse(failures))
+	r.statusPoster = poster
+	r.baseURL = "https://example.com"
+
+	// When: triage runs and persist fails
+	_ = r.run(context.Background(), "team-1", "report-1")
+
+	// Then: an "error" commit status is posted
+	poster.waitForCall(t, 2*time.Second)
+
+	call, ok := poster.lastCall()
+	if !ok {
+		t.Fatal("no PostStatus call recorded")
+	}
+	if call.state != "error" {
+		t.Errorf("state = %q; want %q", call.state, "error")
+	}
+	if call.sha != "deadbeef" {
+		t.Errorf("sha = %q; want %q", call.sha, "deadbeef")
 	}
 }

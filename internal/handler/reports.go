@@ -196,6 +196,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	ctrf.Sanitize(report)
 
 	executionID := r.URL.Query().Get("execution_id")
+	triageGitHubStatus := r.URL.Query().Get("triage_github_status") == "true"
 
 	if h.DB == nil {
 		// Fallback for no-DB mode: accept but don't persist
@@ -206,6 +207,9 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if executionID != "" {
 			resp["execution_id"] = executionID
+		}
+		if triageGitHubStatus {
+			resp["triage_github_status"] = true
 		}
 		JSON(w, http.StatusCreated, resp)
 		h.maybePostGitHubStatus(r, report.Results.Summary, "", executionID)
@@ -258,11 +262,12 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	// Insert report
 	_, err = tx.Exec(r.Context(),
-		`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at, triage_github_status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		reportID, claims.TeamID, execIDPtr,
 		report.Results.Tool.Name, report.Results.Tool.Version,
-		report.Results.Environment, summaryJSON, rawJSON, now)
+		report.Results.Environment, summaryJSON, rawJSON, now,
+		triageGitHubStatus)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to store report")
 		return
@@ -321,6 +326,9 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	if executionID != "" {
 		resp["execution_id"] = executionID
+	}
+	if triageGitHubStatus {
+		resp["triage_github_status"] = true
 	}
 
 	// Evaluate quality gates for this team

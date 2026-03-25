@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/jackc/pgx/v5"
@@ -47,6 +48,12 @@ type webhookNotifier interface {
 	Notify(teamID string, event webhook.EventType, data interface{})
 }
 
+// githubStatusPoster posts a GitHub commit status.
+// Implemented by *github.Client (internal/github).
+type githubStatusPoster interface {
+	PostStatus(ctx context.Context, owner, repo, sha, state, description, statusContext, targetURL string) error
+}
+
 // reportData abstracts the pool-level queries on test_reports and test_results.
 // The production implementation is pgxReportData; tests use fakeReportData.
 type reportData interface {
@@ -60,9 +67,10 @@ type reportData interface {
 
 // reportEnv holds the CTRF environment fields relevant to triage enrichment.
 type reportEnv struct {
-	Repository string `json:"repository"`
-	Commit     string `json:"commit"`
-	Branch     string `json:"branch"`
+	Repository         string `json:"repository"`
+	Commit             string `json:"commit"`
+	Branch             string `json:"branch"`
+	TriageGitHubStatus bool   // not JSON; populated from triage_github_status DB column
 }
 
 // Runner executes triage jobs asynchronously. Create one with NewRunner and
@@ -89,6 +97,8 @@ type Runner struct {
 	diffEnricher *analytics.GitDiffEnricher
 	sem          chan struct{} // bounded semaphore; capacity = triageWorkerLimit
 	webhooks     webhookNotifier
+	statusPoster githubStatusPoster // nil when GitHub integration is disabled
+	baseURL      string             // used to construct target URLs in GitHub statuses
 }
 
 // NewRunner constructs a Runner backed by a live pgxpool. historyRdr and
@@ -116,6 +126,13 @@ func NewRunner(
 // are silently dropped).
 func (r *Runner) SetWebhookNotifier(n webhookNotifier) {
 	r.webhooks = n
+}
+
+// SetStatusPoster configures the GitHub status poster used to post commit
+// statuses after triage completes. A nil poster disables status posting.
+func (r *Runner) SetStatusPoster(poster githubStatusPoster, baseURL string) {
+	r.statusPoster = poster
+	r.baseURL = baseURL
 }
 
 // Enqueue launches a background goroutine that runs the triage job for the
@@ -167,7 +184,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 
 	failures, env, err := r.data.fetchFailuresAndEnv(ctx, teamID, reportID)
 	if err != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, err.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, err.Error(), reportEnv{})
 		return fmt.Errorf("triage: fetch failures: %w", err)
 	}
 
@@ -178,6 +195,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 		}
 		r.data.setTriageStatus(ctx, teamID, reportID, "complete")
 		r.notifyTriageComplete(teamID, reportID, "complete", "", 0, 0, 0)
+		r.postTriageGitHubStatus(env, reportID, "success", triageStatusDescription("", 0))
 		return nil
 	}
 
@@ -187,12 +205,12 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	// Persist clusters and classifications even on engine error — we
 	// persist the fallback output so partial results are available.
 	if persistErr := r.persistOutput(ctx, teamID, triageID, output); persistErr != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error(), env)
 		return fmt.Errorf("triage: persist output: %w", persistErr)
 	}
 
 	if triageErr != nil {
-		r.failTriage(ctx, teamID, triageID, reportID, triageErr.Error())
+		r.failTriage(ctx, teamID, triageID, reportID, triageErr.Error(), env)
 		// Return nil — the error is captured in the record, not a job-level failure.
 		return nil
 	}
@@ -204,6 +222,11 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	r.data.setTriageStatus(ctx, teamID, reportID, "complete")
 	newCount, flakyCount := countNewAndFlaky(output)
 	r.notifyTriageComplete(teamID, reportID, "complete", output.Summary, len(output.Clusters), newCount, flakyCount)
+	state := "success"
+	if newCount > 0 {
+		state = "failure"
+	}
+	r.postTriageGitHubStatus(env, reportID, state, triageStatusDescription(output.Summary, newCount))
 	return nil
 }
 
@@ -323,15 +346,68 @@ func countNewAndFlaky(output *TriageOutput) (newCount, flakyCount int) {
 	return
 }
 
+// triageStatusDescription builds a one-line GitHub commit status description
+// from the triage summary and the count of new failures.
+func triageStatusDescription(summary string, newCount int) string {
+	if summary == "" {
+		if newCount == 0 {
+			return "Triage complete — no new failures"
+		}
+		return fmt.Sprintf("Triage: %d new failure(s) detected", newCount)
+	}
+	// Use first line of summary.
+	line := summary
+	if idx := strings.IndexByte(summary, '\n'); idx >= 0 {
+		line = summary[:idx]
+	}
+	// Truncate to 140 chars with ellipsis if needed (GitHub limit is 140).
+	runes := []rune(line)
+	if len(runes) > 140 {
+		line = string(runes[:139]) + "…"
+	}
+	return line
+}
+
+// postTriageGitHubStatus fires a GitHub commit status in a background goroutine
+// when the per-report flag is set and the integration is configured.
+// Errors are logged and swallowed — status posting is best-effort.
+func (r *Runner) postTriageGitHubStatus(env reportEnv, reportID, state, description string) {
+	if !env.TriageGitHubStatus || r.statusPoster == nil {
+		return
+	}
+	owner, repo, ok := analytics.ParseOwnerRepo(env.Repository)
+	if !ok || env.Commit == "" {
+		return
+	}
+	var targetURL string
+	if r.baseURL != "" {
+		targetURL = r.baseURL + "/reports/" + reportID
+	}
+	poster := r.statusPoster
+	commit := env.Commit
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		defer cancel()
+		if err := poster.PostStatus(ctx, owner, repo, commit, state, description, "ci/triage", targetURL); err != nil {
+			log.Error().Err(err).
+				Str("report_id", reportID).
+				Str("sha", commit).
+				Msg("triage: failed to post GitHub commit status")
+		}
+	}()
+}
+
 // failTriage marks the triage record as failed and updates the report status.
 // Errors are logged rather than returned — the outer run() must not fail
 // because the failure-recording step itself failed.
-func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, errMsg string) {
+// If env contains GitHub status configuration, an "error" commit status is posted.
+func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, errMsg string, env reportEnv) {
 	if _, err := r.store.Fail(ctx, teamID, triageID, errMsg); err != nil {
 		log.Error().Err(err).Str("triage_id", triageID).Msg("triage: failed to record failure")
 	}
 	r.data.setTriageStatus(ctx, teamID, reportID, "failed")
 	r.notifyTriageComplete(teamID, reportID, "failed", "", 0, 0, 0)
+	r.postTriageGitHubStatus(env, reportID, "error", "Triage failed — see run for details")
 }
 
 // ---------------------------------------------------------------------------
@@ -344,15 +420,18 @@ type pgxReportData struct {
 
 func (d *pgxReportData) fetchFailuresAndEnv(ctx context.Context, teamID, reportID string) ([]FailureDetail, reportEnv, error) {
 	var envJSON json.RawMessage
+	var triageGitHubStatus bool
 	err := d.pool.QueryRow(ctx,
-		`SELECT COALESCE(environment, '{}'::jsonb) FROM test_reports WHERE id = $1 AND team_id = $2`,
-		reportID, teamID).Scan(&envJSON)
+		`SELECT COALESCE(environment, '{}'::jsonb), COALESCE(triage_github_status, FALSE)
+		 FROM test_reports WHERE id = $1 AND team_id = $2`,
+		reportID, teamID).Scan(&envJSON, &triageGitHubStatus)
 	if err != nil {
 		return nil, reportEnv{}, fmt.Errorf("fetch report environment: %w", err)
 	}
 
 	var env reportEnv
 	_ = json.Unmarshal(envJSON, &env) // ignore parse errors — enrichment fields are optional
+	env.TriageGitHubStatus = triageGitHubStatus
 
 	rows, err := d.pool.Query(ctx,
 		`SELECT id, name, COALESCE(suite,''), COALESCE(message,''), COALESCE(trace,''), duration_ms
