@@ -14,69 +14,48 @@
 
 ## Architecture
 
-ScaledTest is a dual-stack platform (v1 legacy + v2 Go backend both on main):
+ScaledTest is a v2 Go backend + React SPA:
 
-### v1 Legacy (Next.js monolith)
+- **Go backend**: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
+- **React frontend**: React 19, TanStack Router/Query, Zustand, Recharts — served as embedded SPA via `go:embed`
+- **K8s Job management** for distributed test execution
+- **Quality gate rule DSL**, WebSocket hub for real-time updates
 
-- Next.js 15 + React 19 + TypeScript
-- Better Auth for authentication/RBAC
-- TimescaleDB for time-series test data
-- Jest (unit/component/integration) + Playwright (E2E)
+## Work Submission
 
-### v2 (Go backend + React SPA — now on main)
-
-- Go backend: chi router, pgxpool, JWT auth, RBAC, CTRF ingestion
-- React 19 frontend: TanStack Router/Query, Zustand, Recharts
-- Single binary serves embedded SPA via go:embed
-- K8s Job management for distributed execution
-- Quality gate rule DSL, WebSocket hub for real-time updates
-
-## Work Submission (CRITICAL for polecats)
-
-**NEVER create PRs directly with `gh pr create`.** All work goes through the Gas Town merge queue:
+Create PRs using the standard GitHub CLI:
 
 ```bash
-gt done --pre-verified    # Submit branch to MQ, notify witness, transition to idle
+gh pr create --title "sc-XXXXX: short description" --body "..."
 ```
-
-This ensures:
-
-- Bead/issue is automatically closed after merge
-- Refinery runs quality gates
-- Branch cleanup happens automatically
-- Work is tracked in the capability ledger
-
-If you create a PR manually, the bead will NOT be closed and the work is invisible to the system.
 
 ## Development Standards
 
 - **TDD**: Write failing tests first, then implementation
 - **CTRF compliance**: All test result handling must conform to CTRF spec
 - **Team scoping**: All data queries must be team-scoped (no cross-team data leaks)
-- **API consistency**: v1 uses `{ success: false, error: string }` (optionally `message`/`data`); v2 target contract is `{ error, code, details? }` for all new APIs
+- **API consistency**: v2 contract is `{ error, code, details? }` for all error responses
 - **Type safety**: No `as any` without justification. Strict TypeScript.
 
 ## Test Commands
 
 ```bash
-npm test                    # All tests
-npm run test:unit           # Unit tests
-npm run test:components     # Component tests
-npm run test:integration    # Integration tests
-npm run test:system         # System + Playwright
+make test                   # All Go tests (with race detector)
+make test-short             # Fast Go tests (no race)
+make test-integration       # Integration tests (requires TEST_DATABASE_URL)
+cd frontend && npm test     # Frontend tests (Vitest)
 ```
 
 ## Key Directories
 
 ```
-src/
-  components/views/         # Main UI views (Dashboard, Analytics, TestResults, Admin)
-  lib/                      # Core libraries (auth, analytics, db)
-  pages/api/v1/             # REST API endpoints
-  sdk/                      # TypeScript SDK
-tests/
-  unit/                     # Unit tests
-  components/               # Component tests
-  integration/              # Integration tests
-  ui/                       # Playwright E2E tests
+cmd/                  # Go binaries (server, worker, ci-notify)
+internal/             # Go backend packages (auth, handler, store, ctrf, quality, ws, …)
+frontend/             # React 19 SPA (Vite + TypeScript)
+  src/
+    components/       # UI components
+    routes/           # TanStack Router page routes
+sdk/                  # TypeScript SDK
+migrations/           # Database migrations
+e2e/                  # End-to-end tests
 ```
