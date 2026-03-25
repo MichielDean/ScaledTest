@@ -151,11 +151,17 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:    whNotifier,
 	}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
-	qgH := &handler.QualityGatesHandler{Store: qgStore, DB: dbPool}
-	teamsH := &handler.TeamsHandler{DB: dbPool}
+	qgH := &handler.QualityGatesHandler{DB: dbPool, AuditStore: auditStore}
+	if qgStore != nil {
+		qgH.Store = qgStore
+	}
+	teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
+	if dbPool != nil {
+		teamsH.Store = store.NewTeamsStore(dbPool)
+	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
-	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher()}
+	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher(), AuditStore: auditStore}
 	if whStore != nil {
 		whH.Store = whStore
 	}
@@ -164,9 +170,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 
 	invH := &handler.InvitationsHandler{
-		DB:      dbPool,
-		BaseURL: cfg.BaseURL,
-		Mailer:  mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom),
+		DB:         dbPool,
+		BaseURL:    cfg.BaseURL,
+		Mailer:     mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom),
+		AuditStore: auditStore,
 	}
 	if dbPool != nil {
 		invH.Store = store.NewInvitationStore(dbPool)

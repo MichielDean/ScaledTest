@@ -1,20 +1,57 @@
 # Context
 
-## Item: sc-uq877
+## Item: sc-jnr8j
 
-**Title:** Consistent date formatting across the entire frontend
+**Title:** Audit log: emit events from teams, quality gates, webhooks, invitations
 **Status:** in_progress
-**Priority:** 3
+**Priority:** 2
 
 ### Description
 
-Date formatting is inconsistent across the application: the Users/Teams tables on the Admin page show '3/24/2026' (toLocaleDateString with no options), the Audit Log shows '3/24/2026, 7:49:03 PM' (date + time), the Analytics trend chart shows raw ISO 8601 timestamps, and the Test Reports page uses 'Mar 24, 2026' (month/day/year with abbreviated month). Fix: create a shared date formatting utility in frontend/src/lib/utils.ts (or a new frontend/src/lib/date.ts) exporting: (1) formatDate(iso: string): string — 'Mar 24, 2026' for date-only display; (2) formatDateTime(iso: string): string — 'Mar 24, 2026, 7:49 PM' for timestamps with time; (3) formatDateShort(iso: string): string — 'Mar 24' for chart axis labels. Replace all inline date formatting across admin.tsx, analytics.tsx, dashboard.tsx, test-results.tsx, and any other routes with calls to these shared formatters. Add unit tests for all three formatters covering edge cases (invalid date, midnight UTC boundary).
+The audit log currently only captures report and execution events. Team create/delete, quality gate create/update/delete, webhook create/update/delete, and invitation create/revoke/accept all emit zero audit events. Add AuditStore.Log calls to teams.go, quality_gates.go, webhooks.go, and invitations.go for all mutating operations. Each entry needs actor_id, actor_email, team_id, action (e.g. 'team.delete'), resource_type, and resource_id.
 
 ## Current Step: implement
 
 - **Type:** agent
 - **Role:** implementer
 - **Context:** full_codebase
+
+## ⚠️ REVISION REQUIRED — Fix these issues before anything else
+
+This droplet was recirculated. The following issues were found and **must** be fixed.
+Do not proceed to implementation until you have read and understood each issue.
+
+### Issue 1 (from: reviewer)
+
+Finding 1 (CRITICAL): internal/server/routes.go:154-173 — AuditStore never wired into TeamsHandler, QualityGatesHandler, WebhooksHandler, or InvitationsHandler. All four handlers are constructed without setting the AuditStore field. Because logAudit() silently no-ops on nil, every audit event added by this diff is dead code in production. Fix: pass auditStore to each handler at construction, e.g. teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
+
+### Issue 2 (from: reviewer)
+
+Finding 2: Missing test coverage — teams.go adds 4 audit events (team.created, team.deleted, token.created, token.deleted) with zero tests. quality_gates.go adds 3 audit events (quality_gate.created, quality_gate.updated, quality_gate.deleted) with zero tests. invitation.accepted has no test either. Only webhooks (3 tests) and invitation create/revoke (3 tests) have coverage. Fix: add audit assertion tests for teams, quality gates, and invitation.accepted, following the same capAuditLogger pattern already used in webhooks_test.go and invitations_test.go.
+
+### Issue 3 (from: reviewer)
+
+♻ 2 findings. (1) CRITICAL: internal/server/routes.go:154-173 — AuditStore is never wired into TeamsHandler, QualityGatesHandler, WebhooksHandler, or InvitationsHandler at construction time. Since logAudit() silently no-ops on nil, every audit event in this diff is dead code in production. (2) Missing test coverage — 8 of 13 audit events have no tests: all 4 teams events, all 3 quality gate events, and invitation.accepted.
+
+---
+
+## Recent Step Notes
+
+### From: reviewer
+
+♻ 2 findings. (1) CRITICAL: internal/server/routes.go:154-173 — AuditStore is never wired into TeamsHandler, QualityGatesHandler, WebhooksHandler, or InvitationsHandler at construction time. Since logAudit() silently no-ops on nil, every audit event in this diff is dead code in production. (2) Missing test coverage — 8 of 13 audit events have no tests: all 4 teams events, all 3 quality gate events, and invitation.accepted.
+
+### From: reviewer
+
+Finding 2: Missing test coverage — teams.go adds 4 audit events (team.created, team.deleted, token.created, token.deleted) with zero tests. quality_gates.go adds 3 audit events (quality_gate.created, quality_gate.updated, quality_gate.deleted) with zero tests. invitation.accepted has no test either. Only webhooks (3 tests) and invitation create/revoke (3 tests) have coverage. Fix: add audit assertion tests for teams, quality gates, and invitation.accepted, following the same capAuditLogger pattern already used in webhooks_test.go and invitations_test.go.
+
+### From: reviewer
+
+Finding 1 (CRITICAL): internal/server/routes.go:154-173 — AuditStore never wired into TeamsHandler, QualityGatesHandler, WebhooksHandler, or InvitationsHandler. All four handlers are constructed without setting the AuditStore field. Because logAudit() silently no-ops on nil, every audit event added by this diff is dead code in production. Fix: pass auditStore to each handler at construction, e.g. teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
+
+### From: simplifier
+
+Simplified: extracted logAudit(ctx, al, entry) helper into audit.go, replacing 13 identical nil-guard blocks (if h.AuditStore != nil { h.AuditStore.Log(...) }) across teams.go, quality_gates.go, webhooks.go, and invitations.go. Tests: all handler tests pass (1 package, 2.7s).
 
 <available_skills>
   <skill>
@@ -39,16 +76,16 @@ Date formatting is inconsistent across the application: the Users/Teams tables o
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-uq877
+    ct droplet pass sc-jnr8j
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-uq877
-    ct droplet recirculate sc-uq877 --to implement
+    ct droplet recirculate sc-jnr8j
+    ct droplet recirculate sc-jnr8j --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-uq877
+    ct droplet block sc-jnr8j
 
 Add notes before signaling:
-    ct droplet note sc-uq877 "What you did / found"
+    ct droplet note sc-jnr8j "What you did / found"
 
 The `ct` binary is on your PATH.

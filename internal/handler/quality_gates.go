@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -39,9 +41,20 @@ type QualityGateRule struct {
 	Params json.RawMessage `json:"params"`
 }
 
+// qualityGateStore is the data-access interface for quality gate operations.
+type qualityGateStore interface {
+	List(ctx context.Context, teamID string) ([]model.QualityGate, error)
+	Get(ctx context.Context, teamID, gateID string) (*model.QualityGate, error)
+	Create(ctx context.Context, teamID, name, description string, rules json.RawMessage) (*model.QualityGate, error)
+	Update(ctx context.Context, teamID, gateID, name, description string, rules json.RawMessage, enabled bool) (*model.QualityGate, error)
+	Delete(ctx context.Context, teamID, gateID string) error
+	CreateEvaluation(ctx context.Context, gateID, reportID string, passed bool, details json.RawMessage) (*model.QualityGateEvaluation, error)
+	ListEvaluations(ctx context.Context, gateID string, limit int) ([]model.QualityGateEvaluation, error)
+}
+
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
-	Store      *store.QualityGateStore
+	Store      qualityGateStore
 	DB         *db.Pool
 	AuditStore auditLogger
 }

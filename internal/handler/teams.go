@@ -14,9 +14,19 @@ import (
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
+// teamsStore abstracts team and token data operations for testable handlers.
+type teamsStore interface {
+	CreateTeam(ctx context.Context, userID, name string) (*model.Team, error)
+	GetUserRole(ctx context.Context, userID, teamID string) (string, error)
+	DeleteTeam(ctx context.Context, teamID string) error
+	CreateToken(ctx context.Context, teamID, userID, name, tokenHash, prefix string) (*model.APIToken, error)
+	DeleteToken(ctx context.Context, teamID, tokenID string) (int64, error)
+}
+
 // TeamsHandler handles team management endpoints.
 type TeamsHandler struct {
 	DB         *db.Pool
+	Store      teamsStore
 	AuditStore auditLogger
 }
 
@@ -90,7 +100,7 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusNotImplemented, "create team requires database connection")
 		return
 	}
@@ -98,34 +108,9 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Sanitize user-provided strings
 	req.Name = sanitize.String(req.Name)
 
-	// Use a transaction so team + membership are atomic
-	tx, err := h.DB.Begin(r.Context())
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to begin transaction")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	var team model.Team
-	err = tx.QueryRow(r.Context(),
-		`INSERT INTO teams (name) VALUES ($1) RETURNING id, name, created_at`,
-		req.Name).Scan(&team.ID, &team.Name, &team.CreatedAt)
+	team, err := h.Store.CreateTeam(r.Context(), claims.UserID, req.Name)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create team")
-		return
-	}
-
-	// Add creator as owner
-	_, err = tx.Exec(r.Context(),
-		`INSERT INTO user_teams (user_id, team_id, role) VALUES ($1, $2, 'owner')`,
-		claims.UserID, team.ID)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to add team membership")
-		return
-	}
-
-	if err := tx.Commit(r.Context()); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to commit team creation")
 		return
 	}
 
@@ -198,13 +183,13 @@ func (h *TeamsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusNotImplemented, "delete team requires database connection")
 		return
 	}
 
 	// Only owners can delete teams
-	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
+	role, err := h.Store.GetUserRole(r.Context(), claims.UserID, teamID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
 		return
@@ -218,8 +203,7 @@ func (h *TeamsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = h.DB.Exec(r.Context(), `DELETE FROM teams WHERE id = $1`, teamID)
-	if err != nil {
+	if err := h.Store.DeleteTeam(r.Context(), teamID); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to delete team")
 		return
 	}
@@ -313,13 +297,13 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusNotImplemented, "create token requires database connection")
 		return
 	}
 
 	// Only owners can create tokens
-	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
+	role, err := h.Store.GetUserRole(r.Context(), claims.UserID, teamID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
 		return
@@ -343,13 +327,7 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var token model.APIToken
-	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO api_tokens (team_id, user_id, name, token_hash, prefix)
-		 VALUES ($1, $2, $3, $4, $5)
-		 RETURNING id, team_id, user_id, name, prefix, created_at`,
-		teamID, claims.UserID, req.Name, tokenResult.TokenHash, tokenResult.Prefix).
-		Scan(&token.ID, &token.TeamID, &token.UserID, &token.Name, &token.Prefix, &token.CreatedAt)
+	token, err := h.Store.CreateToken(r.Context(), teamID, claims.UserID, req.Name, tokenResult.TokenHash, tokenResult.Prefix)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create token")
 		return
@@ -395,13 +373,13 @@ func (h *TeamsHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusNotImplemented, "delete token requires database connection")
 		return
 	}
 
 	// Only owners can revoke tokens
-	role, err := h.getUserTeamRole(r.Context(), claims.UserID, teamID)
+	role, err := h.Store.GetUserRole(r.Context(), claims.UserID, teamID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "team not found")
 		return
@@ -415,13 +393,12 @@ func (h *TeamsHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	tag, err := h.DB.Exec(r.Context(),
-		`DELETE FROM api_tokens WHERE id = $1 AND team_id = $2`, tokenID, teamID)
+	rowsAffected, err := h.Store.DeleteToken(r.Context(), teamID, tokenID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to delete token")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		Error(w, http.StatusNotFound, "token not found")
 		return
 	}
