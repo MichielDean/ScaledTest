@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-o4uyx
+## Item: sc-flli2
 
-**Title:** Wire async triage job into report ingest pipeline
+**Title:** Expose on-demand triage result API endpoint
 **Status:** in_progress
 **Priority:** 2
 
 ### Description
 
-After a CI run report is fully ingested and its status is final, enqueue a background triage job. The job invokes the triage prompt engine, persists the result, and updates the run record with a triage_status field. Acceptance criteria: triage runs automatically on every completed run without blocking the ingest response; job is idempotent and re-runnable on failure; job failure does not mark the run as failed; triage result is queryable within 30s of run completion under normal load.
+Add GET /runs/{run_id}/triage returning the persisted triage result: status, clusters array (each with root cause label, failure list, and classification), overall summary, and metadata (model used, generated_at). Add POST /runs/{run_id}/triage/retry to re-trigger triage for a completed run. Integrate with the existing error analysis endpoint surface for a consistent caller API. Return 202 Accepted with triage_status=pending while async job is still running.
 
 ## Current Step: implement
 
@@ -39,16 +39,16 @@ After a CI run report is fully ingested and its status is final, enqueue a backg
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-o4uyx
+    ct droplet pass sc-flli2
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-o4uyx
-    ct droplet recirculate sc-o4uyx --to implement
+    ct droplet recirculate sc-flli2
+    ct droplet recirculate sc-flli2 --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-o4uyx
+    ct droplet block sc-flli2
 
 Add notes before signaling:
-    ct droplet note sc-o4uyx "What you did / found"
+    ct droplet note sc-flli2 "What you did / found"
 
 The `ct` binary is on your PATH.

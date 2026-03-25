@@ -130,6 +130,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	ghClient := ghclient.New(cfg.GitHubToken)
 
+	// Triage store — provides access to persisted triage results.
+	// Used by both the Runner (for job persistence) and the API endpoints.
+	var triageStore *store.TriageStore
+	if dbPool != nil {
+		triageStore = store.NewTriageStore(dbPool)
+	}
+
 	// Triage runner — wires LLM triage into the report ingest pipeline.
 	// Gracefully disabled when LLM credentials are not configured.
 	var triageEnqueuer triage.Enqueuer
@@ -141,7 +148,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		if llmErr != nil {
 			log.Warn().Err(llmErr).Msg("LLM not available — triage disabled")
 		} else {
-			triageStore := store.NewTriageStore(dbPool)
 			historyRdr := store.NewDBHistoryReader(dbPool)
 			prevFinder := store.NewDBPreviousRunFinder(dbPool)
 			diffEnricher := analytics.NewGitDiffEnricher(prevFinder, ghClient)
@@ -164,6 +170,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:           whNotifier,
 		GitHubStatusPoster: ghClient,
 		BaseURL:            cfg.BaseURL,
+		TriageStore:        triageStore,
 		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
 	}
@@ -246,6 +253,8 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			r.Get("/compare", reportsH.Compare)
 			r.Get("/{reportID}", reportsH.Get)
 			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{reportID}", reportsH.Delete)
+			r.Get("/{reportID}/triage", reportsH.GetTriage)
+			r.With(auth.RequireRole("maintainer", "owner")).Post("/{reportID}/triage/retry", reportsH.RetryTriage)
 		})
 
 		r.Route("/executions", func(r chi.Router) {

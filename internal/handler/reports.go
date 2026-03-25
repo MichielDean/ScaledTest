@@ -26,6 +26,14 @@ import (
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
+// triageAccessor abstracts the store operations needed by GetTriage and RetryTriage.
+type triageAccessor interface {
+	GetByReportID(ctx context.Context, teamID, reportID string) (*model.TriageResult, error)
+	ListClusters(ctx context.Context, teamID, triageID string) ([]model.TriageCluster, error)
+	ListClassifications(ctx context.Context, teamID, triageID string) ([]model.TriageFailureClassification, error)
+	ForceReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error)
+}
+
 // qualityGateEvaluator is the subset of store.QualityGateStore used by the
 // reports handler for auto-evaluation on report submission.
 type qualityGateEvaluator interface {
@@ -47,6 +55,9 @@ type ReportsHandler struct {
 	Webhooks           *webhook.Notifier
 	GitHubStatusPoster githubStatusPoster // nil when GitHub integration is disabled
 	BaseURL            string             // used to construct target URLs in GitHub statuses
+	// TriageStore provides access to persisted triage results for read and retry.
+	// When nil, triage endpoints return 503.
+	TriageStore triageAccessor
 	// TriageEnqueuer schedules background LLM triage for each ingested report.
 	// When nil, triage is disabled (e.g. no LLM credentials configured).
 	TriageEnqueuer triage.Enqueuer
@@ -653,6 +664,180 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 			},
 		},
 	})
+}
+
+// GetTriage handles GET /api/v1/reports/{reportID}/triage.
+// It returns the persisted triage result for the report: status, clusters (each
+// with root cause, label, and failure classifications), overall summary, and
+// metadata (model, generated_at). Returns 202 Accepted while triage is pending.
+func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	reportID := chi.URLParam(r, "reportID")
+	if reportID == "" {
+		Error(w, http.StatusBadRequest, "missing report ID")
+		return
+	}
+
+	if h.TriageStore == nil {
+		Error(w, http.StatusServiceUnavailable, "triage not available")
+		return
+	}
+
+	result, err := h.TriageStore.GetByReportID(r.Context(), claims.TeamID, reportID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(w, http.StatusNotFound, "triage not found")
+			return
+		}
+		log.Error().Err(err).Str("report_id", reportID).Msg("failed to get triage result")
+		Error(w, http.StatusInternalServerError, "failed to get triage result")
+		return
+	}
+
+	// While triage is still running, return 202 with minimal body.
+	if result.Status == "pending" {
+		JSON(w, http.StatusAccepted, map[string]interface{}{
+			"triage_status": "pending",
+		})
+		return
+	}
+
+	// Fetch clusters and per-failure classifications.
+	clusters, err := h.TriageStore.ListClusters(r.Context(), claims.TeamID, result.ID)
+	if err != nil {
+		log.Error().Err(err).Str("triage_id", result.ID).Msg("failed to list triage clusters")
+		Error(w, http.StatusInternalServerError, "failed to get triage clusters")
+		return
+	}
+
+	classifications, err := h.TriageStore.ListClassifications(r.Context(), claims.TeamID, result.ID)
+	if err != nil {
+		log.Error().Err(err).Str("triage_id", result.ID).Msg("failed to list triage classifications")
+		Error(w, http.StatusInternalServerError, "failed to get triage classifications")
+		return
+	}
+
+	// Index classifications by cluster ID for O(1) look-up when building output.
+	classByCluster := make(map[string][]map[string]string)
+	for _, c := range classifications {
+		key := ""
+		if c.ClusterID != nil {
+			key = *c.ClusterID
+		}
+		classByCluster[key] = append(classByCluster[key], map[string]string{
+			"test_result_id": c.TestResultID,
+			"classification": c.Classification,
+		})
+	}
+
+	// Build cluster response objects with embedded failure lists.
+	clusterResp := make([]map[string]interface{}, 0, len(clusters))
+	for _, c := range clusters {
+		cr := map[string]interface{}{
+			"id":         c.ID,
+			"root_cause": c.RootCause,
+			"failures":   failuresOrEmpty(classByCluster[c.ID]),
+		}
+		if c.Label != nil {
+			cr["label"] = *c.Label
+		}
+		clusterResp = append(clusterResp, cr)
+	}
+
+	resp := map[string]interface{}{
+		"triage_status": result.Status,
+		"clusters":      clusterResp,
+	}
+	if result.Summary != nil {
+		resp["summary"] = *result.Summary
+	}
+	if result.ErrorMsg != nil {
+		resp["error"] = *result.ErrorMsg
+	}
+
+	// Metadata block.
+	meta := map[string]interface{}{
+		"generated_at": result.UpdatedAt,
+	}
+	if result.LLMModel != nil {
+		meta["model"] = *result.LLMModel
+	}
+	resp["metadata"] = meta
+
+	JSON(w, http.StatusOK, resp)
+}
+
+// RetryTriage handles POST /api/v1/reports/{reportID}/triage/retry.
+// It re-triggers LLM triage for a report whose triage has already completed or
+// failed. Returns 202 Accepted while the new job is queued. Returns 404 if no
+// triage record exists for the report. Returns 202 immediately if triage is
+// already pending (idempotent).
+func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return
+	}
+
+	reportID := chi.URLParam(r, "reportID")
+	if reportID == "" {
+		Error(w, http.StatusBadRequest, "missing report ID")
+		return
+	}
+
+	if h.TriageStore == nil {
+		Error(w, http.StatusServiceUnavailable, "triage not available")
+		return
+	}
+
+	existing, err := h.TriageStore.GetByReportID(r.Context(), claims.TeamID, reportID)
+	if err != nil {
+		if errors.Is(err, pgx.ErrNoRows) {
+			Error(w, http.StatusNotFound, "triage not found")
+			return
+		}
+		log.Error().Err(err).Str("report_id", reportID).Msg("failed to get triage result for retry")
+		Error(w, http.StatusInternalServerError, "failed to get triage result")
+		return
+	}
+
+	// Triage is already in-flight — return accepted without re-enqueuing.
+	if existing.Status == "pending" {
+		JSON(w, http.StatusAccepted, map[string]interface{}{
+			"triage_status": "pending",
+		})
+		return
+	}
+
+	// Reset from complete or failed back to pending.
+	if _, err := h.TriageStore.ForceReset(r.Context(), claims.TeamID, reportID); err != nil {
+		log.Error().Err(err).Str("report_id", reportID).Msg("failed to reset triage for retry")
+		Error(w, http.StatusInternalServerError, "failed to reset triage")
+		return
+	}
+
+	// Enqueue the new triage job (best-effort — nil enqueuer is graceful degradation).
+	if h.TriageEnqueuer != nil {
+		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
+	}
+
+	JSON(w, http.StatusAccepted, map[string]interface{}{
+		"triage_status": "pending",
+	})
+}
+
+// failuresOrEmpty returns the slice if non-nil, otherwise an empty slice, so
+// JSON output always contains an array rather than null.
+func failuresOrEmpty(failures []map[string]string) []map[string]string {
+	if failures == nil {
+		return []map[string]string{}
+	}
+	return failures
 }
 
 // computeReportName derives a display name for a report.

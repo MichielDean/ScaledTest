@@ -186,6 +186,32 @@ func (s *TriageStore) CreateClassification(ctx context.Context, triageID string,
 	return &c, nil
 }
 
+// ForceReset resets a triage result from any terminal state (complete or failed)
+// back to pending so it can be re-run via the retry endpoint.
+//
+// Returns (result, nil) when the row was successfully reset.
+// Returns (nil, nil) when the row is already pending or does not exist for the team.
+// Returns (nil, err) on any database error.
+func (s *TriageStore) ForceReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
+	var t model.TriageResult
+	err := scanTriageResult(s.pool.QueryRow(ctx,
+		`UPDATE triage_results
+		 SET status = 'pending', error_msg = NULL, summary = NULL,
+		     llm_provider = NULL, llm_model = NULL,
+		     input_tokens = 0, output_tokens = 0, cost_usd = 0, updated_at = now()
+		 WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
+		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
+		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
+		reportID, teamID), &t)
+	if errors.Is(err, pgx.ErrNoRows) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("force reset triage: %w", err)
+	}
+	return &t, nil
+}
+
 // ListClassifications returns all failure classifications for a triage result, ordered by creation time.
 func (s *TriageStore) ListClassifications(ctx context.Context, teamID, triageID string) ([]model.TriageFailureClassification, error) {
 	rows, err := s.pool.Query(ctx,
