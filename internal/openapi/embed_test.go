@@ -49,88 +49,63 @@ func TestSpec_NotEmpty(t *testing.T) {
 	}
 }
 
-func TestSpec_HasInvitationPaths(t *testing.T) {
+func specDoc(t *testing.T) map[string]interface{} {
+	t.Helper()
 	var doc map[string]interface{}
 	if err := json.Unmarshal(spec, &doc); err != nil {
 		t.Fatalf("spec is not valid JSON: %v", err)
 	}
+	return doc
+}
 
-	paths, ok := doc["paths"].(map[string]interface{})
+func specPaths(t *testing.T) map[string]interface{} {
+	t.Helper()
+	paths, ok := specDoc(t)["paths"].(map[string]interface{})
 	if !ok {
 		t.Fatal("missing paths section")
 	}
+	return paths
+}
 
-	requiredPaths := []struct {
-		path   string
-		method string
-	}{
+func assertPathMethods(t *testing.T, paths map[string]interface{}, checks []struct{ path, method string }) {
+	t.Helper()
+	for _, c := range checks {
+		pathItem, exists := paths[c.path]
+		if !exists {
+			t.Errorf("missing path: %s", c.path)
+			continue
+		}
+		methods, ok := pathItem.(map[string]interface{})
+		if !ok {
+			t.Errorf("path %s is not an object", c.path)
+			continue
+		}
+		if _, has := methods[c.method]; !has {
+			t.Errorf("missing method %s on path %s", c.method, c.path)
+		}
+	}
+}
+
+func TestSpec_HasInvitationPaths(t *testing.T) {
+	assertPathMethods(t, specPaths(t), []struct{ path, method string }{
 		{"/api/v1/teams/{teamID}/invitations", "post"},
 		{"/api/v1/teams/{teamID}/invitations", "get"},
 		{"/api/v1/teams/{teamID}/invitations/{invitationID}", "delete"},
 		{"/api/v1/invitations/{token}", "get"},
 		{"/api/v1/invitations/{token}/accept", "post"},
-	}
-
-	for _, rp := range requiredPaths {
-		pathItem, exists := paths[rp.path]
-		if !exists {
-			t.Errorf("missing path: %s", rp.path)
-			continue
-		}
-		methods, ok := pathItem.(map[string]interface{})
-		if !ok {
-			t.Errorf("path %s is not an object", rp.path)
-			continue
-		}
-		if _, has := methods[rp.method]; !has {
-			t.Errorf("missing method %s on path %s", rp.method, rp.path)
-		}
-	}
+	})
 }
 
 func TestSpec_HasAuthProfilePaths(t *testing.T) {
-	var doc map[string]interface{}
-	if err := json.Unmarshal(spec, &doc); err != nil {
-		t.Fatalf("spec is not valid JSON: %v", err)
-	}
-
-	paths, ok := doc["paths"].(map[string]interface{})
-	if !ok {
-		t.Fatal("missing paths section")
-	}
-
-	requiredPaths := []struct {
-		path   string
-		method string
-	}{
+	assertPathMethods(t, specPaths(t), []struct{ path, method string }{
 		{"/api/v1/auth/me", "get"},
 		{"/api/v1/auth/me", "patch"},
 		{"/api/v1/auth/change-password", "post"},
-	}
-
-	for _, rp := range requiredPaths {
-		pathItem, exists := paths[rp.path]
-		if !exists {
-			t.Errorf("missing path: %s", rp.path)
-			continue
-		}
-		methods, ok := pathItem.(map[string]interface{})
-		if !ok {
-			t.Errorf("path %s is not an object", rp.path)
-			continue
-		}
-		if _, has := methods[rp.method]; !has {
-			t.Errorf("missing method %s on path %s", rp.method, rp.path)
-		}
-	}
+	})
 }
 
 func TestSpec_HasInvitationSchema(t *testing.T) {
-	var doc map[string]interface{}
-	if err := json.Unmarshal(spec, &doc); err != nil {
-		t.Fatalf("spec is not valid JSON: %v", err)
-	}
-
+	doc := specDoc(t)
 	components, ok := doc["components"].(map[string]interface{})
 	if !ok {
 		t.Fatal("missing components section")
