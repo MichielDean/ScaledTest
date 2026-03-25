@@ -256,13 +256,16 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	}
 	defer tx.Rollback(r.Context())
 
+	triageGitHubStatus := r.URL.Query().Get("triage_github_status") == "true"
+
 	// Insert report
 	_, err = tx.Exec(r.Context(),
-		`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+		`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at, triage_github_status)
+		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
 		reportID, claims.TeamID, execIDPtr,
 		report.Results.Tool.Name, report.Results.Tool.Version,
-		report.Results.Environment, summaryJSON, rawJSON, now)
+		report.Results.Environment, summaryJSON, rawJSON, now,
+		triageGitHubStatus)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to store report")
 		return
