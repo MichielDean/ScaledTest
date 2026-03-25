@@ -190,17 +190,15 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "quality_gate.created",
-			ResourceType: "quality_gate",
-			ResourceID:   gate.ID,
-			Metadata:     map[string]interface{}{"name": gate.Name},
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.created",
+		ResourceType: "quality_gate",
+		ResourceID:   gate.ID,
+		Metadata:     map[string]interface{}{"name": gate.Name},
+	})
 
 	JSON(w, http.StatusCreated, gate)
 }
@@ -292,17 +290,15 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "quality_gate.updated",
-			ResourceType: "quality_gate",
-			ResourceID:   gateID,
-			Metadata:     map[string]interface{}{"name": req.Name},
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.updated",
+		ResourceType: "quality_gate",
+		ResourceID:   gateID,
+		Metadata:     map[string]interface{}{"name": req.Name},
+	})
 
 	JSON(w, http.StatusOK, gate)
 }
@@ -340,16 +336,14 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "quality_gate.deleted",
-			ResourceType: "quality_gate",
-			ResourceID:   gateID,
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.deleted",
+		ResourceType: "quality_gate",
+		ResourceID:   gateID,
+	})
 
 	JSON(w, http.StatusOK, map[string]string{"message": "quality gate deleted"})
 }

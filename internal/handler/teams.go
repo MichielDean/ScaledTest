@@ -129,16 +129,14 @@ func (h *TeamsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       team.ID,
-			Action:       "team.created",
-			ResourceType: "team",
-			ResourceID:   team.ID,
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       team.ID,
+		Action:       "team.created",
+		ResourceType: "team",
+		ResourceID:   team.ID,
+	})
 
 	JSON(w, http.StatusCreated, team)
 }
@@ -226,16 +224,14 @@ func (h *TeamsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "team.deleted",
-			ResourceType: "team",
-			ResourceID:   teamID,
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "team.deleted",
+		ResourceType: "team",
+		ResourceID:   teamID,
+	})
 
 	JSON(w, http.StatusOK, map[string]string{"message": "team deleted"})
 }
@@ -359,17 +355,15 @@ func (h *TeamsHandler) CreateToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "token.created",
-			ResourceType: "token",
-			ResourceID:   token.ID,
-			Metadata:     map[string]interface{}{"name": token.Name},
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "token.created",
+		ResourceType: "token",
+		ResourceID:   token.ID,
+		Metadata:     map[string]interface{}{"name": token.Name},
+	})
 
 	// Return the full token value — shown only once
 	JSON(w, http.StatusCreated, map[string]interface{}{
@@ -432,16 +426,14 @@ func (h *TeamsHandler) DeleteToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.AuditStore != nil {
-		h.AuditStore.Log(r.Context(), store.Entry{
-			ActorID:      claims.UserID,
-			ActorEmail:   claims.Email,
-			TeamID:       teamID,
-			Action:       "token.deleted",
-			ResourceType: "token",
-			ResourceID:   tokenID,
-		})
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "token.deleted",
+		ResourceType: "token",
+		ResourceID:   tokenID,
+	})
 
 	JSON(w, http.StatusOK, map[string]string{"message": "token revoked"})
 }
