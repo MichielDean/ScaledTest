@@ -3,6 +3,7 @@ import {
   loadCachedToken,
   tokenHeaders,
   buildCtrfReport,
+  loginViaUI,
   getOrCreateTeam,
   createAPIToken,
 } from './helpers';
@@ -57,5 +58,43 @@ test.describe('Analytics', () => {
     expect(durationRes.ok()).toBeTruthy();
     const duration = await durationRes.json();
     expect(duration.distribution).toBeDefined();
+  });
+
+  test('analytics UI: page renders all four sections with chart content', async ({
+    page,
+    request,
+  }) => {
+    // Ensure a team exists so the JWT from loginViaUI embeds a team_id.
+    // global-setup seeds reports across 3 distinct dates, so trends, error analysis,
+    // and duration distribution should all have data (non-empty state).
+    const session = loadCachedToken();
+    await getOrCreateTeam(request, session);
+
+    await loginViaUI(page);
+    await page.getByRole('link', { name: 'Analytics' }).click();
+
+    // Page heading
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+
+    // All four section headings
+    await expect(page.getByRole('heading', { name: 'Pass Rate Trends' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flaky Tests' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Duration Distribution' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Error Analysis' })).toBeVisible();
+
+    // Trends chart renders with seeded data (not empty state) — global-setup seeds reports
+    // on 3 distinct dates which produces >1 data point and renders the LineChart.
+    await expect(page.getByText('No trend data available yet.')).not.toBeVisible();
+
+    // Error analysis has data: seeded reports include failing tests with error messages.
+    await expect(page.getByText('No errors recorded.')).not.toBeVisible();
+
+    // Duration distribution has data from submitted test results.
+    await expect(page.getByText('No duration data available.')).not.toBeVisible();
+
+    // Authenticated navigation is present
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/analytics-ui.png' });
   });
 });
