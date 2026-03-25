@@ -1,14 +1,14 @@
 # Context
 
-## Item: sc-yqnno
+## Item: sc-2g9qe
 
-**Title:** Implement configurable LLM provider abstraction
+**Title:** Build git diff context provider for triage enrichment
 **Status:** in_progress
 **Priority:** 2
 
 ### Description
 
-Define a provider interface with a single analyze method accepting a prompt and a structured output schema, returning a typed response. Implement Anthropic (claude-sonnet-4-6) and OpenAI (gpt-4o) backends. Provider selection and credentials are driven by environment config (e.g. LLM_PROVIDER, ANTHROPIC_API_KEY, OPENAI_API_KEY). Include retry logic, timeout handling, and a mock provider for tests. No business logic here — pure transport and auth layer.
+Implement a context enricher that, given a commit SHA and repo, fetches changed files and a condensed diff summary (file paths + churn stats, not full hunks) since the previous successful run. Output is a structured diff summary sized for safe LLM prompt inclusion. Must handle: missing repo access gracefully (return empty context, do not fail triage), large diffs (truncate to top-N files by churn), and per-run caching to avoid redundant fetches.
 
 ## Current Step: delivery
 
@@ -22,31 +22,19 @@ Do not proceed to implementation until you have read and understood each issue.
 
 ### Issue 1 (from: reviewer)
 
-Finding: llm.go:57-58 — MaxRetries zero-value ambiguity. `if cfg.MaxRetries == 0 { cfg.MaxRetries = 2 }` makes it impossible for callers to request 0 retries (1 total attempt). Go zero-value int is 0, so Config{} and Config{MaxRetries: 0} are indistinguishable — both silently get 3 attempts. Tests at llm_test.go:176 and llm_test.go:234 pass MaxRetries: 0 intending no retries but get 2; they pass only by accident (non-JSON test: CLI exits 0 so retry loop breaks immediately; deadline test: parent context kills all attempts). Fix: use negative sentinel for default (if cfg.MaxRetries < 0) or change to *int where nil means use default.
+Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. FetchDiff interpolates owner, repo, baseSHA, headSHA into URL without validation. PostStatus in the same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. User-controlled CTRF data flows through ParseOwnerRepo to these params. Fix: apply same validOwnerRepo/validSHA validation as PostStatus.
 
 ### Issue 2 (from: reviewer)
 
-♻ 1 finding. (1) llm.go:57-58 — MaxRetries zero-value ambiguity: `if cfg.MaxRetries == 0` silently converts explicit MaxRetries:0 (caller wants 1 total attempt) into MaxRetries:2 (3 total attempts). Tests at llm_test.go:176 and llm_test.go:234 set MaxRetries:0 intending no retries but get 2 — they pass by accident. Fix: use negative sentinel for default or *int.
+Finding 2: internal/analytics/git_diff.go:198 — ParseOwnerRepo allows slashes in repo component. strings.SplitN(s, "/", 2) means 'owner/repo/extra' yields repo='repo/extra' with ok=true, injecting extra path segments into FetchDiff URL. Fix: after SplitN, verify parts[1] contains no '/' or use strings.Split and require exactly 2 non-empty parts.
 
 ### Issue 3 (from: reviewer)
 
-Phase 1 — Prior issues RESOLVED: MaxRetries changed from int to *int (llm.go:46). nil→default(2), intPtr(0)→0 retries. New test TestCLIProvider_Analyze_ZeroRetries_MakesExactlyOneAttempt (llm_test.go:234) verifies exactly 1 invocation. All 17 tests pass with -race.
+Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory leak). sync.Map cache has no eviction, TTL, or size limit. Every unique (teamID, repo, headSHA) tuple is cached permanently. For a long-running server with continuous deployments, this grows monotonically. Fix: use a bounded LRU cache or add TTL-based eviction.
 
 ### Issue 4 (from: reviewer)
 
-Finding: llm.go:59-60 — Missing validation for negative *MaxRetries. New() accepts intPtr(-1) without error, setting maxRetries to -1. The retry loop (cli.go:70) 'for attempt := 0; attempt <= c.maxRetries' evaluates 0 <= -1 as false, so the loop body never executes. Analyze then returns a confusing 'not valid JSON' error on nil output instead of a clear config error. Fix: add 'if maxRetries < 0 { return nil, fmt.Errorf("llm: MaxRetries must be >= 0, got %d", maxRetries) }' in New() after resolving the default.
-
-### Issue 5 (from: reviewer)
-
-♻ 1 finding. Prior issues (MaxRetries zero-value ambiguity) are RESOLVED — *int fix is correct and well-tested. New finding: llm.go:59-60 — New() does not validate negative *MaxRetries values. intPtr(-1) silently produces a provider whose Analyze loop never executes, returning a confusing 'not valid JSON' error. Fix: validate maxRetries >= 0 in New().
-
-### Issue 6 (from: reviewer)
-
-Phase 1: All 5 prior issues RESOLVED. (1-2) MaxRetries changed to *int — nil→default(2), intPtr(0)→0 retries. Zero-retries test verifies exactly 1 invocation. (4-5) Negative MaxRetries validation added at llm.go:62-64 with test coverage. All 18 tests pass with -race. Phase 2: Fresh adversarial review — no new findings. exec.CommandContext safely passes prompt as discrete arg (no shell injection). Credential check is fail-fast. Retry loop bounds and context cancellation correct. No resource leaks. Mock is goroutine-safe. Config test follows existing codebase pattern.
-
-### Issue 7 (from: reviewer)
-
-No findings. All prior issues resolved. Fresh review clean — no security, logic, error handling, or contract issues found.
+♻ 3 findings. (1) SSRF: FetchDiff (github/diff.go:39) interpolates owner/repo/SHA into URL without validation — PostStatus in same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. (2) ParseOwnerRepo (analytics/git_diff.go:198) allows slashes in repo via SplitN limit 2, compounding finding 1. (3) Unbounded sync.Map cache (analytics/git_diff.go:75) with no eviction — memory leak on long-running servers.
 
 ---
 
@@ -54,19 +42,19 @@ No findings. All prior issues resolved. Fresh review clean — no security, logi
 
 ### From: docs_writer
 
-Updated README.md: documented LLM provider configuration (ST_LLM_PROVIDER, ST_LLM_COMMAND, ANTHROPIC_API_KEY, OPENAI_API_KEY) and added llm package to Project Structure section.
+♻ 3 findings. (1) SSRF: FetchDiff (github/diff.go:39) interpolates owner/repo/SHA into URL without validation — PostStatus in same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. (2) ParseOwnerRepo (analytics/git_diff.go:198) allows slashes in repo via SplitN limit 2, compounding finding 1. (3) Unbounded sync.Map cache (analytics/git_diff.go:75) with no eviction — memory leak on long-running servers.
 
 ### From: reviewer
 
-No findings. All prior issues resolved. Fresh review clean — no security, logic, error handling, or contract issues found.
+Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory leak). sync.Map cache has no eviction, TTL, or size limit. Every unique (teamID, repo, headSHA) tuple is cached permanently. For a long-running server with continuous deployments, this grows monotonically. Fix: use a bounded LRU cache or add TTL-based eviction.
 
 ### From: reviewer
 
-Phase 1: All 5 prior issues RESOLVED. (1-2) MaxRetries changed to *int — nil→default(2), intPtr(0)→0 retries. Zero-retries test verifies exactly 1 invocation. (4-5) Negative MaxRetries validation added at llm.go:62-64 with test coverage. All 18 tests pass with -race. Phase 2: Fresh adversarial review — no new findings. exec.CommandContext safely passes prompt as discrete arg (no shell injection). Credential check is fail-fast. Retry loop bounds and context cancellation correct. No resource leaks. Mock is goroutine-safe. Config test follows existing codebase pattern.
+Finding 2: internal/analytics/git_diff.go:198 — ParseOwnerRepo allows slashes in repo component. strings.SplitN(s, "/", 2) means 'owner/repo/extra' yields repo='repo/extra' with ok=true, injecting extra path segments into FetchDiff URL. Fix: after SplitN, verify parts[1] contains no '/' or use strings.Split and require exactly 2 non-empty parts.
 
 ### From: simplifier
 
-No simplifications required — code is already clear and idiomatic. All 18 tests pass with -race.
+Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. FetchDiff interpolates owner, repo, baseSHA, headSHA into URL without validation. PostStatus in the same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. User-controlled CTRF data flows through ParseOwnerRepo to these params. Fix: apply same validOwnerRepo/validSHA validation as PostStatus.
 
 <available_skills>
   <skill>
@@ -91,16 +79,16 @@ No simplifications required — code is already clear and idiomatic. All 18 test
 When your work is done, signal your outcome using the `ct` CLI:
 
 **Pass (work complete, move to next step):**
-    ct droplet pass sc-yqnno
+    ct droplet pass sc-2g9qe
 
 **Recirculate (needs rework — send back upstream):**
-    ct droplet recirculate sc-yqnno
-    ct droplet recirculate sc-yqnno --to implement
+    ct droplet recirculate sc-2g9qe
+    ct droplet recirculate sc-2g9qe --to implement
 
 **Block (genuinely blocked, cannot proceed):**
-    ct droplet block sc-yqnno
+    ct droplet block sc-2g9qe
 
 Add notes before signaling:
-    ct droplet note sc-yqnno "What you did / found"
+    ct droplet note sc-2g9qe "What you did / found"
 
 The `ct` binary is on your PATH.
