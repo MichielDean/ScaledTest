@@ -330,7 +330,6 @@ func TestTraceLimit_AdaptsToFailureCount(t *testing.T) {
 	}
 }
 
-// makeDiffFiles creates n synthetic FileDiffStat values.
 // ----- Prompt injection sanitization tests --------------------------------
 
 func TestBuildPrompt_SanitizesNewlinesInTestResultID(t *testing.T) {
@@ -399,6 +398,7 @@ func TestBuildPrompt_WrapsTraceInStructuralDelimiters(t *testing.T) {
 	}
 }
 
+// makeDiffFiles creates n synthetic FileDiffStat values.
 func makeDiffFiles(n int) []analytics.FileDiffStat {
 	files := make([]analytics.FileDiffStat, n)
 	for i := range files {

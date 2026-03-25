@@ -215,7 +215,7 @@ func TestEngine_Triage_LLMError_ReturnsErrorAndFallback(t *testing.T) {
 			t.Errorf("fallback ClusterIndex should be -1, got %d", c.ClusterIndex)
 		}
 	}
-	if out.Clusters != nil && len(out.Clusters) != 0 {
+	if len(out.Clusters) != 0 {
 		t.Errorf("fallback should have no clusters, got %d", len(out.Clusters))
 	}
 }
