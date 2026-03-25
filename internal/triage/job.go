@@ -136,7 +136,7 @@ func (r *Runner) Enqueue(teamID, reportID string) {
 // (engine failure, parse error) are captured in the triage record and do not
 // surface as return values.
 func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
-	// Step 1: Claim a pending slot — idempotency gate.
+	// Claim a pending slot — idempotency gate.
 	result, err := r.store.CreateOrReset(ctx, teamID, reportID)
 	if err != nil {
 		return fmt.Errorf("triage: claim slot: %w", err)
@@ -156,7 +156,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 		return fmt.Errorf("triage: fetch failures: %w", err)
 	}
 
-	// Step 3: No failures — complete immediately without calling the LLM.
+	// No failures — complete immediately without calling the LLM.
 	if len(failures) == 0 {
 		if _, err := r.store.Complete(ctx, teamID, triageID, "", "", "", 0, 0, 0); err != nil {
 			log.Warn().Err(err).Str("triage_id", triageID).Msg("triage: mark complete (no failures)")
@@ -169,7 +169,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	output, triageErr := r.engine.Triage(ctx, input)
 
 	// Persist clusters and classifications even on engine error — we
-	// persist the fallback output so partial results are available).
+	// persist the fallback output so partial results are available.
 	if persistErr := r.persistOutput(ctx, teamID, triageID, output); persistErr != nil {
 		r.failTriage(ctx, teamID, triageID, reportID, persistErr.Error())
 		return fmt.Errorf("triage: persist output: %w", persistErr)

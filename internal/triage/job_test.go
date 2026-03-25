@@ -199,6 +199,7 @@ func newTestRunner(store *fakeTriageStore, data *fakeReportData, llmResp json.Ra
 		store:      store,
 		data:       data,
 		historyRdr: nil,
+		sem:        make(chan struct{}, triageWorkerLimit),
 	}
 }
 
