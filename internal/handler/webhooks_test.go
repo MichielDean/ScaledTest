@@ -417,7 +417,9 @@ func TestWebhooksRetryDeliveryWithoutDB(t *testing.T) {
 
 // mockWebhookStore implements WebhookStoreProvider for unit tests.
 type mockWebhookStore struct {
-	getFunc func(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+	getFunc       func(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
+	createWebhook *model.Webhook
+	updateWebhook *model.Webhook
 }
 
 func (m *mockWebhookStore) List(_ context.Context, _ string) ([]model.Webhook, error) { return nil, nil }
@@ -428,12 +430,134 @@ func (m *mockWebhookStore) Get(ctx context.Context, teamID, webhookID string) (*
 	return &model.Webhook{ID: webhookID, TeamID: teamID, URL: "https://example.com/hook", SecretHash: "hash"}, nil
 }
 func (m *mockWebhookStore) Create(_ context.Context, _, _, _ string, _ []string) (*model.Webhook, error) {
+	if m.createWebhook != nil {
+		return m.createWebhook, nil
+	}
 	return nil, nil
 }
 func (m *mockWebhookStore) Update(_ context.Context, _, _, _ string, _ []string, _ bool) (*model.Webhook, error) {
+	if m.updateWebhook != nil {
+		return m.updateWebhook, nil
+	}
 	return nil, nil
 }
 func (m *mockWebhookStore) Delete(_ context.Context, _, _ string) error { return nil }
+
+// --- Audit logging tests ---
+
+func TestWebhooksCreate_LogsAuditEvent(t *testing.T) {
+	wh := &model.Webhook{ID: "wh-1", TeamID: "team-1", URL: "https://example.com/hook"}
+	ms := &mockWebhookStore{createWebhook: wh}
+	al := &capAuditLogger{}
+	h := &WebhooksHandler{Store: ms, AuditStore: al}
+
+	body := `{"url":"https://example.com/hook","events":["report.submitted"]}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "webhook.created" {
+		t.Errorf("audit action = %q, want %q", e.Action, "webhook.created")
+	}
+	if e.ResourceType != "webhook" {
+		t.Errorf("audit resource_type = %q, want %q", e.ResourceType, "webhook")
+	}
+	if e.ResourceID != "wh-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "wh-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
+	}
+}
+
+func TestWebhooksCreate_NilAuditStore_NoPanic(t *testing.T) {
+	wh := &model.Webhook{ID: "wh-1", TeamID: "team-1", URL: "https://example.com/hook"}
+	ms := &mockWebhookStore{createWebhook: wh}
+	h := &WebhooksHandler{Store: ms, AuditStore: nil}
+
+	body := `{"url":"https://example.com/hook","events":["report.submitted"]}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Errorf("Create with nil audit: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+}
+
+func TestWebhooksUpdate_LogsAuditEvent(t *testing.T) {
+	wh := &model.Webhook{ID: "wh-1", TeamID: "team-1", URL: "https://example.com/updated"}
+	ms := &mockWebhookStore{updateWebhook: wh}
+	al := &capAuditLogger{}
+	h := &WebhooksHandler{Store: ms, AuditStore: al}
+
+	body := `{"url":"https://example.com/updated","events":["execution.completed"]}`
+	req := httptest.NewRequest("PUT", "/api/v1/teams/team-1/webhooks/wh-1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Update: got %d: %s", w.Code, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "webhook.updated" {
+		t.Errorf("audit action = %q, want %q", e.Action, "webhook.updated")
+	}
+	if e.ResourceID != "wh-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "wh-1")
+	}
+}
+
+func TestWebhooksDelete_LogsAuditEvent(t *testing.T) {
+	ms := &mockWebhookStore{}
+	al := &capAuditLogger{}
+	h := &WebhooksHandler{Store: ms, AuditStore: al}
+
+	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/webhooks/wh-1", nil)
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.Delete(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Delete: got %d: %s", w.Code, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "webhook.deleted" {
+		t.Errorf("audit action = %q, want %q", e.Action, "webhook.deleted")
+	}
+	if e.ResourceID != "wh-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "wh-1")
+	}
+}
 
 // mockWebhookDeliveryStore implements WebhookDeliveryStoreProvider for unit tests.
 type mockWebhookDeliveryStore struct {

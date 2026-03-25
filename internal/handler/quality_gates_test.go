@@ -2,14 +2,17 @@ package handler
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
 )
 
 func withClaimsRole(r *http.Request, role string) *http.Request {
@@ -457,5 +460,150 @@ func TestValidateRules(t *testing.T) {
 				t.Errorf("validateRules(%s) err = %v, wantErr = %v", tt.rules, err, tt.wantErr)
 			}
 		})
+	}
+}
+
+// mockQGStore implements qualityGateStore for audit logging tests.
+type mockQGStore struct {
+	gate  *model.QualityGate
+	delErr error
+}
+
+func (m *mockQGStore) List(_ context.Context, _ string) ([]model.QualityGate, error) {
+	return nil, nil
+}
+func (m *mockQGStore) Get(_ context.Context, _, _ string) (*model.QualityGate, error) {
+	return m.gate, nil
+}
+func (m *mockQGStore) Create(_ context.Context, _, _, _ string, _ json.RawMessage) (*model.QualityGate, error) {
+	return m.gate, nil
+}
+func (m *mockQGStore) Update(_ context.Context, _, _, _, _ string, _ json.RawMessage, _ bool) (*model.QualityGate, error) {
+	return m.gate, nil
+}
+func (m *mockQGStore) Delete(_ context.Context, _, _ string) error {
+	return m.delErr
+}
+func (m *mockQGStore) CreateEvaluation(_ context.Context, _, _ string, _ bool, _ json.RawMessage) (*model.QualityGateEvaluation, error) {
+	return &model.QualityGateEvaluation{}, nil
+}
+func (m *mockQGStore) ListEvaluations(_ context.Context, _ string, _ int) ([]model.QualityGateEvaluation, error) {
+	return nil, nil
+}
+
+func TestQualityGatesCreate_LogsAuditEvent(t *testing.T) {
+	gate := &model.QualityGate{
+		ID:        "gate-1",
+		TeamID:    "team-1",
+		Name:      "Release Gate",
+		Rules:     json.RawMessage(`[{"type":"zero_failures"}]`),
+		Enabled:   true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms := &mockQGStore{gate: gate}
+	al := &capAuditLogger{}
+	h := &QualityGatesHandler{Store: ms, AuditStore: al}
+
+	body := `{"name":"Release Gate","rules":[{"type":"zero_failures"}]}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaimsRole(req, "maintainer")
+	req = withTeamParam(req, "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Create: got %d, want %d: %s", w.Code, http.StatusCreated, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "quality_gate.created" {
+		t.Errorf("audit action = %q, want %q", e.Action, "quality_gate.created")
+	}
+	if e.ResourceType != "quality_gate" {
+		t.Errorf("audit resource_type = %q, want %q", e.ResourceType, "quality_gate")
+	}
+	if e.ResourceID != "gate-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "gate-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
+	}
+}
+
+func TestQualityGatesUpdate_LogsAuditEvent(t *testing.T) {
+	gate := &model.QualityGate{
+		ID:        "gate-1",
+		TeamID:    "team-1",
+		Name:      "Updated Gate",
+		Rules:     json.RawMessage(`[{"type":"zero_failures"}]`),
+		Enabled:   true,
+		CreatedAt: time.Now(),
+		UpdatedAt: time.Now(),
+	}
+	ms := &mockQGStore{gate: gate}
+	al := &capAuditLogger{}
+	h := &QualityGatesHandler{Store: ms, AuditStore: al}
+
+	body := `{"name":"Updated Gate","rules":[{"type":"zero_failures"}]}`
+	req := httptest.NewRequest("PUT", "/api/v1/teams/team-1/quality-gates/gate-1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = withClaimsRole(req, "maintainer")
+	req = withTeamParam(req, "team-1")
+	req = withGateParam(req, "gate-1")
+	w := httptest.NewRecorder()
+
+	h.Update(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Update: got %d: %s", w.Code, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "quality_gate.updated" {
+		t.Errorf("audit action = %q, want %q", e.Action, "quality_gate.updated")
+	}
+	if e.ResourceID != "gate-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "gate-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
+	}
+}
+
+func TestQualityGatesDelete_LogsAuditEvent(t *testing.T) {
+	ms := &mockQGStore{}
+	al := &capAuditLogger{}
+	h := &QualityGatesHandler{Store: ms, AuditStore: al}
+
+	req := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/quality-gates/gate-1", nil)
+	req = withClaimsRole(req, "maintainer")
+	req = withTeamParam(req, "team-1")
+	req = withGateParam(req, "gate-1")
+	w := httptest.NewRecorder()
+
+	h.Delete(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Delete: got %d: %s", w.Code, w.Body.String())
+	}
+	if len(al.entries) == 0 {
+		t.Fatal("expected audit entry to be logged")
+	}
+	e := al.entries[0]
+	if e.Action != "quality_gate.deleted" {
+		t.Errorf("audit action = %q, want %q", e.Action, "quality_gate.deleted")
+	}
+	if e.ResourceID != "gate-1" {
+		t.Errorf("audit resource_id = %q, want %q", e.ResourceID, "gate-1")
+	}
+	if e.TeamID != "team-1" {
+		t.Errorf("audit team_id = %q, want %q", e.TeamID, "team-1")
 	}
 }

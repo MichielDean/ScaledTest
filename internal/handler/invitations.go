@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/mailer"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 const invitationTokenBytes = 32
@@ -33,14 +34,16 @@ type invitationStore interface {
 	ListByTeam(ctx context.Context, teamID string) ([]model.Invitation, error)
 	GetByTokenHash(ctx context.Context, tokenHash string) (*model.Invitation, error)
 	Delete(ctx context.Context, teamID, id string) error
+	AcceptInvitation(ctx context.Context, invID, email, passwordHash, displayName, role, teamID string) (string, error)
 }
 
 // InvitationsHandler handles invitation endpoints.
 type InvitationsHandler struct {
-	Store   invitationStore
-	DB      *db.Pool
-	Mailer  mailer.Mailer
-	BaseURL string
+	Store      invitationStore
+	DB         *db.Pool
+	Mailer     mailer.Mailer
+	BaseURL    string
+	AuditStore auditLogger
 }
 
 // CreateInvitationRequest is the request body for creating an invitation.
@@ -100,6 +103,16 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to create invitation")
 		return
 	}
+
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "invitation.created",
+		ResourceType: "invitation",
+		ResourceID:   inv.ID,
+		Metadata:     map[string]interface{}{"email": req.Email, "role": req.Role},
+	})
 
 	inviteURL := h.BaseURL + "/invitations/" + token
 
@@ -203,7 +216,7 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil || h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -236,59 +249,27 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 
 	req.DisplayName = sanitize.String(req.DisplayName)
 
-	// Hash password
 	passwordHash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Transaction: create user + team membership + mark accepted
-	tx, err := h.DB.Begin(r.Context())
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
-	defer tx.Rollback(r.Context())
-
-	// Create user (or get existing)
-	var userID, role string
-	err = tx.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, display_name, role)
-		 VALUES ($1, $2, $3, $4)
-		 ON CONFLICT (email) DO UPDATE SET updated_at = now()
-		 RETURNING id, role`,
-		inv.Email, passwordHash, req.DisplayName, inv.Role,
-	).Scan(&userID, &role)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to create user")
-		return
-	}
-
-	// Add team membership
-	_, err = tx.Exec(r.Context(),
-		`INSERT INTO user_teams (user_id, team_id, role)
-		 VALUES ($1, $2, $3)
-		 ON CONFLICT (user_id, team_id) DO UPDATE SET role = $3`,
-		userID, inv.TeamID, inv.Role,
-	)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to add team membership")
-		return
-	}
-
-	// Mark invitation as accepted
-	_, err = tx.Exec(r.Context(),
-		`UPDATE invitations SET accepted_at = now() WHERE id = $1`, inv.ID)
+	userID, err := h.Store.AcceptInvitation(r.Context(), inv.ID, inv.Email, passwordHash, req.DisplayName, inv.Role, inv.TeamID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to accept invitation")
 		return
 	}
 
-	if err := tx.Commit(r.Context()); err != nil {
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
-	}
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      userID,
+		ActorEmail:   inv.Email,
+		TeamID:       inv.TeamID,
+		Action:       "invitation.accepted",
+		ResourceType: "invitation",
+		ResourceID:   inv.ID,
+		Metadata:     map[string]interface{}{"role": inv.Role},
+	})
 
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"message": "invitation accepted",
@@ -327,6 +308,15 @@ func (h *InvitationsHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotFound, "invitation not found")
 		return
 	}
+
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "invitation.revoked",
+		ResourceType: "invitation",
+		ResourceID:   invitationID,
+	})
 
 	JSON(w, http.StatusOK, map[string]string{"message": "invitation revoked"})
 }

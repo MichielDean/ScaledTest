@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -10,6 +11,7 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -39,10 +41,22 @@ type QualityGateRule struct {
 	Params json.RawMessage `json:"params"`
 }
 
+// qualityGateStore is the data-access interface for quality gate operations.
+type qualityGateStore interface {
+	List(ctx context.Context, teamID string) ([]model.QualityGate, error)
+	Get(ctx context.Context, teamID, gateID string) (*model.QualityGate, error)
+	Create(ctx context.Context, teamID, name, description string, rules json.RawMessage) (*model.QualityGate, error)
+	Update(ctx context.Context, teamID, gateID, name, description string, rules json.RawMessage, enabled bool) (*model.QualityGate, error)
+	Delete(ctx context.Context, teamID, gateID string) error
+	CreateEvaluation(ctx context.Context, gateID, reportID string, passed bool, details json.RawMessage) (*model.QualityGateEvaluation, error)
+	ListEvaluations(ctx context.Context, gateID string, limit int) ([]model.QualityGateEvaluation, error)
+}
+
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
-	Store *store.QualityGateStore
-	DB    *db.Pool
+	Store      qualityGateStore
+	DB         *db.Pool
+	AuditStore auditLogger
 }
 
 // CreateQualityGateRequest is the request body for creating a quality gate.
@@ -189,6 +203,16 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.created",
+		ResourceType: "quality_gate",
+		ResourceID:   gate.ID,
+		Metadata:     map[string]interface{}{"name": gate.Name},
+	})
+
 	JSON(w, http.StatusCreated, gate)
 }
 
@@ -279,6 +303,16 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.updated",
+		ResourceType: "quality_gate",
+		ResourceID:   gateID,
+		Metadata:     map[string]interface{}{"name": req.Name},
+	})
+
 	JSON(w, http.StatusOK, gate)
 }
 
@@ -314,6 +348,15 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotFound, "quality gate not found")
 		return
 	}
+
+	logAudit(r.Context(), h.AuditStore, store.Entry{
+		ActorID:      claims.UserID,
+		ActorEmail:   claims.Email,
+		TeamID:       teamID,
+		Action:       "quality_gate.deleted",
+		ResourceType: "quality_gate",
+		ResourceID:   gateID,
+	})
 
 	JSON(w, http.StatusOK, map[string]string{"message": "quality gate deleted"})
 }
