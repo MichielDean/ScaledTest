@@ -115,6 +115,16 @@ test.describe('Sharding', () => {
     // The failed worker must not appear in the new plan
     const remainingWorkerIds = rebalanced.shards.map((s: { worker_id: string }) => s.worker_id);
     expect(remainingWorkerIds).not.toContain(failedWorkerId);
+
+    // All 6 original tests must be preserved — a rebalance bug that drops tests
+    // would go undetected without this assertion
+    const redistributed: string[] = rebalanced.shards.flatMap(
+      (s: { test_names: string[] }) => s.test_names,
+    );
+    expect(redistributed.length).toBe(TEST_NAMES.length);
+    for (const name of TEST_NAMES) {
+      expect(redistributed).toContain(name);
+    }
   });
 
   test('sharding UI: page renders, create-plan form works, plan view appears', async ({

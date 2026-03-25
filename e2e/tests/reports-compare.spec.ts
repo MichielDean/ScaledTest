@@ -213,9 +213,9 @@ test.describe('Reports Compare', () => {
     await expect(page.getByText('Head Report (new)')).toBeVisible();
     await expect(page.getByRole('button', { name: 'Compare' })).toBeVisible();
 
-    // Select base and head from the dropdowns (Playwright waits for the option to exist)
-    await page.locator('select').first().selectOption(baseReport.id);
-    await page.locator('select').nth(1).selectOption(headReport.id);
+    // Select base and head using label-relative locators (stable across DOM changes)
+    await page.getByText('Base Report (reference)').locator('..').locator('select').selectOption(baseReport.id);
+    await page.getByText('Head Report (new)').locator('..').locator('select').selectOption(headReport.id);
 
     // Run the comparison
     await page.getByRole('button', { name: 'Compare' }).click();

@@ -92,6 +92,27 @@ test.describe('Analytics', () => {
     // Duration distribution has data from submitted test results.
     await expect(page.getByText('No duration data available.')).not.toBeVisible();
 
+    // Positive assertions: verify chart content actually rendered within each section.
+    // Without these, a broken chart library or empty data transform would still pass.
+
+    // Pass Rate Trends — Recharts LineChart renders an SVG
+    const trendsSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Pass Rate Trends' }) });
+    await expect(trendsSection.locator('svg').first()).toBeVisible();
+
+    // Error Analysis — table has at least one data row (seeded reports include failures)
+    const errorsSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Error Analysis' }) });
+    await expect(errorsSection.locator('tbody tr').first()).toBeVisible();
+
+    // Duration Distribution — Recharts BarChart renders an SVG
+    const durationSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Duration Distribution' }) });
+    await expect(durationSection.locator('svg').first()).toBeVisible();
+
     // Authenticated navigation is present
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
