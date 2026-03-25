@@ -10,11 +10,10 @@
 
 Implement a context enricher that, given a commit SHA and repo, fetches changed files and a condensed diff summary (file paths + churn stats, not full hunks) since the previous successful run. Output is a structured diff summary sized for safe LLM prompt inclusion. Must handle: missing repo access gracefully (return empty context, do not fail triage), large diffs (truncate to top-N files by churn), and per-run caching to avoid redundant fetches.
 
-## Current Step: implement
+## Current Step: delivery
 
 - **Type:** agent
-- **Role:** implementer
-- **Context:** full_codebase
+- **Role:** delivery
 
 ## ⚠️ REVISION REQUIRED — Fix these issues before anything else
 
@@ -41,7 +40,7 @@ Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory 
 
 ## Recent Step Notes
 
-### From: reviewer
+### From: docs_writer
 
 ♻ 3 findings. (1) SSRF: FetchDiff (github/diff.go:39) interpolates owner/repo/SHA into URL without validation — PostStatus in same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. (2) ParseOwnerRepo (analytics/git_diff.go:198) allows slashes in repo via SplitN limit 2, compounding finding 1. (3) Unbounded sync.Map cache (analytics/git_diff.go:75) with no eviction — memory leak on long-running servers.
 
@@ -53,11 +52,16 @@ Finding 3: internal/analytics/git_diff.go:75 — Unbounded cache growth (memory 
 
 Finding 2: internal/analytics/git_diff.go:198 — ParseOwnerRepo allows slashes in repo component. strings.SplitN(s, "/", 2) means 'owner/repo/extra' yields repo='repo/extra' with ok=true, injecting extra path segments into FetchDiff URL. Fix: after SplitN, verify parts[1] contains no '/' or use strings.Split and require exactly 2 non-empty parts.
 
-### From: reviewer
+### From: simplifier
 
 Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. FetchDiff interpolates owner, repo, baseSHA, headSHA into URL without validation. PostStatus in the same file validates with validOwnerRepo/validSHA regexes but FetchDiff does not. User-controlled CTRF data flows through ParseOwnerRepo to these params. Fix: apply same validOwnerRepo/validSHA validation as PostStatus.
 
 <available_skills>
+  <skill>
+    <name>cistern-github</name>
+    <description>---</description>
+    <location>/home/lobsterdog/.cistern/skills/cistern-github/SKILL.md</location>
+  </skill>
   <skill>
     <name>cistern-droplet-state</name>
     <description>Manage droplet state in the Cistern agentic pipeline using the `ct` CLI.</description>
@@ -67,11 +71,6 @@ Finding 1: internal/github/diff.go:39 — SSRF via missing input validation. Fet
     <name>cistern-git</name>
     <description>---</description>
     <location>/home/lobsterdog/.cistern/skills/cistern-git/SKILL.md</location>
-  </skill>
-  <skill>
-    <name>cistern-github</name>
-    <description>---</description>
-    <location>/home/lobsterdog/.cistern/skills/cistern-github/SKILL.md</location>
   </skill>
 </available_skills>
 

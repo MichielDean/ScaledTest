@@ -60,6 +60,14 @@ export ST_SMTP_FROM=noreply@example.com
 # Optional: GitHub commit status reporting
 export ST_GITHUB_TOKEN=ghp_your_token   # needs repo:status scope
 
+# Optional: LLM provider for test analysis and triage
+export ST_LLM_PROVIDER=anthropic         # "anthropic" (default) or "openai"
+export ST_LLM_COMMAND=claude             # Override CLI binary (test environments only)
+
+# Required when using the LLM provider (depends on ST_LLM_PROVIDER)
+export ANTHROPIC_API_KEY=your_api_key    # Required if ST_LLM_PROVIDER=anthropic
+export OPENAI_API_KEY=your_api_key       # Required if ST_LLM_PROVIDER=openai
+
 # Optional: disable rate limiting (test environments only — never use in production)
 export ST_DISABLE_RATE_LIMIT=true
 ```
@@ -69,6 +77,8 @@ When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound em
 When `ST_GITHUB_TOKEN` is not set, GitHub commit status posting is disabled. When set, passing `github_owner`, `github_repo`, and `github_sha` query parameters to `POST /api/v1/reports` will post a `scaledtest/e2e` commit status back to GitHub after the report is ingested.
 
 When `ST_DISABLE_RATE_LIMIT=true` is set, all rate-limit middleware is bypassed and a warning is logged at startup. Use this only in controlled test environments (e.g. CI running E2E suites with many per-test user registrations). **Never set this in production** — it removes brute-force protection on auth endpoints.
+
+When `ST_LLM_PROVIDER` is not set, the default is `anthropic`. The LLM provider is used internally for test result analysis and triage. You must configure the corresponding API key (`ANTHROPIC_API_KEY` or `OPENAI_API_KEY`) for your chosen provider. The provider is invoked via CLI (e.g., `claude` or `codex`) — no SDK is required. Set `ST_LLM_COMMAND` only in test environments to override the CLI binary path.
 
 ### Database Migrations
 
@@ -397,6 +407,7 @@ internal/
   server/             # Router and middleware setup
   store/              # Data access (audit, webhooks, quality gates)
   github/             # GitHub commit status client
+  llm/                # LLM provider abstraction (Anthropic, OpenAI, mock)
   mail/               # Email sender interface and SMTP implementation
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
