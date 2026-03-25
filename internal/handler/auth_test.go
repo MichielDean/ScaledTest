@@ -691,6 +691,59 @@ func TestGetMeUserNotFound(t *testing.T) {
 	}
 }
 
+// TestRegister_INSERT_UsesAdvisoryLock verifies that the INSERT SQL used during
+// registration includes pg_advisory_xact_lock. This guards against regressions
+// where the advisory lock is accidentally removed, which would reintroduce a
+// race condition allowing two concurrent registrations to both claim the owner role.
+func TestRegister_INSERT_UsesAdvisoryLock(t *testing.T) {
+	var insertSQL string
+	callCount := 0
+	mockDB := &mockAuthDB{
+		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
+			callCount++
+			switch callCount {
+			case 1:
+				// Email existence check
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*bool)) = false
+					return nil
+				}}
+			case 2:
+				// Capture the INSERT SQL
+				insertSQL = sql
+				return &mockRow{scanFn: func(dest ...any) error {
+					*(dest[0].(*string)) = "user-uuid-1"
+					*(dest[1].(*string)) = "owner"
+					return nil
+				}}
+			default:
+				// issueTokens calls (team lookup etc.)
+				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
+			}
+		},
+		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
+			return pgconn.NewCommandTag("INSERT 1"), nil
+		},
+	}
+
+	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+
+	body := `{"email":"admin@example.com","password":"password123","display_name":"Admin"}`
+	req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("Register: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	}
+	if !strings.Contains(insertSQL, "pg_advisory_xact_lock") {
+		t.Error("INSERT query must use pg_advisory_xact_lock to prevent concurrent first-user race condition")
+	}
+}
+
 // TestRegister_WhenFirstUser_IsAssignedOwnerRole verifies that when the database
 // returns role "owner" from the INSERT (i.e. no prior users existed), the handler
 // returns a 201 response whose user.role is "owner".
