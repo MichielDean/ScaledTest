@@ -3,6 +3,7 @@ import {
   loadCachedToken,
   tokenHeaders,
   buildCtrfReport,
+  loginViaUI,
   getOrCreateTeam,
   createAPIToken,
 } from './helpers';
@@ -57,5 +58,73 @@ test.describe('Analytics', () => {
     expect(durationRes.ok()).toBeTruthy();
     const duration = await durationRes.json();
     expect(duration.distribution).toBeDefined();
+  });
+
+  test('analytics UI: page renders all four sections with chart content', async ({
+    page,
+    request,
+  }) => {
+    // Ensure a team exists so the JWT from loginViaUI embeds a team_id.
+    // global-setup seeds reports across 3 distinct dates, so trends, error analysis,
+    // and duration distribution should all have data (non-empty state).
+    const session = loadCachedToken();
+    await getOrCreateTeam(request, session);
+
+    await loginViaUI(page);
+    await page.getByRole('link', { name: 'Analytics' }).click();
+    await page.waitForURL('/analytics');
+
+    // Page heading
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+
+    // All four section headings
+    await expect(page.getByRole('heading', { name: 'Pass Rate Trends' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flaky Tests' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Duration Distribution' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Error Analysis' })).toBeVisible();
+
+    // Trends chart renders with seeded data (not empty state) — global-setup seeds reports
+    // on 3 distinct dates which produces >1 data point and renders the LineChart.
+    await expect(page.getByText('No trend data available yet.')).not.toBeVisible();
+
+    // Error analysis has data: seeded reports include failing tests with error messages.
+    await expect(page.getByText('No errors recorded.')).not.toBeVisible();
+
+    // Duration distribution has data from submitted test results.
+    await expect(page.getByText('No duration data available.')).not.toBeVisible();
+
+    // Positive assertions: verify chart content actually rendered within each section.
+    // Without these, a broken chart library or empty data transform would still pass.
+
+    // Pass Rate Trends — Recharts LineChart renders an SVG
+    const trendsSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Pass Rate Trends' }) });
+    await expect(trendsSection.locator('svg').first()).toBeVisible();
+
+    // Error Analysis — table has at least one data row (seeded reports include failures)
+    const errorsSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Error Analysis' }) });
+    await expect(errorsSection.locator('tbody tr').first()).toBeVisible();
+
+    // Duration Distribution — Recharts BarChart renders an SVG
+    const durationSection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Duration Distribution' }) });
+    await expect(durationSection.locator('svg').first()).toBeVisible();
+
+    // Flaky Tests — either the empty-state text or a list of flaky test items
+    const flakySection = page
+      .locator('section')
+      .filter({ has: page.getByRole('heading', { name: 'Flaky Tests' }) });
+    await expect(
+      flakySection.getByText('No flaky tests detected.').or(flakySection.locator('.space-y-3 > div').first()),
+    ).toBeVisible();
+
+    // Authenticated navigation is present
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/analytics-ui.png' });
   });
 });
