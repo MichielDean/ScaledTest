@@ -60,12 +60,7 @@ test.describe('Sharding', () => {
     }
 
     // Each shard has the required fields and at least one test
-    for (const shard of plan.shards as Array<{
-      worker_id: string;
-      test_names: string[];
-      test_count: number;
-      est_duration_ms: number;
-    }>) {
+    for (const shard of plan.shards) {
       expect(shard.worker_id).toBeTruthy();
       expect(shard.test_count).toBeGreaterThan(0);
       expect(shard.test_names.length).toBe(shard.test_count);
@@ -98,7 +93,7 @@ test.describe('Sharding', () => {
     expect(planRes.ok()).toBeTruthy();
     const plan = await planRes.json();
 
-    const failedWorkerId = (plan.shards[0] as { worker_id: string }).worker_id;
+    const failedWorkerId = plan.shards[0].worker_id;
 
     // Rebalance: simulate worker_0 going offline with no completed tests
     const rebalanceRes = await request.post('/api/v1/sharding/rebalance', {
@@ -118,9 +113,7 @@ test.describe('Sharding', () => {
     expect(rebalanced.shards.length).toBeGreaterThan(0);
 
     // The failed worker must not appear in the new plan
-    const remainingWorkerIds = (
-      rebalanced.shards as Array<{ worker_id: string }>
-    ).map(s => s.worker_id);
+    const remainingWorkerIds = rebalanced.shards.map((s: { worker_id: string }) => s.worker_id);
     expect(remainingWorkerIds).not.toContain(failedWorkerId);
   });
 
