@@ -12,6 +12,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/llm"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // ---------------------------------------------------------------------------
@@ -181,6 +182,40 @@ type fakeHistoryReader struct {
 
 func (h *fakeHistoryReader) ReadHistory(_ context.Context, _ analytics.HistoryQuery) ([]analytics.TestHistoryRow, error) {
 	return h.rows, h.err
+}
+
+// fakeWebhookNotifier records Notify calls for assertion in tests.
+type fakeWebhookNotifier struct {
+	mu    sync.Mutex
+	calls []webhookCall
+}
+
+type webhookCall struct {
+	teamID string
+	event  webhook.EventType
+	data   webhook.TriageCompleteData
+}
+
+func (f *fakeWebhookNotifier) Notify(teamID string, event webhook.EventType, data interface{}) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	d, _ := data.(webhook.TriageCompleteData)
+	f.calls = append(f.calls, webhookCall{teamID: teamID, event: event, data: d})
+}
+
+func (f *fakeWebhookNotifier) callCount() int {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	return len(f.calls)
+}
+
+func (f *fakeWebhookNotifier) lastCall() (webhookCall, bool) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if len(f.calls) == 0 {
+		return webhookCall{}, false
+	}
+	return f.calls[len(f.calls)-1], true
 }
 
 // pendingResult returns a minimal TriageResult as returned by CreateOrReset
@@ -717,5 +752,166 @@ func TestRunner_Run_FetchPreviousFailures_EmptyRepositoryWhenEnvAbsent(t *testin
 	data.mu.Unlock()
 	if got != "" {
 		t.Errorf("fetchPreviousFailures repository = %q; want empty string when env has no repository", got)
+	}
+}
+
+// ---------------------------------------------------------------------------
+// run.triage_complete webhook event firing
+// ---------------------------------------------------------------------------
+
+func TestRunner_Run_HappyPath_FiresTriageCompleteWebhook(t *testing.T) {
+	// Given: a successful triage run with failures
+	failures := makeNFailures(3)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	notifier := &fakeWebhookNotifier{}
+	r := newTestRunner(store, data, validResponse(failures))
+	r.webhooks = notifier
+
+	// When
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: exactly one webhook event fired
+	if notifier.callCount() != 1 {
+		t.Fatalf("want 1 webhook call; got %d", notifier.callCount())
+	}
+	call, _ := notifier.lastCall()
+	if call.event != webhook.EventRunTriageComplete {
+		t.Errorf("event = %q; want %q", call.event, webhook.EventRunTriageComplete)
+	}
+	if call.teamID != "team-1" {
+		t.Errorf("teamID = %q; want %q", call.teamID, "team-1")
+	}
+	if call.data.RunID != "report-1" {
+		t.Errorf("RunID = %q; want %q", call.data.RunID, "report-1")
+	}
+	if call.data.TriageStatus != "complete" {
+		t.Errorf("TriageStatus = %q; want %q", call.data.TriageStatus, "complete")
+	}
+}
+
+func TestRunner_Run_HappyPath_WebhookPayloadCountsClassifications(t *testing.T) {
+	// Given: failures that will be classified as "new" by the mock LLM
+	failures := makeNFailures(3)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	notifier := &fakeWebhookNotifier{}
+	r := newTestRunner(store, data, validResponse(failures))
+	r.webhooks = notifier
+
+	// When
+	r.run(context.Background(), "team-1", "report-1") //nolint:errcheck
+
+	// Then: payload reflects the cluster and classification counts
+	call, ok := notifier.lastCall()
+	if !ok {
+		t.Fatal("no webhook call recorded")
+	}
+	// validResponse assigns all failures to 1 cluster with classification "new"
+	if call.data.ClusterCount != 1 {
+		t.Errorf("ClusterCount = %d; want 1", call.data.ClusterCount)
+	}
+	if call.data.NewFailureCount != len(failures) {
+		t.Errorf("NewFailureCount = %d; want %d", call.data.NewFailureCount, len(failures))
+	}
+	if call.data.FlakyFailureCount != 0 {
+		t.Errorf("FlakyFailureCount = %d; want 0", call.data.FlakyFailureCount)
+	}
+}
+
+func TestRunner_Run_HappyPath_WebhookPayloadIncludesSummary(t *testing.T) {
+	// Given: a successful run
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	notifier := &fakeWebhookNotifier{}
+	r := newTestRunner(store, data, validResponse(failures))
+	r.webhooks = notifier
+
+	r.run(context.Background(), "team-1", "report-1") //nolint:errcheck
+
+	call, ok := notifier.lastCall()
+	if !ok {
+		t.Fatal("no webhook call recorded")
+	}
+	// validResponse provides a non-empty summary
+	if call.data.Summary == "" {
+		t.Error("webhook payload Summary must not be empty on successful triage")
+	}
+}
+
+func TestRunner_Run_NoFailures_FiresTriageCompleteWebhook(t *testing.T) {
+	// Given: report has no failing tests
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: nil}
+	notifier := &fakeWebhookNotifier{}
+	r := newTestRunner(store, data, nil)
+	r.webhooks = notifier
+
+	// When
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	// Then: webhook fires with complete status and zero counts
+	if notifier.callCount() != 1 {
+		t.Fatalf("want 1 webhook call; got %d", notifier.callCount())
+	}
+	call, _ := notifier.lastCall()
+	if call.data.TriageStatus != "complete" {
+		t.Errorf("TriageStatus = %q; want %q", call.data.TriageStatus, "complete")
+	}
+	if call.data.ClusterCount != 0 {
+		t.Errorf("ClusterCount = %d; want 0", call.data.ClusterCount)
+	}
+	if call.data.NewFailureCount != 0 {
+		t.Errorf("NewFailureCount = %d; want 0", call.data.NewFailureCount)
+	}
+}
+
+func TestRunner_Run_WhenEngineFails_FiresTriageCompleteWebhookWithFailedStatus(t *testing.T) {
+	// Given: LLM error causing engine failure
+	failures := makeNFailures(2)
+	provider := llm.NewMock(nil)
+	provider.SetError(errors.New("service unavailable"))
+
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	notifier := &fakeWebhookNotifier{}
+	r := &Runner{
+		engine:   NewEngine(provider),
+		store:    store,
+		data:     data,
+		webhooks: notifier,
+	}
+
+	r.run(context.Background(), "team-1", "report-1") //nolint:errcheck
+
+	// Then: webhook fires with failed status
+	if notifier.callCount() != 1 {
+		t.Fatalf("want 1 webhook call; got %d", notifier.callCount())
+	}
+	call, _ := notifier.lastCall()
+	if call.data.TriageStatus != "failed" {
+		t.Errorf("TriageStatus = %q; want %q", call.data.TriageStatus, "failed")
+	}
+	if call.data.RunID != "report-1" {
+		t.Errorf("RunID = %q; want %q", call.data.RunID, "report-1")
+	}
+}
+
+func TestRunner_Run_WithNoNotifier_DoesNotPanic(t *testing.T) {
+	// Given: runner with no webhook notifier configured (nil)
+	failures := makeNFailures(2)
+	store := newFakeStore(pendingResult("triage-1"))
+	data := &fakeReportData{failures: failures}
+	r := newTestRunner(store, data, validResponse(failures))
+	// r.webhooks is nil by default in newTestRunner
+
+	// When/Then: no panic
+	if err := r.run(context.Background(), "team-1", "report-1"); err != nil {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }

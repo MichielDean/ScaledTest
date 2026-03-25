@@ -22,7 +22,18 @@ const (
 	EventGateFailed         EventType = "gate.failed"
 	EventExecutionCompleted EventType = "execution.completed"
 	EventExecutionFailed    EventType = "execution.failed"
+	EventRunTriageComplete  EventType = "run.triage_complete"
 )
+
+// TriageCompleteData is the payload data for the run.triage_complete event.
+type TriageCompleteData struct {
+	RunID             string `json:"run_id"`
+	TriageStatus      string `json:"triage_status"`
+	Summary           string `json:"summary"`
+	ClusterCount      int    `json:"cluster_count"`
+	NewFailureCount   int    `json:"new_failure_count"`
+	FlakyFailureCount int    `json:"flaky_failure_count"`
+}
 
 // Payload is the webhook delivery payload.
 type Payload struct {

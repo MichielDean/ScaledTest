@@ -13,6 +13,7 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
 // jobTimeout is the maximum wall-clock time a single triage job may run.
@@ -38,6 +39,12 @@ type triageStorer interface {
 	Fail(ctx context.Context, teamID, triageID, errorMsg string) (*model.TriageResult, error)
 	CreateCluster(ctx context.Context, triageID, teamID, rootCause string, label *string) (*model.TriageCluster, error)
 	CreateClassification(ctx context.Context, triageID string, clusterID *string, testResultID, teamID, classification string) (*model.TriageFailureClassification, error)
+}
+
+// webhookNotifier is the subset of webhook.Notifier used by Runner to fire
+// run.triage_complete events. An interface is used so tests can substitute a fake.
+type webhookNotifier interface {
+	Notify(teamID string, event webhook.EventType, data interface{})
 }
 
 // reportData abstracts the pool-level queries on test_reports and test_results.
@@ -81,6 +88,7 @@ type Runner struct {
 	historyRdr   analytics.HistoryReader
 	diffEnricher *analytics.GitDiffEnricher
 	sem          chan struct{} // bounded semaphore; capacity = triageWorkerLimit
+	webhooks     webhookNotifier
 }
 
 // NewRunner constructs a Runner backed by a live pgxpool. historyRdr and
@@ -101,6 +109,13 @@ func NewRunner(
 		diffEnricher: diffEnricher,
 		sem:          make(chan struct{}, triageWorkerLimit),
 	}
+}
+
+// SetWebhookNotifier configures the notifier used to fire run.triage_complete
+// events. Safe to call after construction; a nil notifier is accepted (events
+// are silently dropped).
+func (r *Runner) SetWebhookNotifier(n webhookNotifier) {
+	r.webhooks = n
 }
 
 // Enqueue launches a background goroutine that runs the triage job for the
@@ -162,6 +177,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 			log.Warn().Err(err).Str("triage_id", triageID).Msg("triage: mark complete (no failures)")
 		}
 		r.data.setTriageStatus(ctx, teamID, reportID, "complete")
+		r.notifyTriageComplete(teamID, reportID, "complete", "", 0, 0, 0)
 		return nil
 	}
 
@@ -186,6 +202,8 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 		return fmt.Errorf("triage: mark complete: %w", err)
 	}
 	r.data.setTriageStatus(ctx, teamID, reportID, "complete")
+	newCount, flakyCount := countNewAndFlaky(output)
+	r.notifyTriageComplete(teamID, reportID, "complete", output.Summary, len(output.Clusters), newCount, flakyCount)
 	return nil
 }
 
@@ -276,6 +294,35 @@ func (r *Runner) persistOutput(ctx context.Context, teamID, triageID string, out
 	return nil
 }
 
+// notifyTriageComplete fires a run.triage_complete webhook event. It is a
+// no-op when the notifier is nil.
+func (r *Runner) notifyTriageComplete(teamID, reportID, status, summary string, clusterCount, newCount, flakyCount int) {
+	if r.webhooks == nil {
+		return
+	}
+	r.webhooks.Notify(teamID, webhook.EventRunTriageComplete, webhook.TriageCompleteData{
+		RunID:             reportID,
+		TriageStatus:      status,
+		Summary:           summary,
+		ClusterCount:      clusterCount,
+		NewFailureCount:   newCount,
+		FlakyFailureCount: flakyCount,
+	})
+}
+
+// countNewAndFlaky counts new and flaky classifications in output.
+func countNewAndFlaky(output *TriageOutput) (newCount, flakyCount int) {
+	for _, c := range output.Classifications {
+		switch c.Classification {
+		case "new":
+			newCount++
+		case "flaky":
+			flakyCount++
+		}
+	}
+	return
+}
+
 // failTriage marks the triage record as failed and updates the report status.
 // Errors are logged rather than returned — the outer run() must not fail
 // because the failure-recording step itself failed.
@@ -284,6 +331,7 @@ func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, err
 		log.Error().Err(err).Str("triage_id", triageID).Msg("triage: failed to record failure")
 	}
 	r.data.setTriageStatus(ctx, teamID, reportID, "failed")
+	r.notifyTriageComplete(teamID, reportID, "failed", "", 0, 0, 0)
 }
 
 // ---------------------------------------------------------------------------
