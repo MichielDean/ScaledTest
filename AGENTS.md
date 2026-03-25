@@ -86,7 +86,7 @@ cp -rf source dest          # NOT: cp -r source dest
 2. **Implement** — write tests first (TDD), then implementation
 3. **Run tests** — `make test` for Go; `cd frontend && npm test` for frontend
 4. **Commit** — `git commit -m "<id>: <short description>"` (do NOT push)
-5. **Signal outcome** — `ct droplet pass <id> --notes "..."` when complete
+5. **Signal outcome** — use the appropriate `ct droplet` command from Quick Reference above
 
 ### Signaling Rules
 
