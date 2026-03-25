@@ -216,6 +216,8 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `POST` | `/api/v1/reports` | Upload CTRF report |
 | `GET` | `/api/v1/reports` | List reports (supports `since`, `until` query params) |
 | `GET` | `/api/v1/reports/{id}` | Get report |
+| `GET` | `/api/v1/reports/{id}/triage` | Get triage result (status, clusters, classifications, summary) |
+| `POST` | `/api/v1/reports/{id}/triage/retry` | Retry triage for a completed run (maintainer+) |
 | `DELETE` | `/api/v1/reports/{id}` | Delete report |
 | `POST` | `/api/v1/executions` | Create test execution |
 | `GET` | `/api/v1/executions` | List executions |
