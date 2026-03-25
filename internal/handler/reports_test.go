@@ -1850,12 +1850,14 @@ func (e *capTriageEnqueuer) count() int {
 
 // fakeTriageStore is a test double for triageAccessor.
 type fakeTriageStore struct {
-	result           *model.TriageResult
-	clusters         []model.TriageCluster
-	classifications  []model.TriageFailureClassification
-	getErr           error
-	forceResetResult *model.TriageResult
-	forceResetErr    error
+	result                 *model.TriageResult
+	clusters               []model.TriageCluster
+	classifications        []model.TriageFailureClassification
+	getErr                 error
+	listClustersErr        error
+	listClassificationsErr error
+	forceResetResult       *model.TriageResult
+	forceResetErr          error
 }
 
 func (f *fakeTriageStore) GetByReportID(_ context.Context, _, _ string) (*model.TriageResult, error) {
@@ -1863,11 +1865,11 @@ func (f *fakeTriageStore) GetByReportID(_ context.Context, _, _ string) (*model.
 }
 
 func (f *fakeTriageStore) ListClusters(_ context.Context, _, _ string) ([]model.TriageCluster, error) {
-	return f.clusters, nil
+	return f.clusters, f.listClustersErr
 }
 
 func (f *fakeTriageStore) ListClassifications(_ context.Context, _, _ string) ([]model.TriageFailureClassification, error) {
-	return f.classifications, nil
+	return f.classifications, f.listClassificationsErr
 }
 
 func (f *fakeTriageStore) ForceReset(_ context.Context, _, _ string) (*model.TriageResult, error) {
@@ -2047,6 +2049,44 @@ func TestGetTriage_Failed_Returns200WithError(t *testing.T) {
 	}
 }
 
+func TestGetTriage_ListClustersError_Returns500(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:          &model.TriageResult{ID: "triage-1", Status: "complete"},
+			listClustersErr: fmt.Errorf("db connection lost"),
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("GetTriage ListClusters error: got %d, want 500", w.Code)
+	}
+}
+
+func TestGetTriage_ListClassificationsError_Returns500(t *testing.T) {
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:                 &model.TriageResult{ID: "triage-1", Status: "complete"},
+			listClassificationsErr: fmt.Errorf("db connection lost"),
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports/abc/triage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "abc")
+
+	h.GetTriage(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("GetTriage ListClassifications error: got %d, want 500", w.Code)
+	}
+}
+
 // --- RetryTriage ---
 
 func TestRetryTriage_Unauthorized(t *testing.T) {
@@ -2199,6 +2239,30 @@ func TestRetryTriage_NilEnqueuer_StillReturns202(t *testing.T) {
 
 	if w.Code != http.StatusAccepted {
 		t.Errorf("RetryTriage nil enqueuer: got %d, want 202", w.Code)
+	}
+}
+
+func TestRetryTriage_ForceResetNoOp_Returns202WithoutEnqueue(t *testing.T) {
+	enqueuer := &capTriageEnqueuer{}
+	h := &ReportsHandler{
+		TriageStore: &fakeTriageStore{
+			result:           &model.TriageResult{ID: "triage-1", Status: "complete", ReportID: "report-1"},
+			forceResetResult: nil, // concurrent retry already won the race — ForceReset is a no-op
+		},
+		TriageEnqueuer: enqueuer,
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/reports/report-1/triage/retry", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "reportID", "report-1")
+
+	h.RetryTriage(w, r)
+
+	if w.Code != http.StatusAccepted {
+		t.Errorf("RetryTriage ForceReset no-op: got %d, want 202", w.Code)
+	}
+	if enqueuer.count() != 0 {
+		t.Errorf("Enqueue call count = %d, want 0 (no-op reset must not enqueue)", enqueuer.count())
 	}
 }
 

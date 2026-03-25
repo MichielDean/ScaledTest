@@ -192,9 +192,41 @@ func (s *TriageStore) CreateClassification(ctx context.Context, triageID string,
 // Returns (result, nil) when the row was successfully reset.
 // Returns (nil, nil) when the row is already pending or does not exist for the team.
 // Returns (nil, err) on any database error.
+//
+// The reset runs inside a transaction: old triage_clusters and
+// triage_failure_classifications are deleted before the status is updated so
+// that a subsequent write does not mix old and new data (ON DELETE CASCADE only
+// fires on DELETE, not UPDATE).
 func (s *TriageStore) ForceReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("force reset triage: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback on early return is intentional
+
+	// Delete old clusters and classifications that belong to the triage result
+	// for this report, but only when the result is in a terminal state. If the
+	// result is pending or absent the subquery returns no rows and the DELETE is
+	// a no-op.
+	for _, q := range []string{
+		`DELETE FROM triage_clusters
+		 WHERE triage_id = (
+		     SELECT id FROM triage_results
+		     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
+		 )`,
+		`DELETE FROM triage_failure_classifications
+		 WHERE triage_id = (
+		     SELECT id FROM triage_results
+		     WHERE report_id = $1 AND team_id = $2 AND status IN ('complete', 'failed')
+		 )`,
+	} {
+		if _, err := tx.Exec(ctx, q, reportID, teamID); err != nil {
+			return nil, fmt.Errorf("force reset triage: delete stale data: %w", err)
+		}
+	}
+
 	var t model.TriageResult
-	err := scanTriageResult(s.pool.QueryRow(ctx,
+	err = scanTriageResult(tx.QueryRow(ctx,
 		`UPDATE triage_results
 		 SET status = 'pending', error_msg = NULL, summary = NULL,
 		     llm_provider = NULL, llm_model = NULL,
@@ -208,6 +240,10 @@ func (s *TriageStore) ForceReset(ctx context.Context, teamID, reportID string) (
 	}
 	if err != nil {
 		return nil, fmt.Errorf("force reset triage: %w", err)
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return nil, fmt.Errorf("force reset triage: commit: %w", err)
 	}
 	return &t, nil
 }

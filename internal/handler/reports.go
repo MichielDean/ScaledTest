@@ -783,9 +783,18 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Reset from complete or failed back to pending.
-	if _, err := h.TriageStore.ForceReset(r.Context(), claims.TeamID, reportID); err != nil {
+	resetResult, err := h.TriageStore.ForceReset(r.Context(), claims.TeamID, reportID)
+	if err != nil {
 		log.Error().Err(err).Str("report_id", reportID).Msg("failed to reset triage for retry")
 		Error(w, http.StatusInternalServerError, "failed to reset triage")
+		return
+	}
+
+	// ForceReset returns (nil, nil) when the row is already pending or absent
+	// (e.g. a concurrent retry already won the race). Return 202 without
+	// re-enqueuing — the in-flight job is sufficient.
+	if resetResult == nil {
+		writePending(w)
 		return
 	}
 
