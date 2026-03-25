@@ -152,6 +152,24 @@ curl -X POST "https://your-instance/api/v1/reports?created_at=2024-03-15T12:00:0
 
 **⚠️ Never use `created_at` in production.** This parameter is only accepted when `ST_DISABLE_RATE_LIMIT=true` (test environments only) and has no effect when the flag is false.
 
+### List Reports with Date Filtering
+
+`GET /api/v1/reports` supports optional `since` and `until` query parameters to filter reports by creation date:
+
+```bash
+curl -X GET "https://your-instance/api/v1/reports?since=2024-01-01T00:00:00Z&until=2024-12-31T23:59:59Z" \
+  -H "Authorization: Bearer sct_your_token"
+```
+
+**Query parameters:**
+
+| Parameter | Format | Description |
+|-----------|--------|-------------|
+| `since` | RFC3339 | Return reports created at or after this timestamp (e.g., `2024-01-01T00:00:00Z`) |
+| `until` | RFC3339 | Return reports created at or before this timestamp |
+
+Both parameters are optional and can be used independently. If either parameter is provided but malformed (not RFC3339), the API returns HTTP 400 with a clear error message.
+
 ### Invitations
 
 Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
@@ -183,7 +201,7 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/v1/reports` | Upload CTRF report |
-| `GET` | `/api/v1/reports` | List reports |
+| `GET` | `/api/v1/reports` | List reports (supports `since`, `until` query params) |
 | `GET` | `/api/v1/reports/{id}` | Get report |
 | `DELETE` | `/api/v1/reports/{id}` | Delete report |
 | `POST` | `/api/v1/executions` | Create test execution |

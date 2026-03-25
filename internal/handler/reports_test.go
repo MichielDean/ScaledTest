@@ -42,6 +42,59 @@ func TestListReports_NoDB(t *testing.T) {
 	}
 }
 
+func TestListReports_ValidSinceUntil_NoDB(t *testing.T) {
+	h := &ReportsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?since=2024-01-01T00:00:00Z&until=2024-12-31T23:59:59Z", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.List(w, r)
+
+	// Valid RFC3339 dates should not cause 400; without DB we expect 503
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("List with valid since/until (no DB): got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestListReports_MalformedSince(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?since=garbage", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.List(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("List with malformed since: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestListReports_MalformedUntil(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?until=not-a-date", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.List(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("List with malformed until: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestListReports_BothMalformed(t *testing.T) {
+	h := &ReportsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/reports?since=garbage&until=junk", nil)
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.List(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("List with both malformed params: got %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
 func TestCreateReport_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
@@ -456,21 +509,23 @@ func TestCreateReport_NoDB_NoExecutionIDInResponse(t *testing.T) {
 // --- Date filtering tests ---
 
 func TestListReports_DateFilterParams_NoDB(t *testing.T) {
-	// Verify that date filter params don't cause crashes when DB is nil.
-	// The handler parses dates before hitting the DB, so this tests the parse path.
+	// Valid RFC3339 dates pass validation and reach the DB nil check (503).
+	// Invalid dates return 400 before touching the DB.
+	// Note: '+' in a raw URL query string is decoded as space — use '%2B' for timezone offsets.
 	tests := []struct {
-		name  string
-		query string
+		name     string
+		query    string
+		wantCode int
 	}{
-		{"valid since", "?since=2026-01-01T00:00:00Z"},
-		{"valid until", "?until=2026-12-31T23:59:59Z"},
-		{"both dates", "?since=2026-01-01T00:00:00Z&until=2026-12-31T23:59:59Z"},
-		{"invalid since format", "?since=not-a-date"},
-		{"invalid until format", "?until=2026-13-45"},
-		{"empty since", "?since="},
-		{"empty until", "?until="},
-		{"since with timezone offset", "?since=2026-01-01T00:00:00+05:00"},
-		{"until with timezone offset", "?until=2026-12-31T23:59:59-08:00"},
+		{"valid since", "?since=2026-01-01T00:00:00Z", http.StatusServiceUnavailable},
+		{"valid until", "?until=2026-12-31T23:59:59Z", http.StatusServiceUnavailable},
+		{"both dates", "?since=2026-01-01T00:00:00Z&until=2026-12-31T23:59:59Z", http.StatusServiceUnavailable},
+		{"invalid since format", "?since=not-a-date", http.StatusBadRequest},
+		{"invalid until format", "?until=2026-13-45", http.StatusBadRequest},
+		{"empty since", "?since=", http.StatusServiceUnavailable},
+		{"empty until", "?until=", http.StatusServiceUnavailable},
+		{"since with timezone offset", "?since=2026-01-01T00:00:00%2B05:00", http.StatusServiceUnavailable},
+		{"until with timezone offset", "?until=2026-12-31T23:59:59-08:00", http.StatusServiceUnavailable},
 	}
 
 	for _, tt := range tests {
@@ -482,9 +537,8 @@ func TestListReports_DateFilterParams_NoDB(t *testing.T) {
 
 			h.List(w, r)
 
-			// With nil DB, we always get 503 — the important thing is we don't panic
-			if w.Code != http.StatusServiceUnavailable {
-				t.Errorf("List(%s): got %d, want %d", tt.query, w.Code, http.StatusServiceUnavailable)
+			if w.Code != tt.wantCode {
+				t.Errorf("List(%s): got %d, want %d", tt.query, w.Code, tt.wantCode)
 			}
 		})
 	}
