@@ -143,11 +143,11 @@ func NewGitDiffEnricher(prevFinder PreviousRunFinder, fetcher DiffFetcher) *GitD
 
 // newGitDiffEnricherWithCap creates a GitDiffEnricher with a specific cache
 // capacity. Intended for tests that need deterministic eviction behaviour.
-func newGitDiffEnricherWithCap(prevFinder PreviousRunFinder, fetcher DiffFetcher, cap int) *GitDiffEnricher {
+func newGitDiffEnricherWithCap(prevFinder PreviousRunFinder, fetcher DiffFetcher, capacity int) *GitDiffEnricher {
 	return &GitDiffEnricher{
 		prevFinder: prevFinder,
 		fetcher:    fetcher,
-		cache:      newDiffLRU(cap),
+		cache:      newDiffLRU(capacity),
 	}
 }
 
@@ -223,10 +223,9 @@ func BuildDiffSummary(q GitDiffQuery, baseSHA string, files []FileDiffStat) GitD
 		return sorted[i].Path < sorted[j].Path // stable: alphabetical for equal churn
 	})
 
-	truncated := false
-	if len(sorted) > limit {
+	truncated := len(sorted) > limit
+	if truncated {
 		sorted = sorted[:limit]
-		truncated = true
 	}
 
 	return GitDiffSummary{
