@@ -7,6 +7,7 @@ vi.mock('../../lib/api', () => ({
   api: {
     getReports: vi.fn(),
     getReport: vi.fn(),
+    getTriage: vi.fn(),
   },
 }));
 
@@ -42,6 +43,7 @@ describe('TestResultsPage', () => {
     vi.clearAllMocks();
     vi.mocked(api.getReports).mockResolvedValue({ reports: [], total: 0 });
     vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
+    vi.mocked(api.getTriage).mockReturnValue(new Promise(() => {}));
   });
 
   it('renders Test Reports heading', () => {
@@ -242,6 +244,7 @@ describe('TestResultsPage — report-level status filtering', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     vi.mocked(api.getReport).mockResolvedValue({ report: { ...mockReport, tests: [] } });
+    vi.mocked(api.getTriage).mockReturnValue(new Promise(() => {}));
   });
 
   it('shows only reports with failures when Failed filter is selected', async () => {

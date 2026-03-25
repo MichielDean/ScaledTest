@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, Clock, Zap, BarChart2 } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { formatDate } from '../lib/date';
+import { TriageSummary } from '../components/triage-summary';
 
 interface Report {
   id: string;
@@ -210,118 +211,122 @@ function ReportDetail({
     return tests.filter(t => t.status === statusFilter);
   }, [tests, statusFilter]);
 
-  if (reportDetailQuery.isLoading) {
-    return (
-      <div className="px-5 py-6 border-t text-muted-foreground text-sm">
-        Loading test results...
-      </div>
-    );
-  }
-
-  if (tests.length === 0) {
-    return (
-      <div className="px-5 py-6 border-t text-muted-foreground text-sm">
-        No individual test results available for this report.
-      </div>
-    );
-  }
+  const hasFailed = report.failed > 0;
 
   return (
-    <div className="border-t">
-      {/* Summary bar */}
-      <div className="px-5 py-3 bg-muted/30 flex items-center gap-4 text-xs text-muted-foreground">
-        <span>{tests.length} tests</span>
-        {statusFilter !== 'all' && (
-          <span>
-            ({filteredTests.length} {statusFilter})
-          </span>
-        )}
-      </div>
-
-      {filteredTests.length === 0 ? (
-        <div className="px-5 py-4 text-sm text-muted-foreground">
-          No {statusFilter} tests in this report.
-        </div>
-      ) : (
-        <div className="divide-y">
-          {filteredTests.map((test, idx) => {
-            const isTestExpanded = expandedTestIdx === idx;
-            return (
-              <div key={idx}>
-                <button
-                  onClick={() => onToggleTest(idx)}
-                  className="w-full px-5 py-3 flex items-center gap-3 text-left text-sm hover:bg-muted/20 transition-colors"
-                >
-                  <TestStatusIcon status={test.status} />
-                  <div className="flex-1 min-w-0">
-                    <p className="truncate font-medium">{test.name}</p>
-                    {test.suite && (
-                      <p className="text-xs text-muted-foreground truncate font-mono">{test.suite}</p>
-                    )}
-                  </div>
-                  <div className="shrink-0 flex items-center gap-2">
-                    {test.flaky && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 text-xs font-medium">
-                        <Zap size={10} />
-                        flaky
-                      </span>
-                    )}
-                    {test.retry !== undefined && test.retry > 0 && (
-                      <span className="text-xs text-muted-foreground">retry {test.retry}</span>
-                    )}
-                    <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
-                      <Clock size={10} />
-                      {formatDuration(test.duration)}
-                    </span>
-                  </div>
-                </button>
-
-                {isTestExpanded && (
-                  <div className="px-5 pb-4 space-y-3">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
-                      {test.file_path && (
-                        <div>
-                          <span className="text-muted-foreground">File</span>
-                          <p className="font-mono mt-0.5 truncate text-foreground">{test.file_path}</p>
-                        </div>
-                      )}
-                      {test.tags && test.tags.length > 0 && (
-                        <div>
-                          <span className="text-muted-foreground">Tags</span>
-                          <div className="flex flex-wrap gap-1 mt-0.5">
-                            {test.tags.map(tag => (
-                              <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
-                                {tag}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                    {test.message && (
-                      <div>
-                        <span className="text-xs text-muted-foreground">Message</span>
-                        <pre className="mt-1 text-xs bg-destructive/10 text-destructive rounded p-3 overflow-x-auto whitespace-pre-wrap border border-destructive/20">
-                          {test.message}
-                        </pre>
-                      </div>
-                    )}
-                    {test.trace && (
-                      <div>
-                        <span className="text-xs text-muted-foreground">Stack Trace</span>
-                        <pre className="mt-1 text-xs bg-muted text-muted-foreground rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto border border-border">
-                          {test.trace}
-                        </pre>
-                      </div>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+    <>
+      {hasFailed && (
+        <div className="border-t">
+          <TriageSummary reportId={report.id} hasFailed={hasFailed} />
         </div>
       )}
-    </div>
+
+      {reportDetailQuery.isLoading ? (
+        <div className="px-5 py-6 border-t text-muted-foreground text-sm">
+          Loading test results...
+        </div>
+      ) : tests.length === 0 ? (
+        <div className="px-5 py-6 border-t text-muted-foreground text-sm">
+          No individual test results available for this report.
+        </div>
+      ) : (
+        <div className="border-t">
+          {/* Summary bar */}
+          <div className="px-5 py-3 bg-muted/30 flex items-center gap-4 text-xs text-muted-foreground">
+            <span>{tests.length} tests</span>
+            {statusFilter !== 'all' && (
+              <span>
+                ({filteredTests.length} {statusFilter})
+              </span>
+            )}
+          </div>
+
+          {filteredTests.length === 0 ? (
+            <div className="px-5 py-4 text-sm text-muted-foreground">
+              No {statusFilter} tests in this report.
+            </div>
+          ) : (
+            <div className="divide-y">
+              {filteredTests.map((test, idx) => {
+                const isTestExpanded = expandedTestIdx === idx;
+                return (
+                  <div key={idx}>
+                    <button
+                      onClick={() => onToggleTest(idx)}
+                      className="w-full px-5 py-3 flex items-center gap-3 text-left text-sm hover:bg-muted/20 transition-colors"
+                    >
+                      <TestStatusIcon status={test.status} />
+                      <div className="flex-1 min-w-0">
+                        <p className="truncate font-medium">{test.name}</p>
+                        {test.suite && (
+                          <p className="text-xs text-muted-foreground truncate font-mono">{test.suite}</p>
+                        )}
+                      </div>
+                      <div className="shrink-0 flex items-center gap-2">
+                        {test.flaky && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-warning/10 text-warning border border-warning/20 px-2 py-0.5 text-xs font-medium">
+                            <Zap size={10} />
+                            flaky
+                          </span>
+                        )}
+                        {test.retry !== undefined && test.retry > 0 && (
+                          <span className="text-xs text-muted-foreground">retry {test.retry}</span>
+                        )}
+                        <span className="text-xs text-muted-foreground font-mono flex items-center gap-1">
+                          <Clock size={10} />
+                          {formatDuration(test.duration)}
+                        </span>
+                      </div>
+                    </button>
+
+                    {isTestExpanded && (
+                      <div className="px-5 pb-4 space-y-3">
+                        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs">
+                          {test.file_path && (
+                            <div>
+                              <span className="text-muted-foreground">File</span>
+                              <p className="font-mono mt-0.5 truncate text-foreground">{test.file_path}</p>
+                            </div>
+                          )}
+                          {test.tags && test.tags.length > 0 && (
+                            <div>
+                              <span className="text-muted-foreground">Tags</span>
+                              <div className="flex flex-wrap gap-1 mt-0.5">
+                                {test.tags.map(tag => (
+                                  <span key={tag} className="rounded bg-muted px-1.5 py-0.5 text-xs text-foreground">
+                                    {tag}
+                                  </span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                        {test.message && (
+                          <div>
+                            <span className="text-xs text-muted-foreground">Message</span>
+                            <pre className="mt-1 text-xs bg-destructive/10 text-destructive rounded p-3 overflow-x-auto whitespace-pre-wrap border border-destructive/20">
+                              {test.message}
+                            </pre>
+                          </div>
+                        )}
+                        {test.trace && (
+                          <div>
+                            <span className="text-xs text-muted-foreground">Stack Trace</span>
+                            <pre className="mt-1 text-xs bg-muted text-muted-foreground rounded p-3 overflow-x-auto whitespace-pre-wrap max-h-48 overflow-y-auto border border-border">
+                              {test.trace}
+                            </pre>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+    </>
   );
 }
 

@@ -125,6 +125,15 @@ describe('fetchAPI non-ok responses', () => {
 
     await expect(api.getReports()).rejects.toThrow('Request failed');
   });
+
+  it('throws ApiError with the HTTP status code preserved', async () => {
+    fetchMock.mockResolvedValueOnce(jsonResponse({ error: 'Not Found' }, 404));
+
+    const err = await api.getReports().catch((e: unknown) => e);
+    expect(err).toHaveProperty('status', 404);
+    expect(err).toHaveProperty('message', 'Not Found');
+    expect(err).toHaveProperty('name', 'ApiError');
+  });
 });
 
 describe('CSRF token handling', () => {
