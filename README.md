@@ -198,6 +198,9 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `GET` | `/api/v1/teams/{id}/quality-gates/{gid}/evaluations` | List gate evaluations |
 | `GET` | `/api/v1/teams/{id}/webhooks` | List webhooks for a team |
 | `POST` | `/api/v1/teams/{id}/webhooks` | Create webhook (maintainer+) |
+| `GET` | `/api/v1/teams/{id}/webhooks/{wid}` | Get webhook |
+| `PUT` | `/api/v1/teams/{id}/webhooks/{wid}` | Update webhook (maintainer+) |
+| `DELETE` | `/api/v1/teams/{id}/webhooks/{wid}` | Delete webhook (maintainer+) |
 | `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
 | `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
@@ -206,6 +209,9 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation |
 | `GET` | `/api/v1/invitations/{token}` | Preview invitation (public) |
 | `POST` | `/api/v1/invitations/{token}/accept` | Accept invitation (public) |
+| `GET` | `/api/v1/teams/{id}/tokens` | List API tokens |
+| `POST` | `/api/v1/teams/{id}/tokens` | Create API token |
+| `DELETE` | `/api/v1/teams/{id}/tokens/{tid}` | Delete API token |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
@@ -262,6 +268,53 @@ Rule types `pass_rate`, `max_duration`, `max_flaky_count`, and `min_test_count` 
 `next_cursor` is only present when more results exist. Pass it as `?cursor=<next_cursor>` to fetch the next page. The cursor is an opaque composite of `delivered_at` (RFC3339Nano) and `id` for stable keyset ordering by `delivered_at DESC, id DESC`. Treat it as an opaque string — do not construct or parse it.
 
 **Frontend UI:** The Webhooks page includes a **Deliveries** button per webhook that expands an inline delivery list. A **Load More** button appears when additional pages are available, and failed deliveries (non-2xx status codes) show a **Retry** button to re-dispatch.
+
+## SDK
+
+The `@scaledtest/sdk` TypeScript/JavaScript client provides type-safe access to the ScaledTest API.
+
+### Installation
+
+```bash
+npm install @scaledtest/sdk
+```
+
+### Usage
+
+```typescript
+import { ScaledTestClient } from '@scaledtest/sdk';
+
+const client = new ScaledTestClient({
+  baseUrl: 'https://your-scaledtest-instance.com',
+  token: 'sct_your_api_token',
+});
+
+// Upload a report
+const report = await client.uploadReport(ctrfReport);
+
+// Manage webhooks
+const { webhooks } = await client.listWebhooks(teamId);
+const { webhook, secret } = await client.createWebhook(teamId, url, events);
+await client.updateWebhook(teamId, webhookId, { enabled: false });
+await client.retryWebhookDelivery(teamId, webhookId, deliveryId);
+
+// Manage invitations
+const { invitation, token } = await client.createInvitation(teamId, email, role);
+const { invitations } = await client.listInvitations(teamId);
+const preview = await client.previewInvitation(token);
+await client.acceptInvitation(token, password, displayName);
+
+// Manage API tokens
+const { tokens } = await client.listTokens(teamId);
+const { token: newToken } = await client.createToken(teamId, name);
+await client.deleteToken(teamId, tokenId);
+
+// Admin operations (owner only)
+const { users } = await client.listUsers();
+const { audit_log } = await client.listAuditLog();
+```
+
+All methods properly URL-encode path parameters and handle errors via `ScaledTestError`.
 
 ## Testing
 
