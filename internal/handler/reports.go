@@ -61,6 +61,30 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Validate date filters before the DB check so malformed params return 400
+	// rather than falling through to a DB error.
+	var sinceTime, untilTime time.Time
+	var hasSince, hasUntil bool
+
+	if since := r.URL.Query().Get("since"); since != "" {
+		t, err := time.Parse(time.RFC3339, since)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid since: must be RFC3339 (e.g. 2006-01-02T15:04:05Z)")
+			return
+		}
+		sinceTime = t
+		hasSince = true
+	}
+	if until := r.URL.Query().Get("until"); until != "" {
+		t, err := time.Parse(time.RFC3339, until)
+		if err != nil {
+			Error(w, http.StatusBadRequest, "invalid until: must be RFC3339 (e.g. 2006-01-02T15:04:05Z)")
+			return
+		}
+		untilTime = t
+		hasUntil = true
+	}
+
 	if h.DB == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
@@ -73,19 +97,15 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 	args := []interface{}{claims.TeamID}
 	argIdx := 2
 
-	if since := r.URL.Query().Get("since"); since != "" {
-		if t, err := time.Parse(time.RFC3339, since); err == nil {
-			whereClause += ` AND created_at >= $` + strconv.Itoa(argIdx)
-			args = append(args, t)
-			argIdx++
-		}
+	if hasSince {
+		whereClause += ` AND created_at >= $` + strconv.Itoa(argIdx)
+		args = append(args, sinceTime)
+		argIdx++
 	}
-	if until := r.URL.Query().Get("until"); until != "" {
-		if t, err := time.Parse(time.RFC3339, until); err == nil {
-			whereClause += ` AND created_at <= $` + strconv.Itoa(argIdx)
-			args = append(args, t)
-			argIdx++
-		}
+	if hasUntil {
+		whereClause += ` AND created_at <= $` + strconv.Itoa(argIdx)
+		args = append(args, untilTime)
+		argIdx++
 	}
 
 	// Count query uses the same WHERE clause (including since/until filters)
