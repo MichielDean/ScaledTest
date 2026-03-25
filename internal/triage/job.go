@@ -195,7 +195,7 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 		}
 		r.data.setTriageStatus(ctx, teamID, reportID, "complete")
 		r.notifyTriageComplete(teamID, reportID, "complete", "", 0, 0, 0)
-		r.maybePostTriageGitHubStatus(env, reportID, "", 0)
+		r.postTriageGitHubStatus(env, reportID, "success", triageStatusDescription("", 0))
 		return nil
 	}
 
@@ -222,7 +222,11 @@ func (r *Runner) run(ctx context.Context, teamID, reportID string) error {
 	r.data.setTriageStatus(ctx, teamID, reportID, "complete")
 	newCount, flakyCount := countNewAndFlaky(output)
 	r.notifyTriageComplete(teamID, reportID, "complete", output.Summary, len(output.Clusters), newCount, flakyCount)
-	r.maybePostTriageGitHubStatus(env, reportID, output.Summary, newCount)
+	state := "success"
+	if newCount > 0 {
+		state = "failure"
+	}
+	r.postTriageGitHubStatus(env, reportID, state, triageStatusDescription(output.Summary, newCount))
 	return nil
 }
 
@@ -364,10 +368,10 @@ func triageStatusDescription(summary string, newCount int) string {
 	return line
 }
 
-// maybePostTriageGitHubStatus fires a GitHub commit status in a background
-// goroutine when the per-report flag is set and the integration is configured.
+// postTriageGitHubStatus fires a GitHub commit status in a background goroutine
+// when the per-report flag is set and the integration is configured.
 // Errors are logged and swallowed — status posting is best-effort.
-func (r *Runner) maybePostTriageGitHubStatus(env reportEnv, reportID, summary string, newCount int) {
+func (r *Runner) postTriageGitHubStatus(env reportEnv, reportID, state, description string) {
 	if !env.TriageGitHubStatus || r.statusPoster == nil {
 		return
 	}
@@ -375,18 +379,10 @@ func (r *Runner) maybePostTriageGitHubStatus(env reportEnv, reportID, summary st
 	if !ok || env.Commit == "" {
 		return
 	}
-
-	state := "success"
-	if newCount > 0 {
-		state = "failure"
-	}
-	description := triageStatusDescription(summary, newCount)
-
 	var targetURL string
 	if r.baseURL != "" {
 		targetURL = r.baseURL + "/reports/" + reportID
 	}
-
 	poster := r.statusPoster
 	commit := env.Commit
 	go func() {
@@ -411,39 +407,7 @@ func (r *Runner) failTriage(ctx context.Context, teamID, triageID, reportID, err
 	}
 	r.data.setTriageStatus(ctx, teamID, reportID, "failed")
 	r.notifyTriageComplete(teamID, reportID, "failed", "", 0, 0, 0)
-	r.maybePostTriageGitHubStatusError(env, reportID)
-}
-
-// maybePostTriageGitHubStatusError fires a GitHub "error" commit status in a
-// background goroutine when the per-report flag is set and the integration is
-// configured. Called when triage fails so PRs receive feedback rather than
-// hanging without a ci/triage status.
-func (r *Runner) maybePostTriageGitHubStatusError(env reportEnv, reportID string) {
-	if !env.TriageGitHubStatus || r.statusPoster == nil {
-		return
-	}
-	owner, repo, ok := analytics.ParseOwnerRepo(env.Repository)
-	if !ok || env.Commit == "" {
-		return
-	}
-
-	var targetURL string
-	if r.baseURL != "" {
-		targetURL = r.baseURL + "/reports/" + reportID
-	}
-
-	poster := r.statusPoster
-	commit := env.Commit
-	go func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-		defer cancel()
-		if err := poster.PostStatus(ctx, owner, repo, commit, "error", "Triage failed — see run for details", "ci/triage", targetURL); err != nil {
-			log.Error().Err(err).
-				Str("report_id", reportID).
-				Str("sha", commit).
-				Msg("triage: failed to post GitHub commit error status")
-		}
-	}()
+	r.postTriageGitHubStatus(env, reportID, "error", "Triage failed — see run for details")
 }
 
 // ---------------------------------------------------------------------------
