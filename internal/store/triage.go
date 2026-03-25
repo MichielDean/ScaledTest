@@ -78,7 +78,7 @@ func (s *TriageStore) Complete(ctx context.Context, teamID, triageID, summary, l
 		`UPDATE triage_results
 		 SET status = 'complete', summary = $3, llm_provider = $4, llm_model = $5,
 		     input_tokens = $6, output_tokens = $7, cost_usd = $8, updated_at = now()
-		 WHERE id = $1 AND team_id = $2
+		 WHERE id = $1 AND team_id = $2 AND status = 'pending'
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
 		triageID, teamID, summary, llmProvider, llmModel, inputTokens, outputTokens, costUSD), &t); err != nil {
@@ -93,7 +93,7 @@ func (s *TriageStore) Fail(ctx context.Context, teamID, triageID, errorMsg strin
 	if err := scanTriageResult(s.pool.QueryRow(ctx,
 		`UPDATE triage_results
 		 SET status = 'failed', error_msg = $3, updated_at = now()
-		 WHERE id = $1 AND team_id = $2
+		 WHERE id = $1 AND team_id = $2 AND status = 'pending'
 		 RETURNING id, team_id, report_id, status, summary, llm_provider, llm_model,
 		           input_tokens, output_tokens, cost_usd, error_msg, created_at, updated_at`,
 		triageID, teamID, errorMsg), &t); err != nil {

@@ -405,6 +405,98 @@ func TestTriageStore_ListClassifications_ReturnsAllForTriage(t *testing.T) {
 	}
 }
 
+func TestTriageStore_Complete_WhenAlreadyComplete_ReturnsError(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "triage-complete-nopending-a")
+	reportID := createTestReport(t, tdb, teamID)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamID, reportID)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := s.Complete(ctx, teamID, triage.ID, "summary", "anthropic", "claude-sonnet-4-6", 100, 50, 0.001); err != nil {
+		t.Fatalf("first Complete: %v", err)
+	}
+
+	// Completing an already-complete triage must fail (status guard)
+	_, err = s.Complete(ctx, teamID, triage.ID, "summary2", "anthropic", "claude-sonnet-4-6", 200, 100, 0.002)
+	if err == nil {
+		t.Error("expected error when completing an already-complete triage, got nil")
+	}
+}
+
+func TestTriageStore_Fail_WhenAlreadyFailed_ReturnsError(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "triage-fail-nopending-a")
+	reportID := createTestReport(t, tdb, teamID)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamID, reportID)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := s.Fail(ctx, teamID, triage.ID, "first error"); err != nil {
+		t.Fatalf("first Fail: %v", err)
+	}
+
+	// Failing an already-failed triage must fail (status guard)
+	_, err = s.Fail(ctx, teamID, triage.ID, "second error")
+	if err == nil {
+		t.Error("expected error when failing an already-failed triage, got nil")
+	}
+}
+
+func TestTriageStore_Fail_WhenAlreadyComplete_ReturnsError(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "triage-fail-aftercomplete-a")
+	reportID := createTestReport(t, tdb, teamID)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamID, reportID)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := s.Complete(ctx, teamID, triage.ID, "summary", "anthropic", "claude-sonnet-4-6", 100, 50, 0.001); err != nil {
+		t.Fatalf("Complete: %v", err)
+	}
+
+	// Failing a completed triage must fail (status guard prevents inconsistent state)
+	_, err = s.Fail(ctx, teamID, triage.ID, "some error")
+	if err == nil {
+		t.Error("expected error when failing a completed triage, got nil")
+	}
+}
+
+func TestTriageStore_Complete_WhenAlreadyFailed_ReturnsError(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "triage-complete-afterfail-a")
+	reportID := createTestReport(t, tdb, teamID)
+	s := store.NewTriageStore(tdb.Pool)
+
+	triage, err := s.Create(ctx, teamID, reportID)
+	if err != nil {
+		t.Fatalf("Create: %v", err)
+	}
+
+	if _, err := s.Fail(ctx, teamID, triage.ID, "some error"); err != nil {
+		t.Fatalf("Fail: %v", err)
+	}
+
+	// Completing a failed triage must fail (status guard prevents inconsistent state)
+	_, err = s.Complete(ctx, teamID, triage.ID, "summary", "anthropic", "claude-sonnet-4-6", 100, 50, 0.001)
+	if err == nil {
+		t.Error("expected error when completing a failed triage, got nil")
+	}
+}
+
 func TestTriageStore_Complete_TeamIsolation(t *testing.T) {
 	tdb := integration.Setup(t)
 	ctx := context.Background()
