@@ -1343,7 +1343,7 @@ func TestTriageStatusDescription_TruncatesLongSummary(t *testing.T) {
 	// Build a single-line summary longer than 140 chars
 	long := strings.Repeat("a", 145)
 	got := triageStatusDescription(long, 0)
-	if len([]rune(got)) > 140+len("…") {
+	if len([]rune(got)) > 141 {
 		t.Errorf("description too long: len=%d, got %q", len(got), got)
 	}
 	if !strings.HasSuffix(got, "…") {
