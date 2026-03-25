@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { AlertCircle, Zap } from 'lucide-react';
-import { api } from '../lib/api';
+import { api, ApiError } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 
 interface TriageFailure {
@@ -41,6 +41,8 @@ export function TriageSummary({ reportId, hasFailed }: TriageSummaryProps) {
     queryKey: queryKeys.reports.triage(reportId),
     queryFn: () => api.getTriage(reportId) as Promise<TriageResponse>,
     enabled: hasFailed,
+    refetchInterval: (query) =>
+      (query.state.data as TriageResponse | undefined)?.triage_status === 'pending' ? 5000 : false,
   });
 
   if (!hasFailed) return null;
@@ -57,8 +59,7 @@ export function TriageSummary({ reportId, hasFailed }: TriageSummaryProps) {
   }
 
   if (error) {
-    const msg = (error as Error).message;
-    if (msg === 'triage not found') {
+    if (error instanceof ApiError && error.status === 404) {
       return (
         <div className="px-5 py-4 text-sm text-muted-foreground">
           Triage analysis not yet available for this report.

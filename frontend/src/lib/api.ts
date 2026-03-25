@@ -1,5 +1,12 @@
 import { useAuthStore } from '../stores/auth-store';
 
+export class ApiError extends Error {
+  constructor(message: string, public readonly status: number) {
+    super(message);
+    this.name = 'ApiError';
+  }
+}
+
 const BASE_URL = '';
 
 let csrfToken: string | null = null;
@@ -99,8 +106,8 @@ async function fetchAPI<T>(path: string, options: globalThis.RequestInit = {}, r
   }
 
   if (!response.ok) {
-    const error = await response.json().catch(() => ({ error: 'Request failed' }));
-    throw new Error(error.error || `HTTP ${response.status}`);
+    const body = await response.json().catch(() => ({ error: 'Request failed' }));
+    throw new ApiError(body.error || `HTTP ${response.status}`, response.status);
   }
 
   return response.json();

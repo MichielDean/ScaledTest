@@ -1,13 +1,18 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, act } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { TriageSummary } from '../triage-summary';
-import { api } from '../../lib/api';
+import { api, ApiError } from '../../lib/api';
+import { queryKeys } from '../../lib/query-keys';
 
-vi.mock('../../lib/api', () => ({
-  api: {
-    getTriage: vi.fn(),
-  },
-}));
+vi.mock('../../lib/api', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../lib/api')>();
+  return {
+    ...actual,
+    api: {
+      getTriage: vi.fn(),
+    },
+  };
+});
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
@@ -53,6 +58,10 @@ const mockTriageFailed = {
 describe('TriageSummary', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('renders nothing when report has no failures', () => {
@@ -134,12 +143,45 @@ describe('TriageSummary', () => {
     expect(await screen.findByText(/triage analysis unavailable/i)).toBeInTheDocument();
   });
 
-  it('shows fallback when triage record is not found', async () => {
-    vi.mocked(api.getTriage).mockRejectedValue(new Error('triage not found'));
+  it('shows fallback when triage record is not found (404)', async () => {
+    vi.mocked(api.getTriage).mockRejectedValue(new ApiError('triage not found', 404));
     renderWithClient(<TriageSummary reportId="rpt-001" hasFailed={true} />);
     expect(
       await screen.findByText(/triage analysis not yet available/i),
     ).toBeInTheDocument();
+  });
+
+  it('shows error state for non-404 API errors', async () => {
+    vi.mocked(api.getTriage).mockRejectedValue(new ApiError('internal server error', 500));
+    renderWithClient(<TriageSummary reportId="rpt-001" hasFailed={true} />);
+    expect(await screen.findByText(/failed to load triage/i)).toBeInTheDocument();
+  });
+
+  it('transitions from skeleton to complete state when poll returns new data', async () => {
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    vi.mocked(api.getTriage)
+      .mockResolvedValueOnce({ triage_status: 'pending' })
+      .mockResolvedValue(mockTriageComplete);
+
+    render(
+      <QueryClientProvider client={queryClient}>
+        <TriageSummary reportId="rpt-001" hasFailed={true} />
+      </QueryClientProvider>,
+    );
+
+    // Initial fetch: status is pending, skeleton is shown
+    expect(await screen.findByTestId('triage-skeleton')).toBeInTheDocument();
+    expect(api.getTriage).toHaveBeenCalledTimes(1);
+
+    // Simulate what the 5-second refetchInterval does: trigger a refetch
+    await act(async () => {
+      await queryClient.refetchQueries({ queryKey: queryKeys.reports.triage('rpt-001') });
+    });
+
+    // After the poll resolves, complete triage data is displayed
+    expect(api.getTriage).toHaveBeenCalledTimes(2);
+    expect(await screen.findByText('Triage Summary')).toBeInTheDocument();
   });
 
   it('shows error state for unexpected fetch errors', async () => {
