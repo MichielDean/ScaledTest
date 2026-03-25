@@ -90,6 +90,18 @@ func TestNew_UnknownProvider_ReturnsErrUnknownProvider(t *testing.T) {
 	}
 }
 
+func TestNew_NegativeMaxRetries_ReturnsError(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+
+	_, err := New(Config{Provider: "anthropic", MaxRetries: intPtr(-1)})
+	if err == nil {
+		t.Fatal("expected error for negative MaxRetries")
+	}
+	if !strings.Contains(err.Error(), "MaxRetries must be >= 0") {
+		t.Fatalf("unexpected error message: %v", err)
+	}
+}
+
 // ---- cliProvider.Analyze -------------------------------------------------
 
 func TestCLIProvider_Analyze_ReturnsJSONFromStdout(t *testing.T) {

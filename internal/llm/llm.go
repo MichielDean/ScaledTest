@@ -59,6 +59,9 @@ func New(cfg Config) (Provider, error) {
 	if cfg.MaxRetries != nil {
 		maxRetries = *cfg.MaxRetries
 	}
+	if maxRetries < 0 {
+		return nil, fmt.Errorf("llm: MaxRetries must be >= 0, got %d", maxRetries)
+	}
 
 	preset, ok := presets[cfg.Provider]
 	if !ok {
