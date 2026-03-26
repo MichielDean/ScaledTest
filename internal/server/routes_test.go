@@ -63,12 +63,16 @@ func addCSRF(req *http.Request, token string, cookie *http.Cookie) {
 func TestHealthEndpoint(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
+	// No Authorization header — endpoint must be publicly accessible.
 	req := httptest.NewRequest("GET", "/health", nil)
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
 	if w.Code != http.StatusOK {
 		t.Errorf("GET /health status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("GET /health Content-Type = %q, want application/json", ct)
 	}
 
 	var body struct {
@@ -83,22 +87,6 @@ func TestHealthEndpoint(t *testing.T) {
 	}
 	if _, err := time.Parse(time.RFC3339, body.Timestamp); err != nil {
 		t.Errorf("GET /health timestamp = %q, not valid ISO8601: %v", body.Timestamp, err)
-	}
-}
-
-func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
-
-	// No Authorization header — should still return 200.
-	req := httptest.NewRequest("GET", "/health", nil)
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-
-	if w.Code != http.StatusOK {
-		t.Errorf("GET /health (no auth) status = %d, want 200", w.Code)
-	}
-	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
-		t.Errorf("GET /health Content-Type = %q, want application/json", ct)
 	}
 }
 
