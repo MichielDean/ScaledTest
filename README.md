@@ -100,6 +100,22 @@ make docker         # Build Docker image
 
 All API endpoints live under `/api/v1` and require a Bearer token (`Authorization: Bearer sct_...` or a JWT access token).
 
+### Health Check
+
+The `/health` endpoint is publicly accessible (no authentication required) and is used by load balancers and CI systems to check server health:
+
+```bash
+GET /health
+```
+
+Response (HTTP 200):
+```json
+{
+  "status": "ok",
+  "timestamp": "2024-03-26T15:30:45Z"
+}
+```
+
 ### Authentication
 
 ```bash
