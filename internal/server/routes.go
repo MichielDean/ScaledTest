@@ -219,10 +219,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		invH.Store = store.NewInvitationStore(dbPool)
 	}
 
-	// Health check
+	// Health check — no auth required; used by CI and load balancers.
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
-		w.Write([]byte(`{"status":"ok"}`))
+		w.Write([]byte(`{"status":"ok","timestamp":"` + time.Now().UTC().Format(time.RFC3339) + `"}`))
 	})
 
 	// CSRF token endpoint — SPA calls this to get a token before mutations
