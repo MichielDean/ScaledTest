@@ -1,6 +1,7 @@
 package server
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -69,8 +70,35 @@ func TestHealthEndpoint(t *testing.T) {
 	if w.Code != http.StatusOK {
 		t.Errorf("GET /health status = %d, want %d", w.Code, http.StatusOK)
 	}
-	if body := w.Body.String(); !strings.Contains(body, `"ok"`) {
-		t.Errorf("GET /health body = %q", body)
+
+	var body struct {
+		Status    string `json:"status"`
+		Timestamp string `json:"timestamp"`
+	}
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("GET /health body is not valid JSON: %v", err)
+	}
+	if body.Status != "ok" {
+		t.Errorf("GET /health status = %q, want %q", body.Status, "ok")
+	}
+	if _, err := time.Parse(time.RFC3339, body.Timestamp); err != nil {
+		t.Errorf("GET /health timestamp = %q, not valid ISO8601: %v", body.Timestamp, err)
+	}
+}
+
+func TestHealthEndpoint_NoAuthRequired(t *testing.T) {
+	router := NewRouter(testConfig(), nil)
+
+	// No Authorization header — should still return 200.
+	req := httptest.NewRequest("GET", "/health", nil)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("GET /health (no auth) status = %d, want 200", w.Code)
+	}
+	if ct := w.Header().Get("Content-Type"); !strings.Contains(ct, "application/json") {
+		t.Errorf("GET /health Content-Type = %q, want application/json", ct)
 	}
 }
 
