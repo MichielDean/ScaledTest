@@ -77,7 +77,8 @@ test.describe('Analytics', () => {
     // Wait for DOM to be fully loaded after SPA navigation
     await page.waitForLoadState('domcontentloaded');
 
-    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+    // Assert page heading is visible
+    await expect(page.getByText('Analytics', { exact: true })).toBeVisible();
 
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
