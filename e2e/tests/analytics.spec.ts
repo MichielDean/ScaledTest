@@ -75,7 +75,10 @@ test.describe('Analytics', () => {
     // in Zustand memory — a full page reload would lose the access token.
     await page.getByRole('link', { name: 'Analytics' }).click();
 
-    // Assert page loaded by checking for page heading and key sections
+    // Wait for at least one section heading to appear, indicating the page has loaded
+    await expect(page.getByText('Pass Rate Trends')).toBeVisible();
+
+    // Assert page heading is visible
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
