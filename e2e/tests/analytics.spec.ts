@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+  loginViaUI,
   loadCachedToken,
   tokenHeaders,
   buildCtrfReport,
@@ -57,5 +58,36 @@ test.describe('Analytics', () => {
     expect(durationRes.ok()).toBeTruthy();
     const duration = await durationRes.json();
     expect(duration.distribution).toBeDefined();
+  });
+
+  test('analytics browser: navigate to /analytics via nav link and assert page renders', async ({
+    page,
+    request,
+  }) => {
+    // Ensure the user has a team so the JWT from loginViaUI embeds a team_id.
+    const session = loadCachedToken();
+    await getOrCreateTeam(request, session);
+
+    // Login via UI form — auth token is stored in Zustand memory.
+    await loginViaUI(page);
+
+    // Navigate via SPA link click (not page.goto) to preserve auth state
+    // in Zustand memory — a full page reload would lose the access token.
+    await page.getByRole('link', { name: 'Analytics' }).click();
+    await page.waitForURL('/analytics');
+
+    // The Analytics heading must be visible before any other assertions.
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+
+    // Section headings for each analytics panel
+    await expect(page.getByText('Pass Rate Trends')).toBeVisible();
+    await expect(page.getByText('Flaky Tests')).toBeVisible();
+    await expect(page.getByText('Duration Distribution')).toBeVisible();
+    await expect(page.getByText('Error Analysis')).toBeVisible();
+
+    // User is still authenticated
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-analytics.png' });
   });
 });
