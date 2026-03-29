@@ -6,6 +6,8 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **`GET /api/v1/reports/compare` endpoint returning 500**: Fixed a database query issue where NULL values in optional text columns (`message`, `trace`, `file_path`, `suite`) could not be scanned into string destinations in pgx v5, causing the compare endpoint to return HTTP 500 for reports with missing optional fields. The fix wraps these columns with `COALESCE(..., '')` to convert NULL to empty string, ensuring the endpoint returns HTTP 200 with a valid diff payload. The fix maintains team isolation — reports from different teams return HTTP 404.
+
 - **`GET /api/v1/reports` (ListReports) query parameter validation**: The `since` and `until` query parameters now return HTTP 400 with a clear error message when provided in a malformed format (not RFC3339). Previously, malformed dates were silently ignored, causing the endpoint to return all records instead of signaling a bad request. Empty string values for these parameters continue to be accepted and ignored as before.
 
 - **Test report `name` field in ListReports and GetReport responses**: Both `GET /api/v1/reports` and `GET /api/v1/reports/{reportID}` responses now include a computed `name` field. The name is derived from `tool_name` and `tool_version` (e.g., `"playwright v1.50.1"` or `"jest"`). If `tool_name` is empty, the name falls back to `"Report <short-id>"` using the first 8 characters of the report UUID. This eliminates blank report titles in the test-results list and dashboard recent reports table. The TypeScript SDK's `Report` interface has been updated to include the `name` field.

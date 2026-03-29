@@ -199,6 +199,60 @@ curl -X GET "https://your-instance/api/v1/reports?since=2024-01-01T00:00:00Z&unt
 
 Both parameters are optional and can be used independently. If either parameter is provided but malformed (not RFC3339), the API returns HTTP 400 with a clear error message.
 
+### Compare Two Reports
+
+Compare two reports to see what changed — pass/fail status shifts, new failures, fixed tests, and duration deltas.
+
+```bash
+curl -X GET "https://your-instance/api/v1/reports/compare?base=<base-report-id>&head=<head-report-id>" \
+  -H "Authorization: Bearer sct_..."
+```
+
+**Query parameters:**
+
+| Parameter | Required | Description |
+|-----------|----------|-------------|
+| `base` | Yes | Report ID to compare from (baseline) |
+| `head` | Yes | Report ID to compare to (new results) |
+
+**Response (HTTP 200):**
+
+```json
+{
+  "base": {
+    "id": "report-uuid-1",
+    "tool_name": "playwright",
+    "summary": { "tests": 10, "passed": 9, "failed": 1 }
+  },
+  "head": {
+    "id": "report-uuid-2",
+    "tool_name": "playwright",
+    "summary": { "tests": 11, "passed": 10, "failed": 1 }
+  },
+  "diff": {
+    "summary": {
+      "base_tests": 10,
+      "head_tests": 11,
+      "new_failures": 1,
+      "fixed": 1,
+      "passed_unchanged": 8,
+      "failed_unchanged": 0
+    },
+    "new_failures": [
+      { "name": "test_api_timeout", "duration_ms": 5000, "message": "..." }
+    ],
+    "fixed": [
+      { "name": "test_db_connection", "duration_ms": 1500 }
+    ]
+  }
+}
+```
+
+**Error responses:**
+
+- HTTP 400: Missing `base` or `head` parameter, or `base` and `head` are the same ID
+- HTTP 404: One or both report IDs don't exist, or belong to a different team (team isolation enforced)
+
 ### Invitations
 
 Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
@@ -232,6 +286,7 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `POST` | `/api/v1/reports` | Upload CTRF report |
 | `GET` | `/api/v1/reports` | List reports (supports `since`, `until` query params) |
 | `GET` | `/api/v1/reports/{id}` | Get report |
+| `GET` | `/api/v1/reports/compare` | Compare two reports (query params: `base`, `head` — report IDs) |
 | `GET` | `/api/v1/reports/{id}/triage` | Get triage result (status, clusters, classifications, summary) |
 | `POST` | `/api/v1/reports/{id}/triage/retry` | Retry triage for a completed run (maintainer+) |
 | `DELETE` | `/api/v1/reports/{id}` | Delete report |
