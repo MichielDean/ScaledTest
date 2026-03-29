@@ -63,17 +63,6 @@ type DurationBucket struct {
 	Count      int    `json:"count"`
 }
 
-// DurationStats holds aggregate duration statistics.
-type DurationStats struct {
-	Mean         float64          `json:"mean_ms"`
-	Median       float64          `json:"median_ms"`
-	P95          float64          `json:"p95_ms"`
-	P99          float64          `json:"p99_ms"`
-	Min          int64            `json:"min_ms"`
-	Max          int64            `json:"max_ms"`
-	Distribution []DurationBucket `json:"distribution"`
-}
-
 // TrendQuery defines the parameters for a trend query.
 type TrendQuery struct {
 	TeamID    string
