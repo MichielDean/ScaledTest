@@ -190,23 +190,7 @@ func TestCompareReports_CrossTeam_ReturnsNotFound(t *testing.T) {
 	testutil.InsertQGResult(t, ctx, tdb.Pool, headID, teamA, "test/x", "failed")
 
 	// But we're calling as teamB — should not see teamA's reports
-	h := &handler.ReportsHandler{
-		DB: tdb.Pool,
-	}
-	req := httptest.NewRequest(http.MethodGet,
-		fmt.Sprintf("/api/v1/reports/compare?base=%s&head=%s", baseID, headID),
-		nil)
-	rctx := chi.NewRouteContext()
-	reqCtx := context.WithValue(req.Context(), chi.RouteCtxKey, rctx)
-	reqCtx = auth.SetClaims(reqCtx, &auth.Claims{
-		UserID: "user-b",
-		Email:  "b@example.com",
-		Role:   "owner",
-		TeamID: teamB, // different team
-	})
-	req = req.WithContext(reqCtx)
-	w := httptest.NewRecorder()
-	h.Compare(w, req)
+	w := postCompare(t, tdb.Pool, teamB, baseID, headID)
 
 	if w.Code != http.StatusNotFound {
 		t.Errorf("cross-team compare: got %d, want 404", w.Code)
