@@ -76,7 +76,7 @@ test.describe('Analytics', () => {
     await page.getByRole('link', { name: 'Analytics' }).click();
 
     // Wait for navigation to complete and heading to be visible
-    await expect(page.getByRole('heading', { name: 'Analytics' }), 'Analytics heading should be visible').toBeVisible({ timeout: 15000 });
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible({ timeout: 15000 });
 
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
