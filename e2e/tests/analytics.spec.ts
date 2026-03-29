@@ -76,10 +76,10 @@ test.describe('Analytics', () => {
     await page.getByRole('link', { name: 'Analytics' }).click();
     await page.waitForURL('**/analytics');
 
-    // Wait for the main heading to appear — ensures the component has hydrated
-    // and React has rendered the page. This prevents race conditions between
-    // SPA navigation completion and component render in the browser.
-    await page.waitForSelector('h1');
+    // Wait for the main content div to ensure the AnalyticsPage component
+    // has fully rendered. The page uses a loading state check (useQuery loading),
+    // so we verify the main container is present before checking headings.
+    await page.waitForSelector('div.p-6.space-y-8');
 
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
