@@ -146,3 +146,28 @@ func TestDefaultDurationBuckets(t *testing.T) {
 		}
 	}
 }
+
+// TestDurationBucket_JSONKey_IsRange verifies that DurationBucket serializes its
+// label field as "range" (not "range_label") so it matches the frontend BarChart's
+// dataKey="range" in analytics.tsx.
+func TestDurationBucket_JSONKey_IsRange(t *testing.T) {
+	bucket := DurationBucket{
+		RangeLabel: "0-100ms",
+		MinMs:      0,
+		MaxMs:      100,
+		Count:      3,
+	}
+
+	data, err := json.Marshal(bucket)
+	if err != nil {
+		t.Fatalf("json.Marshal: %v", err)
+	}
+
+	got := string(data)
+	if !strings.Contains(got, `"range"`) {
+		t.Errorf("DurationBucket JSON = %s; want key \"range\"", got)
+	}
+	if strings.Contains(got, `"range_label"`) {
+		t.Errorf("DurationBucket JSON = %s; must not contain key \"range_label\" (frontend uses dataKey=\"range\")", got)
+	}
+}

@@ -443,6 +443,17 @@ make lint               # golangci-lint
 make frontend-test      # React component/unit tests
 ```
 
+### E2E tests
+
+```bash
+cd e2e && npm test              # Run all Playwright E2E tests
+cd e2e && npm run test:ui       # Run tests in UI mode (interactive debugging)
+cd e2e && npm run test:headed   # Run tests in headed mode (visible browser)
+```
+
+Tests validate browser-based user flows including authentication, navigation, report submission, quality gates, webhooks, executions, and analytics views. Requires the server running (`make dev-api`) and configured database.
+
+
 ## User Roles
 
 | Role | Permissions |

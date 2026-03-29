@@ -57,21 +57,10 @@ type ErrorCluster struct {
 
 // DurationBucket represents a bucket in a duration distribution histogram.
 type DurationBucket struct {
-	RangeLabel string `json:"range_label"` // e.g., "0-100ms", "100-500ms"
+	RangeLabel string `json:"range"` // "range" matches the frontend BarChart dataKey
 	MinMs      int64  `json:"min_ms"`
 	MaxMs      int64  `json:"max_ms"`
 	Count      int    `json:"count"`
-}
-
-// DurationStats holds aggregate duration statistics.
-type DurationStats struct {
-	Mean         float64          `json:"mean_ms"`
-	Median       float64          `json:"median_ms"`
-	P95          float64          `json:"p95_ms"`
-	P99          float64          `json:"p99_ms"`
-	Min          int64            `json:"min_ms"`
-	Max          int64            `json:"max_ms"`
-	Distribution []DurationBucket `json:"distribution"`
 }
 
 // TrendQuery defines the parameters for a trend query.

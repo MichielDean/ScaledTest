@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import {
+  loginViaUI,
   loadCachedToken,
   tokenHeaders,
   buildCtrfReport,
@@ -56,6 +57,38 @@ test.describe('Analytics', () => {
     });
     expect(durationRes.ok()).toBeTruthy();
     const duration = await durationRes.json();
-    expect(duration.distribution).toBeDefined();
+    expect(Array.isArray(duration.distribution)).toBeTruthy();
+  });
+
+  test('analytics browser: navigate to /analytics via nav link and assert page renders', async ({
+    page,
+    request,
+  }) => {
+    // Ensure the user has a team so the JWT from loginViaUI embeds a team_id.
+    const session = loadCachedToken();
+    await getOrCreateTeam(request, session);
+
+    // Login via UI form — auth token is stored in Zustand memory.
+    await loginViaUI(page);
+
+    // Wait for the dashboard's API queries to complete before navigating away.
+    // This ensures the Zustand auth state is stable — if any dashboard query
+    // returned 401 and triggered a token refresh, that round-trip has finished
+    // before we start the next SPA navigation.
+    await page.waitForLoadState('networkidle');
+
+    // Navigate via SPA link click (not page.goto) to preserve auth state
+    // in Zustand memory — a full page reload would lose the access token.
+    await page.getByRole('link', { name: 'Analytics' }).click();
+    await page.waitForURL('**/analytics');
+
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pass Rate Trends' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flaky Tests' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Duration Distribution' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Error Analysis' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
+
+    await page.screenshot({ path: 'screenshots/browser-ui-analytics.png' });
   });
 });
