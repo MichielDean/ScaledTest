@@ -498,11 +498,11 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	fetchReport := func(id string) (*model.TestReport, error) {
 		var rpt model.TestReport
 		err := h.DB.QueryRow(r.Context(),
-			`SELECT id, team_id, execution_id, tool_name, tool_version, COALESCE(environment, '[]'), summary, created_at
+			`SELECT id, team_id, execution_id, tool_name, tool_version, summary, created_at
 			 FROM test_reports WHERE id = $1 AND team_id = $2`,
 			id, claims.TeamID).Scan(
 			&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
-			&rpt.ToolVersion, &rpt.Environment, &rpt.Summary, &rpt.CreatedAt,
+			&rpt.ToolVersion, &rpt.Summary, &rpt.CreatedAt,
 		)
 		return &rpt, err
 	}
