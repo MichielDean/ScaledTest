@@ -1178,3 +1178,4 @@ func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Sum
 		}
 	}()
 }
+
