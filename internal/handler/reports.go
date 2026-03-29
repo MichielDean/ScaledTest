@@ -530,7 +530,9 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	// Fetch test results for both reports
 	fetchResults := func(reportID string) (map[string]*model.TestResult, error) {
 		rows, err := h.DB.Query(r.Context(),
-			`SELECT id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at
+			`SELECT id, report_id, team_id, name, status, duration_ms,
+			        COALESCE(message, ''), COALESCE(trace, ''), COALESCE(file_path, ''), COALESCE(suite, ''),
+			        tags, retry, flaky, created_at
 			 FROM test_results WHERE report_id = $1 AND team_id = $2`,
 			reportID, claims.TeamID)
 		if err != nil {
