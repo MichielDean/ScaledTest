@@ -498,11 +498,11 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	fetchReport := func(id string) (*model.TestReport, error) {
 		var rpt model.TestReport
 		err := h.DB.QueryRow(r.Context(),
-			`SELECT id, team_id, execution_id, tool_name, tool_version, environment, summary, created_at
+			`SELECT id, team_id, execution_id, tool_name, tool_version, summary, created_at
 			 FROM test_reports WHERE id = $1 AND team_id = $2`,
 			id, claims.TeamID).Scan(
 			&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
-			&rpt.ToolVersion, &rpt.Environment, &rpt.Summary, &rpt.CreatedAt,
+			&rpt.ToolVersion, &rpt.Summary, &rpt.CreatedAt,
 		)
 		return &rpt, err
 	}
@@ -530,7 +530,9 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	// Fetch test results for both reports
 	fetchResults := func(reportID string) (map[string]*model.TestResult, error) {
 		rows, err := h.DB.Query(r.Context(),
-			`SELECT id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at
+			`SELECT id, report_id, team_id, name, status, duration_ms,
+			        COALESCE(message, ''), COALESCE(trace, ''), COALESCE(file_path, ''), COALESCE(suite, ''),
+			        tags, retry, flaky, created_at
 			 FROM test_results WHERE report_id = $1 AND team_id = $2`,
 			reportID, claims.TeamID)
 		if err != nil {
@@ -1176,3 +1178,4 @@ func (h *ReportsHandler) maybePostGitHubStatus(r *http.Request, summary ctrf.Sum
 		}
 	}()
 }
+

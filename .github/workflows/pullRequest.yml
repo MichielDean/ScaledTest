@@ -35,6 +35,7 @@ jobs:
   go-integration-test:
     runs-on: self-hosted
     if: github.event.pull_request.head.repo.full_name == github.repository
+    needs: [e2e-tests]
     timeout-minutes: 10
     services:
       postgres:
@@ -44,7 +45,7 @@ jobs:
           POSTGRES_PASSWORD: test
           POSTGRES_DB: scaledtest_test
         ports:
-          - 5432:5432
+          - 5433:5432
         options: >-
           --health-cmd "pg_isready -U test"
           --health-interval 10s
@@ -61,7 +62,7 @@ jobs:
 
       - name: Run store integration tests
         env:
-          TEST_DATABASE_URL: postgres://test:test@localhost:5432/scaledtest_test?sslmode=disable
+          TEST_DATABASE_URL: postgres://test:test@localhost:5433/scaledtest_test?sslmode=disable
         run: make test-integration
 
   frontend-build:

@@ -34,8 +34,8 @@ func InsertQGReport(t *testing.T, ctx context.Context, pool *db.Pool, teamID str
 	})
 	var id string
 	err := pool.QueryRow(ctx,
-		`INSERT INTO test_reports (team_id, tool_name, summary, raw, created_at)
-		 VALUES ($1, 'jest', $2, '{"results":{"tool":{"name":"jest"}}}'::jsonb, $3)
+		`INSERT INTO test_reports (team_id, tool_name, tool_version, summary, raw, created_at)
+		 VALUES ($1, 'jest', '1.0.0', $2, '{"results":{"tool":{"name":"jest"}}}'::jsonb, $3)
 		 RETURNING id`,
 		teamID, summary, createdAt,
 	).Scan(&id)
