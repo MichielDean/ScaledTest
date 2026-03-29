@@ -44,6 +44,8 @@ make test                   # All Go tests (with race detector)
 make test-short             # Fast Go tests (no race)
 make test-integration       # Integration tests (requires TEST_DATABASE_URL)
 cd frontend && npm test     # Frontend tests (Vitest)
+cd e2e && npm test          # E2E tests (Playwright)
+cd e2e && npm run test:ui   # E2E tests in UI mode (interactive debugging)
 ```
 
 ## Key Directories
