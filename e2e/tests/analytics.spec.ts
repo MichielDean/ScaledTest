@@ -76,11 +76,12 @@ test.describe('Analytics', () => {
     const analyticsLink = page.getByRole('link', { name: 'Analytics' });
     await expect(analyticsLink).toBeVisible();
     await analyticsLink.click();
-    // Wait for DOM to be fully loaded after SPA navigation
-    await page.waitForLoadState('domcontentloaded');
+
+    // Wait for URL to change to /analytics and page to load
+    await expect(page).toHaveURL(/\/analytics/);
 
     // Assert page heading is visible
-    await expect(page.getByText('Analytics', { exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
 
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
