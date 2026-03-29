@@ -71,15 +71,16 @@ test.describe('Analytics', () => {
     // Login via UI form — auth token is stored in Zustand memory.
     await loginViaUI(page);
 
+    // Wait for the dashboard's API queries to complete before navigating away.
+    // This ensures the Zustand auth state is stable — if any dashboard query
+    // returned 401 and triggered a token refresh, that round-trip has finished
+    // before we start the next SPA navigation.
+    await page.waitForLoadState('networkidle');
+
     // Navigate via SPA link click (not page.goto) to preserve auth state
     // in Zustand memory — a full page reload would lose the access token.
     await page.getByRole('link', { name: 'Analytics' }).click();
     await page.waitForURL('**/analytics');
-
-    // Wait for the main content div to ensure the AnalyticsPage component
-    // has fully rendered. The page uses a loading state check (useQuery loading),
-    // so we verify the main container is present before checking headings.
-    await page.waitForSelector('div.p-6.space-y-8');
 
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
