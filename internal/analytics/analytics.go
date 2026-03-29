@@ -57,7 +57,7 @@ type ErrorCluster struct {
 
 // DurationBucket represents a bucket in a duration distribution histogram.
 type DurationBucket struct {
-	RangeLabel string `json:"range_label"` // e.g., "0-100ms", "100-500ms"
+	RangeLabel string `json:"range"` // "range" matches the frontend BarChart dataKey
 	MinMs      int64  `json:"min_ms"`
 	MaxMs      int64  `json:"max_ms"`
 	Count      int    `json:"count"`

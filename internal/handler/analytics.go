@@ -319,7 +319,7 @@ func (h *AnalyticsHandler) DurationDistribution(w http.ResponseWriter, r *http.R
 	stats.Distribution = buckets
 
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"distribution": stats,
+		"distribution": stats.Distribution,
 	})
 }
 

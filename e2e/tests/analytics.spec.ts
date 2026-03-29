@@ -57,7 +57,7 @@ test.describe('Analytics', () => {
     });
     expect(durationRes.ok()).toBeTruthy();
     const duration = await durationRes.json();
-    expect(duration.distribution).toBeDefined();
+    expect(Array.isArray(duration.distribution)).toBeTruthy();
   });
 
   test('analytics browser: navigate to /analytics via nav link and assert page renders', async ({
