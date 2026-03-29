@@ -83,10 +83,10 @@ test.describe('Analytics', () => {
     await page.waitForURL('**/analytics');
 
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
-    await expect(page.getByText('Pass Rate Trends')).toBeVisible();
-    await expect(page.getByText('Flaky Tests')).toBeVisible();
-    await expect(page.getByText('Duration Distribution')).toBeVisible();
-    await expect(page.getByText('Error Analysis')).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Pass Rate Trends' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Flaky Tests' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Duration Distribution' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Error Analysis' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
     await page.screenshot({ path: 'screenshots/browser-ui-analytics.png' });
