@@ -74,9 +74,8 @@ test.describe('Analytics', () => {
     // Navigate via SPA link click (not page.goto) to preserve auth state
     // in Zustand memory — a full page reload would lose the access token.
     await page.getByRole('link', { name: 'Analytics' }).click();
-    await page.waitForURL('/analytics');
-    await page.waitForLoadState('domcontentloaded');
 
+    // Wait for the heading to be visible before proceeding with assertions
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
 
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
