@@ -244,44 +244,6 @@ func (h *AnalyticsHandler) DurationDistribution(w http.ResponseWriter, r *http.R
 
 	start, end := parseDateRange(r)
 
-	query := `
-		SELECT
-			avg(duration_ms) AS mean_ms,
-			percentile_cont(0.5) WITHIN GROUP (ORDER BY duration_ms) AS median_ms,
-			percentile_cont(0.95) WITHIN GROUP (ORDER BY duration_ms) AS p95_ms,
-			percentile_cont(0.99) WITHIN GROUP (ORDER BY duration_ms) AS p99_ms,
-			COALESCE(min(duration_ms), 0) AS min_ms,
-			COALESCE(max(duration_ms), 0) AS max_ms
-		FROM test_results
-		WHERE team_id = $1
-			AND created_at >= $2
-			AND created_at <= $3
-	`
-
-	var stats analytics.DurationStats
-	var meanF, medianF, p95F, p99F *float64
-	err := h.DB.QueryRow(r.Context(), query, claims.TeamID, start, end).Scan(
-		&meanF, &medianF, &p95F, &p99F, &stats.Min, &stats.Max,
-	)
-	if err != nil {
-		log.Error().Err(err).Msg("analytics: duration stats query failed")
-		Error(w, http.StatusInternalServerError, "query failed")
-		return
-	}
-
-	if meanF != nil {
-		stats.Mean = *meanF
-	}
-	if medianF != nil {
-		stats.Median = *medianF
-	}
-	if p95F != nil {
-		stats.P95 = *p95F
-	}
-	if p99F != nil {
-		stats.P99 = *p99F
-	}
-
 	// Build histogram buckets
 	buckets := analytics.DefaultDurationBuckets()
 	bucketQuery := `
@@ -316,10 +278,8 @@ func (h *AnalyticsHandler) DurationDistribution(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	stats.Distribution = buckets
-
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"distribution": stats,
+		"distribution": buckets,
 	})
 }
 

@@ -816,26 +816,16 @@
                   "type": "object",
                   "properties": {
                     "distribution": {
-                      "type": "object",
-                      "properties": {
-                        "mean_ms": { "type": "number" },
-                        "median_ms": { "type": "number" },
-                        "p95_ms": { "type": "number" },
-                        "p99_ms": { "type": "number" },
-                        "min_ms": { "type": "integer" },
-                        "max_ms": { "type": "integer" },
-                        "distribution": {
-                          "type": "array",
-                          "items": {
-                            "type": "object",
-                            "properties": {
-                              "range_label": { "type": "string" },
-                              "min_ms": { "type": "integer" },
-                              "max_ms": { "type": "integer" },
-                              "count": { "type": "integer" }
-                            }
-                          }
-                        }
+                      "type": "array",
+                      "items": {
+                        "type": "object",
+                        "properties": {
+                          "range": { "type": "string" },
+                          "min_ms": { "type": "integer" },
+                          "max_ms": { "type": "integer" },
+                          "count": { "type": "integer" }
+                        },
+                        "required": ["range", "min_ms", "max_ms", "count"]
                       }
                     }
                   },
