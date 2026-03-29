@@ -73,7 +73,9 @@ test.describe('Analytics', () => {
 
     // Navigate via SPA link click (not page.goto) to preserve auth state
     // in Zustand memory — a full page reload would lose the access token.
-    await page.getByRole('link', { name: 'Analytics' }).click();
+    const analyticsLink = page.getByRole('link', { name: 'Analytics' });
+    await expect(analyticsLink).toBeVisible();
+    await analyticsLink.click();
     // Wait for DOM to be fully loaded after SPA navigation
     await page.waitForLoadState('domcontentloaded');
 
