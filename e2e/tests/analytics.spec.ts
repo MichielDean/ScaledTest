@@ -76,16 +76,13 @@ test.describe('Analytics', () => {
     await page.getByRole('link', { name: 'Analytics' }).click();
     await page.waitForURL('/analytics');
 
-    // The Analytics heading must be visible before any other assertions.
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
 
-    // Section headings for each analytics panel
     await expect(page.getByText('Pass Rate Trends')).toBeVisible();
     await expect(page.getByText('Flaky Tests')).toBeVisible();
     await expect(page.getByText('Duration Distribution')).toBeVisible();
     await expect(page.getByText('Error Analysis')).toBeVisible();
 
-    // User is still authenticated
     await expect(page.getByRole('button', { name: 'Sign Out' })).toBeVisible();
 
     await page.screenshot({ path: 'screenshots/browser-ui-analytics.png' });
