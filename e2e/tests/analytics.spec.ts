@@ -75,6 +75,7 @@ test.describe('Analytics', () => {
     // in Zustand memory — a full page reload would lose the access token.
     await page.getByRole('link', { name: 'Analytics' }).click();
     await page.waitForURL('/analytics');
+    await page.waitForLoadState('domcontentloaded');
 
     await expect(page.getByRole('heading', { name: 'Analytics' })).toBeVisible();
 
