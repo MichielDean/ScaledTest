@@ -254,13 +254,12 @@ should appear there.
 
 ## 6. Point a CI Pipeline at It
 
-Set three secrets in your CI system:
+Set two secrets in your CI system:
 
 | Secret | Value |
 |---|---|
 | `SCALEDTEST_URL` | Your instance URL, e.g. `https://scaledtest.example.com` |
-| `SCALEDTEST_API_TOKEN` | The `sct_...` token generated above |
-| `SCALEDTEST_TEAM_ID` | Your team UUID |
+| `SCALEDTEST_API_TOKEN` | The `sct_...` token generated above — it is team-scoped at creation time, so no separate team ID variable is needed |
 
 ### GitHub Actions — minimal example
 
