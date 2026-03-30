@@ -359,7 +359,7 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
   // Seed representative CTRF reports so the dashboard and analytics views
   // render real data instead of empty state in E2E screenshots.
-  const teamId = await getOrCreateTeam(baseURL, ownerLogin.accessToken);
-  const seedApiToken = await createSeedAPIToken(baseURL, ownerLogin.accessToken, teamId);
+  const teamId = await getOrCreateTeam(baseURL, maintainerLogin.accessToken);
+  const seedApiToken = await createSeedAPIToken(baseURL, maintainerLogin.accessToken, teamId);
   await seedCTRFReports(baseURL, seedApiToken);
 }
