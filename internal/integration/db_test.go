@@ -5,6 +5,7 @@ package integration
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -1121,5 +1122,65 @@ func TestWebhookCRUD(t *testing.T) {
 	}
 	if count != 0 {
 		t.Errorf("enabled webhooks after disabling = %d, want 0", count)
+	}
+}
+
+// --- AcceptInvitation owner constraint ---
+
+func TestAcceptInvitation_OwnerAlreadyExists_ReturnsErrOwnerAlreadyExists(t *testing.T) {
+	tdb := Setup(t)
+	ctx := context.Background()
+
+	// An owner already exists.
+	_ = tdb.CreateUser(t, "existing-owner@example.com", "hash", "Existing Owner", "owner")
+	teamID := tdb.CreateTeam(t, "Test Team")
+
+	// Insert an owner-role invitation directly.
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	var invID string
+	err := tdb.Pool.QueryRow(ctx,
+		`INSERT INTO invitations (team_id, email, role, token_hash, invited_by, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id`,
+		teamID, "second-owner@example.com", "owner", "testhash-owner-conflict", "existing-owner@example.com", expiresAt,
+	).Scan(&invID)
+	if err != nil {
+		t.Fatalf("create invitation: %v", err)
+	}
+
+	invStore := store.NewInvitationStore(tdb.Pool)
+	_, err = invStore.AcceptInvitation(ctx, invID, "second-owner@example.com", "hash", "Second Owner", "owner", teamID)
+	if !errors.Is(err, store.ErrOwnerAlreadyExists) {
+		t.Errorf("AcceptInvitation duplicate owner: got %v, want store.ErrOwnerAlreadyExists", err)
+	}
+}
+
+func TestAcceptInvitation_NonOwnerRole_Succeeds(t *testing.T) {
+	tdb := Setup(t)
+	ctx := context.Background()
+
+	// An owner already exists.
+	_ = tdb.CreateUser(t, "owner@example.com", "hash", "Owner", "owner")
+	teamID := tdb.CreateTeam(t, "Test Team")
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	var invID string
+	err := tdb.Pool.QueryRow(ctx,
+		`INSERT INTO invitations (team_id, email, role, token_hash, invited_by, expires_at)
+		 VALUES ($1, $2, $3, $4, $5, $6)
+		 RETURNING id`,
+		teamID, "maintainer@example.com", "maintainer", "testhash-maintainer", "owner@example.com", expiresAt,
+	).Scan(&invID)
+	if err != nil {
+		t.Fatalf("create invitation: %v", err)
+	}
+
+	invStore := store.NewInvitationStore(tdb.Pool)
+	userID, err := invStore.AcceptInvitation(ctx, invID, "maintainer@example.com", "hash", "New Maintainer", "maintainer", teamID)
+	if err != nil {
+		t.Fatalf("AcceptInvitation maintainer role: unexpected error: %v", err)
+	}
+	if userID == "" {
+		t.Error("AcceptInvitation maintainer role: expected non-empty userID")
 	}
 }
