@@ -139,8 +139,8 @@ test.describe('Browser UI — Core Platform Flows', () => {
 
   test('admin: login as owner via UI and assert admin page renders', async ({ page }) => {
     // Log in as the owner user (role='owner' in users table, seeded in global-setup
-    // via the invitation flow). The admin page requires owner role; a maintainer
-    // would see "Access Denied".
+    // via POST /auth/register — first-user-becomes-owner logic). The admin page
+    // requires owner role; a maintainer would see "Access Denied".
     await loginViaUI(page, OWNER);
     await page.getByRole('link', { name: 'Admin' }).click();
 
