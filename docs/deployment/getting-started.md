@@ -224,7 +224,7 @@ curl -s -X POST "http://localhost:3000/api/v1/teams/$TEAM_ID/tokens" \
 
 ```bash
 curl -s http://localhost:3000/health
-# → { "status": "ok" }
+# → { "status": "ok", "timestamp": "2024-01-01T00:00:00Z" }
 ```
 
 ### Upload a minimal CTRF report
