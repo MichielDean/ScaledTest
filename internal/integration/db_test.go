@@ -1132,7 +1132,7 @@ func TestAcceptInvitation_OwnerAlreadyExists_ReturnsErrOwnerAlreadyExists(t *tes
 	ctx := context.Background()
 
 	// An owner already exists.
-	_ = tdb.CreateUser(t, "existing-owner@example.com", "hash", "Existing Owner", "owner")
+	ownerID := tdb.CreateUser(t, "existing-owner@example.com", "hash", "Existing Owner", "owner")
 	teamID := tdb.CreateTeam(t, "Test Team")
 
 	// Insert an owner-role invitation directly.
@@ -1142,7 +1142,7 @@ func TestAcceptInvitation_OwnerAlreadyExists_ReturnsErrOwnerAlreadyExists(t *tes
 		`INSERT INTO invitations (team_id, email, role, token_hash, invited_by, expires_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
-		teamID, "second-owner@example.com", "owner", "testhash-owner-conflict", "existing-owner@example.com", expiresAt,
+		teamID, "second-owner@example.com", "owner", "testhash-owner-conflict", ownerID, expiresAt,
 	).Scan(&invID)
 	if err != nil {
 		t.Fatalf("create invitation: %v", err)
@@ -1160,7 +1160,7 @@ func TestAcceptInvitation_NonOwnerRole_Succeeds(t *testing.T) {
 	ctx := context.Background()
 
 	// An owner already exists.
-	_ = tdb.CreateUser(t, "owner@example.com", "hash", "Owner", "owner")
+	ownerID := tdb.CreateUser(t, "owner@example.com", "hash", "Owner", "owner")
 	teamID := tdb.CreateTeam(t, "Test Team")
 
 	expiresAt := time.Now().Add(7 * 24 * time.Hour)
@@ -1169,7 +1169,7 @@ func TestAcceptInvitation_NonOwnerRole_Succeeds(t *testing.T) {
 		`INSERT INTO invitations (team_id, email, role, token_hash, invited_by, expires_at)
 		 VALUES ($1, $2, $3, $4, $5, $6)
 		 RETURNING id`,
-		teamID, "maintainer@example.com", "maintainer", "testhash-maintainer", "owner@example.com", expiresAt,
+		teamID, "maintainer@example.com", "maintainer", "testhash-maintainer", ownerID, expiresAt,
 	).Scan(&invID)
 	if err != nil {
 		t.Fatalf("create invitation: %v", err)
