@@ -14,6 +14,7 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // mockInvitationStore is a test double for invitationStore.
@@ -273,6 +274,36 @@ func TestRevokeInvitation_NoDB(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("Revoke without store: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestAcceptInvitation_OwnerAlreadyExists_Returns409(t *testing.T) {
+	now := time.Now()
+	inv := &model.Invitation{
+		ID:        "inv-owner",
+		TeamID:    "team-1",
+		Email:     "second-owner@example.com",
+		Role:      "owner",
+		InvitedBy: "user-1",
+		ExpiresAt: now.Add(7 * 24 * time.Hour),
+		CreatedAt: now,
+	}
+	ms := &mockInvitationStore{
+		tokenInv:  inv,
+		acceptErr: store.ErrOwnerAlreadyExists,
+	}
+	h := &InvitationsHandler{Store: ms}
+
+	body := `{"password":"password123","display_name":"Second Owner"}`
+	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Accept(w, r)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("Accept with owner conflict: got %d, want %d", w.Code, http.StatusConflict)
 	}
 }
 
