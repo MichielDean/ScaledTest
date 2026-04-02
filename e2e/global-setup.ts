@@ -87,14 +87,25 @@ async function loginUser(
 }
 
 /**
- * Try to login as the owner. Returns null if the credentials are wrong or user doesn't exist.
+ * Try to login as the owner and verify they have role='owner'.
+ * Returns null if credentials are wrong, user doesn't exist, or user lacks owner role.
  * Used to make owner seeding idempotent across repeated global-setup runs.
  */
 async function tryLoginOwner(
   baseURL: string
 ): Promise<{ accessToken: string; userId: string } | null> {
   try {
-    return await loginUser(baseURL, OWNER_EMAIL, OWNER_PASSWORD);
+    const login = await loginUser(baseURL, OWNER_EMAIL, OWNER_PASSWORD);
+    // Verify the user actually has owner role (existing users from old CI runs
+    // may have registered as maintainer before the first-user-becomes-owner logic)
+    const meRes = await fetch(`${baseURL}/api/v1/auth/me`, {
+      headers: { Authorization: `Bearer ${login.accessToken}` },
+      signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+    });
+    if (!meRes.ok) return null;
+    const me = (await meRes.json()) as { role?: string };
+    if (me.role !== 'owner') return null;
+    return login;
   } catch {
     return null;
   }
@@ -162,6 +173,11 @@ async function seedOwnerViaInvitation(baseURL: string, maintainerToken: string):
   });
   if (!acceptRes.ok) {
     const body = await acceptRes.text();
+    // 409 "owner already exists" can happen if the first-user-becomes-owner logic already
+    // ran and owner@example.com was the first user. This is idempotent — we can proceed.
+    if (acceptRes.status === 409 && body.includes('owner already exists')) {
+      return;
+    }
     throw new Error(`Failed to accept owner invitation: ${acceptRes.status} — ${body}`);
   }
 }
@@ -410,15 +426,27 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
     process.env.E2E_BASE_URL ??
     'http://localhost:8080';
 
-  // Seed maintainer
+  // Seed owner FIRST: on a fresh database the Register handler assigns role='owner'
+  // to the first registered user (CASE WHEN NOT EXISTS logic). Seeding owner@example.com
+  // before maintainer@example.com ensures the owner gets the correct role.
+  // On a non-fresh DB (409 = user already exists), this is a no-op.
+  const OWNER_USER: SeedUser = {
+    email: OWNER_EMAIL,
+    password: OWNER_PASSWORD,
+    display_name: 'Owner User',
+  };
+  await seedUser(baseURL, OWNER_USER);
+
+  // Seed maintainer second (will be assigned role='maintainer' since an owner already exists)
   await seedUser(baseURL, MAINTAINER_USER);
 
-  // Login as maintainer (token used for owner seeding API calls below)
+  // Login as maintainer (token used for fallback owner seeding API calls below)
   const maintainerLogin = await loginUser(baseURL, MAINTAINER_USER.email, MAINTAINER_USER.password);
 
-  // Seed owner (idempotent: try login first; create via invitation only if missing)
+  // Seed owner (idempotent: try login + verify role; create via invitation only if not owner)
   let ownerLogin = await tryLoginOwner(baseURL);
   if (!ownerLogin) {
+    // owner@example.com exists but has role='maintainer' (old DB state). Use invitation flow.
     await seedOwnerViaInvitation(baseURL, maintainerLogin.accessToken);
     ownerLogin = await loginUser(baseURL, OWNER_EMAIL, OWNER_PASSWORD);
   }
