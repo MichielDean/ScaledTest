@@ -27,6 +27,7 @@ services:
       ST_DATABASE_URL: postgres://${POSTGRES_USER:-scaledtest}:${POSTGRES_PASSWORD:-password}@timescaledb:5432/${POSTGRES_DB:-scaledtest}?sslmode=disable
       ST_JWT_SECRET: ${ST_JWT_SECRET:-docker-compose-dev-secret-at-least-32-characters}
       ST_PORT: "8080"
+      ST_BASE_URL: ${ST_BASE_URL:-http://localhost:3000}
     ports:
       - "3000:8080"
     depends_on:

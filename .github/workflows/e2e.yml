@@ -96,6 +96,13 @@ jobs:
 
       - name: Seed test user, team, and API token
         run: |
+          # Register owner FIRST: the backend assigns role='owner' to the first registered user.
+          # This must happen before registering maintainer so global-setup's admin tests work.
+          curl -X POST http://localhost:8080/auth/register \
+            -H "Content-Type: application/json" \
+            -d '{"email":"owner@example.com","password":"Owner123!","display_name":"Owner User"}' \
+            > /dev/null || true
+
           # Register the E2E maintainer account
           curl -sf -X POST http://localhost:8080/auth/register \
             -H "Content-Type: application/json" \

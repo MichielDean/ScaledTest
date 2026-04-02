@@ -2,13 +2,19 @@ package store
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
 )
+
+// ErrOwnerAlreadyExists is returned when an AcceptInvitation call would create
+// a second owner, violating the idx_users_single_owner unique partial index.
+var ErrOwnerAlreadyExists = errors.New("owner role already claimed")
 
 // InvitationStore handles invitation persistence.
 type InvitationStore struct {
@@ -100,6 +106,10 @@ func (s *InvitationStore) AcceptInvitation(ctx context.Context, invID, email, pa
 		email, passwordHash, displayName, role,
 	).Scan(&userID)
 	if err != nil {
+		var pgErr *pgconn.PgError
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_users_single_owner" {
+			return "", ErrOwnerAlreadyExists
+		}
 		return "", fmt.Errorf("upsert user: %w", err)
 	}
 

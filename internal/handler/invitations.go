@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
+	"errors"
 	"net/http"
 	"time"
 
@@ -257,6 +258,10 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := h.Store.AcceptInvitation(r.Context(), inv.ID, inv.Email, passwordHash, req.DisplayName, inv.Role, inv.TeamID)
 	if err != nil {
+		if errors.Is(err, store.ErrOwnerAlreadyExists) {
+			Error(w, http.StatusConflict, "an owner already exists")
+			return
+		}
 		Error(w, http.StatusInternalServerError, "failed to accept invitation")
 		return
 	}
