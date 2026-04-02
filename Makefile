@@ -36,8 +36,10 @@ test-short:
 	go test ./...
 
 ## test-integration: Run store integration tests (requires TEST_DATABASE_URL)
+# Packages are run sequentially (-p 1) to avoid concurrent truncation races
+# on the shared test database when multiple packages share the same DB connection.
 test-integration:
-	go test -tags=integration -v -race ./internal/store/... ./internal/integration/...
+	go test -tags=integration -v -race -p 1 ./internal/store/... ./internal/integration/...
 
 ## lint: Run golangci-lint
 lint:
