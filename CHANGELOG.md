@@ -4,6 +4,12 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Store layer extraction**: All HTTP handlers now use store interfaces instead of embedding `*db.Pool` directly. Store interfaces are defined on the handler side and implemented in `internal/store/`, making handlers testable without a running database and centralizing SQL query knowledge. Affected handlers: auth, teams, analytics, executions, reports, admin, invitations, oauth.
+
+- **Bulk test result inserts**: Report ingestion now uses `pgx.Batch` to insert test results in bulk instead of one query per result. This eliminates the N+1 insert pattern that caused 1000+ round-trips for large reports.
+
 ### Fixed
 
 - **IDOR vulnerability in invitation handlers**: `Create`, `List`, and `Revoke` invitation endpoints (`POST/GET/DELETE /api/v1/teams/{teamID}/invitations`) now verify that the authenticated user's team matches the URL `teamID` before checking role permissions. Previously, any maintainer or owner could list, create, or revoke invitations for any team regardless of membership.
