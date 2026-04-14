@@ -404,14 +404,55 @@ func TestDurationStore_GetByTeamMap(t *testing.T) {
 	if len(m) != 2 {
 		t.Fatalf("len(m) = %d, want 2", len(m))
 	}
-	if m["TestM1"] == nil {
-		t.Error("TestM1 not in map")
+
+	key1 := store.DurationMapKey("TestM1", "unit")
+	if m[key1] == nil {
+		t.Error("TestM1/unit not in map")
+	} else if m[key1].AvgDurationMs != 150 {
+		t.Errorf("TestM1/unit AvgDurationMs = %d, want 150", m[key1].AvgDurationMs)
 	}
-	if m["TestM2"] == nil {
-		t.Error("TestM2 not in map")
+
+	key2 := store.DurationMapKey("TestM2", "unit")
+	if m[key2] == nil {
+		t.Error("TestM2/unit not in map")
+	} else if m[key2].AvgDurationMs != 250 {
+		t.Errorf("TestM2/unit AvgDurationMs = %d, want 250", m[key2].AvgDurationMs)
 	}
-	if m["TestM1"].AvgDurationMs != 150 {
-		t.Errorf("TestM1 AvgDurationMs = %d, want 150", m["TestM1"].AvgDurationMs)
+}
+
+func TestDurationStore_GetByTeamMap_PreservesSameNameDifferentSuites(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "dur-team-map-dup")
+	s := store.NewDurationStore(tdb.Pool)
+
+	err := s.UpsertFromResults(ctx, teamID, []model.TestResult{
+		{Name: "TestDup", Suite: "unit", DurationMs: 100, Status: "passed", TeamID: teamID},
+		{Name: "TestDup", Suite: "integration", DurationMs: 500, Status: "passed", TeamID: teamID},
+	}, tdb.Pool)
+	if err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	m, err := s.GetByTeamMap(ctx, teamID)
+	if err != nil {
+		t.Fatalf("GetByTeamMap: %v", err)
+	}
+	if len(m) != 2 {
+		t.Fatalf("len(m) = %d, want 2 (same test name, different suites should not collide)", len(m))
+	}
+
+	keyUnit := store.DurationMapKey("TestDup", "unit")
+	keyInteg := store.DurationMapKey("TestDup", "integration")
+	if m[keyUnit] == nil {
+		t.Error("TestDup/unit not in map")
+	} else if m[keyUnit].AvgDurationMs != 100 {
+		t.Errorf("TestDup/unit AvgDurationMs = %d, want 100", m[keyUnit].AvgDurationMs)
+	}
+	if m[keyInteg] == nil {
+		t.Error("TestDup/integration not in map")
+	} else if m[keyInteg].AvgDurationMs != 500 {
+		t.Errorf("TestDup/integration AvgDurationMs = %d, want 500", m[keyInteg].AvgDurationMs)
 	}
 }
 
@@ -450,6 +491,52 @@ func TestDurationStore_UpsertFromResults_ThreeRunsMinMaxAvg(t *testing.T) {
 	}
 	if d.MaxDurationMs != 300 {
 		t.Errorf("MaxDurationMs = %d, want 300", d.MaxDurationMs)
+	}
+}
+
+func TestDurationStore_UpsertFromResults_P95UpdatesOnConflict(t *testing.T) {
+	tdb := integration.Setup(t)
+	ctx := context.Background()
+	teamID := tdb.CreateTeam(t, "dur-team-p95")
+	s := store.NewDurationStore(tdb.Pool)
+
+	err := s.UpsertFromResults(ctx, teamID, []model.TestResult{
+		{Name: "TestP95", Suite: "unit", DurationMs: 100, Status: "passed", TeamID: teamID},
+	}, tdb.Pool)
+	if err != nil {
+		t.Fatalf("first upsert: %v", err)
+	}
+
+	entries, _ := s.GetByTeam(ctx, teamID)
+	if len(entries) != 1 {
+		t.Fatalf("len(entries) = %d, want 1", len(entries))
+	}
+	if entries[0].P95DurationMs != 100 {
+		t.Errorf("initial p95 = %d, want 100 (equals duration on insert)", entries[0].P95DurationMs)
+	}
+
+	err = s.UpsertFromResults(ctx, teamID, []model.TestResult{
+		{Name: "TestP95", Suite: "unit", DurationMs: 300, Status: "passed", TeamID: teamID},
+	}, tdb.Pool)
+	if err != nil {
+		t.Fatalf("second upsert: %v", err)
+	}
+
+	entries, _ = s.GetByTeam(ctx, teamID)
+	if entries[0].P95DurationMs != 300 {
+		t.Errorf("p95 after conflict = %d, want 300 (GREATEST of 100 and 300)", entries[0].P95DurationMs)
+	}
+
+	err = s.UpsertFromResults(ctx, teamID, []model.TestResult{
+		{Name: "TestP95", Suite: "unit", DurationMs: 200, Status: "passed", TeamID: teamID},
+	}, tdb.Pool)
+	if err != nil {
+		t.Fatalf("third upsert: %v", err)
+	}
+
+	entries, _ = s.GetByTeam(ctx, teamID)
+	if entries[0].P95DurationMs != 300 {
+		t.Errorf("p95 after smaller value = %d, want 300 (GREATEST keeps max)", entries[0].P95DurationMs)
 	}
 }
 

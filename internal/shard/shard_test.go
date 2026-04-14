@@ -238,8 +238,8 @@ func TestPlan_MoreWorkersThanTests(t *testing.T) {
 func TestEnrichWithHistory(t *testing.T) {
 	names := []string{"test-a", "test-b", "test-c"}
 	history := map[string]*model.TestDurationHistory{
-		"test-a": {AvgDurationMs: 1500, Suite: "unit"},
-		"test-c": {AvgDurationMs: 0, Suite: "e2e"}, // 0 should get default
+		"test-a\x00unit": {TestName: "test-a", AvgDurationMs: 1500, Suite: "unit"},
+		"test-c\x00e2e":  {TestName: "test-c", AvgDurationMs: 0, Suite: "e2e"},
 	}
 
 	enriched := EnrichWithHistory(names, history)
@@ -255,6 +255,23 @@ func TestEnrichWithHistory(t *testing.T) {
 	}
 	if enriched[2].EstDurationMs != DefaultEstDurationMs {
 		t.Errorf("test-c (0 avg) duration: got %d, want %d", enriched[2].EstDurationMs, DefaultEstDurationMs)
+	}
+}
+
+func TestEnrichWithHistory_SameNameDifferentSuites_SumsDurations(t *testing.T) {
+	names := []string{"test-a"}
+	history := map[string]*model.TestDurationHistory{
+		"test-a\x00unit":        {TestName: "test-a", AvgDurationMs: 100, Suite: "unit"},
+		"test-a\x00integration": {TestName: "test-a", AvgDurationMs: 200, Suite: "integration"},
+	}
+
+	enriched := EnrichWithHistory(names, history)
+
+	if len(enriched) != 1 {
+		t.Fatalf("len(enriched) = %d, want 1", len(enriched))
+	}
+	if enriched[0].EstDurationMs != 300 {
+		t.Errorf("test-a duration across suites: got %d, want 300 (100+200)", enriched[0].EstDurationMs)
 	}
 }
 

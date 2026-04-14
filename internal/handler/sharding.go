@@ -155,6 +155,7 @@ func (h *ShardingHandler) ListDurations(w http.ResponseWriter, r *http.Request) 
 }
 
 // GetDuration handles GET /api/v1/sharding/durations/{testName}.
+// Always returns a JSON array of duration entries for consistent API shape.
 func (h *ShardingHandler) GetDuration(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
 	if claims == nil {
@@ -181,11 +182,6 @@ func (h *ShardingHandler) GetDuration(w http.ResponseWriter, r *http.Request) {
 
 	if len(durations) == 0 {
 		Error(w, http.StatusNotFound, "no duration history for test")
-		return
-	}
-
-	if len(durations) == 1 {
-		JSON(w, http.StatusOK, durations[0])
 		return
 	}
 

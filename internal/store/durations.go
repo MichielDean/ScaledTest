@@ -48,7 +48,15 @@ func (s *DurationStore) GetByTeamAndTest(ctx context.Context, teamID, testName s
 		 ORDER BY suite`, teamID, testName)
 }
 
-// GetByTeamMap returns duration history as a map keyed by test_name.
+// DurationMapKey returns a unique key for a test duration entry combining
+// test name and suite. This avoids collisions when the same test name appears
+// in multiple suites — the database UNIQUE constraint is (team_id, test_name, suite).
+func DurationMapKey(testName, suite string) string {
+	return testName + "\x00" + suite
+}
+
+// GetByTeamMap returns duration history as a map keyed by composite "testName\x00suite".
+// This preserves all entries including same-named tests across different suites.
 func (s *DurationStore) GetByTeamMap(ctx context.Context, teamID string) (map[string]*model.TestDurationHistory, error) {
 	entries, err := s.GetByTeam(ctx, teamID)
 	if err != nil {
@@ -56,7 +64,7 @@ func (s *DurationStore) GetByTeamMap(ctx context.Context, teamID string) (map[st
 	}
 	m := make(map[string]*model.TestDurationHistory, len(entries))
 	for i := range entries {
-		m[entries[i].TestName] = &entries[i]
+		m[DurationMapKey(entries[i].TestName, entries[i].Suite)] = &entries[i]
 	}
 	return m, nil
 }
@@ -96,6 +104,7 @@ func (s *DurationStore) UpsertFromResults(ctx context.Context, teamID string, re
 			 ON CONFLICT (team_id, test_name, suite)
 			 DO UPDATE SET
 			     avg_duration_ms = (test_duration_history.avg_duration_ms * test_duration_history.run_count + $4) / (test_duration_history.run_count + 1),
+			     p95_duration_ms = GREATEST(test_duration_history.p95_duration_ms, $4),
 			     min_duration_ms = LEAST(test_duration_history.min_duration_ms, $4),
 			     max_duration_ms = GREATEST(test_duration_history.max_duration_ms, $4),
 			     run_count = test_duration_history.run_count + 1,
