@@ -32,16 +32,17 @@ type JWTManager struct {
 	refreshDuration time.Duration
 }
 
-// NewJWTManager creates a new JWT manager. Panics if secret is empty or too short.
-func NewJWTManager(secret string, accessDuration, refreshDuration time.Duration) *JWTManager {
+// NewJWTManager creates a new JWT manager. Returns an error if secret is
+// empty or too short.
+func NewJWTManager(secret string, accessDuration, refreshDuration time.Duration) (*JWTManager, error) {
 	if len(secret) < 32 {
-		panic("jwt secret must be at least 32 characters")
+		return nil, fmt.Errorf("jwt secret must be at least 32 characters, got %d", len(secret))
 	}
 	return &JWTManager{
 		secret:          []byte(secret),
 		accessDuration:  accessDuration,
 		refreshDuration: refreshDuration,
-	}
+	}, nil
 }
 
 // GenerateTokenPair creates a new access + refresh token pair.

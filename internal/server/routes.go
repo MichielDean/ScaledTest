@@ -65,7 +65,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if refreshDur == 0 {
 		refreshDur = 7 * 24 * time.Hour
 	}
-	jwtMgr := auth.NewJWTManager(cfg.JWTSecret, accessDur, refreshDur)
+	jwtMgr, err := auth.NewJWTManager(cfg.JWTSecret, accessDur, refreshDur)
+	if err != nil {
+		log.Fatal().Err(err).Msg("invalid JWT configuration")
+		return nil
+	}
 
 	// Auth middleware with API token lookup
 	var tokenLookup func(string) (*auth.Claims, error)
@@ -78,7 +82,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	wsHub := ws.NewHub(cfg.BaseURL, "http://localhost:5173")
 
 	// CSRF middleware — uses JWT secret as HMAC key for token signing
-	csrfMW := auth.CSRFMiddleware([]byte(cfg.JWTSecret))
+	csrfMW, err := auth.CSRFMiddleware([]byte(cfg.JWTSecret))
+	if err != nil {
+		log.Fatal().Err(err).Msg("failed to create CSRF middleware")
+		return nil
+	}
 
 	// Stores
 	var auditStore *store.AuditStore
@@ -187,6 +195,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		reportsH.TriageStore = triageStore
 	}
 	execH := &handler.ExecutionsHandler{
+		DB:          dbPool,
 		Hub:         wsHub,
 		AuditStore:  auditStore,
 		K8s:         k8sClient,
@@ -243,7 +252,11 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	// CSRF token endpoint — SPA calls this to get a token before mutations
 	r.Get("/auth/csrf-token", func(w http.ResponseWriter, r *http.Request) {
-		token := auth.SetCSRFCookie(w, []byte(cfg.JWTSecret), isSecure)
+		token, err := auth.SetCSRFCookie(w, []byte(cfg.JWTSecret), isSecure)
+		if err != nil {
+			handler.Error(w, http.StatusInternalServerError, "failed to generate CSRF token")
+			return
+		}
 		handler.JSON(w, http.StatusOK, map[string]string{"csrf_token": token})
 	})
 
@@ -359,7 +372,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	r.Get("/ws/executions", wsHub.HandleConnect)
 
 	// SPA fallback — serves embedded React app
-	spa.Mount(r)
+	if err := spa.Mount(r); err != nil {
+		log.Fatal().Err(err).Msg("failed to mount SPA")
+		return nil
+	}
 
 	return r
 }
