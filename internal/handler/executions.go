@@ -26,13 +26,17 @@ import (
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
 	DB          *db.Pool
-	Hub         *ws.Hub              // WebSocket hub for real-time broadcasting (optional)
-	AuditStore  *store.AuditStore    // optional; nil means no audit logging
-	K8s         *k8s.Client          // optional; nil means K8s job launch is disabled
-	WorkerImage string               // default container image for test workers
-	WorkerToken string               // auth token workers use to report back
-	APIBaseURL  string               // base URL workers use to call the API
-	Webhooks    *webhook.Notifier    // optional; nil means no webhook dispatch
+	Hub         *ws.Hub           // WebSocket hub for real-time broadcasting (optional)
+	AuditStore  *store.AuditStore // optional; nil means no audit logging
+	K8s         *k8s.Client       // optional; nil means K8s job launch is disabled
+	WorkerImage string            // default container image for test workers
+	WorkerToken string            // auth token workers use to report back
+	APIBaseURL  string            // base URL workers use to call the API
+	Webhooks    *webhook.Notifier // optional; nil means no webhook dispatch
+
+	// ownsExecFunc overrides ownsExecution for testing. If nil, the DB-based
+	// implementation is used. Callers must not set this outside of tests.
+	ownsExecFunc func(ctx context.Context, executionID, teamID string) (bool, error)
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -446,6 +450,55 @@ func getExecution(ctx context.Context, pool *db.Pool, id, teamID string) (*model
 	return &e, nil
 }
 
+// ownsExecution checks whether the given execution belongs to the specified team.
+// Returns (false, nil) if the execution does not belong to the team,
+// (false, err) on database errors (distinguishing 404 from 500),
+// and (true, nil) if the execution belongs to the team.
+func (h *ExecutionsHandler) ownsExecution(ctx context.Context, executionID, teamID string) (bool, error) {
+	if h.ownsExecFunc != nil {
+		return h.ownsExecFunc(ctx, executionID, teamID)
+	}
+	var exists bool
+	err := h.DB.QueryRow(ctx,
+		`SELECT EXISTS(SELECT 1 FROM test_executions WHERE id = $1 AND team_id = $2)`,
+		executionID, teamID).Scan(&exists)
+	if err != nil {
+		return false, err
+	}
+	return exists, nil
+}
+
+func (h *ExecutionsHandler) requireWorkerCallback(w http.ResponseWriter, r *http.Request) (*auth.Claims, string, bool) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return nil, "", false
+	}
+
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return nil, "", false
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return nil, "", false
+	}
+
+	owned, err := h.ownsExecution(r.Context(), executionID, claims.TeamID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "database error")
+		return nil, "", false
+	}
+	if !owned {
+		Error(w, http.StatusNotFound, "execution not found")
+		return nil, "", false
+	}
+
+	return claims, executionID, true
+}
+
 // ProgressRequest is the request body for reporting test progress.
 type ProgressRequest struct {
 	Passed       int     `json:"passed"`
@@ -459,9 +512,8 @@ type ProgressRequest struct {
 // ReportProgress handles POST /api/v1/executions/{executionID}/progress.
 // Called by workers to stream live test counters.
 func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Request) {
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 
@@ -503,9 +555,8 @@ type TestResultEvent struct {
 // ReportTestResult handles POST /api/v1/executions/{executionID}/test-result.
 // Called by workers to stream individual test results as they complete.
 func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Request) {
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 
@@ -545,9 +596,8 @@ type WorkerStatusEvent struct {
 // ReportWorkerStatus handles POST /api/v1/executions/{executionID}/worker-status.
 // Called by workers to report their health and progress.
 func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Request) {
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 

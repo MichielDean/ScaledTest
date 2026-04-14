@@ -257,7 +257,7 @@ curl -X GET "https://your-instance/api/v1/reports/compare?base=<base-report-id>&
 
 ### Invitations
 
-Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page.
+Team owners and maintainers can invite users by email. The invitee receives a token link that opens a sign-up page. All authenticated endpoints below require the caller to be a member of the specified team (the `teamID` in the URL must match the caller's team).
 
 ```bash
 # Create an invitation (maintainer or owner; returns token shown once)
@@ -296,6 +296,9 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `GET` | `/api/v1/executions` | List executions |
 | `DELETE` | `/api/v1/executions/{id}` | Cancel/delete execution |
 | `PUT` | `/api/v1/executions/{id}/status` | Update execution status |
+| `POST` | `/api/v1/executions/{id}/progress` | Report test progress (worker callback; team-scoped) |
+| `POST` | `/api/v1/executions/{id}/test-result` | Report individual test result (worker callback; team-scoped) |
+| `POST` | `/api/v1/executions/{id}/worker-status` | Report worker health (worker callback; team-scoped) |
 | `GET` | `/api/v1/analytics/trends` | Pass-rate trends |
 | `GET` | `/api/v1/analytics/flaky-tests` | Flaky test detection |
 | `GET` | `/api/v1/teams/{id}/quality-gates` | List quality gates |
@@ -313,9 +316,9 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `GET` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries` | List recent delivery attempts |
 | `POST` | `/api/v1/teams/{id}/webhooks/{wid}/deliveries/{did}/retry` | Re-dispatch a stored delivery (maintainer+) |
 | `GET` | `/api/v1/teams` | List teams |
-| `POST` | `/api/v1/teams/{id}/invitations` | Invite user to team |
-| `GET` | `/api/v1/teams/{id}/invitations` | List team invitations |
-| `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation |
+| `POST` | `/api/v1/teams/{id}/invitations` | Invite user to team (team member; maintainer+) |
+| `GET` | `/api/v1/teams/{id}/invitations` | List team invitations (team member; maintainer+) |
+| `DELETE` | `/api/v1/teams/{id}/invitations/{iid}` | Revoke invitation (team member; maintainer+) |
 | `GET` | `/api/v1/invitations/{token}` | Preview invitation (public) |
 | `POST` | `/api/v1/invitations/{token}/accept` | Accept invitation (public) |
 | `GET` | `/api/v1/teams/{id}/tokens` | List API tokens |
