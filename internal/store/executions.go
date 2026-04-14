@@ -157,10 +157,3 @@ func (s *ExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, n
 		errorMsg, now, id)
 	return err
 }
-
-func (s *ExecutionsStore) LinkReport(ctx context.Context, executionID, teamID, reportID string, now time.Time) (int64, error) {
-	tag, err := s.pool.Exec(ctx,
-		`UPDATE test_executions SET report_id = $1, updated_at = $2 WHERE id = $3 AND team_id = $4`,
-		reportID, now, executionID, teamID)
-	return tag.RowsAffected(), err
-}

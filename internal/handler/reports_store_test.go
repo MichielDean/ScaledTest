@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -229,6 +230,50 @@ type mockAdminStore struct {
 
 func (m *mockAdminStore) ListUsers(ctx context.Context, limit, offset int) ([]model.User, int, error) {
 	return m.listUsersFunc(ctx, limit, offset)
+}
+
+func TestReportsHandler_Create_WithStore_BulkInsert_LargeBatch(t *testing.T) {
+	var capturedResults []model.TestResult
+	ms := &mockReportsStore{
+		executionExistsFunc: func(_ context.Context, _, _ string) (bool, error) {
+			return false, nil
+		},
+		createWithResultsFunc: func(_ context.Context, p store.CreateReportParams, results []model.TestResult) error {
+			capturedResults = results
+			return nil
+		},
+	}
+	h := &ReportsHandler{ReportStore: ms}
+	w := httptest.NewRecorder()
+
+	var testsJSON strings.Builder
+	testsJSON.WriteString(`{"results":{"tool":{"name":"jest"},"summary":{"tests":200,"passed":180,"failed":15,"skipped":5,"pending":0,"other":0},"tests":[`)
+	for i := 0; i < 200; i++ {
+		if i > 0 {
+			testsJSON.WriteByte(',')
+		}
+		status := "passed"
+		if i%13 == 0 {
+			status = "failed"
+		}
+		if i%40 == 0 {
+			status = "skipped"
+		}
+		fmt.Fprintf(&testsJSON, `{"name":"bulk-test-%d","status":"%s","duration":%d}`, i, status, i*10)
+	}
+	testsJSON.WriteString(`]}}`)
+
+	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(testsJSON.String()))
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+	h.Create(w, r)
+
+	if w.Code != 201 {
+		t.Errorf("Create with store bulk: status = %d, want 201 (body: %s)", w.Code, w.Body.String())
+	}
+	if len(capturedResults) != 200 {
+		t.Errorf("Create with store bulk: expected 200 results passed in single CreateWithResults call, got %d", len(capturedResults))
+	}
 }
 
 func TestAdminHandler_ListUsers_WithStore(t *testing.T) {

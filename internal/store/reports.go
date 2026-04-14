@@ -29,11 +29,6 @@ type ReportListFilter struct {
 	Offset int
 }
 
-type ReportListItem struct {
-	Report model.TestReport
-	Total  int
-}
-
 func (s *ReportsStore) List(ctx context.Context, f ReportListFilter) ([]map[string]interface{}, int, error) {
 	whereClause := ` WHERE team_id = $1`
 	args := []interface{}{f.TeamID}
@@ -127,17 +122,6 @@ type CreateReportParams struct {
 	TriageGitHubStatus bool
 }
 
-func (s *ReportsStore) Create(ctx context.Context, p CreateReportParams) error {
-	_, err := s.pool.Exec(ctx,
-		`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at, triage_github_status)
-		 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-		p.ID, p.TeamID, p.ExecutionID,
-		p.ToolName, p.ToolVersion,
-		p.Environment, p.Summary, p.Raw, p.CreatedAt,
-		p.TriageGitHubStatus)
-	return err
-}
-
 func (s *ReportsStore) CreateWithResults(ctx context.Context, p CreateReportParams, results []model.TestResult) error {
 	tx, err := s.pool.Begin(ctx)
 	if err != nil {
@@ -222,11 +206,6 @@ func (s *ReportsStore) ExecutionExists(ctx context.Context, executionID, teamID 
 		`SELECT EXISTS(SELECT 1 FROM test_executions WHERE id = $1 AND team_id = $2)`,
 		executionID, teamID).Scan(&exists)
 	return exists, err
-}
-
-type ReportSummaryData struct {
-	Report *model.TestReport
-	Tests  map[string]*model.TestResult
 }
 
 func (s *ReportsStore) GetReportAndResults(ctx context.Context, id, teamID string) (*model.TestReport, map[string]*model.TestResult, error) {

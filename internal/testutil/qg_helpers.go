@@ -80,7 +80,8 @@ func InsertNoNewFailuresGate(t *testing.T, ctx context.Context, pool *db.Pool, t
 func PostEvaluateQG(t *testing.T, pool *db.Pool, teamID, gateID, reportID string) *httptest.ResponseRecorder {
 	t.Helper()
 	h := &handler.QualityGatesHandler{
-		Store: store.NewQualityGateStore(pool),
+		Store:       store.NewQualityGateStore(pool),
+		ReportStore: store.NewReportsStore(pool),
 	}
 	body := fmt.Sprintf(`{"report_id":%q}`, reportID)
 	req := httptest.NewRequest(http.MethodPost,
