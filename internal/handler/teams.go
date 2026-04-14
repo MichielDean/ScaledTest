@@ -1,7 +1,6 @@
 package handler
 
 import (
-	"context"
 	"net/http"
 
 	"github.com/go-chi/chi/v5"
@@ -12,18 +11,6 @@ import (
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
 )
-
-// teamsStore abstracts team and token data operations for testable handlers.
-type teamsStore interface {
-	ListTeams(ctx context.Context, userID string) ([]store.TeamWithRole, error)
-	GetTeam(ctx context.Context, teamID, userID string) (*store.TeamWithRole, error)
-	GetUserRole(ctx context.Context, userID, teamID string) (string, error)
-	CreateTeam(ctx context.Context, userID, name string) (*model.Team, error)
-	DeleteTeam(ctx context.Context, teamID string) error
-	ListTokens(ctx context.Context, teamID string) ([]model.APIToken, error)
-	CreateToken(ctx context.Context, teamID, userID, name, tokenHash, prefix string) (*model.APIToken, error)
-	DeleteToken(ctx context.Context, teamID, tokenID string) (int64, error)
-}
 
 // TeamsHandler handles team management endpoints.
 type TeamsHandler struct {

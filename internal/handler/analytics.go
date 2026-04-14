@@ -129,15 +129,15 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	result := make([]analytics.ErrorCluster, 0, len(clusters))
-	for _, ec := range clusters {
-		result = append(result, analytics.ErrorCluster{
+	result := make([]analytics.ErrorCluster, len(clusters))
+	for i, ec := range clusters {
+		result[i] = analytics.ErrorCluster{
 			Message:   ec.Message,
 			Count:     ec.Count,
 			TestNames: ec.TestNames,
 			FirstSeen: ec.FirstSeen,
 			LastSeen:  ec.LastSeen,
-		})
+		}
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
