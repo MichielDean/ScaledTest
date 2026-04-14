@@ -147,3 +147,13 @@ func (s *InvitationStore) Delete(ctx context.Context, teamID, id string) error {
 	}
 	return nil
 }
+
+// GetTeamName returns the name of the team with the given ID.
+func (s *InvitationStore) GetTeamName(ctx context.Context, teamID string) (string, error) {
+	var name string
+	err := s.pool.QueryRow(ctx, `SELECT name FROM teams WHERE id = $1`, teamID).Scan(&name)
+	if err != nil {
+		return "", fmt.Errorf("get team name: %w", err)
+	}
+	return name, nil
+}

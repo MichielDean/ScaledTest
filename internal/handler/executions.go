@@ -4,19 +4,15 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/k8s"
-	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/webhook"
@@ -25,18 +21,14 @@ import (
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
-	DB          *db.Pool
-	Hub         *ws.Hub           // WebSocket hub for real-time broadcasting (optional)
-	AuditStore  *store.AuditStore // optional; nil means no audit logging
-	K8s         *k8s.Client       // optional; nil means K8s job launch is disabled
-	WorkerImage string            // default container image for test workers
-	WorkerToken string            // auth token workers use to report back
-	APIBaseURL  string            // base URL workers use to call the API
-	Webhooks    *webhook.Notifier // optional; nil means no webhook dispatch
-
-	// ownsExecFunc overrides ownsExecution for testing. If nil, the DB-based
-	// implementation is used. Callers must not set this outside of tests.
-	ownsExecFunc func(ctx context.Context, executionID, teamID string) (bool, error)
+	ExecStore   executionsStore
+	Hub         *ws.Hub
+	AuditStore  *store.AuditStore
+	K8s         *k8s.Client
+	WorkerImage string
+	WorkerToken string
+	APIBaseURL  string
+	Webhooks    *webhook.Notifier
 }
 
 // CreateExecutionRequest is the request body for creating a test execution.
@@ -54,53 +46,16 @@ func (h *ExecutionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	// Pagination
 	limit, offset := parsePagination(r)
 
-	rows, err := h.DB.Query(r.Context(),
-		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
-		        error_msg, started_at, finished_at, created_at, updated_at
-		 FROM test_executions
-		 WHERE team_id = $1
-		 ORDER BY created_at DESC
-		 LIMIT $2 OFFSET $3`,
-		claims.TeamID, limit, offset)
+	executions, total, err := h.ExecStore.List(r.Context(), claims.TeamID, limit, offset)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to query executions")
-		return
-	}
-	defer rows.Close()
-
-	executions := []model.TestExecution{}
-	for rows.Next() {
-		var e model.TestExecution
-		if err := rows.Scan(
-			&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
-			&e.K8sJobName, &e.K8sPodName, &e.ErrorMsg, &e.StartedAt,
-			&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt,
-		); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to scan execution")
-			return
-		}
-		executions = append(executions, e)
-	}
-	if err := rows.Err(); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to iterate executions")
-		return
-	}
-
-	// Get total count for pagination
-	var total int
-	err = h.DB.QueryRow(r.Context(),
-		`SELECT COUNT(*) FROM test_executions WHERE team_id = $1`,
-		claims.TeamID).Scan(&total)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to count executions")
 		return
 	}
 
@@ -124,17 +79,15 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.Command = sanitize.String(req.Command)
 	req.Image = sanitize.String(req.Image)
 	req.EnvVars = sanitize.StringMap(req.EnvVars)
 
-	// Build config JSON from image and env vars
 	var configJSON []byte
 	if req.Image != "" || len(req.EnvVars) > 0 {
 		cfg := map[string]interface{}{}
@@ -152,19 +105,12 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id := uuid.New().String()
-	now := time.Now()
-
-	_, err := h.DB.Exec(r.Context(),
-		`INSERT INTO test_executions (id, team_id, status, command, config, created_at, updated_at)
-		 VALUES ($1, $2, 'pending', $3, $4, $5, $5)`,
-		id, claims.TeamID, req.Command, configJSON, now)
+	id, err := h.ExecStore.Create(r.Context(), claims.TeamID, req.Command, configJSON)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create execution")
 		return
 	}
 
-	// Launch K8s job if client is configured
 	if h.K8s != nil {
 		image := req.Image
 		if image == "" {
@@ -182,16 +128,13 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := h.K8s.CreateJob(r.Context(), jobCfg); err != nil {
 			log.Error().Err(err).Str("execution_id", id).Msg("failed to launch k8s job")
-			h.DB.Exec(r.Context(),
-				`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
-				"job launch failed: "+err.Error(), time.Now(), id)
+			_ = h.ExecStore.MarkFailed(r.Context(), id, "job launch failed: "+err.Error(), time.Now())
 			Error(w, http.StatusInternalServerError, "execution created but job launch failed")
 			return
 		}
-		// Store K8s job name on the execution record
-		h.DB.Exec(r.Context(),
-			`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
-			jobName, time.Now(), id)
+		if err := h.ExecStore.SetK8sJobName(r.Context(), id, jobName, time.Now()); err != nil {
+			log.Error().Err(err).Str("execution_id", id).Msg("failed to store k8s job name")
+		}
 	}
 
 	if h.AuditStore != nil {
@@ -227,12 +170,12 @@ func (h *ExecutionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	e, err := getExecution(r.Context(), h.DB, executionID, claims.TeamID)
+	e, err := h.ExecStore.Get(r.Context(), executionID, claims.TeamID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "execution not found")
 		return
@@ -259,31 +202,24 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	now := time.Now()
-	tag, err := h.DB.Exec(r.Context(),
-		`UPDATE test_executions
-		 SET status = 'cancelled', finished_at = $1, updated_at = $1
-		 WHERE id = $2 AND team_id = $3 AND status IN ('pending', 'running')`,
-		now, executionID, claims.TeamID)
+	rowsAffected, err := h.ExecStore.Cancel(r.Context(), executionID, claims.TeamID, now)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to cancel execution")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		Error(w, http.StatusNotFound, "execution not found or not cancellable")
 		return
 	}
 
-	// Clean up the K8s job if one was launched
 	if h.K8s != nil {
-		var jobName *string
-		_ = h.DB.QueryRow(r.Context(),
-			`SELECT k8s_job_name FROM test_executions WHERE id = $1`, executionID).Scan(&jobName)
+		jobName, _ := h.ExecStore.GetK8sJobName(r.Context(), executionID)
 		if jobName != nil && *jobName != "" {
 			if err := h.K8s.DeleteJob(r.Context(), *jobName); err != nil {
 				log.Error().Err(err).Str("job", *jobName).Msg("failed to delete k8s job on cancel")
@@ -335,60 +271,34 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.ErrorMsg = sanitize.String(req.ErrorMsg)
 
 	now := time.Now()
-
-	// Build dynamic update
-	query := `UPDATE test_executions SET status = $1, updated_at = $2`
-	args := []interface{}{req.Status, now}
-	argIdx := 3
-
-	if req.Status == "running" {
-		query += `, started_at = COALESCE(started_at, $` + strconv.Itoa(argIdx) + `)`
-		args = append(args, now)
-		argIdx++
-	}
-
-	if req.Status == "completed" || req.Status == "failed" || req.Status == "cancelled" {
-		query += `, finished_at = $` + strconv.Itoa(argIdx)
-		args = append(args, now)
-		argIdx++
-	}
-
+	var errorMsg *string
 	if req.ErrorMsg != "" {
-		query += `, error_msg = $` + strconv.Itoa(argIdx)
-		args = append(args, req.ErrorMsg)
-		argIdx++
+		errorMsg = &req.ErrorMsg
 	}
-
-	query += ` WHERE id = $` + strconv.Itoa(argIdx) + ` AND team_id = $` + strconv.Itoa(argIdx+1)
-	args = append(args, executionID, claims.TeamID)
-
-	tag, err := h.DB.Exec(r.Context(), query, args...)
+	rowsAffected, err := h.ExecStore.UpdateStatus(r.Context(), executionID, claims.TeamID, req.Status, now, errorMsg)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to update execution status")
 		return
 	}
-	if tag.RowsAffected() == 0 {
+	if rowsAffected == 0 {
 		Error(w, http.StatusNotFound, "execution not found")
 		return
 	}
 
-	// Broadcast status change via WebSocket
 	if h.Hub != nil {
 		h.Hub.BroadcastExecutionStatus(executionID, req.Status, map[string]interface{}{
 			"error_msg": req.ErrorMsg,
 		})
 	}
 
-	// Audit terminal state transitions (completed/failed).
 	if h.AuditStore != nil && (req.Status == "completed" || req.Status == "failed") {
 		meta := map[string]interface{}{"status": req.Status}
 		if req.ErrorMsg != "" {
@@ -409,7 +319,6 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		})
 	}
 
-	// Fire webhooks for terminal execution states.
 	if req.Status == "completed" || req.Status == "failed" {
 		eventType := webhook.EventExecutionCompleted
 		if req.Status == "failed" {
@@ -431,41 +340,9 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// getExecution fetches a single execution by ID, scoped to team.
-func getExecution(ctx context.Context, pool *db.Pool, id, teamID string) (*model.TestExecution, error) {
-	var e model.TestExecution
-	err := pool.QueryRow(ctx,
-		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
-		        error_msg, started_at, finished_at, created_at, updated_at
-		 FROM test_executions
-		 WHERE id = $1 AND team_id = $2`,
-		id, teamID).Scan(
-		&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
-		&e.K8sJobName, &e.K8sPodName, &e.ErrorMsg, &e.StartedAt,
-		&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt,
-	)
-	if err != nil {
-		return nil, err
-	}
-	return &e, nil
-}
-
 // ownsExecution checks whether the given execution belongs to the specified team.
-// Returns (false, nil) if the execution does not belong to the team,
-// (false, err) on database errors (distinguishing 404 from 500),
-// and (true, nil) if the execution belongs to the team.
 func (h *ExecutionsHandler) ownsExecution(ctx context.Context, executionID, teamID string) (bool, error) {
-	if h.ownsExecFunc != nil {
-		return h.ownsExecFunc(ctx, executionID, teamID)
-	}
-	var exists bool
-	err := h.DB.QueryRow(ctx,
-		`SELECT EXISTS(SELECT 1 FROM test_executions WHERE id = $1 AND team_id = $2)`,
-		executionID, teamID).Scan(&exists)
-	if err != nil {
-		return false, err
-	}
-	return exists, nil
+	return h.ExecStore.Exists(ctx, executionID, teamID)
 }
 
 func (h *ExecutionsHandler) requireWorkerCallback(w http.ResponseWriter, r *http.Request) (*auth.Claims, string, bool) {
@@ -481,7 +358,7 @@ func (h *ExecutionsHandler) requireWorkerCallback(w http.ResponseWriter, r *http
 		return nil, "", false
 	}
 
-	if h.DB == nil {
+	if h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return nil, "", false
 	}
@@ -523,7 +400,6 @@ func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
-	// Broadcast progress via WebSocket
 	if h.Hub != nil {
 		h.Hub.BroadcastProgress(executionID, map[string]interface{}{
 			"passed":                req.Passed,
@@ -566,7 +442,6 @@ func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	// Broadcast individual test result via WebSocket
 	if h.Hub != nil {
 		h.Hub.BroadcastTestResult(executionID, map[string]interface{}{
 			"name":        req.Name,
@@ -607,7 +482,6 @@ func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	// Broadcast worker status via WebSocket
 	if h.Hub != nil {
 		h.Hub.BroadcastWorkerStatus(executionID, map[string]interface{}{
 			"worker_id":       req.WorkerID,

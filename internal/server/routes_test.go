@@ -151,7 +151,7 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 		path       string
 		wantStatus int
 	}{
-		{"GET", "/api/v1/reports", http.StatusServiceUnavailable},                        // no DB configured
+		{"GET", "/api/v1/reports", http.StatusServiceUnavailable},                         // no DB configured
 		{"GET", "/api/v1/executions", http.StatusServiceUnavailable},                      // no DB configured
 		{"GET", "/api/v1/analytics/trends", http.StatusServiceUnavailable},                // no DB configured
 		{"GET", "/api/v1/analytics/flaky-tests", http.StatusServiceUnavailable},           // no DB configured
@@ -205,8 +205,8 @@ func TestCTRFReportIngestion(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("POST /api/v1/reports status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("POST /api/v1/reports status = %d, want %d (no DB configured)", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -433,9 +433,9 @@ func TestMaintainerCanCreateReport(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
-	// Without DB, should get 201 (no-DB fallback), not 403
-	if w.Code != http.StatusCreated {
-		t.Errorf("maintainer POST /api/v1/reports: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	// Without DB, should get 503 since the no-DB fallback path was removed
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("maintainer POST /api/v1/reports: status = %d, want %d (no DB configured)", w.Code, http.StatusServiceUnavailable)
 	}
 }
 

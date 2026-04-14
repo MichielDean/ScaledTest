@@ -497,7 +497,7 @@ internal/
   db/                 # Database pool, migrations
   handler/            # HTTP handlers (reports, executions, teams, admin, etc.)
   server/             # Router and middleware setup
-  store/              # Data access (audit, webhooks, quality gates)
+  store/              # Data access layer (store interfaces + implementations)
   github/             # GitHub commit status client
   llm/                # LLM provider abstraction (Anthropic, OpenAI, mock)
   mail/               # Email sender interface and SMTP implementation

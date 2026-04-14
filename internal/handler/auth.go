@@ -15,17 +15,10 @@ import (
 
 const refreshTokenCookie = "refresh_token"
 
-// authDB is the minimal database interface used by AuthHandler.
-// *pgxpool.Pool satisfies this interface.
-type authDB interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-}
-
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	JWT *auth.JWTManager
-	DB  authDB
+	JWT       *auth.JWTManager
+	AuthStore authStore
 }
 
 // RegisterRequest is the request body for user registration.
@@ -62,11 +55,6 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" validate:"required,min=8,max=72"`
 }
 
-// UpdateProfileRequest is the request body for updating the authenticated user's profile.
-type UpdateProfileRequest struct {
-	DisplayName string `json:"display_name" validate:"required,min=1"`
-}
-
 // ChangePassword handles POST /api/v1/auth/change-password.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
@@ -81,17 +69,12 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	// Look up current password hash
-	var passwordHash string
-	err := h.DB.QueryRow(r.Context(),
-		"SELECT password_hash FROM users WHERE id = $1",
-		claims.UserID,
-	).Scan(&passwordHash)
+	user, err := h.AuthStore.GetUserByID(r.Context(), claims.UserID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -101,29 +84,23 @@ func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify current password
-	if !auth.CheckPassword(req.CurrentPassword, passwordHash) {
+	if !auth.CheckPassword(req.CurrentPassword, user.PasswordHash) {
 		Error(w, http.StatusUnauthorized, "invalid current password")
 		return
 	}
 
-	// Hash new password
 	newHash, err := auth.HashPassword(req.NewPassword)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Update password
-	tag, err := h.DB.Exec(r.Context(),
-		"UPDATE users SET password_hash = $1 WHERE id = $2",
-		newHash, claims.UserID,
-	)
+	rowsAffected, err := h.AuthStore.UpdatePassword(r.Context(), claims.UserID, newHash)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
-	if tag.RowsAffected() != 1 {
+	if rowsAffected != 1 {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -150,18 +127,12 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	var userID, email, displayName, role string
-	err := h.DB.QueryRow(r.Context(),
-		`UPDATE users SET display_name = $1, updated_at = now()
-		 WHERE id = $2
-		 RETURNING id, email, display_name, role`,
-		req.DisplayName, claims.UserID,
-	).Scan(&userID, &email, &displayName, &role)
+	user, err := h.AuthStore.UpdateProfile(r.Context(), claims.UserID, req.DisplayName)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "user not found")
 		return
@@ -172,10 +143,10 @@ func (h *AuthHandler) UpdateMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, UserResponse{
-		ID:          userID,
-		Email:       email,
-		DisplayName: displayName,
-		Role:        role,
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Role:        user.Role,
 	})
 }
 
@@ -187,16 +158,12 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	var email, displayName, role string
-	err := h.DB.QueryRow(r.Context(),
-		"SELECT email, display_name, role FROM users WHERE id = $1",
-		claims.UserID,
-	).Scan(&email, &displayName, &role)
+	user, err := h.AuthStore.GetUserByID(r.Context(), claims.UserID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusUnauthorized, "unauthorized")
 		return
@@ -207,16 +174,16 @@ func (h *AuthHandler) GetMe(w http.ResponseWriter, r *http.Request) {
 	}
 
 	JSON(w, http.StatusOK, UserResponse{
-		ID:          claims.UserID,
-		Email:       email,
-		DisplayName: displayName,
-		Role:        role,
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Role:        user.Role,
 	})
 }
 
 // Register handles POST /auth/register.
 func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -227,10 +194,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if email already exists
-	var exists bool
-	err := h.DB.QueryRow(r.Context(),
-		"SELECT EXISTS(SELECT 1 FROM users WHERE email = $1)", req.Email).Scan(&exists)
+	exists, err := h.AuthStore.EmailExists(r.Context(), req.Email)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
@@ -240,7 +204,6 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Hash password
 	hash, err := auth.HashPassword(req.Password)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -255,32 +218,22 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 	// second INSERT will violate the index (SQLSTATE 23505). In that case we
 	// retry explicitly as 'maintainer', which is correct because a committed
 	// owner row now exists.
-	var userID, role string
-	err = h.DB.QueryRow(r.Context(),
-		`INSERT INTO users (email, password_hash, display_name, role)
-		 SELECT $1, $2, $3,
-		   CASE WHEN NOT EXISTS (SELECT 1 FROM users) THEN 'owner'::text ELSE 'maintainer'::text END
-		 RETURNING id, role`,
-		req.Email, hash, req.DisplayName,
-	).Scan(&userID, &role)
+	userID, role, err := h.AuthStore.CreateUser(r.Context(), req.Email, hash, req.DisplayName, "")
 	if err != nil {
 		var pgErr *pgconn.PgError
 		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_users_single_owner" {
-			// A concurrent registration claimed the owner role; retry as maintainer.
-			err = h.DB.QueryRow(r.Context(),
-				`INSERT INTO users (email, password_hash, display_name, role)
-				 VALUES ($1, $2, $3, 'maintainer')
-				 RETURNING id, role`,
-				req.Email, hash, req.DisplayName,
-			).Scan(&userID, &role)
-		}
-		if err != nil {
+			userID, err = h.AuthStore.CreateUserWithRole(r.Context(), req.Email, hash, req.DisplayName, "maintainer")
+			if err != nil {
+				Error(w, http.StatusInternalServerError, "internal error")
+				return
+			}
+			role = "maintainer"
+		} else {
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 	}
 
-	// Generate token pair and create session
 	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, "")
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
@@ -299,7 +252,7 @@ func (h *AuthHandler) Register(w http.ResponseWriter, r *http.Request) {
 
 // Login handles POST /auth/login.
 func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -310,12 +263,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up user by email
-	var userID, passwordHash, displayName, role string
-	err := h.DB.QueryRow(r.Context(),
-		`SELECT id, password_hash, display_name, role FROM users WHERE email = $1`,
-		req.Email,
-	).Scan(&userID, &passwordHash, &displayName, &role)
+	user, err := h.AuthStore.GetUserByEmail(r.Context(), req.Email)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
@@ -325,8 +273,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Verify password
-	if !auth.CheckPassword(req.Password, passwordHash) {
+	if !auth.CheckPassword(req.Password, user.PasswordHash) {
 		Error(w, http.StatusUnauthorized, "invalid credentials")
 		return
 	}
@@ -335,23 +282,19 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	// have team context for team-scoped API calls. Best-effort: if the
 	// lookup fails for any reason, teamID stays empty.
 	var teamID string
-	_ = h.DB.QueryRow(r.Context(),
-		`SELECT team_id FROM user_teams WHERE user_id = $1 ORDER BY joined_at ASC LIMIT 1`,
-		userID,
-	).Scan(&teamID)
+	teamID, _ = h.AuthStore.GetPrimaryTeamID(r.Context(), user.ID)
 
-	// Generate token pair and create session
-	resp, err := h.issueTokens(r.Context(), w, r, userID, req.Email, role, teamID)
+	resp, err := h.issueTokens(r.Context(), w, r, user.ID, user.Email, user.Role, teamID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	resp.User = UserResponse{
-		ID:          userID,
-		Email:       req.Email,
-		DisplayName: displayName,
-		Role:        role,
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Role:        user.Role,
 	}
 
 	JSON(w, http.StatusOK, resp)
@@ -359,7 +302,7 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 
 // Refresh handles POST /auth/refresh.
 func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -370,15 +313,7 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up session by refresh token
-	var sessionID, userID string
-	var expiresAt time.Time
-	err = h.DB.QueryRow(r.Context(),
-		`SELECT s.id, s.user_id, s.expires_at
-		 FROM sessions s
-		 WHERE s.refresh_token = $1`,
-		cookie.Value,
-	).Scan(&sessionID, &userID, &expiresAt)
+	session, err := h.AuthStore.GetSessionByRefreshToken(r.Context(), cookie.Value)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusUnauthorized, "invalid refresh token")
 		return
@@ -388,39 +323,32 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if time.Now().After(expiresAt) {
-		// Delete expired session
-		_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE id = $1", sessionID)
+	if time.Now().After(session.ExpiresAt) {
+		_ = h.AuthStore.DeleteSession(r.Context(), session.ID)
 		clearRefreshCookie(w, r)
 		Error(w, http.StatusUnauthorized, "refresh token expired")
 		return
 	}
 
-	// Look up user
-	var email, displayName, role string
-	err = h.DB.QueryRow(r.Context(),
-		`SELECT email, display_name, role FROM users WHERE id = $1`, userID,
-	).Scan(&email, &displayName, &role)
+	user, err := h.AuthStore.GetUserByID(r.Context(), session.UserID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
-	// Delete old session (rotate refresh token)
-	_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE id = $1", sessionID)
+	_ = h.AuthStore.DeleteSession(r.Context(), session.ID)
 
-	// Issue new token pair
-	resp, err := h.issueTokens(r.Context(), w, r, userID, email, role, "")
+	resp, err := h.issueTokens(r.Context(), w, r, user.ID, user.Email, user.Role, "")
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
 
 	resp.User = UserResponse{
-		ID:          userID,
-		Email:       email,
-		DisplayName: displayName,
-		Role:        role,
+		ID:          user.ID,
+		Email:       user.Email,
+		DisplayName: user.DisplayName,
+		Role:        user.Role,
 	}
 
 	JSON(w, http.StatusOK, resp)
@@ -428,20 +356,18 @@ func (h *AuthHandler) Refresh(w http.ResponseWriter, r *http.Request) {
 
 // Logout handles POST /auth/logout.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	if h.DB == nil {
+	if h.AuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	cookie, err := r.Cookie(refreshTokenCookie)
 	if err != nil {
-		// No cookie — already logged out, just return success
 		JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
 		return
 	}
 
-	// Delete session by refresh token
-	_, _ = h.DB.Exec(r.Context(), "DELETE FROM sessions WHERE refresh_token = $1", cookie.Value)
+	_ = h.AuthStore.DeleteSessionByRefreshToken(r.Context(), cookie.Value)
 	clearRefreshCookie(w, r)
 
 	JSON(w, http.StatusOK, map[string]string{"message": "logged out"})
@@ -454,10 +380,8 @@ func (h *AuthHandler) issueTokens(ctx context.Context, w http.ResponseWriter, r 
 		return nil, err
 	}
 
-	// Extract client metadata
 	userAgent := r.UserAgent()
 	ipAddr := net.ParseIP(r.RemoteAddr)
-	// RemoteAddr may include port — try to parse host only
 	if ipAddr == nil {
 		host, _, _ := net.SplitHostPort(r.RemoteAddr)
 		ipAddr = net.ParseIP(host)
@@ -465,12 +389,7 @@ func (h *AuthHandler) issueTokens(ctx context.Context, w http.ResponseWriter, r 
 
 	expiresAt := time.Now().Add(h.JWT.RefreshDuration())
 
-	_, err = h.DB.Exec(ctx,
-		`INSERT INTO sessions (user_id, refresh_token, user_agent, ip_address, expires_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		userID, pair.RefreshToken, userAgent, ipAddr, expiresAt,
-	)
-	if err != nil {
+	if err := h.AuthStore.CreateSession(ctx, userID, pair.RefreshToken, userAgent, ipAddr, expiresAt); err != nil {
 		return nil, err
 	}
 
