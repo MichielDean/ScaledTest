@@ -4,10 +4,19 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
 )
+
+// DBTX is the common interface satisfied by pgxpool.Pool and pgx.Tx.
+type DBTX interface {
+	Exec(ctx context.Context, sql string, arguments ...interface{}) (pgconn.CommandTag, error)
+	Query(ctx context.Context, sql string, optionsAndArgs ...interface{}) (pgx.Rows, error)
+	QueryRow(ctx context.Context, sql string, optionsAndArgs ...interface{}) pgx.Row
+}
 
 // DurationStore handles test duration history persistence.
 type DurationStore struct {
@@ -21,30 +30,22 @@ func NewDurationStore(pool *pgxpool.Pool) *DurationStore {
 
 // GetByTeam returns all duration history entries for a team.
 func (s *DurationStore) GetByTeam(ctx context.Context, teamID string) ([]model.TestDurationHistory, error) {
-	rows, err := s.pool.Query(ctx,
+	return queryDurations(ctx, s.pool,
 		`SELECT id, team_id, test_name, suite, avg_duration_ms, p95_duration_ms,
 		        min_duration_ms, max_duration_ms, run_count, last_status, updated_at, created_at
 		 FROM test_duration_history
 		 WHERE team_id = $1
 		 ORDER BY test_name`, teamID)
-	if err != nil {
-		return nil, fmt.Errorf("query duration history: %w", err)
-	}
-	defer rows.Close()
+}
 
-	var results []model.TestDurationHistory
-	for rows.Next() {
-		var d model.TestDurationHistory
-		if err := rows.Scan(
-			&d.ID, &d.TeamID, &d.TestName, &d.Suite,
-			&d.AvgDurationMs, &d.P95DurationMs, &d.MinDurationMs, &d.MaxDurationMs,
-			&d.RunCount, &d.LastStatus, &d.UpdatedAt, &d.CreatedAt,
-		); err != nil {
-			return nil, fmt.Errorf("scan duration history: %w", err)
-		}
-		results = append(results, d)
-	}
-	return results, rows.Err()
+// GetByTeamAndTest returns duration history entries for a specific test name within a team.
+func (s *DurationStore) GetByTeamAndTest(ctx context.Context, teamID, testName string) ([]model.TestDurationHistory, error) {
+	return queryDurations(ctx, s.pool,
+		`SELECT id, team_id, test_name, suite, avg_duration_ms, p95_duration_ms,
+		        min_duration_ms, max_duration_ms, run_count, last_status, updated_at, created_at
+		 FROM test_duration_history
+		 WHERE team_id = $1 AND test_name = $2
+		 ORDER BY suite`, teamID, testName)
 }
 
 // GetByTeamMap returns duration history as a map keyed by test_name.
@@ -62,16 +63,30 @@ func (s *DurationStore) GetByTeamMap(ctx context.Context, teamID string) (map[st
 
 // UpsertFromResults updates duration history from a set of test results.
 // Uses a rolling average: new_avg = ((old_avg * old_count) + new_duration) / (old_count + 1).
-func (s *DurationStore) UpsertFromResults(ctx context.Context, teamID string, results []model.TestResult) error {
+// When db is a pgx.Tx the caller is responsible for committing the transaction.
+// When db is a pgxpool.Pool this method creates and commits its own transaction.
+func (s *DurationStore) UpsertFromResults(ctx context.Context, teamID string, results []model.TestResult, db DBTX) error {
 	if len(results) == 0 {
 		return nil
 	}
 
-	tx, err := s.pool.Begin(ctx)
-	if err != nil {
-		return fmt.Errorf("begin tx: %w", err)
+	shouldCommit := false
+	var tx pgx.Tx
+	var err error
+
+	switch d := db.(type) {
+	case *pgxpool.Pool:
+		tx, err = d.Begin(ctx)
+		if err != nil {
+			return fmt.Errorf("begin tx: %w", err)
+		}
+		defer tx.Rollback(ctx)
+		shouldCommit = true
+	case pgx.Tx:
+		tx = d
+	default:
+		return fmt.Errorf("UpsertFromResults: unsupported DBTX type %T", db)
 	}
-	defer tx.Rollback(ctx)
 
 	for _, r := range results {
 		_, err := tx.Exec(ctx,
@@ -93,19 +108,26 @@ func (s *DurationStore) UpsertFromResults(ctx context.Context, teamID string, re
 		}
 	}
 
-	return tx.Commit(ctx)
+	if shouldCommit {
+		return tx.Commit(ctx)
+	}
+	return nil
 }
 
 // GetBySuite returns duration history for tests in a specific suite.
 func (s *DurationStore) GetBySuite(ctx context.Context, teamID, suite string) ([]model.TestDurationHistory, error) {
-	rows, err := s.pool.Query(ctx,
+	return queryDurations(ctx, s.pool,
 		`SELECT id, team_id, test_name, suite, avg_duration_ms, p95_duration_ms,
 		        min_duration_ms, max_duration_ms, run_count, last_status, updated_at, created_at
 		 FROM test_duration_history
 		 WHERE team_id = $1 AND suite = $2
 		 ORDER BY avg_duration_ms DESC`, teamID, suite)
+}
+
+func queryDurations(ctx context.Context, db DBTX, query string, args ...interface{}) ([]model.TestDurationHistory, error) {
+	rows, err := db.Query(ctx, query, args...)
 	if err != nil {
-		return nil, fmt.Errorf("query duration by suite: %w", err)
+		return nil, fmt.Errorf("query duration history: %w", err)
 	}
 	defer rows.Close()
 
@@ -117,7 +139,7 @@ func (s *DurationStore) GetBySuite(ctx context.Context, teamID, suite string) ([
 			&d.AvgDurationMs, &d.P95DurationMs, &d.MinDurationMs, &d.MaxDurationMs,
 			&d.RunCount, &d.LastStatus, &d.UpdatedAt, &d.CreatedAt,
 		); err != nil {
-			return nil, fmt.Errorf("scan duration: %w", err)
+			return nil, fmt.Errorf("scan duration history: %w", err)
 		}
 		results = append(results, d)
 	}

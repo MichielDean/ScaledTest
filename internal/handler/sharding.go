@@ -71,7 +71,7 @@ func (h *ShardingHandler) CreatePlan(w http.ResponseWriter, r *http.Request) {
 // RebalanceRequest is the request body for rebalancing after worker failure.
 type RebalanceRequest struct {
 	ExecutionID    string          `json:"execution_id" validate:"required"`
-	FailedWorkerID string         `json:"failed_worker_id" validate:"required"`
+	FailedWorkerID string          `json:"failed_worker_id" validate:"required"`
 	CurrentPlan    model.ShardPlan `json:"current_plan" validate:"required"`
 	CompletedTests []string        `json:"completed_tests"`
 }
@@ -173,18 +173,21 @@ func (h *ShardingHandler) GetDuration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	durations, err := h.DurationStore.GetByTeam(r.Context(), claims.TeamID)
+	durations, err := h.DurationStore.GetByTeamAndTest(r.Context(), claims.TeamID, testName)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to query durations")
 		return
 	}
 
-	for _, d := range durations {
-		if d.TestName == testName {
-			JSON(w, http.StatusOK, d)
-			return
-		}
+	if len(durations) == 0 {
+		Error(w, http.StatusNotFound, "no duration history for test")
+		return
 	}
 
-	Error(w, http.StatusNotFound, "no duration history for test")
+	if len(durations) == 1 {
+		JSON(w, http.StatusOK, durations[0])
+		return
+	}
+
+	JSON(w, http.StatusOK, durations)
 }
