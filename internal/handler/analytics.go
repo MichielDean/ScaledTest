@@ -14,7 +14,8 @@ import (
 
 // AnalyticsHandler handles analytics endpoints.
 type AnalyticsHandler struct {
-	DB *db.Pool
+	DB             *db.Pool
+	AnalyticsStore analyticsStore
 }
 
 // Trends handles GET /api/v1/analytics/trends.
@@ -26,12 +27,38 @@ func (h *AnalyticsHandler) Trends(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	q := parseTrendQuery(r, claims.TeamID)
+
+	if h.AnalyticsStore != nil {
+		rows, err := h.AnalyticsStore.QueryTrends(r.Context(), q.GroupBy, q.TeamID, q.StartDate, q.EndDate)
+		if err != nil {
+			log.Error().Err(err).Msg("analytics: trends query failed")
+			Error(w, http.StatusInternalServerError, "query failed")
+			return
+		}
+		trends := make([]analytics.TrendPoint, len(rows))
+		for i, row := range rows {
+			trends[i] = analytics.TrendPoint{
+				Date:     row.Date,
+				Total:    row.Total,
+				Passed:   row.Passed,
+				Failed:   row.Failed,
+				Skipped:  row.Skipped,
+				PassRate: row.PassRate,
+			}
+		}
+		JSON(w, http.StatusOK, map[string]interface{}{
+			"trends": trends,
+		})
+		return
+	}
+
+	// Legacy path: direct SQL
 
 	query := `
 		SELECT
@@ -91,7 +118,7 @@ func (h *AnalyticsHandler) FlakyTests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -168,7 +195,7 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -237,7 +264,7 @@ func (h *AnalyticsHandler) DurationDistribution(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}

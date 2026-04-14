@@ -14,6 +14,7 @@ import (
 type AdminHandler struct {
 	AuditStore *store.AuditStore
 	DB         *db.Pool
+	AdminStore adminStore
 }
 
 // ListAuditLog handles GET /api/v1/admin/audit-log.
@@ -66,12 +67,25 @@ func (h *AdminHandler) ListAuditLog(w http.ResponseWriter, r *http.Request) {
 
 // ListUsers handles GET /api/v1/admin/users.
 func (h *AdminHandler) ListUsers(w http.ResponseWriter, r *http.Request) {
-	if h.DB == nil {
+	if h.DB == nil && h.AdminStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	limit, offset := parsePagination(r)
+
+	if h.AdminStore != nil {
+		users, total, err := h.AdminStore.ListUsers(r.Context(), limit, offset)
+		if err != nil {
+			Error(w, http.StatusInternalServerError, "failed to query users")
+			return
+		}
+		JSON(w, http.StatusOK, map[string]interface{}{
+			"users": users,
+			"total": total,
+		})
+		return
+	}
 
 	rows, err := h.DB.Query(r.Context(),
 		`SELECT id, email, display_name, role, created_at, updated_at

@@ -166,6 +166,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	if dbPool != nil {
 		authH.DB = dbPool
+		authH.AuthStore = &handler.AuthStoreAdapter{Inner: store.NewAuthStore(dbPool)}
 	}
 	reportsH := &handler.ReportsHandler{
 		DB:                 dbPool,
@@ -176,6 +177,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		BaseURL:            cfg.BaseURL,
 		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
+	}
+	if dbPool != nil {
+		reportsH.ReportStore = &handler.ReportsStoreAdapter{Inner: store.NewReportsStore(dbPool)}
 	}
 	if triageStore != nil {
 		reportsH.TriageStore = triageStore
@@ -190,7 +194,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		APIBaseURL:  cfg.BaseURL,
 		Webhooks:    whNotifier,
 	}
+	if dbPool != nil {
+		execH.ExecStore = &handler.ExecutionsStoreAdapter{Inner: store.NewExecutionsStore(dbPool)}
+	}
 	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
+	if dbPool != nil {
+		analyticsH.AnalyticsStore = &handler.AnalyticsStoreAdapter{Inner: store.NewAnalyticsStore(dbPool)}
+	}
 	qgH := &handler.QualityGatesHandler{DB: dbPool, AuditStore: auditStore}
 	if qgStore != nil {
 		qgH.Store = qgStore
@@ -201,6 +211,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
 	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
+	if dbPool != nil {
+		adminH.AdminStore = &handler.AdminStoreAdapter{Inner: store.NewAdminStore(dbPool)}
+	}
 	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher(), AuditStore: auditStore}
 	if whStore != nil {
 		whH.Store = whStore
@@ -317,7 +330,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			})
 		})
 
-
 		r.Route("/sharding", func(r chi.Router) {
 			r.Post("/plan", shardH.CreatePlan)
 			r.Post("/rebalance", shardH.Rebalance)
@@ -348,7 +360,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	return r
 }
-
 
 func zerologMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

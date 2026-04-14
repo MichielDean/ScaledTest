@@ -26,6 +26,7 @@ import (
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
 	DB          *db.Pool
+	ExecStore   executionsStore
 	Hub         *ws.Hub           // WebSocket hub for real-time broadcasting (optional)
 	AuditStore  *store.AuditStore // optional; nil means no audit logging
 	K8s         *k8s.Client       // optional; nil means K8s job launch is disabled
@@ -54,7 +55,7 @@ func (h *ExecutionsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -124,7 +125,7 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -227,7 +228,7 @@ func (h *ExecutionsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -259,7 +260,7 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -335,7 +336,7 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -481,7 +482,7 @@ func (h *ExecutionsHandler) requireWorkerCallback(w http.ResponseWriter, r *http
 		return nil, "", false
 	}
 
-	if h.DB == nil {
+	if h.DB == nil && h.ExecStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return nil, "", false
 	}

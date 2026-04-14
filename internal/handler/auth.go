@@ -24,8 +24,9 @@ type authDB interface {
 
 // AuthHandler handles authentication endpoints.
 type AuthHandler struct {
-	JWT *auth.JWTManager
-	DB  authDB
+	JWT       *auth.JWTManager
+	DB        authDB
+	AuthStore authStore
 }
 
 // RegisterRequest is the request body for user registration.

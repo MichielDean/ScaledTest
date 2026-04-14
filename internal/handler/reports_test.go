@@ -18,7 +18,6 @@ import (
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
-
 func TestListReports_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
@@ -291,12 +290,12 @@ func TestParsePagination(t *testing.T) {
 	}{
 		{"", 50, 0},
 		{"?limit=10&offset=20", 10, 20},
-		{"?limit=200", 50, 0},     // exceeds max
-		{"?limit=-1", 50, 0},      // negative
-		{"?limit=abc", 50, 0},     // non-numeric
-		{"?offset=-5", 50, 0},     // negative offset
-		{"?limit=100", 100, 0},    // max allowed
-		{"?limit=0", 50, 0},       // zero not allowed
+		{"?limit=200", 50, 0},  // exceeds max
+		{"?limit=-1", 50, 0},   // negative
+		{"?limit=abc", 50, 0},  // non-numeric
+		{"?offset=-5", 50, 0},  // negative offset
+		{"?limit=100", 100, 0}, // max allowed
+		{"?limit=0", 50, 0},    // zero not allowed
 	}
 
 	for _, tt := range tests {
@@ -729,7 +728,7 @@ func TestParsePagination_AdditionalCases(t *testing.T) {
 		wantLimit  int
 		wantOffset int
 	}{
-		{"?limit=1", 1, 0},          // minimum valid limit
+		{"?limit=1", 1, 0}, // minimum valid limit
 		{"?limit=99&offset=0", 99, 0},
 		{"?limit=50&offset=1000", 50, 1000}, // large offset
 		{"?limit=101", 50, 0},               // just over max
@@ -959,8 +958,8 @@ func TestBuildReportData_WithPreviousFailedTests(t *testing.T) {
 }
 
 func TestFetchPreviousFailedTests_NilDB(t *testing.T) {
-	// When DB is nil, fetchPreviousFailedTests must return (nil, nil) gracefully.
-	result, err := fetchPreviousFailedTests(context.Background(), nil, "team-1", "report-1")
+	// When DB is nil, fetchPreviousFailedTestsDB must return (nil, nil) gracefully.
+	result, err := fetchPreviousFailedTestsDB(context.Background(), nil, "team-1", "report-1")
 	if err != nil {
 		t.Errorf("expected nil error when DB is nil, got %v", err)
 	}
@@ -972,10 +971,10 @@ func TestFetchPreviousFailedTests_NilDB(t *testing.T) {
 // --- Mock webhook lister for testing dispatch ---
 
 type mockWebhookLister struct {
-	mu      sync.Mutex
-	calls   []mockWebhookCall
-	hooks   []webhook.WebhookRecord
-	err     error
+	mu    sync.Mutex
+	calls []mockWebhookCall
+	hooks []webhook.WebhookRecord
+	err   error
 }
 
 type mockWebhookCall struct {
@@ -1067,10 +1066,10 @@ func TestCreateReport_NoDB_QualityGateNotEvaluatedWhenStoreNil(t *testing.T) {
 
 // mockQualityGateStore implements qualityGateEvaluator for testing.
 type mockQualityGateStore struct {
-	gates       []model.QualityGate
-	listErr     error
-	evalCalls   []mockEvalCall
-	createErr   error
+	gates     []model.QualityGate
+	listErr   error
+	evalCalls []mockEvalCall
+	createErr error
 }
 
 type mockEvalCall struct {
@@ -1590,9 +1589,9 @@ func TestFlattenReportForList_PromotesSummaryFields(t *testing.T) {
 
 func TestFlattenReportForList_ZeroCounts(t *testing.T) {
 	rpt := model.TestReport{
-		ID:       "report-2",
-		TeamID:   "team-1",
-		Summary:  json.RawMessage(`{"tests":0,"passed":0,"failed":0,"skipped":0,"pending":0,"other":0}`),
+		ID:      "report-2",
+		TeamID:  "team-1",
+		Summary: json.RawMessage(`{"tests":0,"passed":0,"failed":0,"skipped":0,"pending":0,"other":0}`),
 	}
 
 	out := flattenReportForList(rpt)
