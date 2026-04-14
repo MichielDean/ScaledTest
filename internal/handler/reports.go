@@ -57,6 +57,7 @@ type ReportsHandler struct {
 	BaseURL            string
 	TriageStore        triageAccessor
 	TriageEnqueuer     triage.Enqueuer
+	DurationStore      *store.DurationStore
 	AllowBackdate      bool
 }
 
@@ -200,6 +201,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		Raw:                rawJSON,
 		CreatedAt:          now,
 		TriageGitHubStatus: triageGitHubStatus,
+		DurationStore:      h.DurationStore,
 	}
 	if err := h.ReportStore.CreateWithResults(r.Context(), params, results); err != nil {
 		if err == pgx.ErrNoRows {
@@ -210,6 +212,8 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Enqueue async triage — non-blocking, best-effort. Must be called after
+	// the transaction commits so the triage job can read the persisted rows.
 	if h.TriageEnqueuer != nil {
 		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
 	}

@@ -177,6 +177,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		GitHubStatusPoster: ghClient,
 		BaseURL:            cfg.BaseURL,
 		TriageEnqueuer:     triageEnqueuer,
+		DurationStore:      durStore,
 		AllowBackdate:      cfg.DisableRateLimit,
 	}
 	if dbPool != nil {

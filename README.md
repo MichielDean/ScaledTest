@@ -329,6 +329,10 @@ Tokens are prefixed `inv_`, valid for **7 days**, and stored as SHA-256 hashes. 
 | `POST` | `/api/v1/auth/change-password` | Change password |
 | `GET` | `/api/v1/admin/users` | List all users (owner only) |
 | `GET` | `/api/v1/admin/audit-log` | Paginated audit log (`?limit=&offset=&action=`) (owner only) |
+| `POST` | `/api/v1/sharding/plan` | Create a shard plan (duration-balanced or count-based) |
+| `POST` | `/api/v1/sharding/rebalance` | Rebalance after worker failure |
+| `GET` | `/api/v1/sharding/durations` | List all duration history for the team |
+| `GET` | `/api/v1/sharding/durations/{testName}` | Get duration history for a specific test (returns array, 404 if none) |
 | `GET` | `/ws/executions` | WebSocket for live updates |
 
 ### Quality Gate Rules

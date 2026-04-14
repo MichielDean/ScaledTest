@@ -97,6 +97,7 @@ var truncateTables = []string{
 	"triage_failure_classifications",
 	"triage_clusters",
 	"triage_results",
+	"test_duration_history",
 	"test_results",
 	"test_reports",
 	"test_executions",

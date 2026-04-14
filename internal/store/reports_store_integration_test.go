@@ -8,6 +8,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/google/uuid"
+
 	"github.com/scaledtest/scaledtest/internal/integration"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -19,11 +21,12 @@ func TestReportsStore_CreateWithResults_BulkInsert(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "reports-bulk-test-team")
 	s := store.NewReportsStore(tdb.Pool)
 
+	reportID := uuid.New().String()
 	summary, _ := json.Marshal(map[string]int{"tests": 100, "passed": 90, "failed": 8, "skipped": 2})
 	raw, _ := json.Marshal(map[string]interface{}{"results": map[string]interface{}{"tool": map[string]interface{}{"name": "jest"}}})
 
 	params := store.CreateReportParams{
-		ID:          "rpt-bulk-001",
+		ID:          reportID,
 		TeamID:      teamID,
 		ToolName:    "jest",
 		ToolVersion: "1.0.0",
@@ -42,7 +45,7 @@ func TestReportsStore_CreateWithResults_BulkInsert(t *testing.T) {
 			status = "skipped"
 		}
 		results[i] = model.TestResult{
-			ReportID:   "rpt-bulk-001",
+			ReportID:   reportID,
 			TeamID:     teamID,
 			Name:       "test-bulk-" + string(rune('A'+i%26)) + string(rune('0'+i%10)),
 			Status:     status,
@@ -55,7 +58,7 @@ func TestReportsStore_CreateWithResults_BulkInsert(t *testing.T) {
 		t.Fatalf("CreateWithResults with 100 results: %v", err)
 	}
 
-	rpt, found, err := s.GetReportAndResults(ctx, "rpt-bulk-001", teamID)
+	rpt, found, err := s.GetReportAndResults(ctx, reportID, teamID)
 	if err != nil {
 		t.Fatalf("GetReportAndResults: %v", err)
 	}
@@ -73,11 +76,12 @@ func TestReportsStore_CreateWithResults_BulkInsert_1000Results(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "reports-bulk-1k-test-team")
 	s := store.NewReportsStore(tdb.Pool)
 
+	reportID := uuid.New().String()
 	summary, _ := json.Marshal(map[string]int{"tests": 1000, "passed": 900, "failed": 50, "skipped": 50})
 	raw, _ := json.Marshal(map[string]interface{}{"results": map[string]interface{}{"tool": map[string]interface{}{"name": "jest"}}})
 
 	params := store.CreateReportParams{
-		ID:          "rpt-bulk-1k",
+		ID:          reportID,
 		TeamID:      teamID,
 		ToolName:    "jest",
 		ToolVersion: "1.0.0",
@@ -96,7 +100,7 @@ func TestReportsStore_CreateWithResults_BulkInsert_1000Results(t *testing.T) {
 			status = "skipped"
 		}
 		results[i] = model.TestResult{
-			ReportID:   "rpt-bulk-1k",
+			ReportID:   reportID,
 			TeamID:     teamID,
 			Name:       "test-1k-" + string(rune('A'+i%26)) + string(rune('0'+i%10)) + string(rune('0'+i/10%10)),
 			Status:     status,
@@ -109,7 +113,7 @@ func TestReportsStore_CreateWithResults_BulkInsert_1000Results(t *testing.T) {
 		t.Fatalf("CreateWithResults with 1000 results: %v", err)
 	}
 
-	rpt, found, err := s.GetReportAndResults(ctx, "rpt-bulk-1k", teamID)
+	rpt, found, err := s.GetReportAndResults(ctx, reportID, teamID)
 	if err != nil {
 		t.Fatalf("GetReportAndResults: %v", err)
 	}
