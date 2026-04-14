@@ -332,7 +332,7 @@ func TestQualityGatesDeleteReadonlyForbidden(t *testing.T) {
 }
 
 func TestQualityGatesEvaluateWithoutDB(t *testing.T) {
-	h := &QualityGatesHandler{Store: nil, DB: nil}
+	h := &QualityGatesHandler{Store: nil, ReportStore: nil}
 
 	body := `{"report_id":"report-123"}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
@@ -350,7 +350,7 @@ func TestQualityGatesEvaluateWithoutDB(t *testing.T) {
 }
 
 func TestQualityGatesEvaluateMissingReportID(t *testing.T) {
-	h := &QualityGatesHandler{Store: nil, DB: nil}
+	h := &QualityGatesHandler{Store: nil, ReportStore: nil}
 
 	body := `{}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
@@ -370,7 +370,7 @@ func TestQualityGatesEvaluateMissingReportID(t *testing.T) {
 }
 
 func TestQualityGatesEvaluateUnauthorized(t *testing.T) {
-	h := &QualityGatesHandler{Store: nil, DB: nil}
+	h := &QualityGatesHandler{Store: nil, ReportStore: nil}
 
 	body := `{"report_id":"report-123"}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates/gate-1/evaluate", strings.NewReader(body))
@@ -387,7 +387,7 @@ func TestQualityGatesEvaluateUnauthorized(t *testing.T) {
 }
 
 func TestQualityGatesEvaluateMissingGateID(t *testing.T) {
-	h := &QualityGatesHandler{Store: nil, DB: nil}
+	h := &QualityGatesHandler{Store: nil, ReportStore: nil}
 
 	body := `{"report_id":"report-123"}`
 	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/quality-gates//evaluate", strings.NewReader(body))
@@ -465,7 +465,7 @@ func TestValidateRules(t *testing.T) {
 
 // mockQGStore implements qualityGateStore for audit logging tests.
 type mockQGStore struct {
-	gate  *model.QualityGate
+	gate   *model.QualityGate
 	delErr error
 }
 

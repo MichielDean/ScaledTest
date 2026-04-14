@@ -162,13 +162,15 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 
 	// Handlers
-	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
+	oauthH := &handler.OAuthHandler{JWT: jwtMgr, OAuth: oauthCfgs, Secure: isSecure}
+	if dbPool != nil {
+		oauthH.OAuthStore = store.NewOAuthStore(dbPool)
+	}
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	if dbPool != nil {
-		authH.DB = dbPool
+		authH.AuthStore = store.NewAuthStore(dbPool)
 	}
 	reportsH := &handler.ReportsHandler{
-		DB:                 dbPool,
 		AuditStore:         auditStore,
 		QualityGateStore:   qgStore,
 		Webhooks:           whNotifier,
@@ -177,11 +179,13 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		TriageEnqueuer:     triageEnqueuer,
 		AllowBackdate:      cfg.DisableRateLimit,
 	}
+	if dbPool != nil {
+		reportsH.ReportStore = store.NewReportsStore(dbPool)
+	}
 	if triageStore != nil {
 		reportsH.TriageStore = triageStore
 	}
 	execH := &handler.ExecutionsHandler{
-		DB:          dbPool,
 		Hub:         wsHub,
 		AuditStore:  auditStore,
 		K8s:         k8sClient,
@@ -190,17 +194,29 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		APIBaseURL:  cfg.BaseURL,
 		Webhooks:    whNotifier,
 	}
-	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
-	qgH := &handler.QualityGatesHandler{DB: dbPool, AuditStore: auditStore}
+	if dbPool != nil {
+		execH.ExecStore = store.NewExecutionsStore(dbPool)
+	}
+	analyticsH := &handler.AnalyticsHandler{}
+	if dbPool != nil {
+		analyticsH.AnalyticsStore = store.NewAnalyticsStore(dbPool)
+	}
+	qgH := &handler.QualityGatesHandler{AuditStore: auditStore}
 	if qgStore != nil {
 		qgH.Store = qgStore
 	}
-	teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
+	if dbPool != nil {
+		qgH.ReportStore = store.NewReportsStore(dbPool)
+	}
+	teamsH := &handler.TeamsHandler{AuditStore: auditStore}
 	if dbPool != nil {
 		teamsH.Store = store.NewTeamsStore(dbPool)
 	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
-	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
+	adminH := &handler.AdminHandler{AuditStore: auditStore}
+	if dbPool != nil {
+		adminH.AdminStore = store.NewAdminStore(dbPool)
+	}
 	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher(), AuditStore: auditStore}
 	if whStore != nil {
 		whH.Store = whStore
@@ -210,7 +226,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 
 	invH := &handler.InvitationsHandler{
-		DB:         dbPool,
 		BaseURL:    cfg.BaseURL,
 		Mailer:     mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom),
 		AuditStore: auditStore,
@@ -317,7 +332,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 			})
 		})
 
-
 		r.Route("/sharding", func(r chi.Router) {
 			r.Post("/plan", shardH.CreatePlan)
 			r.Post("/rebalance", shardH.Rebalance)
@@ -348,7 +362,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 
 	return r
 }
-
 
 func zerologMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

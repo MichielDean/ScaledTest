@@ -10,8 +10,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/jackc/pgx/v5/pgxpool"
-
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -19,12 +17,14 @@ import (
 
 // mockInvitationStore is a test double for invitationStore.
 type mockInvitationStore struct {
-	inv            *model.Invitation // returned by Create
-	err            error             // returned by Create
-	tokenInv       *model.Invitation // returned by GetByTokenHash
-	tokenErr       error             // returned by GetByTokenHash
-	acceptedUserID string            // returned by AcceptInvitation
-	acceptErr      error             // returned by AcceptInvitation
+	inv            *model.Invitation
+	err            error
+	tokenInv       *model.Invitation
+	tokenErr       error
+	acceptedUserID string
+	acceptErr      error
+	teamName       string
+	teamNameErr    error
 }
 
 func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _, _ string, _ time.Time) (*model.Invitation, error) {
@@ -45,6 +45,10 @@ func (m *mockInvitationStore) Delete(_ context.Context, _, _ string) error {
 
 func (m *mockInvitationStore) AcceptInvitation(_ context.Context, _, _, _, _, _, _ string) (string, error) {
 	return m.acceptedUserID, m.acceptErr
+}
+
+func (m *mockInvitationStore) GetTeamName(_ context.Context, _ string) (string, error) {
+	return m.teamName, m.teamNameErr
 }
 
 // mockMailer is a test double for mailer.Mailer.
@@ -117,7 +121,7 @@ func TestCreateInvitation_InvalidRole(t *testing.T) {
 }
 
 func TestCreateInvitation_NoDB(t *testing.T) {
-	h := &InvitationsHandler{Store: nil, DB: nil}
+	h := &InvitationsHandler{Store: nil}
 	w := httptest.NewRecorder()
 	body := `{"email":"test@example.com","role":"readonly"}`
 	r := httptest.NewRequest("POST", "/api/v1/teams/t1/invitations", strings.NewReader(body))
@@ -127,7 +131,7 @@ func TestCreateInvitation_NoDB(t *testing.T) {
 	h.Create(w, r)
 
 	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Create without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+		t.Errorf("Create without store: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -177,7 +181,7 @@ func TestPreviewInvitation_MissingToken(t *testing.T) {
 }
 
 func TestPreviewInvitation_NoDB(t *testing.T) {
-	h := &InvitationsHandler{Store: nil, DB: nil}
+	h := &InvitationsHandler{Store: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/invitations/inv_abc", nil)
 	r = testWithChiParam(r, "token", "inv_abc")
@@ -185,7 +189,7 @@ func TestPreviewInvitation_NoDB(t *testing.T) {
 	h.Preview(w, r)
 
 	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Preview without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+		t.Errorf("Preview without store: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -203,7 +207,7 @@ func TestAcceptInvitation_MissingToken(t *testing.T) {
 }
 
 func TestAcceptInvitation_NoDB(t *testing.T) {
-	h := &InvitationsHandler{Store: nil, DB: nil}
+	h := &InvitationsHandler{Store: nil}
 	w := httptest.NewRecorder()
 	body := `{"password":"password123","display_name":"Test User"}`
 	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(body))
@@ -213,13 +217,12 @@ func TestAcceptInvitation_NoDB(t *testing.T) {
 	h.Accept(w, r)
 
 	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Accept without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+		t.Errorf("Accept without store: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
 func TestAcceptInvitation_InvalidBody(t *testing.T) {
-	// With nil DB, handler returns 503 before parsing body
-	h := &InvitationsHandler{Store: nil, DB: nil}
+	h := &InvitationsHandler{Store: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(`{invalid}`))
 	r.Header.Set("Content-Type", "application/json")
@@ -228,7 +231,7 @@ func TestAcceptInvitation_InvalidBody(t *testing.T) {
 	h.Accept(w, r)
 
 	if w.Code != http.StatusServiceUnavailable {
-		t.Errorf("Accept with nil DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+		t.Errorf("Accept with nil store: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -347,8 +350,8 @@ func TestCreateInvitation_CallsMailer(t *testing.T) {
 	store := &mockInvitationStore{inv: inv}
 	ml := &mockMailer{}
 	h := &InvitationsHandler{
-		Store:   store,
-		DB:      new(pgxpool.Pool),
+		Store: store,
+
 		Mailer:  ml,
 		BaseURL: "http://app.example.com",
 	}
@@ -386,8 +389,8 @@ func TestCreateInvitation_NilMailer_ReturnsCreated(t *testing.T) {
 		CreatedAt: time.Now(),
 	}
 	h := &InvitationsHandler{
-		Store:   &mockInvitationStore{inv: inv},
-		DB:      new(pgxpool.Pool),
+		Store: &mockInvitationStore{inv: inv},
+
 		Mailer:  nil, // no SMTP configured
 		BaseURL: "http://app.example.com",
 	}
@@ -417,8 +420,8 @@ func TestCreateInvitation_MailerError_StillReturnsCreated(t *testing.T) {
 	}
 	ml := &mockMailer{err: fmt.Errorf("smtp connection refused")}
 	h := &InvitationsHandler{
-		Store:   &mockInvitationStore{inv: inv},
-		DB:      new(pgxpool.Pool),
+		Store: &mockInvitationStore{inv: inv},
+
 		Mailer:  ml,
 		BaseURL: "http://app.example.com",
 	}
@@ -462,7 +465,6 @@ func TestCreateInvitation_LogsAuditEvent(t *testing.T) {
 	al := &capAuditLogger{}
 	h := &InvitationsHandler{
 		Store:      ms,
-		DB:         new(pgxpool.Pool),
 		AuditStore: al,
 	}
 
@@ -507,7 +509,6 @@ func TestCreateInvitation_NilAuditStore_NoPanic(t *testing.T) {
 	}
 	h := &InvitationsHandler{
 		Store:      &mockInvitationStore{inv: inv},
-		DB:         new(pgxpool.Pool),
 		AuditStore: nil,
 	}
 
@@ -642,5 +643,71 @@ func TestAcceptInvitation_LogsAuditEvent(t *testing.T) {
 	}
 	if e.ActorID != "new-user-1" {
 		t.Errorf("audit actor_id = %q, want %q", e.ActorID, "new-user-1")
+	}
+}
+
+func TestPreviewInvitation_WithStore_ReturnsTeamName(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-preview",
+		TeamID:    "team-1",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	ms := &mockInvitationStore{
+		tokenInv: inv,
+		teamName: "Alpha Team",
+	}
+	h := &InvitationsHandler{Store: ms}
+
+	r := httptest.NewRequest("GET", "/api/v1/invitations/inv_abc", nil)
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Preview(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Preview: got %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["team_name"] != "Alpha Team" {
+		t.Errorf("team_name = %v, want %q", resp["team_name"], "Alpha Team")
+	}
+}
+
+func TestPreviewInvitation_GetTeamNameFallsBackToUnknown(t *testing.T) {
+	inv := &model.Invitation{
+		ID:        "inv-preview-2",
+		TeamID:    "team-missing",
+		Email:     "invitee@example.com",
+		Role:      "readonly",
+		InvitedBy: "user-1",
+		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
+		CreatedAt: time.Now(),
+	}
+	ms := &mockInvitationStore{
+		tokenInv:    inv,
+		teamNameErr: fmt.Errorf("team not found"),
+	}
+	h := &InvitationsHandler{Store: ms}
+
+	r := httptest.NewRequest("GET", "/api/v1/invitations/inv_abc", nil)
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Preview(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Preview: got %d, want %d: %s", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["team_name"] != "Unknown" {
+		t.Errorf("team_name = %v, want %q when GetTeamName fails", resp["team_name"], "Unknown")
 	}
 }

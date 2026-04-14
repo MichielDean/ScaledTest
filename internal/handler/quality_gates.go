@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
+
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
@@ -54,9 +54,9 @@ type qualityGateStore interface {
 
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
-	Store      qualityGateStore
-	DB         *db.Pool
-	AuditStore auditLogger
+	Store       qualityGateStore
+	ReportStore reportsStore
+	AuditStore  auditLogger
 }
 
 // CreateQualityGateRequest is the request body for creating a quality gate.
@@ -119,6 +119,17 @@ func teamIDFromURL(w http.ResponseWriter, r *http.Request, claims *auth.Claims) 
 		return "", false
 	}
 	return teamID, true
+}
+
+// gateIDFromURL extracts the gateID URL parameter.
+// Returns the gateID or writes an error.
+func gateIDFromURL(w http.ResponseWriter, r *http.Request) (string, bool) {
+	gateID := chi.URLParam(r, "gateID")
+	if gateID == "" {
+		Error(w, http.StatusBadRequest, "missing gate ID")
+		return "", false
+	}
+	return gateID, true
 }
 
 // List handles GET /api/v1/teams/:teamID/quality-gates.
@@ -193,7 +204,6 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.Name = sanitize.String(req.Name)
 	req.Description = sanitize.String(req.Description)
 
@@ -229,9 +239,8 @@ func (h *QualityGatesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -266,9 +275,8 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -288,7 +296,6 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.Name = sanitize.String(req.Name)
 	req.Description = sanitize.String(req.Description)
 
@@ -333,9 +340,8 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -379,13 +385,12 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
-	if h.Store == nil || h.DB == nil {
+	if h.Store == nil || h.ReportStore == nil {
 		Error(w, http.StatusNotImplemented, "evaluate requires database connection")
 		return
 	}
@@ -400,18 +405,13 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the gate to access its rules
 	gate, err := h.Store.Get(r.Context(), teamID, gateID)
 	if err != nil {
 		Error(w, http.StatusNotFound, "quality gate not found")
 		return
 	}
 
-	// Load report summary from DB
-	var summaryJSON json.RawMessage
-	err = h.DB.QueryRow(r.Context(),
-		`SELECT summary FROM test_reports WHERE id = $1 AND team_id = $2`,
-		req.ReportID, teamID).Scan(&summaryJSON)
+	rpt, testResults, err := h.ReportStore.GetReportAndResults(r.Context(), req.ReportID, teamID)
 	if err != nil {
 		Error(w, http.StatusNotFound, "report not found")
 		return
@@ -423,60 +423,22 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		Failed  int `json:"failed"`
 		Skipped int `json:"skipped"`
 	}
-	if err := json.Unmarshal(summaryJSON, &summary); err != nil {
+	if err := json.Unmarshal(rpt.Summary, &summary); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to parse report summary")
 		return
 	}
 
-	// Load test results for duration and flaky data
-	rows, err := h.DB.Query(r.Context(),
-		`SELECT name, status, duration_ms, flaky, suite, file_path
-		 FROM test_results WHERE report_id = $1 AND team_id = $2`,
-		req.ReportID, teamID)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to query test results")
-		return
-	}
-	defer rows.Close()
-
 	var totalDurationMs int64
 	currentFailed := make(map[string]bool)
-	var flakyTests []struct {
-		name, suite, filePath string
+
+	for _, res := range testResults {
+		totalDurationMs += res.DurationMs
+		if res.Status == "failed" {
+			currentFailed[res.Name] = true
+		}
 	}
 
-	for rows.Next() {
-		var name, status string
-		var suite, filePath *string
-		var durationMs int64
-		var flaky bool
-		if err := rows.Scan(&name, &status, &durationMs, &flaky, &suite, &filePath); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to scan test result")
-			return
-		}
-		totalDurationMs += durationMs
-		if status == "failed" {
-			currentFailed[name] = true
-		}
-		if flaky {
-			s, fp := "", ""
-			if suite != nil {
-				s = *suite
-			}
-			if filePath != nil {
-				fp = *filePath
-			}
-			flakyTests = append(flakyTests, struct {
-				name, suite, filePath string
-			}{name, s, fp})
-		}
-	}
-	if err := rows.Err(); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to iterate test results")
-		return
-	}
-
-	previousFailed, err := fetchPreviousFailedTests(r.Context(), h.DB, teamID, req.ReportID)
+	previousFailed, err := h.ReportStore.GetPreviousFailedTests(r.Context(), teamID, req.ReportID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to fetch previous failures")
 		return
@@ -499,7 +461,6 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store evaluation result
 	detailsJSON, _ := json.Marshal(evalResult.Results)
 	eval, err := h.Store.CreateEvaluation(r.Context(), gateID, req.ReportID, evalResult.Passed, detailsJSON)
 	if err != nil {
@@ -507,7 +468,6 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response
 	rules := make([]QualityGateRuleResult, len(evalResult.Results))
 	for i, rr := range evalResult.Results {
 		rules[i] = QualityGateRuleResult{
@@ -541,9 +501,8 @@ func (h *QualityGatesHandler) ListEvaluations(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 

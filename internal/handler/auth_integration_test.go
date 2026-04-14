@@ -15,12 +15,13 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/integration"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // newIntegrationAuthHandler returns an AuthHandler backed by the given real DB pool.
 func newIntegrationAuthHandler(tdb *integration.TestDB) *AuthHandler {
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	return &AuthHandler{JWT: jwt, DB: tdb.Pool}
+	return &AuthHandler{JWT: jwt, AuthStore: store.NewAuthStore(tdb.Pool)}
 }
 
 // registerViaHandler calls the Register handler with the given email and returns
