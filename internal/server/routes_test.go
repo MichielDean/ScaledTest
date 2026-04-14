@@ -25,7 +25,7 @@ func testConfig() *config.Config {
 }
 
 func testToken() string {
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
 	return pair.AccessToken
 }
@@ -178,7 +178,7 @@ func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
 	// Create a token with readonly role
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-2", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("GET", "/api/v1/admin/users", nil)
@@ -384,7 +384,7 @@ func TestReadonlyCannotCreateReport(t *testing.T) {
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	// Create a token with readonly role
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
@@ -404,7 +404,7 @@ func TestReadonlyCannotDeleteReport(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("DELETE", "/api/v1/reports/some-report-id", nil)
@@ -422,7 +422,7 @@ func TestMaintainerCanCreateReport(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-m", "maint@example.com", "maintainer", "team-1")
 
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
@@ -443,7 +443,7 @@ func TestReadonlyCannotCreateExecution(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
@@ -462,7 +462,7 @@ func TestReadonlyCannotCancelExecution(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("DELETE", "/api/v1/executions/some-exec-id", nil)
@@ -480,7 +480,7 @@ func TestMaintainerCanCreateExecution(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-m", "maint@example.com", "maintainer", "team-1")
 
 	req := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{}`))
@@ -499,7 +499,7 @@ func TestMaintainerCanCreateExecution(t *testing.T) {
 func TestReadonlyCanListExecutions(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("GET", "/api/v1/executions", nil)
@@ -516,7 +516,7 @@ func TestReadonlyCanListExecutions(t *testing.T) {
 func TestReadonlyCanListReports(t *testing.T) {
 	router := NewRouter(testConfig(), nil)
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
 
 	req := httptest.NewRequest("GET", "/api/v1/reports", nil)

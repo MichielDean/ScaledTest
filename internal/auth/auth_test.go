@@ -10,7 +10,7 @@ import (
 )
 
 func TestJWTRoundTrip(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	pair, err := mgr.GenerateTokenPair("user-123", "test@example.com", "maintainer", "team-456")
 	if err != nil {
@@ -47,7 +47,7 @@ func TestJWTRoundTrip(t *testing.T) {
 }
 
 func TestJWTExpiredToken(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", -1*time.Second, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", -1*time.Second, 7*24*time.Hour)
 
 	pair, err := mgr.GenerateTokenPair("user-123", "test@example.com", "maintainer", "")
 	if err != nil {
@@ -61,8 +61,8 @@ func TestJWTExpiredToken(t *testing.T) {
 }
 
 func TestJWTInvalidSecret(t *testing.T) {
-	mgr1 := NewJWTManager("secret-one-that-is-long-enough!!", 15*time.Minute, 7*24*time.Hour)
-	mgr2 := NewJWTManager("secret-two-that-is-long-enough!!", 15*time.Minute, 7*24*time.Hour)
+	mgr1, _ := NewJWTManager("secret-one-that-is-long-enough!!", 15*time.Minute, 7*24*time.Hour)
+	mgr2, _ := NewJWTManager("secret-two-that-is-long-enough!!", 15*time.Minute, 7*24*time.Hour)
 
 	pair, _ := mgr1.GenerateTokenPair("user-123", "test@example.com", "maintainer", "")
 
@@ -122,7 +122,7 @@ func TestAPITokenUniqueness(t *testing.T) {
 }
 
 func TestMiddlewareNoToken(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	mw := Middleware(mgr, nil)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -142,7 +142,7 @@ func TestMiddlewareNoToken(t *testing.T) {
 }
 
 func TestMiddlewareQueryTokenBlockedForNonWebSocket(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
 
 	mw := Middleware(mgr, nil)
@@ -161,7 +161,7 @@ func TestMiddlewareQueryTokenBlockedForNonWebSocket(t *testing.T) {
 }
 
 func TestMiddlewareQueryTokenAllowedForWebSocket(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
 
 	mw := Middleware(mgr, nil)
@@ -186,7 +186,7 @@ func TestMiddlewareQueryTokenAllowedForWebSocket(t *testing.T) {
 }
 
 func TestMiddlewareValidJWT(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	mw := Middleware(mgr, nil)
 
 	pair, _ := mgr.GenerateTokenPair("user-123", "test@example.com", "owner", "team-1")
@@ -214,7 +214,7 @@ func TestMiddlewareValidJWT(t *testing.T) {
 }
 
 func TestMiddlewareAPIToken(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	apiToken, _ := GenerateAPIToken()
 	expectedClaims := &Claims{
@@ -253,7 +253,7 @@ func TestMiddlewareAPIToken(t *testing.T) {
 // --- JWT edge cases ---
 
 func TestJWTMalformedToken(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	malformed := []string{
 		"",
@@ -272,17 +272,15 @@ func TestJWTMalformedToken(t *testing.T) {
 	}
 }
 
-func TestJWTShortSecretPanics(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Error("expected panic for short secret")
-		}
-	}()
-	NewJWTManager("short", 15*time.Minute, 7*24*time.Hour)
+func TestJWTShortSecretReturnsError(t *testing.T) {
+	_, err := NewJWTManager("short", 15*time.Minute, 7*24*time.Hour)
+	if err == nil {
+		t.Error("expected error for short secret, got nil")
+	}
 }
 
 func TestJWTEmptyTeamID(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	pair, err := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "")
 	if err != nil {
 		t.Fatalf("GenerateTokenPair() error: %v", err)
@@ -298,7 +296,7 @@ func TestJWTEmptyTeamID(t *testing.T) {
 }
 
 func TestJWTExpiresAtInFuture(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 5*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 5*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
 
 	if !pair.ExpiresAt.After(time.Now()) {
@@ -310,14 +308,14 @@ func TestJWTExpiresAtInFuture(t *testing.T) {
 }
 
 func TestRefreshDuration(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 48*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 48*time.Hour)
 	if mgr.RefreshDuration() != 48*time.Hour {
 		t.Errorf("RefreshDuration = %v, want 48h", mgr.RefreshDuration())
 	}
 }
 
 func TestRefreshTokenRandomness(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	p1, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
 	p2, _ := mgr.GenerateTokenPair("u", "e@e.com", "owner", "")
 	if p1.RefreshToken == p2.RefreshToken {
@@ -331,7 +329,7 @@ func TestRefreshTokenRandomness(t *testing.T) {
 // --- Middleware edge cases ---
 
 func TestMiddlewareExpiredJWT(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", -1*time.Second, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", -1*time.Second, 7*24*time.Hour)
 	mw := Middleware(mgr, nil)
 
 	pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "")
@@ -351,7 +349,7 @@ func TestMiddlewareExpiredJWT(t *testing.T) {
 }
 
 func TestMiddlewareInvalidAPIToken(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	lookup := func(hash string) (*Claims, error) {
 		return nil, fmt.Errorf("token not found")
@@ -373,7 +371,7 @@ func TestMiddlewareInvalidAPIToken(t *testing.T) {
 }
 
 func TestMiddlewareAPITokenNoLookupConfigured(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	// tokenLookup is nil — API tokens should be rejected
 	mw := Middleware(mgr, nil)
@@ -392,7 +390,7 @@ func TestMiddlewareAPITokenNoLookupConfigured(t *testing.T) {
 }
 
 func TestMiddlewareBearerWithAPITokenPrefix(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	apiToken, _ := GenerateAPIToken()
 	expectedClaims := &Claims{UserID: "api-user", Role: "owner", TeamID: "team-1"}
@@ -425,7 +423,7 @@ func TestMiddlewareBearerWithAPITokenPrefix(t *testing.T) {
 }
 
 func TestMiddlewareMalformedAuthHeader(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 	mw := Middleware(mgr, nil)
 
 	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -433,10 +431,10 @@ func TestMiddlewareMalformedAuthHeader(t *testing.T) {
 	}))
 
 	headers := []string{
-		"Bearer ",           // empty token after prefix
+		"Bearer ",            // empty token after prefix
 		"Basic dXNlcjpwYXNz", // basic auth (not supported)
 		"InvalidScheme xyz",
-		"Bearer",            // no space after Bearer
+		"Bearer", // no space after Bearer
 	}
 
 	for _, h := range headers {
@@ -498,7 +496,7 @@ func TestPasswordHashUniqueness(t *testing.T) {
 }
 
 func TestRequireRole(t *testing.T) {
-	mgr := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := NewJWTManager("test-secret-32-chars-long-enough!", 15*time.Minute, 7*24*time.Hour)
 
 	tests := []struct {
 		name         string

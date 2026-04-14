@@ -34,11 +34,8 @@ func (s *APITokenStore) Lookup(ctx context.Context, tokenHash string) (*auth.Cla
 		return nil, fmt.Errorf("lookup api token: %w", err)
 	}
 
-	// Update last_used_at asynchronously — don't block the request
-	go func() {
-		_, _ = s.pool.Exec(context.Background(),
-			`UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1`, tokenHash)
-	}()
+	_, _ = s.pool.Exec(ctx,
+		`UPDATE api_tokens SET last_used_at = now() WHERE token_hash = $1`, tokenHash)
 
 	return &auth.Claims{
 		UserID: userID,

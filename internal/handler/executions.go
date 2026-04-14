@@ -7,11 +7,13 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
 
 	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/k8s"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -21,6 +23,7 @@ import (
 
 // ExecutionsHandler handles test execution endpoints.
 type ExecutionsHandler struct {
+	DB          *db.Pool
 	ExecStore   executionsStore
 	Hub         *ws.Hub
 	AuditStore  *store.AuditStore
@@ -79,7 +82,7 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.ExecStore == nil {
+	if h.DB == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -105,12 +108,31 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	id, err := h.ExecStore.Create(r.Context(), claims.TeamID, req.Command, configJSON)
+	id := uuid.New().String()
+	now := time.Now()
+
+	tx, err := h.DB.Begin(r.Context())
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to begin transaction")
+		return
+	}
+	defer tx.Rollback(r.Context())
+
+	_, err = tx.Exec(r.Context(),
+		`INSERT INTO test_executions (id, team_id, status, command, config, created_at, updated_at)
+		 VALUES ($1, $2, 'pending', $3, $4, $5, $5)`,
+		id, claims.TeamID, req.Command, configJSON, now)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create execution")
 		return
 	}
 
+	if err := tx.Commit(r.Context()); err != nil {
+		Error(w, http.StatusInternalServerError, "failed to commit execution")
+		return
+	}
+
+	// Launch K8s job outside the transaction
 	if h.K8s != nil {
 		image := req.Image
 		if image == "" {
@@ -128,15 +150,17 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		}
 		if _, err := h.K8s.CreateJob(r.Context(), jobCfg); err != nil {
 			log.Error().Err(err).Str("execution_id", id).Msg("failed to launch k8s job")
-			_ = h.ExecStore.MarkFailed(r.Context(), id, "job launch failed: "+err.Error(), time.Now())
+			markExecutionFailed(r.Context(), h.DB, id, "job launch failed: "+err.Error())
 			Error(w, http.StatusInternalServerError, "execution created but job launch failed")
 			return
 		}
-		if err := h.ExecStore.SetK8sJobName(r.Context(), id, jobName, time.Now()); err != nil {
-			log.Error().Err(err).Str("execution_id", id).Msg("failed to store k8s job name")
-		}
+		// Store K8s job name on the execution record (best-effort)
+		_, _ = h.DB.Exec(r.Context(),
+			`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
+			jobName, time.Now(), id)
 	}
 
+	// Log audit event after commit
 	if h.AuditStore != nil {
 		h.AuditStore.Log(r.Context(), store.Entry{
 			ActorID:      claims.UserID,
@@ -338,6 +362,27 @@ func (h *ExecutionsHandler) UpdateStatus(w http.ResponseWriter, r *http.Request)
 		"id":     executionID,
 		"status": req.Status,
 	})
+}
+
+// markExecutionFailed updates an execution's status to 'failed' in its own
+// transaction. Errors are logged but not propagated — the caller has already
+// reported the problem to the HTTP client.
+func markExecutionFailed(ctx context.Context, pool *db.Pool, id, errMsg string) {
+	tx, err := pool.Begin(ctx)
+	if err != nil {
+		log.Error().Err(err).Str("execution_id", id).Msg("failed to begin failure-status transaction")
+		return
+	}
+	defer tx.Rollback(ctx)
+	if _, err := tx.Exec(ctx,
+		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+		errMsg, time.Now(), id); err != nil {
+		log.Error().Err(err).Str("execution_id", id).Msg("failed to update execution failure status")
+		return
+	}
+	if err := tx.Commit(ctx); err != nil {
+		log.Error().Err(err).Str("execution_id", id).Msg("failed to commit failure-status update")
+	}
 }
 
 // ownsExecution checks whether the given execution belongs to the specified team.

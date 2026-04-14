@@ -120,7 +120,7 @@ func TestCreateExecution_MissingCommand(t *testing.T) {
 }
 
 func TestCreateExecution_NoDB(t *testing.T) {
-	h := &ExecutionsHandler{ExecStore: nil}
+	h := &ExecutionsHandler{ExecStore: nil, DB: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{"command":"npm test"}`))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -549,13 +549,13 @@ func TestExecutionsHandler_Cancel_WithStore_NotFound(t *testing.T) {
 	}
 }
 
-func TestExecutionsHandler_Create_WithStore(t *testing.T) {
+func TestExecutionsHandler_Create_RequiresDB(t *testing.T) {
 	ms := &mockExecutionsStore{
 		createFn: func(_ context.Context, _, _ string, _ []byte) (string, error) {
 			return "exec-new", nil
 		},
 	}
-	h := &ExecutionsHandler{ExecStore: ms}
+	h := &ExecutionsHandler{ExecStore: ms, DB: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(`{"command":"npm test"}`))
 	r.Header.Set("Content-Type", "application/json")
@@ -563,8 +563,8 @@ func TestExecutionsHandler_Create_WithStore(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with store: status = %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create without DB pool: status = %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 

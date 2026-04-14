@@ -15,7 +15,7 @@ import (
 func tokenForTeam(t *testing.T, userID, email, role, teamID string) string {
 	t.Helper()
 
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, err := mgr.GenerateTokenPair(userID, email, role, teamID)
 	if err != nil {
 		t.Fatalf("failed to generate token pair: %v", err)
@@ -88,7 +88,7 @@ func TestTeamIsolation_ClaimsPropagateTeamID(t *testing.T) {
 	// Verify that claims extracted in handlers carry the correct team_id.
 	// We test this by generating tokens for different teams and validating
 	// the claims round-trip through the middleware.
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	authMW := auth.Middleware(mgr, nil)
 
 	teams := []struct {
@@ -130,7 +130,7 @@ func TestTeamIsolation_ClaimsPropagateTeamID(t *testing.T) {
 func TestTeamIsolation_CrossTeamTokensDiffer(t *testing.T) {
 	// Ensure tokens for different teams produce different claims,
 	// which is the foundation for team-scoped data isolation.
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 
 	pairA, _ := mgr.GenerateTokenPair("user-a", "a@example.com", "owner", "team-alpha")
 	pairB, _ := mgr.GenerateTokenPair("user-b", "b@example.com", "owner", "team-beta")
@@ -225,12 +225,12 @@ func TestTeamIsolation_InvalidTokenRejected(t *testing.T) {
 	}{
 		{"garbage", "not-a-real-token"},
 		{"expired JWT", func() string {
-			mgr := auth.NewJWTManager(testJWTSecret, -1*time.Second, 7*24*time.Hour)
+			mgr, _ := auth.NewJWTManager(testJWTSecret, -1*time.Second, 7*24*time.Hour)
 			pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
 			return pair.AccessToken
 		}()},
 		{"wrong secret", func() string {
-			mgr := auth.NewJWTManager("different-secret-that-is-long-!!", 15*time.Minute, 7*24*time.Hour)
+			mgr, _ := auth.NewJWTManager("different-secret-that-is-long-!!", 15*time.Minute, 7*24*time.Hour)
 			pair, _ := mgr.GenerateTokenPair("user-1", "test@example.com", "owner", "team-1")
 			return pair.AccessToken
 		}()},
@@ -252,7 +252,7 @@ func TestTeamIsolation_InvalidTokenRejected(t *testing.T) {
 
 func TestTeamIsolation_APITokenWithTeamScope(t *testing.T) {
 	// Verify API token auth path carries team context through middleware.
-	mgr := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 
 	apiToken, _ := auth.GenerateAPIToken()
 	expectedClaims := &auth.Claims{

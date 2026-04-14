@@ -3,14 +3,23 @@ package auth
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 )
 
 var testHMACKey = []byte("test-hmac-key-for-csrf-testing!!")
 
+func mustCSRFMW(t *testing.T) func(http.Handler) http.Handler {
+	t.Helper()
+	mw, err := CSRFMiddleware(testHMACKey)
+	if err != nil {
+		t.Fatalf("CSRFMiddleware() error: %v", err)
+	}
+	return mw
+}
+
 func TestCSRFMiddleware_SafeMethodsPass(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -25,8 +34,7 @@ func TestCSRFMiddleware_SafeMethodsPass(t *testing.T) {
 }
 
 func TestCSRFMiddleware_APITokenSkipsCRSF(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -41,8 +49,7 @@ func TestCSRFMiddleware_APITokenSkipsCRSF(t *testing.T) {
 }
 
 func TestCSRFMiddleware_BearerJWTSkipsCSRF(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -59,12 +66,10 @@ func TestCSRFMiddleware_BearerJWTSkipsCSRF(t *testing.T) {
 }
 
 func TestCSRFMiddleware_MissingCookieRejects(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// No Authorization header — simulates browser cookie-based auth
 	req := httptest.NewRequest("POST", "/test", nil)
 	w := httptest.NewRecorder()
 	handler.ServeHTTP(w, req)
@@ -75,12 +80,11 @@ func TestCSRFMiddleware_MissingCookieRejects(t *testing.T) {
 }
 
 func TestCSRFMiddleware_MissingHeaderRejects(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token := generateSignedToken(testHMACKey)
+	token, _ := generateSignedToken(testHMACKey)
 	req := httptest.NewRequest("POST", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token})
 	w := httptest.NewRecorder()
@@ -92,13 +96,12 @@ func TestCSRFMiddleware_MissingHeaderRejects(t *testing.T) {
 }
 
 func TestCSRFMiddleware_MismatchRejects(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token1 := generateSignedToken(testHMACKey)
-	token2 := generateSignedToken(testHMACKey)
+	token1, _ := generateSignedToken(testHMACKey)
+	token2, _ := generateSignedToken(testHMACKey)
 
 	req := httptest.NewRequest("POST", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: token1})
@@ -112,12 +115,11 @@ func TestCSRFMiddleware_MismatchRejects(t *testing.T) {
 }
 
 func TestCSRFMiddleware_ValidDoubleSubmitPasses(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	token := generateSignedToken(testHMACKey)
+	token, _ := generateSignedToken(testHMACKey)
 
 	for _, method := range []string{"POST", "PUT", "DELETE", "PATCH"} {
 		req := httptest.NewRequest(method, "/test", nil)
@@ -133,13 +135,11 @@ func TestCSRFMiddleware_ValidDoubleSubmitPasses(t *testing.T) {
 }
 
 func TestCSRFMiddleware_ForgedSignatureRejects(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
-	// Token with wrong HMAC key
-	badToken := generateSignedToken([]byte("wrong-key-for-testing-purposes!!"))
+	badToken, _ := generateSignedToken([]byte("wrong-key-for-testing-purposes!!"))
 
 	req := httptest.NewRequest("POST", "/test", nil)
 	req.AddCookie(&http.Cookie{Name: csrfCookieName, Value: badToken})
@@ -153,8 +153,7 @@ func TestCSRFMiddleware_ForgedSignatureRejects(t *testing.T) {
 }
 
 func TestCSRFMiddleware_MalformedTokenRejects(t *testing.T) {
-	mw := CSRFMiddleware(testHMACKey)
-	handler := mw(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	handler := mustCSRFMW(t)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
 
@@ -171,9 +170,33 @@ func TestCSRFMiddleware_MalformedTokenRejects(t *testing.T) {
 	}
 }
 
+func TestCSRFMiddleware_NilKeyReturnsError(t *testing.T) {
+	_, err := CSRFMiddleware(nil)
+	if err == nil {
+		t.Error("CSRFMiddleware with nil key should return error")
+	}
+}
+
+func TestCSRFMiddleware_EmptyKeyReturnsError(t *testing.T) {
+	_, err := CSRFMiddleware([]byte{})
+	if err == nil {
+		t.Error("CSRFMiddleware with empty key should return error")
+	}
+}
+
+func TestGenerateSignedToken_EmptyKeyReturnsError(t *testing.T) {
+	_, err := generateSignedToken(nil)
+	if err == nil {
+		t.Error("generateSignedToken with nil key should return error")
+	}
+}
+
 func TestSetCSRFCookie(t *testing.T) {
 	w := httptest.NewRecorder()
-	token := SetCSRFCookie(w, testHMACKey, false)
+	token, err := SetCSRFCookie(w, testHMACKey, false)
+	if err != nil {
+		t.Fatalf("SetCSRFCookie() error: %v", err)
+	}
 
 	if token == "" {
 		t.Fatal("SetCSRFCookie returned empty token")
@@ -198,9 +221,40 @@ func TestSetCSRFCookie(t *testing.T) {
 	}
 }
 
+func TestSetCSRFCookie_NilKeyReturnsError(t *testing.T) {
+	w := httptest.NewRecorder()
+	_, err := SetCSRFCookie(w, nil, false)
+	if err == nil {
+		t.Error("SetCSRFCookie with nil key should return error")
+	}
+}
+
 func TestSignedTokenRoundTrip(t *testing.T) {
-	token := generateSignedToken(testHMACKey)
+	token, err := generateSignedToken(testHMACKey)
+	if err != nil {
+		t.Fatalf("generateSignedToken() error: %v", err)
+	}
 	if !validSignedToken(token, testHMACKey) {
 		t.Error("generated token fails validation")
+	}
+}
+
+func TestGenerateSignedToken_Success(t *testing.T) {
+	token, err := generateSignedToken(testHMACKey)
+	if err != nil {
+		t.Fatalf("generateSignedToken() unexpected error: %v", err)
+	}
+	if token == "" {
+		t.Error("generateSignedToken() returned empty token")
+	}
+	parts := strings.SplitN(token, ".", 2)
+	if len(parts) != 2 {
+		t.Errorf("token format invalid: expected two parts separated by '.', got %q", token)
+	}
+	if len(parts[0]) == 0 {
+		t.Error("random portion of token is empty")
+	}
+	if len(parts[1]) == 0 {
+		t.Error("signature portion of token is empty")
 	}
 }
