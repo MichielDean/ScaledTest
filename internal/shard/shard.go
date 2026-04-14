@@ -259,6 +259,9 @@ func EnrichWithHistory(testNames []string, history map[string]*model.TestDuratio
 			agg[h.TestName] = &durationAggregate{totalDurationMs: h.AvgDurationMs, suite: h.Suite}
 		} else {
 			a.totalDurationMs += h.AvgDurationMs
+			if h.Suite < a.suite {
+				a.suite = h.Suite
+			}
 		}
 	}
 
