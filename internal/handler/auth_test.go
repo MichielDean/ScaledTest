@@ -21,7 +21,7 @@ import (
 const testSecret = "test-secret-32-chars-long-enough!"
 
 func newTestAuthHandler() *AuthHandler {
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	return &AuthHandler{JWT: jwt, AuthStore: nil}
 }
 
@@ -367,7 +367,7 @@ func TestChangePasswordSuccess(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
@@ -395,7 +395,7 @@ func TestChangePasswordWrongCurrentPassword(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"wrongpassword","new_password":"newpassword123"}`
@@ -426,7 +426,7 @@ func TestChangePasswordRowsAffectedZero(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
@@ -526,7 +526,7 @@ func TestLoginEmbedsPrimaryTeamInJWT(t *testing.T) {
 		},
 	}
 
-	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwtMgr, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"test@example.com","password":"password123"}`
@@ -584,7 +584,7 @@ func TestLoginNoTeamHasEmptyTeamIDInJWT(t *testing.T) {
 		},
 	}
 
-	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwtMgr, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"test@example.com","password":"password123"}`
@@ -629,7 +629,7 @@ func TestGetMeSuccess(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
@@ -664,7 +664,7 @@ func TestGetMeUserNotFound(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
@@ -699,7 +699,7 @@ func TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer(t *testing.T) 
 		},
 	}
 
-	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwtMgr, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"admin@example.com","password":"password123","display_name":"Admin"}`
@@ -749,7 +749,7 @@ func TestRegister_RoleAssignment(t *testing.T) {
 				},
 			}
 
-			jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+			jwtMgr, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 			h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 			body := `{"email":"user@example.com","password":"password123","display_name":"User"}`
@@ -807,7 +807,7 @@ func TestAuthHandler_Login_WithStore_Success(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"email":"test@test.com","password":"password123"}`
@@ -843,7 +843,7 @@ func TestAuthHandler_Login_WithStore_InvalidCredentials(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"email":"test@test.com","password":"wrongpassword"}`
@@ -865,7 +865,7 @@ func TestAuthHandler_Login_WithStore_UserNotFound(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"email":"nobody@test.com","password":"password123"}`
@@ -894,7 +894,7 @@ func TestAuthHandler_Refresh_WithStore_Expired(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("POST", "/auth/refresh", nil)
@@ -917,7 +917,7 @@ func TestAuthHandler_Logout_WithStore(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("POST", "/auth/logout", nil)
@@ -946,7 +946,7 @@ func TestAuthHandler_UpdateMe_WithStore(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"display_name":"New Name"}`
@@ -969,7 +969,7 @@ func TestAuthHandler_Register_WithStore_EmailExists(t *testing.T) {
 		},
 	}
 
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"email":"taken@test.com","password":"password123","display_name":"Test"}`

@@ -12,7 +12,7 @@ import (
 )
 
 func newTestOAuthHandler(oauthCfgs *auth.OAuthConfigs) *OAuthHandler {
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	return &OAuthHandler{JWT: jwt, OAuthStore: nil, OAuth: oauthCfgs, Secure: false}
 }
 
@@ -180,7 +180,10 @@ func TestGitHubCallback_MissingState(t *testing.T) {
 	}
 	// Need a non-nil OAuthStore to get past the store check
 	h := &OAuthHandler{
-		JWT:        auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour),
+		JWT: func() *auth.JWTManager {
+			m, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+			return m
+		}(),
 		OAuthStore: nil, // We'll test the state check, but store nil check comes first
 		OAuth:      cfg,
 	}

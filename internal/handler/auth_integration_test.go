@@ -20,7 +20,7 @@ import (
 
 // newIntegrationAuthHandler returns an AuthHandler backed by the given real DB pool.
 func newIntegrationAuthHandler(tdb *integration.TestDB) *AuthHandler {
-	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	jwt, _ := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
 	return &AuthHandler{JWT: jwt, AuthStore: store.NewAuthStore(tdb.Pool)}
 }
 
