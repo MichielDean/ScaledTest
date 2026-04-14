@@ -13,7 +13,6 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/mailer"
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
@@ -36,12 +35,12 @@ type invitationStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (*model.Invitation, error)
 	Delete(ctx context.Context, teamID, id string) error
 	AcceptInvitation(ctx context.Context, invID, email, passwordHash, displayName, role, teamID string) (string, error)
+	GetTeamName(ctx context.Context, teamID string) (string, error)
 }
 
 // InvitationsHandler handles invitation endpoints.
 type InvitationsHandler struct {
 	Store      invitationStore
-	DB         *db.Pool
 	Mailer     mailer.Mailer
 	BaseURL    string
 	AuditStore auditLogger
@@ -88,7 +87,7 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil || h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -182,7 +181,7 @@ func (h *InvitationsHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil || h.DB == nil {
+	if h.Store == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -204,9 +203,7 @@ func (h *InvitationsHandler) Preview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Look up team name for display
-	var teamName string
-	err = h.DB.QueryRow(r.Context(), "SELECT name FROM teams WHERE id = $1", inv.TeamID).Scan(&teamName)
+	teamName, err := h.Store.GetTeamName(r.Context(), inv.TeamID)
 	if err != nil {
 		teamName = "Unknown"
 	}

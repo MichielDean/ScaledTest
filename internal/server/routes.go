@@ -162,7 +162,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 
 	// Handlers
-	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
+	oauthH := &handler.OAuthHandler{JWT: jwtMgr, OAuth: oauthCfgs, Secure: isSecure}
+	if dbPool != nil {
+		oauthH.OAuthStore = store.NewOAuthStore(dbPool)
+	}
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	if dbPool != nil {
 		authH.AuthStore = store.NewAuthStore(dbPool)
@@ -223,7 +226,6 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	}
 
 	invH := &handler.InvitationsHandler{
-		DB:         dbPool,
 		BaseURL:    cfg.BaseURL,
 		Mailer:     mailer.New(cfg.SMTPHost, cfg.SMTPPort, cfg.SMTPUser, cfg.SMTPPass, cfg.SMTPFrom),
 		AuditStore: auditStore,

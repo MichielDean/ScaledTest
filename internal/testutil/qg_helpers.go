@@ -81,7 +81,6 @@ func PostEvaluateQG(t *testing.T, pool *db.Pool, teamID, gateID, reportID string
 	t.Helper()
 	h := &handler.QualityGatesHandler{
 		Store: store.NewQualityGateStore(pool),
-		DB:    pool,
 	}
 	body := fmt.Sprintf(`{"report_id":%q}`, reportID)
 	req := httptest.NewRequest(http.MethodPost,

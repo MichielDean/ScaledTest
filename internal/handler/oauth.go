@@ -11,19 +11,28 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
+
+// oauthStore abstracts OAuth persistence operations.
+type oauthStore interface {
+	FindLinkedUser(ctx context.Context, provider, providerID string) (*store.OAuthLinkedUser, error)
+	FindUserByEmail(ctx context.Context, email string) (*store.OAuthLinkedUser, error)
+	CreateUser(ctx context.Context, email, displayName string) (userID, role string, err error)
+	LinkAccount(ctx context.Context, userID, provider, providerID, accessToken, refreshToken string) error
+	UpdateTokens(ctx context.Context, accessToken, refreshToken, provider, providerID string) error
+	CreateSession(ctx context.Context, userID, refreshToken, userAgent string, ipAddr net.IP, expiresAt time.Time) error
+}
 
 // OAuthHandler handles OAuth 2.0 authentication flows.
 type OAuthHandler struct {
-	JWT    *auth.JWTManager
-	DB     *db.Pool
-	OAuth  *auth.OAuthConfigs
-	Secure bool // true if base URL uses HTTPS
+	JWT        *auth.JWTManager
+	OAuth      *auth.OAuthConfigs
+	OAuthStore oauthStore
+	Secure     bool // true if base URL uses HTTPS
 }
 
 const oauthStateCookie = "oauth_state"
@@ -43,7 +52,7 @@ func (h *OAuthHandler) GitHubCallback(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotImplemented, "GitHub OAuth is not configured")
 		return
 	}
-	if h.DB == nil {
+	if h.OAuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -77,7 +86,7 @@ func (h *OAuthHandler) GoogleCallback(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusNotImplemented, "Google OAuth is not configured")
 		return
 	}
-	if h.DB == nil {
+	if h.OAuthStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -281,64 +290,49 @@ func (h *OAuthHandler) completeOAuth(w http.ResponseWriter, r *http.Request, pro
 	ctx := r.Context()
 
 	// Check if this OAuth account is already linked
-	var userID, userEmail, userDisplayName, role string
-	err := h.DB.QueryRow(ctx,
-		`SELECT u.id, u.email, u.display_name, u.role
-		 FROM oauth_accounts oa
-		 JOIN users u ON u.id = oa.user_id
-		 WHERE oa.provider = $1 AND oa.provider_id = $2`,
-		provider, providerID,
-	).Scan(&userID, &userEmail, &userDisplayName, &role)
+	user, err := h.OAuthStore.FindLinkedUser(ctx, provider, providerID)
+	if err != nil && !store.IsNoRows(err) {
+		Error(w, http.StatusInternalServerError, "internal error")
+		return
+	}
 
-	if err == pgx.ErrNoRows {
+	if user == nil {
 		// Check if a user with this email already exists (link account)
-		err = h.DB.QueryRow(ctx,
-			`SELECT id, email, display_name, role FROM users WHERE email = $1`, email,
-		).Scan(&userID, &userEmail, &userDisplayName, &role)
-
-		if err == pgx.ErrNoRows {
-			// Create new user
-			err = h.DB.QueryRow(ctx,
-				`INSERT INTO users (email, password_hash, display_name)
-				 VALUES ($1, '', $2)
-				 RETURNING id, role`,
-				email, displayName,
-			).Scan(&userID, &role)
-			if err != nil {
-				Error(w, http.StatusInternalServerError, "failed to create user")
-				return
-			}
-			userEmail = email
-			userDisplayName = displayName
-		} else if err != nil {
+		existing, err := h.OAuthStore.FindUserByEmail(ctx, email)
+		if err != nil && !store.IsNoRows(err) {
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}
 
+		if existing == nil {
+			// Create new user
+			userID, role, err := h.OAuthStore.CreateUser(ctx, email, displayName)
+			if err != nil {
+				Error(w, http.StatusInternalServerError, "failed to create user")
+				return
+			}
+			user = &store.OAuthLinkedUser{
+				ID:          userID,
+				Email:       email,
+				DisplayName: displayName,
+				Role:        role,
+			}
+		} else {
+			user = existing
+		}
+
 		// Link OAuth account
-		_, err = h.DB.Exec(ctx,
-			`INSERT INTO oauth_accounts (user_id, provider, provider_id, access_token, refresh_token)
-			 VALUES ($1, $2, $3, $4, $5)`,
-			userID, provider, providerID, token.AccessToken, token.RefreshToken,
-		)
-		if err != nil {
+		if err := h.OAuthStore.LinkAccount(ctx, user.ID, provider, providerID, token.AccessToken, token.RefreshToken); err != nil {
 			Error(w, http.StatusInternalServerError, "failed to link OAuth account")
 			return
 		}
-	} else if err != nil {
-		Error(w, http.StatusInternalServerError, "internal error")
-		return
 	} else {
 		// Update stored tokens
-		_, _ = h.DB.Exec(ctx,
-			`UPDATE oauth_accounts SET access_token = $1, refresh_token = $2
-			 WHERE provider = $3 AND provider_id = $4`,
-			token.AccessToken, token.RefreshToken, provider, providerID,
-		)
+		_ = h.OAuthStore.UpdateTokens(ctx, token.AccessToken, token.RefreshToken, provider, providerID)
 	}
 
 	// Issue JWT tokens
-	pair, err := h.JWT.GenerateTokenPair(userID, userEmail, role, "")
+	pair, err := h.JWT.GenerateTokenPair(user.ID, user.Email, user.Role, "")
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to generate tokens")
 		return
@@ -352,12 +346,7 @@ func (h *OAuthHandler) completeOAuth(w http.ResponseWriter, r *http.Request, pro
 	}
 
 	expiresAt := time.Now().Add(h.JWT.RefreshDuration())
-	_, err = h.DB.Exec(ctx,
-		`INSERT INTO sessions (user_id, refresh_token, user_agent, ip_address, expires_at)
-		 VALUES ($1, $2, $3, $4, $5)`,
-		userID, pair.RefreshToken, r.UserAgent(), ipAddr, expiresAt,
-	)
-	if err != nil {
+	if err := h.OAuthStore.CreateSession(ctx, user.ID, pair.RefreshToken, r.UserAgent(), ipAddr, expiresAt); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create session")
 		return
 	}
@@ -366,10 +355,10 @@ func (h *OAuthHandler) completeOAuth(w http.ResponseWriter, r *http.Request, pro
 
 	JSON(w, http.StatusOK, AuthResponse{
 		User: UserResponse{
-			ID:          userID,
-			Email:       userEmail,
-			DisplayName: userDisplayName,
-			Role:        role,
+			ID:          user.ID,
+			Email:       user.Email,
+			DisplayName: user.DisplayName,
+			Role:        user.Role,
 		},
 		AccessToken: pair.AccessToken,
 		ExpiresAt:   pair.ExpiresAt,
