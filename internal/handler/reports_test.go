@@ -15,8 +15,23 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/ctrf"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
+
+func newCreateMockStore() *mockReportsStore {
+	return &mockReportsStore{
+		createWithResultsFunc: func(_ context.Context, _ store.CreateReportParams, _ []model.TestResult) error {
+			return nil
+		},
+		executionExistsFunc: func(_ context.Context, _, _ string) (bool, error) {
+			return true, nil
+		},
+		getPreviousFailedTestsFunc: func(_ context.Context, _, _ string) (map[string]bool, error) {
+			return nil, nil
+		},
+	}
+}
 
 func TestListReports_Unauthorized(t *testing.T) {
 	h := &ReportsHandler{}
@@ -31,7 +46,7 @@ func TestListReports_Unauthorized(t *testing.T) {
 }
 
 func TestListReports_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -44,7 +59,7 @@ func TestListReports_NoDB(t *testing.T) {
 }
 
 func TestListReports_ValidSinceUntil_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports?since=2024-01-01T00:00:00Z&until=2024-12-31T23:59:59Z", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -136,7 +151,7 @@ func TestCreateReport_InvalidCTRF(t *testing.T) {
 }
 
 func TestCreateReport_NoDB_Fallback(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":2,"passed":1,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"test1","status":"passed","duration":100},{"name":"test2","status":"failed","duration":200,"message":"oops"}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -144,24 +159,13 @@ func TestCreateReport_NoDB_Fallback(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create without DB (fallback): got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
-	}
-
-	var resp map[string]interface{}
-	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
-		t.Fatalf("failed to decode response: %v", err)
-	}
-	if resp["tool"] != "jest" {
-		t.Errorf("tool = %v, want jest", resp["tool"])
-	}
-	if resp["tests"] != float64(2) {
-		t.Errorf("tests = %v, want 2", resp["tests"])
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create without ReportStore: got %d, want %d (body: %s)", w.Code, http.StatusServiceUnavailable, w.Body.String())
 	}
 }
 
 func TestCreateReport_NoDB_WithExecutionID(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"mocha"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":50}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports?execution_id=exec-123", strings.NewReader(report))
@@ -169,19 +173,13 @@ func TestCreateReport_NoDB_WithExecutionID(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with execution_id: got %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["execution_id"] != "exec-123" {
-		t.Errorf("execution_id = %v, want exec-123", resp["execution_id"])
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create with execution_id but no ReportStore: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
 func TestCreateReport_NoDB_WithTriageGitHubStatus(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":0,"failed":1,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"failed","duration":50}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports?triage_github_status=true", strings.NewReader(report))
@@ -189,14 +187,8 @@ func TestCreateReport_NoDB_WithTriageGitHubStatus(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with triage_github_status=true: got %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["triage_github_status"] != true {
-		t.Errorf("triage_github_status = %v, want true", resp["triage_github_status"])
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create with triage_github_status=true but no ReportStore: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -228,7 +220,7 @@ func TestGetReport_MissingID(t *testing.T) {
 }
 
 func TestGetReport_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/abc", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -269,7 +261,7 @@ func TestDeleteReport_MissingID(t *testing.T) {
 }
 
 func TestDeleteReport_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("DELETE", "/api/v1/reports/abc", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -309,11 +301,11 @@ func TestParsePagination(t *testing.T) {
 }
 
 func TestNullString(t *testing.T) {
-	if got := nullString(""); got != nil {
-		t.Errorf("nullString(\"\") = %v, want nil", got)
+	if got := store.NullString(""); got != nil {
+		t.Errorf("NullString(\"\") = %v, want nil", got)
 	}
-	if got := nullString("hello"); got == nil || *got != "hello" {
-		t.Errorf("nullString(\"hello\") = %v, want &\"hello\"", got)
+	if got := store.NullString("hello"); got == nil || *got != "hello" {
+		t.Errorf("NullString(\"hello\") = %v, want &\"hello\"", got)
 	}
 }
 
@@ -370,7 +362,7 @@ func TestCompareReports_SameID(t *testing.T) {
 }
 
 func TestCompareReports_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=a&head=b", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -445,7 +437,7 @@ func TestCreateReport_TestMissingName(t *testing.T) {
 }
 
 func TestCreateReport_NoDB_AllTestStatuses(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"pytest"},"summary":{"tests":5,"passed":1,"failed":1,"skipped":1,"pending":1,"other":1},"tests":[
 		{"name":"t1","status":"passed","duration":10},
@@ -459,25 +451,13 @@ func TestCreateReport_NoDB_AllTestStatuses(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with all statuses: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["tool"] != "pytest" {
-		t.Errorf("tool = %v, want pytest", resp["tool"])
-	}
-	if resp["tests"] != float64(5) {
-		t.Errorf("tests = %v, want 5", resp["tests"])
-	}
-	if resp["message"] != "report accepted" {
-		t.Errorf("message = %v, want 'report accepted'", resp["message"])
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create with all statuses but no ReportStore: got %d, want %d (body: %s)", w.Code, http.StatusServiceUnavailable, w.Body.String())
 	}
 }
 
 func TestCreateReport_NoDB_RichCTRFData(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{
 		"tool":{"name":"playwright","version":"1.40.0"},
@@ -493,22 +473,13 @@ func TestCreateReport_NoDB_RichCTRFData(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with rich CTRF: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["tool"] != "playwright" {
-		t.Errorf("tool = %v, want playwright", resp["tool"])
-	}
-	if resp["tests"] != float64(2) {
-		t.Errorf("tests = %v, want 2", resp["tests"])
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create with rich CTRF but no ReportStore: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
 func TestCreateReport_NoDB_NoExecutionIDInResponse(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -516,14 +487,8 @@ func TestCreateReport_NoDB_NoExecutionIDInResponse(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("got %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if _, ok := resp["execution_id"]; ok {
-		t.Error("execution_id should not be present when not provided")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -551,7 +516,7 @@ func TestListReports_DateFilterParams_NoDB(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			h := &ReportsHandler{DB: nil}
+			h := &ReportsHandler{}
 			w := httptest.NewRecorder()
 			r := httptest.NewRequest("GET", "/api/v1/reports"+tt.query, nil)
 			r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -566,7 +531,7 @@ func TestListReports_DateFilterParams_NoDB(t *testing.T) {
 }
 
 func TestListReports_DateFilterWithPagination_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports?since=2026-01-01T00:00:00Z&until=2026-06-01T00:00:00Z&limit=25&offset=10", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -583,7 +548,7 @@ func TestListReports_DateFilterWithPagination_NoDB(t *testing.T) {
 
 func TestListReports_RequiresClaims(t *testing.T) {
 	// Without any claims, List must return 401 regardless of query params
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports?limit=10", nil)
 
@@ -595,7 +560,6 @@ func TestListReports_RequiresClaims(t *testing.T) {
 }
 
 func TestCreateReport_DifferentTeams_NoDB(t *testing.T) {
-	// Verify that reports created by different teams work in no-DB fallback mode
 	teams := []struct {
 		teamID string
 		tool   string
@@ -607,7 +571,7 @@ func TestCreateReport_DifferentTeams_NoDB(t *testing.T) {
 
 	for _, tt := range teams {
 		t.Run(tt.teamID, func(t *testing.T) {
-			h := &ReportsHandler{DB: nil}
+			h := &ReportsHandler{}
 			w := httptest.NewRecorder()
 			report := `{"results":{"tool":{"name":"` + tt.tool + `"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 			r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -615,8 +579,8 @@ func TestCreateReport_DifferentTeams_NoDB(t *testing.T) {
 
 			h.Create(w, r)
 
-			if w.Code != http.StatusCreated {
-				t.Errorf("Create for %s: got %d, want %d", tt.teamID, w.Code, http.StatusCreated)
+			if w.Code != http.StatusServiceUnavailable {
+				t.Errorf("Create for %s: got %d, want %d", tt.teamID, w.Code, http.StatusServiceUnavailable)
 			}
 		})
 	}
@@ -957,17 +921,6 @@ func TestBuildReportData_WithPreviousFailedTests(t *testing.T) {
 	}
 }
 
-func TestFetchPreviousFailedTests_NilDB(t *testing.T) {
-	// When DB is nil, fetchPreviousFailedTestsDB must return (nil, nil) gracefully.
-	result, err := fetchPreviousFailedTestsDB(context.Background(), nil, "team-1", "report-1")
-	if err != nil {
-		t.Errorf("expected nil error when DB is nil, got %v", err)
-	}
-	if result != nil {
-		t.Errorf("expected nil map when DB is nil, got %v", result)
-	}
-}
-
 // --- Mock webhook lister for testing dispatch ---
 
 type mockWebhookLister struct {
@@ -999,13 +952,12 @@ func (m *mockWebhookLister) getCalls() []mockWebhookCall {
 
 // --- Webhook dispatch tests ---
 
-func TestCreateReport_NoDB_WebhookNotSkippedInFallback(t *testing.T) {
-	// In no-DB fallback mode, webhook dispatch is skipped (return before dispatch code).
-	// Verify the handler doesn't call the lister in this path.
+func TestCreateReport_NoDB_Returns503(t *testing.T) {
+	// Without ReportStore, Create should return 503
 	lister := &mockWebhookLister{}
 	notifier := webhook.NewNotifier(lister, webhook.NewDispatcher())
 
-	h := &ReportsHandler{DB: nil, Webhooks: notifier}
+	h := &ReportsHandler{Webhooks: notifier}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -1013,21 +965,24 @@ func TestCreateReport_NoDB_WebhookNotSkippedInFallback(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("Create: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Create: got %d, want %d (body: %s)", w.Code, http.StatusServiceUnavailable, w.Body.String())
 	}
 
-	// In no-DB fallback, webhook dispatch should NOT be called
+	// No webhook dispatch should happen
 	time.Sleep(100 * time.Millisecond)
 	calls := lister.getCalls()
+	if len(calls) > 0 {
+		t.Errorf("expected no webhook calls without ReportStore, got %d", len(calls))
+	}
 	if len(calls) > 0 {
 		t.Errorf("expected no webhook calls in no-DB fallback, got %d", len(calls))
 	}
 }
 
 func TestCreateReport_NoDB_NilWebhookNotifierSafe(t *testing.T) {
-	// Webhooks is nil — should not panic
-	h := &ReportsHandler{DB: nil, Webhooks: nil}
+	// Without ReportStore, Create should return 503
+	h := &ReportsHandler{Webhooks: nil}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -1035,15 +990,15 @@ func TestCreateReport_NoDB_NilWebhookNotifierSafe(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Errorf("Create with nil Webhooks: got %d, want %d (body: %s)", w.Code, http.StatusCreated, w.Body.String())
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("Create with nil Webhooks and no ReportStore: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
 // --- Quality gate auto-evaluation tests ---
 
 func TestCreateReport_NoDB_QualityGateNotEvaluatedWhenStoreNil(t *testing.T) {
-	h := &ReportsHandler{DB: nil, QualityGateStore: nil}
+	h := &ReportsHandler{QualityGateStore: nil}
 	w := httptest.NewRecorder()
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -1051,14 +1006,8 @@ func TestCreateReport_NoDB_QualityGateNotEvaluatedWhenStoreNil(t *testing.T) {
 
 	h.Create(w, r)
 
-	if w.Code != http.StatusCreated {
-		t.Fatalf("Create: got %d, want %d", w.Code, http.StatusCreated)
-	}
-
-	var resp map[string]interface{}
-	json.NewDecoder(w.Body).Decode(&resp)
-	if _, ok := resp["qualityGate"]; ok {
-		t.Error("qualityGate should not be present when QualityGateStore is nil")
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("Create: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
@@ -1122,7 +1071,11 @@ func TestEvaluateQualityGates_TeamScopedAPIToken(t *testing.T) {
 		},
 	}
 
-	h := &ReportsHandler{QualityGateStore: mockStore}
+	h := &ReportsHandler{QualityGateStore: mockStore, ReportStore: &mockReportsStore{
+		getPreviousFailedTestsFunc: func(_ context.Context, _, _ string) (map[string]bool, error) {
+			return nil, nil
+		},
+	}}
 
 	report := &ctrf.Report{
 		Results: ctrf.Results{
@@ -1198,7 +1151,11 @@ func TestEvaluateQualityGates_PassingGateViaAPIToken(t *testing.T) {
 		},
 	}
 
-	h := &ReportsHandler{QualityGateStore: mockStore}
+	h := &ReportsHandler{QualityGateStore: mockStore, ReportStore: &mockReportsStore{
+		getPreviousFailedTestsFunc: func(_ context.Context, _, _ string) (map[string]bool, error) {
+			return nil, nil
+		},
+	}}
 
 	report := &ctrf.Report{
 		Results: ctrf.Results{
@@ -1235,7 +1192,11 @@ func TestEvaluateQualityGates_NoGatesForTeam(t *testing.T) {
 		},
 	}
 
-	h := &ReportsHandler{QualityGateStore: mockStore}
+	h := &ReportsHandler{QualityGateStore: mockStore, ReportStore: &mockReportsStore{
+		getPreviousFailedTestsFunc: func(_ context.Context, _, _ string) (map[string]bool, error) {
+			return nil, nil
+		},
+	}}
 	report := &ctrf.Report{
 		Results: ctrf.Results{
 			Tool:    ctrf.Tool{Name: "test"},
@@ -1264,7 +1225,11 @@ func TestEvaluateQualityGates_MultipleGates(t *testing.T) {
 		},
 	}
 
-	h := &ReportsHandler{QualityGateStore: mockStore}
+	h := &ReportsHandler{QualityGateStore: mockStore, ReportStore: &mockReportsStore{
+		getPreviousFailedTestsFunc: func(_ context.Context, _, _ string) (map[string]bool, error) {
+			return nil, nil
+		},
+	}}
 	report := &ctrf.Report{
 		Results: ctrf.Results{
 			Tool:    ctrf.Tool{Name: "test"},
@@ -1306,7 +1271,7 @@ func TestEvaluateQualityGates_MultipleGates(t *testing.T) {
 // --- Nil DB returns 503 tests ---
 
 func TestCreateReport_NilDB_Returns503ForGet(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/some-id", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1320,7 +1285,7 @@ func TestCreateReport_NilDB_Returns503ForGet(t *testing.T) {
 }
 
 func TestDeleteReport_NilDB_Returns503(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("DELETE", "/api/v1/reports/some-id", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1334,7 +1299,7 @@ func TestDeleteReport_NilDB_Returns503(t *testing.T) {
 }
 
 func TestCompareReports_NilDB_Returns503(t *testing.T) {
-	h := &ReportsHandler{DB: nil}
+	h := &ReportsHandler{}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("GET", "/api/v1/reports/compare?base=a&head=b", nil)
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1398,7 +1363,7 @@ const failingReport = `{"results":{"tool":{"name":"playwright"},"summary":{"test
 
 func TestCreateReport_PostsGitHubStatus_AllPassed(t *testing.T) {
 	poster := &mockGitHubStatusPoster{}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1430,7 +1395,7 @@ func TestCreateReport_PostsGitHubStatus_AllPassed(t *testing.T) {
 
 func TestCreateReport_PostsGitHubStatus_WithFailures(t *testing.T) {
 	poster := &mockGitHubStatusPoster{}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(failingReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1450,7 +1415,7 @@ func TestCreateReport_PostsGitHubStatus_WithFailures(t *testing.T) {
 
 func TestCreateReport_GitHubStatusError_IsNonFatal(t *testing.T) {
 	poster := &mockGitHubStatusPoster{err: fmt.Errorf("github API down")}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1469,7 +1434,7 @@ func TestCreateReport_GitHubStatusError_IsNonFatal(t *testing.T) {
 
 func TestCreateReport_NoGitHubParams_NoPosterCalled(t *testing.T) {
 	poster := &mockGitHubStatusPoster{}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(validReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1486,7 +1451,7 @@ func TestCreateReport_NoGitHubParams_NoPosterCalled(t *testing.T) {
 }
 
 func TestCreateReport_NilGitHubPoster_NoError(t *testing.T) {
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: nil}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: nil}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234", strings.NewReader(validReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
@@ -1500,10 +1465,10 @@ func TestCreateReport_NilGitHubPoster_NoError(t *testing.T) {
 
 func TestCreateReport_GitHubStatus_WithExecutionID_LinksToExecution(t *testing.T) {
 	poster := &mockGitHubStatusPoster{}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster, BaseURL: "http://example.com"}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster, BaseURL: "http://example.com"}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST",
-		"/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234&execution_id=exec-uuid-123",
+		"/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234&execution_id=00000000-0000-0000-0000-000000000123",
 		strings.NewReader(validReport))
 	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
 
@@ -1515,18 +1480,18 @@ func TestCreateReport_GitHubStatus_WithExecutionID_LinksToExecution(t *testing.T
 	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
 
 	call, _ := poster.firstCall()
-	wantURL := "http://example.com/executions/exec-uuid-123"
+	wantURL := "http://example.com/executions/00000000-0000-0000-0000-000000000123"
 	if call.TargetURL != wantURL {
 		t.Errorf("targetURL = %q, want %q", call.TargetURL, wantURL)
 	}
-	if !strings.Contains(call.Description, "exec-uuid-123") {
+	if !strings.Contains(call.Description, "00000000-0000-0000-0000-000000000123") {
 		t.Errorf("description %q should contain execution ID", call.Description)
 	}
 }
 
 func TestCreateReport_GitHubStatus_WithoutExecutionID_LinksToReport(t *testing.T) {
 	poster := &mockGitHubStatusPoster{}
-	h := &ReportsHandler{DB: nil, GitHubStatusPoster: poster, BaseURL: "http://example.com"}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), GitHubStatusPoster: poster, BaseURL: "http://example.com"}
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST",
 		"/api/v1/reports?github_owner=acme&github_repo=app&github_sha=abc1234",
@@ -1541,9 +1506,11 @@ func TestCreateReport_GitHubStatus_WithoutExecutionID_LinksToReport(t *testing.T
 	eventually(t, 500, func() bool { return poster.callCount() == 1 }, "GitHub status not posted")
 
 	call, _ := poster.firstCall()
-	// Without execution_id and no reportID (no-DB path), targetURL should be empty
 	if strings.Contains(call.TargetURL, "/executions/") {
 		t.Errorf("targetURL %q should not link to execution when no execution_id", call.TargetURL)
+	}
+	if !strings.Contains(call.TargetURL, "/reports/") {
+		t.Errorf("targetURL %q should link to report", call.TargetURL)
 	}
 }
 
@@ -2336,7 +2303,7 @@ func TestRetryTriage_ForceResetNoOp_Returns202WithoutEnqueue(t *testing.T) {
 // TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB verifies that the handler
 // does not panic when TriageEnqueuer is nil (triage disabled).
 func TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB(t *testing.T) {
-	h := &ReportsHandler{DB: nil, TriageEnqueuer: nil}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), TriageEnqueuer: nil}
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -2350,11 +2317,11 @@ func TestCreateReport_TriageEnqueuer_NilEnqueuer_NoDB(t *testing.T) {
 	}
 }
 
-// TestCreateReport_TriageEnqueuer_NotCalledOnNoDB verifies that Enqueue is
-// not invoked when there is no database (no persistent report to triage).
-func TestCreateReport_TriageEnqueuer_NotCalledOnNoDB(t *testing.T) {
+// TestCreateReport_TriageEnqueuer_CalledWhenStorePresent verifies that Enqueue
+// is invoked when the report is persisted via ReportStore.
+func TestCreateReport_TriageEnqueuer_CalledWhenStorePresent(t *testing.T) {
 	enqueuer := &capTriageEnqueuer{}
-	h := &ReportsHandler{DB: nil, TriageEnqueuer: enqueuer}
+	h := &ReportsHandler{ReportStore: newCreateMockStore(), TriageEnqueuer: enqueuer}
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"t1","status":"passed","duration":10}]}}`
 	w := httptest.NewRecorder()
 	r := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(report))
@@ -2365,7 +2332,7 @@ func TestCreateReport_TriageEnqueuer_NotCalledOnNoDB(t *testing.T) {
 	if w.Code != http.StatusCreated {
 		t.Fatalf("unexpected status: %d", w.Code)
 	}
-	if enqueuer.count() != 0 {
-		t.Errorf("Enqueue should not be called in no-DB mode; got %d calls", enqueuer.count())
+	if enqueuer.count() != 1 {
+		t.Errorf("Enqueue should be called once with ReportStore; got %d calls", enqueuer.count())
 	}
 }

@@ -9,12 +9,10 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
 )
 
 // AnalyticsHandler handles analytics endpoints.
 type AnalyticsHandler struct {
-	DB             *db.Pool
 	AnalyticsStore analyticsStore
 }
 
@@ -27,83 +25,30 @@ func (h *AnalyticsHandler) Trends(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil && h.AnalyticsStore == nil {
+	if h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	q := parseTrendQuery(r, claims.TeamID)
 
-	if h.AnalyticsStore != nil {
-		rows, err := h.AnalyticsStore.QueryTrends(r.Context(), q.GroupBy, q.TeamID, q.StartDate, q.EndDate)
-		if err != nil {
-			log.Error().Err(err).Msg("analytics: trends query failed")
-			Error(w, http.StatusInternalServerError, "query failed")
-			return
-		}
-		trends := make([]analytics.TrendPoint, len(rows))
-		for i, row := range rows {
-			trends[i] = analytics.TrendPoint{
-				Date:     row.Date,
-				Total:    row.Total,
-				Passed:   row.Passed,
-				Failed:   row.Failed,
-				Skipped:  row.Skipped,
-				PassRate: row.PassRate,
-			}
-		}
-		JSON(w, http.StatusOK, map[string]interface{}{
-			"trends": trends,
-		})
-		return
-	}
-
-	// Legacy path: direct SQL
-
-	query := `
-		SELECT
-			time_bucket($1::interval, created_at) AS bucket,
-			count(*) AS total,
-			count(*) FILTER (WHERE status = 'passed') AS passed,
-			count(*) FILTER (WHERE status = 'failed') AS failed,
-			count(*) FILTER (WHERE status = 'skipped') AS skipped
-		FROM test_results
-		WHERE team_id = $2
-			AND created_at >= $3
-			AND created_at <= $4
-		GROUP BY bucket
-		ORDER BY bucket
-	`
-
-	rows, err := h.DB.Query(r.Context(), query, q.GroupBy, q.TeamID, q.StartDate, q.EndDate)
+	rows, err := h.AnalyticsStore.QueryTrends(r.Context(), q.GroupBy, q.TeamID, q.StartDate, q.EndDate)
 	if err != nil {
 		log.Error().Err(err).Msg("analytics: trends query failed")
 		Error(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	defer rows.Close()
-
-	var trends []analytics.TrendPoint
-	for rows.Next() {
-		var tp analytics.TrendPoint
-		if err := rows.Scan(&tp.Date, &tp.Total, &tp.Passed, &tp.Failed, &tp.Skipped); err != nil {
-			log.Error().Err(err).Msg("analytics: trends scan failed")
-			Error(w, http.StatusInternalServerError, "query failed")
-			return
+	trends := make([]analytics.TrendPoint, len(rows))
+	for i, row := range rows {
+		trends[i] = analytics.TrendPoint{
+			Date:     row.Date,
+			Total:    row.Total,
+			Passed:   row.Passed,
+			Failed:   row.Failed,
+			Skipped:  row.Skipped,
+			PassRate: row.PassRate,
 		}
-		tp.PassRate = analytics.ComputePassRate(tp.Passed, tp.Total)
-		trends = append(trends, tp)
 	}
-	if err := rows.Err(); err != nil {
-		log.Error().Err(err).Msg("analytics: trends iteration failed")
-		Error(w, http.StatusInternalServerError, "query failed")
-		return
-	}
-
-	if trends == nil {
-		trends = []analytics.TrendPoint{}
-	}
-
 	JSON(w, http.StatusOK, map[string]interface{}{
 		"trends": trends,
 	})
@@ -118,7 +63,7 @@ func (h *AnalyticsHandler) FlakyTests(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil && h.AnalyticsStore == nil {
+	if h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -126,55 +71,29 @@ func (h *AnalyticsHandler) FlakyTests(w http.ResponseWriter, r *http.Request) {
 	q := parseFlakyQuery(r, claims.TeamID)
 	cutoff := time.Now().Add(-q.Window)
 
-	// Query: for each test, get ordered statuses, then compute flakiness in Go.
-	// This avoids complex SQL window functions and uses the analytics.DetectFlaky helper.
-	query := `
-		SELECT
-			name,
-			COALESCE(suite, '') AS suite,
-			COALESCE(file_path, '') AS file_path,
-			array_agg(status ORDER BY created_at) AS statuses,
-			(array_agg(status ORDER BY created_at DESC))[1] AS last_status,
-			count(*) AS total_runs
-		FROM test_results
-		WHERE team_id = $1
-			AND created_at >= $2
-		GROUP BY name, suite, file_path
-		HAVING count(*) >= $3
-		ORDER BY name
-	`
-
-	rows, err := h.DB.Query(r.Context(), query, q.TeamID, cutoff, q.MinRuns)
+	rows, err := h.AnalyticsStore.QueryFlakyTests(r.Context(), claims.TeamID, cutoff, q.MinRuns)
 	if err != nil {
 		log.Error().Err(err).Msg("analytics: flaky query failed")
 		Error(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	defer rows.Close()
 
 	var flaky []analytics.FlakyTest
-	for rows.Next() {
-		var ft analytics.FlakyTest
-		var statuses []string
-		if err := rows.Scan(&ft.Name, &ft.Suite, &ft.FilePath, &statuses, &ft.LastStatus, &ft.TotalRuns); err != nil {
-			log.Error().Err(err).Msg("analytics: flaky scan failed")
-			Error(w, http.StatusInternalServerError, "query failed")
-			return
+	for _, fr := range rows {
+		ft := analytics.FlakyTest{
+			Name:       fr.Name,
+			Suite:      fr.Suite,
+			FilePath:   fr.FilePath,
+			LastStatus: fr.LastStatus,
+			TotalRuns:  fr.TotalRuns,
 		}
-
-		ft.FlipCount, ft.FlipRate = analytics.DetectFlaky(statuses)
+		ft.FlipCount, ft.FlipRate = analytics.DetectFlaky(fr.Statuses)
 		if ft.FlipCount > 0 {
 			flaky = append(flaky, ft)
 		}
-
 		if q.Limit > 0 && len(flaky) >= q.Limit {
 			break
 		}
-	}
-	if err := rows.Err(); err != nil {
-		log.Error().Err(err).Msg("analytics: flaky iteration failed")
-		Error(w, http.StatusInternalServerError, "query failed")
-		return
 	}
 
 	if flaky == nil {
@@ -195,7 +114,7 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	if h.DB == nil && h.AnalyticsStore == nil {
+	if h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -203,55 +122,29 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 	start, end := parseDateRange(r)
 	limit := parseIntParam(r, "limit", 20)
 
-	query := `
-		SELECT
-			message,
-			count(*) AS count,
-			array_agg(DISTINCT name) AS test_names,
-			min(created_at) AS first_seen,
-			max(created_at) AS last_seen
-		FROM test_results
-		WHERE team_id = $1
-			AND status = 'failed'
-			AND message IS NOT NULL
-			AND message != ''
-			AND created_at >= $2
-			AND created_at <= $3
-		GROUP BY message
-		ORDER BY count DESC
-		LIMIT $4
-	`
-
-	rows, err := h.DB.Query(r.Context(), query, claims.TeamID, start, end, limit)
+	clusters, err := h.AnalyticsStore.QueryErrorClusters(r.Context(), claims.TeamID, start, end, limit)
 	if err != nil {
 		log.Error().Err(err).Msg("analytics: error analysis query failed")
 		Error(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	defer rows.Close()
 
-	var clusters []analytics.ErrorCluster
-	for rows.Next() {
-		var ec analytics.ErrorCluster
-		if err := rows.Scan(&ec.Message, &ec.Count, &ec.TestNames, &ec.FirstSeen, &ec.LastSeen); err != nil {
-			log.Error().Err(err).Msg("analytics: error analysis scan failed")
-			Error(w, http.StatusInternalServerError, "query failed")
-			return
-		}
-		clusters = append(clusters, ec)
+	var result []analytics.ErrorCluster
+	for _, ec := range clusters {
+		result = append(result, analytics.ErrorCluster{
+			Message:   ec.Message,
+			Count:     ec.Count,
+			TestNames: ec.TestNames,
+			FirstSeen: ec.FirstSeen,
+			LastSeen:  ec.LastSeen,
+		})
 	}
-	if err := rows.Err(); err != nil {
-		log.Error().Err(err).Msg("analytics: error analysis iteration failed")
-		Error(w, http.StatusInternalServerError, "query failed")
-		return
-	}
-
-	if clusters == nil {
-		clusters = []analytics.ErrorCluster{}
+	if result == nil {
+		result = []analytics.ErrorCluster{}
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"errors": clusters,
+		"errors": result,
 	})
 }
 
@@ -264,45 +157,23 @@ func (h *AnalyticsHandler) DurationDistribution(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if h.DB == nil && h.AnalyticsStore == nil {
+	if h.AnalyticsStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	start, end := parseDateRange(r)
 
-	// Build histogram buckets
 	buckets := analytics.DefaultDurationBuckets()
-	bucketQuery := `
-		SELECT duration_ms
-		FROM test_results
-		WHERE team_id = $1
-			AND created_at >= $2
-			AND created_at <= $3
-	`
-
-	rows, err := h.DB.Query(r.Context(), bucketQuery, claims.TeamID, start, end)
+	durations, err := h.AnalyticsStore.QueryDurationBuckets(r.Context(), claims.TeamID, start, end)
 	if err != nil {
 		log.Error().Err(err).Msg("analytics: duration bucket query failed")
 		Error(w, http.StatusInternalServerError, "query failed")
 		return
 	}
-	defer rows.Close()
-
-	for rows.Next() {
-		var ms int64
-		if err := rows.Scan(&ms); err != nil {
-			log.Error().Err(err).Msg("analytics: duration bucket scan failed")
-			Error(w, http.StatusInternalServerError, "query failed")
-			return
-		}
+	for _, ms := range durations {
 		idx := analytics.BucketDuration(ms, buckets)
 		buckets[idx].Count++
-	}
-	if err := rows.Err(); err != nil {
-		log.Error().Err(err).Msg("analytics: duration bucket iteration failed")
-		Error(w, http.StatusInternalServerError, "query failed")
-		return
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{

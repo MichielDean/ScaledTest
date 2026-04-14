@@ -31,7 +31,11 @@ func (s *AnalyticsStore) QueryTrends(ctx context.Context, groupBy, teamID string
 			count(*) AS total,
 			count(*) FILTER (WHERE status = 'passed') AS passed,
 			count(*) FILTER (WHERE status = 'failed') AS failed,
-			count(*) FILTER (WHERE status = 'skipped') AS skipped
+			count(*) FILTER (WHERE status = 'skipped') AS skipped,
+			CASE WHEN count(*) > 0
+			     THEN round(count(*) FILTER (WHERE status = 'passed')::numeric / count(*)::numeric * 100, 2)
+			     ELSE 0
+			END AS pass_rate
 		FROM test_results
 		WHERE team_id = $2
 			AND created_at >= $3
@@ -48,7 +52,7 @@ func (s *AnalyticsStore) QueryTrends(ctx context.Context, groupBy, teamID string
 	var results []TrendRow
 	for rows.Next() {
 		var tr TrendRow
-		if err := rows.Scan(&tr.Date, &tr.Total, &tr.Passed, &tr.Failed, &tr.Skipped); err != nil {
+		if err := rows.Scan(&tr.Date, &tr.Total, &tr.Passed, &tr.Failed, &tr.Skipped, &tr.PassRate); err != nil {
 			return nil, err
 		}
 		results = append(results, tr)

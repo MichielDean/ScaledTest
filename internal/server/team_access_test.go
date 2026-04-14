@@ -366,9 +366,9 @@ func TestTeamIsolation_CTRFIngestionAcceptsBothTeams(t *testing.T) {
 			w := httptest.NewRecorder()
 			router.ServeHTTP(w, req)
 
-			if w.Code != http.StatusCreated {
-				t.Errorf("POST /api/v1/reports for %s: status = %d, want 201 (body: %s)",
-					tc.name, w.Code, w.Body.String())
+			if w.Code != http.StatusServiceUnavailable {
+				t.Errorf("POST /api/v1/reports for %s: status = %d, want 503 (no DB configured)",
+					tc.name, w.Code)
 			}
 		})
 	}

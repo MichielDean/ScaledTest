@@ -7,9 +7,8 @@ import (
 	"time"
 )
 
-
 func TestAnalyticsTrendsNoDB(t *testing.T) {
-	h := &AnalyticsHandler{DB: nil}
+	h := &AnalyticsHandler{AnalyticsStore: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/trends", nil)
 	req = testWithClaimsTeamOnly(req, "team-1")
@@ -23,7 +22,7 @@ func TestAnalyticsTrendsNoDB(t *testing.T) {
 }
 
 func TestAnalyticsFlakyTestsNoDB(t *testing.T) {
-	h := &AnalyticsHandler{DB: nil}
+	h := &AnalyticsHandler{AnalyticsStore: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/flaky-tests", nil)
 	req = testWithClaimsTeamOnly(req, "team-1")
@@ -37,7 +36,7 @@ func TestAnalyticsFlakyTestsNoDB(t *testing.T) {
 }
 
 func TestAnalyticsErrorAnalysisNoDB(t *testing.T) {
-	h := &AnalyticsHandler{DB: nil}
+	h := &AnalyticsHandler{AnalyticsStore: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/error-analysis", nil)
 	req = testWithClaimsTeamOnly(req, "team-1")
@@ -51,7 +50,7 @@ func TestAnalyticsErrorAnalysisNoDB(t *testing.T) {
 }
 
 func TestAnalyticsDurationDistributionNoDB(t *testing.T) {
-	h := &AnalyticsHandler{DB: nil}
+	h := &AnalyticsHandler{AnalyticsStore: nil}
 
 	req := httptest.NewRequest("GET", "/api/v1/analytics/duration-distribution", nil)
 	req = testWithClaimsTeamOnly(req, "team-1")
@@ -65,7 +64,7 @@ func TestAnalyticsDurationDistributionNoDB(t *testing.T) {
 }
 
 func TestAnalyticsUnauthorized(t *testing.T) {
-	h := &AnalyticsHandler{DB: nil}
+	h := &AnalyticsHandler{AnalyticsStore: nil}
 
 	handlers := []struct {
 		name string

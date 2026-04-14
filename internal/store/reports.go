@@ -163,8 +163,8 @@ func (s *ReportsStore) CreateWithResults(ctx context.Context, p CreateReportPara
 			`INSERT INTO test_results (id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at)
 			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
 			resID, res.ReportID, res.TeamID, res.Name, res.Status,
-			res.DurationMs, nullString(res.Message), nullString(res.Trace),
-			nullString(res.FilePath), nullString(res.Suite),
+			res.DurationMs, NullString(res.Message), NullString(res.Trace),
+			NullString(res.FilePath), NullString(res.Suite),
 			res.Tags, res.Retry, res.Flaky, p.CreatedAt,
 		)
 	}

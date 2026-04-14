@@ -10,7 +10,7 @@ import (
 	"github.com/go-chi/chi/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
-	"github.com/scaledtest/scaledtest/internal/db"
+
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/sanitize"
@@ -54,9 +54,9 @@ type qualityGateStore interface {
 
 // QualityGatesHandler handles quality gate endpoints.
 type QualityGatesHandler struct {
-	Store      qualityGateStore
-	DB         *db.Pool
-	AuditStore auditLogger
+	Store       qualityGateStore
+	ReportStore reportsStore
+	AuditStore  auditLogger
 }
 
 // CreateQualityGateRequest is the request body for creating a quality gate.
@@ -385,7 +385,7 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.Store == nil || h.DB == nil {
+	if h.Store == nil || h.ReportStore == nil {
 		Error(w, http.StatusNotImplemented, "evaluate requires database connection")
 		return
 	}
@@ -400,18 +400,13 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Get the gate to access its rules
 	gate, err := h.Store.Get(r.Context(), teamID, gateID)
 	if err != nil {
 		Error(w, http.StatusNotFound, "quality gate not found")
 		return
 	}
 
-	// Load report summary from DB
-	var summaryJSON json.RawMessage
-	err = h.DB.QueryRow(r.Context(),
-		`SELECT summary FROM test_reports WHERE id = $1 AND team_id = $2`,
-		req.ReportID, teamID).Scan(&summaryJSON)
+	rpt, testResults, err := h.ReportStore.GetReportAndResults(r.Context(), req.ReportID, teamID)
 	if err != nil {
 		Error(w, http.StatusNotFound, "report not found")
 		return
@@ -423,21 +418,10 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		Failed  int `json:"failed"`
 		Skipped int `json:"skipped"`
 	}
-	if err := json.Unmarshal(summaryJSON, &summary); err != nil {
+	if err := json.Unmarshal(rpt.Summary, &summary); err != nil {
 		Error(w, http.StatusInternalServerError, "failed to parse report summary")
 		return
 	}
-
-	// Load test results for duration and flaky data
-	rows, err := h.DB.Query(r.Context(),
-		`SELECT name, status, duration_ms, flaky, suite, file_path
-		 FROM test_results WHERE report_id = $1 AND team_id = $2`,
-		req.ReportID, teamID)
-	if err != nil {
-		Error(w, http.StatusInternalServerError, "failed to query test results")
-		return
-	}
-	defer rows.Close()
 
 	var totalDurationMs int64
 	currentFailed := make(map[string]bool)
@@ -445,38 +429,19 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		name, suite, filePath string
 	}
 
-	for rows.Next() {
-		var name, status string
-		var suite, filePath *string
-		var durationMs int64
-		var flaky bool
-		if err := rows.Scan(&name, &status, &durationMs, &flaky, &suite, &filePath); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to scan test result")
-			return
+	for _, res := range testResults {
+		totalDurationMs += res.DurationMs
+		if res.Status == "failed" {
+			currentFailed[res.Name] = true
 		}
-		totalDurationMs += durationMs
-		if status == "failed" {
-			currentFailed[name] = true
-		}
-		if flaky {
-			s, fp := "", ""
-			if suite != nil {
-				s = *suite
-			}
-			if filePath != nil {
-				fp = *filePath
-			}
+		if res.Flaky {
 			flakyTests = append(flakyTests, struct {
 				name, suite, filePath string
-			}{name, s, fp})
+			}{res.Name, res.Suite, res.FilePath})
 		}
 	}
-	if err := rows.Err(); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to iterate test results")
-		return
-	}
 
-	previousFailed, err := fetchPreviousFailedTestsDB(r.Context(), h.DB, teamID, req.ReportID)
+	previousFailed, err := h.ReportStore.GetPreviousFailedTests(r.Context(), teamID, req.ReportID)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to fetch previous failures")
 		return

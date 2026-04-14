@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
@@ -159,50 +158,9 @@ func (s *ExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, n
 	return err
 }
 
-func (s *ExecutionsStore) LinkReport(ctx context.Context, executionID, reportID string, now time.Time) (int64, error) {
+func (s *ExecutionsStore) LinkReport(ctx context.Context, executionID, teamID, reportID string, now time.Time) (int64, error) {
 	tag, err := s.pool.Exec(ctx,
 		`UPDATE test_executions SET report_id = $1, updated_at = $2 WHERE id = $3 AND team_id = $4`,
-		reportID, now, executionID, "")
-	// Note: teamID should be passed properly - this is called from handler context
+		reportID, now, executionID, teamID)
 	return tag.RowsAffected(), err
 }
-
-// BulkInsertTestResults inserts multiple test results in a single round-trip
-// using pgx.Batch, avoiding the N+1 insert pattern.
-func (s *ExecutionsStore) BulkInsertTestResults(ctx context.Context, results []model.TestResult, now time.Time) error {
-	if len(results) == 0 {
-		return nil
-	}
-
-	batch := &pgx.Batch{}
-	for _, res := range results {
-		resID := uuid.New().String()
-		batch.Queue(
-			`INSERT INTO test_results (id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-			resID, res.ReportID, res.TeamID, res.Name, res.Status,
-			res.DurationMs, nullString(res.Message), nullString(res.Trace),
-			nullString(res.FilePath), nullString(res.Suite),
-			res.Tags, res.Retry, res.Flaky, now,
-		)
-	}
-
-	br := s.pool.SendBatch(ctx, batch)
-	defer br.Close()
-
-	for range results {
-		if _, err := br.Exec(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func nullString(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
-// nullString and strconv are used in this file

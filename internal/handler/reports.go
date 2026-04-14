@@ -18,7 +18,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/ctrf"
-	"github.com/scaledtest/scaledtest/internal/db"
+
 	"github.com/scaledtest/scaledtest/internal/model"
 	"github.com/scaledtest/scaledtest/internal/quality"
 	"github.com/scaledtest/scaledtest/internal/store"
@@ -49,24 +49,15 @@ type githubStatusPoster interface {
 
 // ReportsHandler handles CTRF report endpoints.
 type ReportsHandler struct {
-	DB                 *db.Pool
 	ReportStore        reportsStore
 	AuditStore         *store.AuditStore
 	QualityGateStore   qualityGateEvaluator
 	Webhooks           *webhook.Notifier
-	GitHubStatusPoster githubStatusPoster // nil when GitHub integration is disabled
-	BaseURL            string             // used to construct target URLs in GitHub statuses
-	// TriageStore provides access to persisted triage results for read and retry.
-	// When nil, triage endpoints return 503.
-	TriageStore triageAccessor
-	// TriageEnqueuer schedules background LLM triage for each ingested report.
-	// When nil, triage is disabled (e.g. no LLM credentials configured).
-	TriageEnqueuer triage.Enqueuer
-	// AllowBackdate permits callers to supply a ?created_at=<RFC3339> query
-	// parameter to override the report ingestion timestamp. This must only be
-	// enabled in controlled test environments (e.g. when ST_DISABLE_RATE_LIMIT
-	// is true) — never in production.
-	AllowBackdate bool
+	GitHubStatusPoster githubStatusPoster
+	BaseURL            string
+	TriageStore        triageAccessor
+	TriageEnqueuer     triage.Enqueuer
+	AllowBackdate      bool
 }
 
 // List handles GET /api/v1/reports.
@@ -77,8 +68,8 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Validate date filters before the DB check so malformed params return 400
-	// rather than falling through to a DB error.
+	// Validate date filters before the store check so malformed params return 400
+	// rather than falling through to a store error.
 	var sinceTime, untilTime time.Time
 	var hasSince, hasUntil bool
 
@@ -101,95 +92,33 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 		hasUntil = true
 	}
 
-	if h.DB == nil && h.ReportStore == nil {
+	if h.ReportStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
 	limit, offset := parsePagination(r)
 
-	if h.ReportStore != nil {
-		var sincePtr, untilPtr *time.Time
-		if hasSince {
-			sincePtr = &sinceTime
-		}
-		if hasUntil {
-			untilPtr = &untilTime
-		}
-		reports, total, err := h.ReportStore.List(r.Context(), store.ReportListFilter{
-			TeamID: claims.TeamID,
-			Since:  sincePtr,
-			Until:  untilPtr,
-			Limit:  limit,
-			Offset: offset,
-		})
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to query reports")
-			return
-		}
-		JSON(w, http.StatusOK, map[string]interface{}{
-			"reports": reports,
-			"total":   total,
-		})
-		return
-	}
-
-	// Legacy path: direct SQL
-	whereClause := ` WHERE team_id = $1`
-	args := []interface{}{claims.TeamID}
-	argIdx := 2
-
+	var sincePtr, untilPtr *time.Time
 	if hasSince {
-		whereClause += ` AND created_at >= $` + strconv.Itoa(argIdx)
-		args = append(args, sinceTime)
-		argIdx++
+		sincePtr = &sinceTime
 	}
 	if hasUntil {
-		whereClause += ` AND created_at <= $` + strconv.Itoa(argIdx)
-		args = append(args, untilTime)
-		argIdx++
+		untilPtr = &untilTime
 	}
-
-	// Count query uses the same WHERE clause (including since/until filters)
-	countQuery := `SELECT COUNT(*) FROM test_reports` + whereClause
-	var total int
-	if err := h.DB.QueryRow(r.Context(), countQuery, args...).Scan(&total); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to count reports")
-		return
-	}
-
-	// Data query
-	query := `SELECT id, team_id, execution_id, tool_name, tool_version, environment, summary, created_at
-	          FROM test_reports` + whereClause +
-		` ORDER BY created_at DESC LIMIT $` + strconv.Itoa(argIdx) + ` OFFSET $` + strconv.Itoa(argIdx+1)
-	dataArgs := append(args, limit, offset)
-
-	rows, err := h.DB.Query(r.Context(), query, dataArgs...)
+	reports, total, err := h.ReportStore.List(r.Context(), store.ReportListFilter{
+		TeamID: claims.TeamID,
+		Since:  sincePtr,
+		Until:  untilPtr,
+		Limit:  limit,
+		Offset: offset,
+	})
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to query reports")
 		return
 	}
-	defer rows.Close()
-
-	flatReports := make([]map[string]interface{}, 0)
-	for rows.Next() {
-		var rpt model.TestReport
-		if err := rows.Scan(
-			&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
-			&rpt.ToolVersion, &rpt.Environment, &rpt.Summary, &rpt.CreatedAt,
-		); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to scan report")
-			return
-		}
-		flatReports = append(flatReports, flattenReportForList(rpt))
-	}
-	if err := rows.Err(); err != nil {
-		Error(w, http.StatusInternalServerError, "failed to iterate reports")
-		return
-	}
-
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"reports": flatReports,
+		"reports": reports,
 		"total":   total,
 	})
 }
@@ -225,21 +154,8 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	executionID := r.URL.Query().Get("execution_id")
 	triageGitHubStatus := r.URL.Query().Get("triage_github_status") == "true"
 
-	if h.DB == nil && h.ReportStore == nil {
-		// Fallback for no-DB mode: accept but don't persist
-		resp := map[string]interface{}{
-			"message": "report accepted",
-			"tool":    report.Results.Tool.Name,
-			"tests":   report.Results.Summary.Tests,
-		}
-		if executionID != "" {
-			resp["execution_id"] = executionID
-		}
-		if triageGitHubStatus {
-			resp["triage_github_status"] = true
-		}
-		JSON(w, http.StatusCreated, resp)
-		h.maybePostGitHubStatus(r, report.Results.Summary, "", executionID)
+	if h.ReportStore == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
@@ -254,13 +170,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		var exists bool
-		if h.ReportStore != nil {
-			exists, err = h.ReportStore.ExecutionExists(r.Context(), executionID, claims.TeamID)
-		} else {
-			err = h.DB.QueryRow(r.Context(),
-				`SELECT EXISTS(SELECT 1 FROM test_executions WHERE id = $1 AND team_id = $2)`,
-				executionID, claims.TeamID).Scan(&exists)
-		}
+		exists, err = h.ReportStore.ExecutionExists(r.Context(), executionID, claims.TeamID)
 		if err != nil {
 			Error(w, http.StatusInternalServerError, "failed to verify execution")
 			return
@@ -282,85 +192,26 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Normalize test results
 	results := ctrf.Normalize(report, reportID, claims.TeamID)
 
-	if h.ReportStore != nil {
-		// Use store layer with pgx.Batch for bulk inserts (avoids N+1)
-		rawJSON := json.RawMessage(body)
-		params := store.CreateReportParams{
-			ID:                 reportID,
-			TeamID:             claims.TeamID,
-			ExecutionID:        execIDPtr,
-			ToolName:           report.Results.Tool.Name,
-			ToolVersion:        report.Results.Tool.Version,
-			Environment:        report.Results.Environment,
-			Summary:            summaryJSON,
-			Raw:                rawJSON,
-			CreatedAt:          now,
-			TriageGitHubStatus: triageGitHubStatus,
-		}
-		if err := h.ReportStore.CreateWithResults(r.Context(), params, results); err != nil {
-			if err == pgx.ErrNoRows {
-				Error(w, http.StatusBadRequest, "execution not found or not in team")
-				return
-			}
-			Error(w, http.StatusInternalServerError, "failed to store report")
+	rawJSON := json.RawMessage(body)
+	params := store.CreateReportParams{
+		ID:                 reportID,
+		TeamID:             claims.TeamID,
+		ExecutionID:        execIDPtr,
+		ToolName:           report.Results.Tool.Name,
+		ToolVersion:        report.Results.Tool.Version,
+		Environment:        report.Results.Environment,
+		Summary:            summaryJSON,
+		Raw:                rawJSON,
+		CreatedAt:          now,
+		TriageGitHubStatus: triageGitHubStatus,
+	}
+	if err := h.ReportStore.CreateWithResults(r.Context(), params, results); err != nil {
+		if err == pgx.ErrNoRows {
+			Error(w, http.StatusBadRequest, "execution not found or not in team")
 			return
 		}
-	} else {
-		// Legacy path: raw SQL with N+1 inserts (kept for backward compatibility)
-		rawJSON := json.RawMessage(body)
-		tx, txErr := h.DB.Begin(r.Context())
-		if txErr != nil {
-			Error(w, http.StatusInternalServerError, "failed to begin transaction")
-			return
-		}
-		defer tx.Rollback(r.Context())
-
-		_, err = tx.Exec(r.Context(),
-			`INSERT INTO test_reports (id, team_id, execution_id, tool_name, tool_version, environment, summary, raw, created_at, triage_github_status)
-			 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
-			reportID, claims.TeamID, execIDPtr,
-			report.Results.Tool.Name, report.Results.Tool.Version,
-			report.Results.Environment, summaryJSON, rawJSON, now,
-			triageGitHubStatus)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to store report")
-			return
-		}
-
-		for _, res := range results {
-			resID := uuid.New().String()
-			_, err = tx.Exec(r.Context(),
-				`INSERT INTO test_results (id, report_id, team_id, name, status, duration_ms, message, trace, file_path, suite, tags, retry, flaky, created_at)
-				 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)`,
-				resID, res.ReportID, res.TeamID, res.Name, res.Status,
-				res.DurationMs, nullString(res.Message), nullString(res.Trace),
-				nullString(res.FilePath), nullString(res.Suite),
-				res.Tags, res.Retry, res.Flaky, now)
-			if err != nil {
-				Error(w, http.StatusInternalServerError, "failed to store test result")
-				return
-			}
-		}
-
-		if execIDPtr != nil {
-			tag, txErr := tx.Exec(r.Context(),
-				`UPDATE test_executions SET report_id = $1, updated_at = $2
-				 WHERE id = $3 AND team_id = $4`,
-				reportID, now, executionID, claims.TeamID)
-			if txErr != nil {
-				Error(w, http.StatusInternalServerError, "failed to link report to execution")
-				return
-			}
-			if tag.RowsAffected() == 0 {
-				Error(w, http.StatusBadRequest, "execution not found or not in team")
-				return
-			}
-		}
-
-		if err := tx.Commit(r.Context()); err != nil {
-			Error(w, http.StatusInternalServerError, "failed to commit report")
-			return
-		}
+		Error(w, http.StatusInternalServerError, "failed to store report")
+		return
 	}
 
 	// Enqueue async triage — non-blocking, best-effort. Must be called after
@@ -446,35 +297,12 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil && h.ReportStore == nil {
+	if h.ReportStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	if h.ReportStore != nil {
-		rpt, err := h.ReportStore.Get(r.Context(), reportID, claims.TeamID)
-		if err == pgx.ErrNoRows {
-			Error(w, http.StatusNotFound, "report not found")
-			return
-		}
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to get report")
-			return
-		}
-		JSON(w, http.StatusOK, buildGetReportResponse(*rpt))
-		return
-	}
-
-	// Legacy path: direct SQL
-	var rpt model.TestReport
-	err := h.DB.QueryRow(r.Context(),
-		`SELECT id, team_id, execution_id, tool_name, tool_version, environment, summary, created_at
-		 FROM test_reports
-		 WHERE id = $1 AND team_id = $2`,
-		reportID, claims.TeamID).Scan(
-		&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
-		&rpt.ToolVersion, &rpt.Environment, &rpt.Summary, &rpt.CreatedAt,
-	)
+	rpt, err := h.ReportStore.Get(r.Context(), reportID, claims.TeamID)
 	if err == pgx.ErrNoRows {
 		Error(w, http.StatusNotFound, "report not found")
 		return
@@ -483,8 +311,7 @@ func (h *ReportsHandler) Get(w http.ResponseWriter, r *http.Request) {
 		Error(w, http.StatusInternalServerError, "failed to get report")
 		return
 	}
-
-	JSON(w, http.StatusOK, buildGetReportResponse(rpt))
+	JSON(w, http.StatusOK, buildGetReportResponse(*rpt))
 }
 
 // Delete handles DELETE /api/v1/reports/{reportID}.
@@ -501,33 +328,19 @@ func (h *ReportsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil && h.ReportStore == nil {
+	if h.ReportStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
 
-	if h.ReportStore != nil {
-		rowsAffected, err := h.ReportStore.Delete(r.Context(), reportID, claims.TeamID)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to delete report")
-			return
-		}
-		if rowsAffected == 0 {
-			Error(w, http.StatusNotFound, "report not found")
-			return
-		}
-	} else {
-		tag, err := h.DB.Exec(r.Context(),
-			`DELETE FROM test_reports WHERE id = $1 AND team_id = $2`,
-			reportID, claims.TeamID)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to delete report")
-			return
-		}
-		if tag.RowsAffected() == 0 {
-			Error(w, http.StatusNotFound, "report not found")
-			return
-		}
+	rowsAffected, err := h.ReportStore.Delete(r.Context(), reportID, claims.TeamID)
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to delete report")
+		return
+	}
+	if rowsAffected == 0 {
+		Error(w, http.StatusNotFound, "report not found")
+		return
 	}
 
 	if h.AuditStore != nil {
@@ -568,7 +381,7 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if h.DB == nil && h.ReportStore == nil {
+	if h.ReportStore == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
 	}
@@ -576,57 +389,24 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	var baseReport, headReport *model.TestReport
 	var baseResults, headResults map[string]*model.TestResult
 
-	if h.ReportStore != nil {
-		var err error
-		baseReport, baseResults, err = h.ReportStore.GetReportAndResults(r.Context(), baseID, claims.TeamID)
-		if err == pgx.ErrNoRows {
-			Error(w, http.StatusNotFound, "base report not found")
-			return
-		}
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch base report")
-			return
-		}
-		headReport, headResults, err = h.ReportStore.GetReportAndResults(r.Context(), headID, claims.TeamID)
-		if err == pgx.ErrNoRows {
-			Error(w, http.StatusNotFound, "head report not found")
-			return
-		}
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch head report")
-			return
-		}
-	} else {
-		// Legacy path: direct SQL
-		var err error
-		baseReport, err = fetchReportDB(r.Context(), h.DB, baseID, claims.TeamID)
-		if err == pgx.ErrNoRows {
-			Error(w, http.StatusNotFound, "base report not found")
-			return
-		}
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch base report")
-			return
-		}
-		headReport, err = fetchReportDB(r.Context(), h.DB, headID, claims.TeamID)
-		if err == pgx.ErrNoRows {
-			Error(w, http.StatusNotFound, "head report not found")
-			return
-		}
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch head report")
-			return
-		}
-		baseResults, err = fetchResultsDB(r.Context(), h.DB, baseID, claims.TeamID)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch base test results")
-			return
-		}
-		headResults, err = fetchResultsDB(r.Context(), h.DB, headID, claims.TeamID)
-		if err != nil {
-			Error(w, http.StatusInternalServerError, "failed to fetch head test results")
-			return
-		}
+	var err error
+	baseReport, baseResults, err = h.ReportStore.GetReportAndResults(r.Context(), baseID, claims.TeamID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "base report not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch base report")
+		return
+	}
+	headReport, headResults, err = h.ReportStore.GetReportAndResults(r.Context(), headID, claims.TeamID)
+	if err == pgx.ErrNoRows {
+		Error(w, http.StatusNotFound, "head report not found")
+		return
+	}
+	if err != nil {
+		Error(w, http.StatusInternalServerError, "failed to fetch head report")
+		return
 	}
 
 	// Compute diff
@@ -993,14 +773,6 @@ func (h *ReportsHandler) resolveReportTime(r *http.Request) time.Time {
 	return time.Now()
 }
 
-// nullString returns a *string that is nil for empty strings.
-func nullString(s string) *string {
-	if s == "" {
-		return nil
-	}
-	return &s
-}
-
 // parsePagination extracts limit and offset from query parameters.
 func parsePagination(r *http.Request) (int, int) {
 	limit := 50
@@ -1113,100 +885,11 @@ func (h *ReportsHandler) evaluateQualityGates(
 	return gateResp
 }
 
-// fetchReportDB is the legacy SQL-based report fetcher.
-func fetchReportDB(ctx context.Context, pool *db.Pool, id, teamID string) (*model.TestReport, error) {
-	var rpt model.TestReport
-	err := pool.QueryRow(ctx,
-		`SELECT id, team_id, execution_id, tool_name, tool_version, summary, created_at
-		 FROM test_reports WHERE id = $1 AND team_id = $2`,
-		id, teamID).Scan(
-		&rpt.ID, &rpt.TeamID, &rpt.ExecutionID, &rpt.ToolName,
-		&rpt.ToolVersion, &rpt.Summary, &rpt.CreatedAt,
-	)
-	return &rpt, err
-}
-
-// fetchResultsDB is the legacy SQL-based test results fetcher.
-func fetchResultsDB(ctx context.Context, pool *db.Pool, reportID, teamID string) (map[string]*model.TestResult, error) {
-	rows, err := pool.Query(ctx,
-		`SELECT id, report_id, team_id, name, status, duration_ms,
-		        COALESCE(message, ''), COALESCE(trace, ''), COALESCE(file_path, ''), COALESCE(suite, ''),
-		        tags, retry, flaky, created_at
-		 FROM test_results WHERE report_id = $1 AND team_id = $2`,
-		reportID, teamID)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	results := make(map[string]*model.TestResult)
-	for rows.Next() {
-		var res model.TestResult
-		if err := rows.Scan(
-			&res.ID, &res.ReportID, &res.TeamID, &res.Name, &res.Status,
-			&res.DurationMs, &res.Message, &res.Trace, &res.FilePath,
-			&res.Suite, &res.Tags, &res.Retry, &res.Flaky, &res.CreatedAt,
-		); err != nil {
-			return nil, err
-		}
-		results[res.Name] = &res
-	}
-	return results, rows.Err()
-}
-
 func (h *ReportsHandler) getPreviousFailedTests(ctx context.Context, teamID, currentReportID string) (map[string]bool, error) {
-	if h.ReportStore != nil {
-		return h.ReportStore.GetPreviousFailedTests(ctx, teamID, currentReportID)
-	}
-	return fetchPreviousFailedTestsDB(ctx, h.DB, teamID, currentReportID)
-}
-
-// fetchPreviousFailedTestsDB returns the set of failed test names from the most
-// recent prior report for the given team (excluding currentReportID). Returns
-// (nil, nil) if no prior report exists or the prior report had no failures.
-// Returns a non-nil error on DB errors so callers can distinguish transient
-// failures from the legitimate "no baseline" case.
-func fetchPreviousFailedTestsDB(ctx context.Context, pool *db.Pool, teamID, currentReportID string) (map[string]bool, error) {
-	if pool == nil {
+	if h.ReportStore == nil {
 		return nil, nil
 	}
-
-	var prevReportID string
-	err := pool.QueryRow(ctx,
-		`SELECT id FROM test_reports WHERE team_id = $1 AND id != $2 ORDER BY created_at DESC LIMIT 1`,
-		teamID, currentReportID,
-	).Scan(&prevReportID)
-	if err != nil {
-		if errors.Is(err, pgx.ErrNoRows) {
-			return nil, nil // no prior report — not an error
-		}
-		return nil, fmt.Errorf("fetch previous report: %w", err)
-	}
-
-	rows, err := pool.Query(ctx,
-		`SELECT name FROM test_results WHERE report_id = $1 AND status = 'failed'`,
-		prevReportID,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("fetch previous failures: %w", err)
-	}
-	defer rows.Close()
-
-	failed := make(map[string]bool)
-	for rows.Next() {
-		var name string
-		if err := rows.Scan(&name); err != nil {
-			return nil, fmt.Errorf("scan previous failure: %w", err)
-		}
-		failed[name] = true
-	}
-	if err := rows.Err(); err != nil {
-		return nil, fmt.Errorf("iterate previous failures: %w", err)
-	}
-	if len(failed) == 0 {
-		return nil, nil
-	}
-	return failed, nil
+	return h.ReportStore.GetPreviousFailedTests(ctx, teamID, currentReportID)
 }
 
 // buildReportData constructs quality.ReportData from a CTRF report, its

@@ -5,8 +5,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/jackc/pgx/v5"
-	"github.com/jackc/pgx/v5/pgconn"
 	"github.com/jackc/pgx/v5/pgxpool"
 
 	"github.com/scaledtest/scaledtest/internal/model"
@@ -143,9 +141,4 @@ func (s *AuthStore) DeleteSession(ctx context.Context, sessionID string) error {
 func (s *AuthStore) DeleteSessionByRefreshToken(ctx context.Context, refreshToken string) error {
 	_, err := s.pool.Exec(ctx, `DELETE FROM sessions WHERE refresh_token = $1`, refreshToken)
 	return err
-}
-
-type AuthDBTX interface {
-	QueryRow(ctx context.Context, sql string, args ...any) pgx.Row
-	Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
 }

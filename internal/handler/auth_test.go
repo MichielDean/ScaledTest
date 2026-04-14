@@ -3,6 +3,7 @@ package handler
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -13,36 +14,68 @@ import (
 	"github.com/jackc/pgx/v5/pgconn"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
+	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
-
-// mockAuthDB implements authDB for testing.
-type mockAuthDB struct {
-	queryRowFn func(ctx context.Context, sql string, args ...any) pgx.Row
-	execFn     func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error)
-}
-
-func (m *mockAuthDB) QueryRow(ctx context.Context, sql string, args ...any) pgx.Row {
-	return m.queryRowFn(ctx, sql, args...)
-}
-
-func (m *mockAuthDB) Exec(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-	return m.execFn(ctx, sql, arguments...)
-}
-
-// mockRow implements pgx.Row for testing.
-type mockRow struct {
-	scanFn func(dest ...any) error
-}
-
-func (r *mockRow) Scan(dest ...any) error {
-	return r.scanFn(dest...)
-}
 
 const testSecret = "test-secret-32-chars-long-enough!"
 
 func newTestAuthHandler() *AuthHandler {
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	return &AuthHandler{JWT: jwt, DB: nil}
+	return &AuthHandler{JWT: jwt, AuthStore: nil}
+}
+
+// mockAuthStore implements authStore for testing.
+type mockAuthStore struct {
+	getUserByEmailFn           func(ctx context.Context, email string) (*model.User, error)
+	getUserByIDFn              func(ctx context.Context, id string) (*model.User, error)
+	emailExistsFn              func(ctx context.Context, email string) (bool, error)
+	createUserFn               func(ctx context.Context, email, passwordHash, displayName, role string) (string, string, error)
+	createUserWithRoleFn       func(ctx context.Context, email, passwordHash, displayName, role string) (string, error)
+	updatePasswordFn           func(ctx context.Context, userID, passwordHash string) (int64, error)
+	updateProfileFn            func(ctx context.Context, userID, displayName string) (*model.User, error)
+	getPrimaryTeamIDFn         func(ctx context.Context, userID string) (string, error)
+	createSessionFn            func(ctx context.Context, userID, refreshToken, userAgent string, ipAddr net.IP, expiresAt time.Time) error
+	getSessionByRefreshTokenFn func(ctx context.Context, refreshToken string) (*store.SessionInfo, error)
+	deleteSessionFn            func(ctx context.Context, sessionID string) error
+	deleteSessionByRefreshFn   func(ctx context.Context, refreshToken string) error
+}
+
+func (m *mockAuthStore) GetUserByEmail(ctx context.Context, email string) (*model.User, error) {
+	return m.getUserByEmailFn(ctx, email)
+}
+func (m *mockAuthStore) GetUserByID(ctx context.Context, id string) (*model.User, error) {
+	return m.getUserByIDFn(ctx, id)
+}
+func (m *mockAuthStore) EmailExists(ctx context.Context, email string) (bool, error) {
+	return m.emailExistsFn(ctx, email)
+}
+func (m *mockAuthStore) CreateUser(ctx context.Context, email, passwordHash, displayName, role string) (string, string, error) {
+	return m.createUserFn(ctx, email, passwordHash, displayName, role)
+}
+func (m *mockAuthStore) CreateUserWithRole(ctx context.Context, email, passwordHash, displayName, role string) (string, error) {
+	return m.createUserWithRoleFn(ctx, email, passwordHash, displayName, role)
+}
+func (m *mockAuthStore) UpdatePassword(ctx context.Context, userID, passwordHash string) (int64, error) {
+	return m.updatePasswordFn(ctx, userID, passwordHash)
+}
+func (m *mockAuthStore) UpdateProfile(ctx context.Context, userID, displayName string) (*model.User, error) {
+	return m.updateProfileFn(ctx, userID, displayName)
+}
+func (m *mockAuthStore) GetPrimaryTeamID(ctx context.Context, userID string) (string, error) {
+	return m.getPrimaryTeamIDFn(ctx, userID)
+}
+func (m *mockAuthStore) CreateSession(ctx context.Context, userID, refreshToken, userAgent string, ipAddr net.IP, expiresAt time.Time) error {
+	return m.createSessionFn(ctx, userID, refreshToken, userAgent, ipAddr, expiresAt)
+}
+func (m *mockAuthStore) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*store.SessionInfo, error) {
+	return m.getSessionByRefreshTokenFn(ctx, refreshToken)
+}
+func (m *mockAuthStore) DeleteSession(ctx context.Context, sessionID string) error {
+	return m.deleteSessionFn(ctx, sessionID)
+}
+func (m *mockAuthStore) DeleteSessionByRefreshToken(ctx context.Context, refreshToken string) error {
+	return m.deleteSessionByRefreshFn(ctx, refreshToken)
 }
 
 func TestRegisterNoDB(t *testing.T) {
@@ -124,8 +157,6 @@ func TestRegisterInvalidRequest(t *testing.T) {
 
 			h.Register(w, req)
 
-			// Without DB, we get 503 (DB check happens first). With DB, bad input gets 400.
-			// Either way, it should NOT be 200/201.
 			if w.Code == http.StatusCreated || w.Code == http.StatusOK {
 				t.Errorf("Register(%s): should not succeed, got %d", tt.name, w.Code)
 			}
@@ -161,9 +192,6 @@ func TestLoginInvalidRequest(t *testing.T) {
 }
 
 func TestRefreshMissingCookie(t *testing.T) {
-	// Need a handler with a real (mock) DB for this test to get past the nil check.
-	// With nil DB, we get 503, which is correct but tests a different path.
-	// This test verifies the no-DB path returns 503.
 	h := newTestAuthHandler()
 
 	req := httptest.NewRequest("POST", "/auth/refresh", nil)
@@ -177,7 +205,6 @@ func TestRefreshMissingCookie(t *testing.T) {
 }
 
 func TestLogoutNoCookie(t *testing.T) {
-	// Without DB, returns 503
 	h := newTestAuthHandler()
 
 	req := httptest.NewRequest("POST", "/auth/logout", nil)
@@ -191,7 +218,6 @@ func TestLogoutNoCookie(t *testing.T) {
 }
 
 func TestAuthResponseShape(t *testing.T) {
-	// Verify the JSON shape of AuthResponse
 	resp := AuthResponse{
 		User: UserResponse{
 			ID:          "user-1",
@@ -213,14 +239,12 @@ func TestAuthResponseShape(t *testing.T) {
 		t.Fatalf("unmarshal: %v", err)
 	}
 
-	// Check top-level keys
 	for _, key := range []string{"user", "access_token", "expires_at"} {
 		if _, ok := decoded[key]; !ok {
 			t.Errorf("missing key %q in AuthResponse", key)
 		}
 	}
 
-	// Check user keys
 	user := decoded["user"].(map[string]interface{})
 	for _, key := range []string{"id", "email", "display_name", "role"} {
 		if _, ok := user[key]; !ok {
@@ -231,7 +255,6 @@ func TestAuthResponseShape(t *testing.T) {
 
 func TestRefreshCookieAttributes(t *testing.T) {
 	w := httptest.NewRecorder()
-	// Simulate HTTPS via X-Forwarded-Proto so Secure flag is set
 	req := httptest.NewRequest("POST", "/auth/refresh", nil)
 	req.Header.Set("X-Forwarded-Proto", "https")
 	setRefreshCookie(w, req, "test-token", 7*24*time.Hour)
@@ -264,7 +287,6 @@ func TestRefreshCookieAttributes(t *testing.T) {
 
 func TestRefreshCookieNotSecureOverHTTP(t *testing.T) {
 	w := httptest.NewRecorder()
-	// Plain HTTP request — Secure should be false
 	req := httptest.NewRequest("POST", "/auth/refresh", nil)
 	setRefreshCookie(w, req, "test-token", 7*24*time.Hour)
 
@@ -302,7 +324,6 @@ func TestChangePasswordNoAuth(t *testing.T) {
 	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
 	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
-	// No claims injected into context
 	w := httptest.NewRecorder()
 
 	h.ChangePassword(w, req)
@@ -334,20 +355,20 @@ func TestChangePasswordSuccess(t *testing.T) {
 		t.Fatalf("HashPassword: %v", err)
 	}
 
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				*(dest[0].(*string)) = hash
-				return nil
-			}}
+	ms := &mockAuthStore{
+		getUserByIDFn: func(_ context.Context, id string) (*model.User, error) {
+			return &model.User{ID: id, PasswordHash: hash}, nil
 		},
-		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("UPDATE 1"), nil
+		updatePasswordFn: func(_ context.Context, _, _ string) (int64, error) {
+			return 1, nil
+		},
+		createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+			return nil
 		},
 	}
 
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwt, DB: mockDB}
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
 	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
@@ -368,17 +389,14 @@ func TestChangePasswordWrongCurrentPassword(t *testing.T) {
 		t.Fatalf("HashPassword: %v", err)
 	}
 
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				*(dest[0].(*string)) = hash
-				return nil
-			}}
+	ms := &mockAuthStore{
+		getUserByIDFn: func(_ context.Context, id string) (*model.User, error) {
+			return &model.User{ID: id, PasswordHash: hash}, nil
 		},
 	}
 
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwt, DB: mockDB}
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"wrongpassword","new_password":"newpassword123"}`
 	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
@@ -399,20 +417,17 @@ func TestChangePasswordRowsAffectedZero(t *testing.T) {
 		t.Fatalf("HashPassword: %v", err)
 	}
 
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				*(dest[0].(*string)) = hash
-				return nil
-			}}
+	ms := &mockAuthStore{
+		getUserByIDFn: func(_ context.Context, id string) (*model.User, error) {
+			return &model.User{ID: id, PasswordHash: hash}, nil
 		},
-		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("UPDATE 0"), nil
+		updatePasswordFn: func(_ context.Context, _, _ string) (int64, error) {
+			return 0, nil
 		},
 	}
 
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwt, DB: mockDB}
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	body := `{"current_password":"oldpassword123","new_password":"newpassword123"}`
 	req := httptest.NewRequest("POST", "/api/v1/auth/change-password", strings.NewReader(body))
@@ -428,8 +443,6 @@ func TestChangePasswordRowsAffectedZero(t *testing.T) {
 }
 
 func TestChangePasswordInvalidRequest(t *testing.T) {
-	// Decode/validate runs before the DB nil check, so invalid requests must
-	// produce 400 Bad Request even when h.DB is nil.
 	h := newTestAuthHandler()
 
 	tests := []struct {
@@ -494,39 +507,27 @@ func TestLoginEmbedsPrimaryTeamInJWT(t *testing.T) {
 	}
 
 	const teamID = "550e8400-e29b-41d4-a716-446655440000"
-	callCount := 0
 
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			callCount++
-			switch callCount {
-			case 1:
-				// User lookup: id, password_hash, display_name, role
-				return &mockRow{scanFn: func(dest ...any) error {
-					*(dest[0].(*string)) = "user-id-1"
-					*(dest[1].(*string)) = hash
-					*(dest[2].(*string)) = "Test User"
-					*(dest[3].(*string)) = "maintainer"
-					return nil
-				}}
-			case 2:
-				// Primary team lookup
-				return &mockRow{scanFn: func(dest ...any) error {
-					*(dest[0].(*string)) = teamID
-					return nil
-				}}
-			default:
-				t.Errorf("unexpected QueryRow call #%d", callCount)
-				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
-			}
+	ms := &mockAuthStore{
+		getUserByEmailFn: func(_ context.Context, email string) (*model.User, error) {
+			return &model.User{
+				ID:           "user-id-1",
+				Email:        email,
+				PasswordHash: hash,
+				DisplayName:  "Test User",
+				Role:         "maintainer",
+			}, nil
 		},
-		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("INSERT 1"), nil
+		getPrimaryTeamIDFn: func(_ context.Context, _ string) (string, error) {
+			return teamID, nil
+		},
+		createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+			return nil
 		},
 	}
 
 	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"test@example.com","password":"password123"}`
 	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
@@ -565,38 +566,26 @@ func TestLoginNoTeamHasEmptyTeamIDInJWT(t *testing.T) {
 		t.Fatalf("HashPassword: %v", err)
 	}
 
-	callCount := 0
-
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			callCount++
-			switch callCount {
-			case 1:
-				// User lookup
-				return &mockRow{scanFn: func(dest ...any) error {
-					*(dest[0].(*string)) = "user-id-1"
-					*(dest[1].(*string)) = hash
-					*(dest[2].(*string)) = "Test User"
-					*(dest[3].(*string)) = "maintainer"
-					return nil
-				}}
-			case 2:
-				// No teams found
-				return &mockRow{scanFn: func(dest ...any) error {
-					return pgx.ErrNoRows
-				}}
-			default:
-				t.Errorf("unexpected QueryRow call #%d", callCount)
-				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
-			}
+	ms := &mockAuthStore{
+		getUserByEmailFn: func(_ context.Context, email string) (*model.User, error) {
+			return &model.User{
+				ID:           "user-id-1",
+				Email:        email,
+				PasswordHash: hash,
+				DisplayName:  "Test User",
+				Role:         "maintainer",
+			}, nil
 		},
-		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("INSERT 1"), nil
+		getPrimaryTeamIDFn: func(_ context.Context, _ string) (string, error) {
+			return "", pgx.ErrNoRows
+		},
+		createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+			return nil
 		},
 	}
 
 	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"test@example.com","password":"password123"}`
 	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
@@ -629,19 +618,19 @@ func TestLoginNoTeamHasEmptyTeamIDInJWT(t *testing.T) {
 }
 
 func TestGetMeSuccess(t *testing.T) {
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				*(dest[0].(*string)) = "test@test.com"
-				*(dest[1].(*string)) = "Test User"
-				*(dest[2].(*string)) = "maintainer"
-				return nil
-			}}
+	ms := &mockAuthStore{
+		getUserByIDFn: func(_ context.Context, id string) (*model.User, error) {
+			return &model.User{
+				ID:          id,
+				Email:       "test@test.com",
+				DisplayName: "Test User",
+				Role:        "maintainer",
+			}, nil
 		},
 	}
 
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwt, DB: mockDB}
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
 	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
@@ -669,16 +658,14 @@ func TestGetMeSuccess(t *testing.T) {
 }
 
 func TestGetMeUserNotFound(t *testing.T) {
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			return &mockRow{scanFn: func(dest ...any) error {
-				return pgx.ErrNoRows
-			}}
+	ms := &mockAuthStore{
+		getUserByIDFn: func(_ context.Context, _ string) (*model.User, error) {
+			return nil, pgx.ErrNoRows
 		},
 	}
 
 	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwt, DB: mockDB}
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
 
 	req := httptest.NewRequest("GET", "/api/v1/auth/me", nil)
 	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
@@ -691,45 +678,29 @@ func TestGetMeUserNotFound(t *testing.T) {
 	}
 }
 
-// TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer verifies that when
-// the idx_users_single_owner unique partial index raises a 23505 violation (two
-// concurrent registrations both evaluating as the first user), the handler retries
-// with role='maintainer' and succeeds.
 func TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer(t *testing.T) {
 	callCount := 0
-	mockDB := &mockAuthDB{
-		queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-			callCount++
-			switch callCount {
-			case 1:
-				// Email existence check
-				return &mockRow{scanFn: func(dest ...any) error {
-					*(dest[0].(*bool)) = false
-					return nil
-				}}
-			case 2:
-				// First INSERT attempt — simulate owner constraint violation
-				return &mockRow{scanFn: func(dest ...any) error {
-					return &pgconn.PgError{Code: "23505", ConstraintName: "idx_users_single_owner"}
-				}}
-			case 3:
-				// Retry INSERT as maintainer — succeeds
-				return &mockRow{scanFn: func(dest ...any) error {
-					*(dest[0].(*string)) = "user-uuid-1"
-					*(dest[1].(*string)) = "maintainer"
-					return nil
-				}}
-			default:
-				return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
-			}
+	ms := &mockAuthStore{
+		emailExistsFn: func(_ context.Context, _ string) (bool, error) {
+			return false, nil
 		},
-		execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-			return pgconn.NewCommandTag("INSERT 1"), nil
+		createUserFn: func(_ context.Context, _, _, _, _ string) (string, string, error) {
+			callCount++
+			if callCount == 1 {
+				return "", "", &pgconn.PgError{Code: "23505", ConstraintName: "idx_users_single_owner"}
+			}
+			return "", "owner", nil
+		},
+		createUserWithRoleFn: func(_ context.Context, _, _, _, _ string) (string, error) {
+			return "user-uuid-1", nil
+		},
+		createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+			return nil
 		},
 	}
 
 	jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-	h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+	h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 	body := `{"email":"admin@example.com","password":"password123","display_name":"Admin"}`
 	req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
@@ -753,13 +724,8 @@ func TestRegister_WhenOwnerConstraintViolated_RetriesAsMaintainer(t *testing.T) 
 	if role := user["role"]; role != "maintainer" {
 		t.Errorf("role = %q, want %q", role, "maintainer")
 	}
-	if callCount != 3 {
-		t.Errorf("expected 3 QueryRow calls (email check + first INSERT + retry), got %d", callCount)
-	}
 }
 
-// TestRegister_RoleAssignment verifies that the first registered user receives
-// the 'owner' role and all subsequent users receive 'maintainer'.
 func TestRegister_RoleAssignment(t *testing.T) {
 	tests := []struct {
 		name string
@@ -771,36 +737,20 @@ func TestRegister_RoleAssignment(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			callCount := 0
-			mockDB := &mockAuthDB{
-				queryRowFn: func(ctx context.Context, sql string, args ...any) pgx.Row {
-					callCount++
-					switch callCount {
-					case 1:
-						// Email existence check → not taken
-						return &mockRow{scanFn: func(dest ...any) error {
-							*(dest[0].(*bool)) = false
-							return nil
-						}}
-					case 2:
-						// INSERT ... RETURNING id, role
-						return &mockRow{scanFn: func(dest ...any) error {
-							*(dest[0].(*string)) = "user-uuid"
-							*(dest[1].(*string)) = tc.role
-							return nil
-						}}
-					default:
-						t.Errorf("unexpected QueryRow call #%d", callCount)
-						return &mockRow{scanFn: func(dest ...any) error { return pgx.ErrNoRows }}
-					}
+			ms := &mockAuthStore{
+				emailExistsFn: func(_ context.Context, _ string) (bool, error) {
+					return false, nil
 				},
-				execFn: func(ctx context.Context, sql string, arguments ...any) (pgconn.CommandTag, error) {
-					return pgconn.NewCommandTag("INSERT 1"), nil
+				createUserFn: func(_ context.Context, _, _, _, _ string) (string, string, error) {
+					return "user-uuid", tc.role, nil
+				},
+				createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+					return nil
 				},
 			}
 
 			jwtMgr := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
-			h := &AuthHandler{JWT: jwtMgr, DB: mockDB}
+			h := &AuthHandler{JWT: jwtMgr, AuthStore: ms}
 
 			body := `{"email":"user@example.com","password":"password123","display_name":"User"}`
 			req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
@@ -826,5 +776,210 @@ func TestRegister_RoleAssignment(t *testing.T) {
 				t.Errorf("role = %q, want %q", role, tc.role)
 			}
 		})
+	}
+}
+
+// Store-aware handler tests
+
+func TestAuthHandler_Login_WithStore_Success(t *testing.T) {
+	hash, err := auth.HashPassword("password123")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	callCount := 0
+	ms := &mockAuthStore{
+		getUserByEmailFn: func(_ context.Context, email string) (*model.User, error) {
+			callCount++
+			return &model.User{
+				ID:           "uid-1",
+				Email:        email,
+				PasswordHash: hash,
+				DisplayName:  "Test",
+				Role:         "maintainer",
+			}, nil
+		},
+		getPrimaryTeamIDFn: func(_ context.Context, _ string) (string, error) {
+			return "team-1", nil
+		},
+		createSessionFn: func(_ context.Context, _ string, _ string, _ string, _ net.IP, _ time.Time) error {
+			return nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	body := `{"email":"test@test.com","password":"password123"}`
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Login with store: status = %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+	if callCount != 1 {
+		t.Errorf("expected 1 GetUserByEmail call, got %d", callCount)
+	}
+}
+
+func TestAuthHandler_Login_WithStore_InvalidCredentials(t *testing.T) {
+	hash, err := auth.HashPassword("correctpassword")
+	if err != nil {
+		t.Fatalf("HashPassword: %v", err)
+	}
+
+	ms := &mockAuthStore{
+		getUserByEmailFn: func(_ context.Context, _ string) (*model.User, error) {
+			return &model.User{
+				ID:           "uid-1",
+				Email:        "test@test.com",
+				PasswordHash: hash,
+				DisplayName:  "Test",
+				Role:         "maintainer",
+			}, nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	body := `{"email":"test@test.com","password":"wrongpassword"}`
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Login wrong password: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthHandler_Login_WithStore_UserNotFound(t *testing.T) {
+	ms := &mockAuthStore{
+		getUserByEmailFn: func(_ context.Context, _ string) (*model.User, error) {
+			return nil, pgx.ErrNoRows
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	body := `{"email":"nobody@test.com","password":"password123"}`
+	req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Login(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Login user not found: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthHandler_Refresh_WithStore_Expired(t *testing.T) {
+	ms := &mockAuthStore{
+		getSessionByRefreshTokenFn: func(_ context.Context, _ string) (*store.SessionInfo, error) {
+			return &store.SessionInfo{
+				ID:        "sess-1",
+				UserID:    "uid-1",
+				ExpiresAt: time.Now().Add(-1 * time.Hour),
+			}, nil
+		},
+		deleteSessionFn: func(_ context.Context, _ string) error {
+			return nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	req := httptest.NewRequest("POST", "/auth/refresh", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "expired-token"})
+	w := httptest.NewRecorder()
+
+	h.Refresh(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Refresh expired: status = %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestAuthHandler_Logout_WithStore(t *testing.T) {
+	deleteCalled := false
+	ms := &mockAuthStore{
+		deleteSessionByRefreshFn: func(_ context.Context, _ string) error {
+			deleteCalled = true
+			return nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	req := httptest.NewRequest("POST", "/auth/logout", nil)
+	req.AddCookie(&http.Cookie{Name: "refresh_token", Value: "some-token"})
+	w := httptest.NewRecorder()
+
+	h.Logout(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Logout: status = %d, want %d", w.Code, http.StatusOK)
+	}
+	if !deleteCalled {
+		t.Error("expected DeleteSessionByRefreshToken to be called")
+	}
+}
+
+func TestAuthHandler_UpdateMe_WithStore(t *testing.T) {
+	ms := &mockAuthStore{
+		updateProfileFn: func(_ context.Context, userID, displayName string) (*model.User, error) {
+			return &model.User{
+				ID:          userID,
+				Email:       "test@test.com",
+				DisplayName: displayName,
+				Role:        "maintainer",
+			}, nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	body := `{"display_name":"New Name"}`
+	req := httptest.NewRequest("PATCH", "/api/v1/auth/me", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = req.WithContext(auth.SetClaims(req.Context(), &auth.Claims{UserID: "user-123"}))
+	w := httptest.NewRecorder()
+
+	h.UpdateMe(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("UpdateMe: status = %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+}
+
+func TestAuthHandler_Register_WithStore_EmailExists(t *testing.T) {
+	ms := &mockAuthStore{
+		emailExistsFn: func(_ context.Context, _ string) (bool, error) {
+			return true, nil
+		},
+	}
+
+	jwt := auth.NewJWTManager(testSecret, 15*time.Minute, 7*24*time.Hour)
+	h := &AuthHandler{JWT: jwt, AuthStore: ms}
+
+	body := `{"email":"taken@test.com","password":"password123","display_name":"Test"}`
+	req := httptest.NewRequest("POST", "/auth/register", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	h.Register(w, req)
+
+	if w.Code != http.StatusConflict {
+		t.Errorf("Register email taken: status = %d, want %d", w.Code, http.StatusConflict)
 	}
 }

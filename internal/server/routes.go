@@ -165,11 +165,9 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	oauthH := &handler.OAuthHandler{JWT: jwtMgr, DB: dbPool, OAuth: oauthCfgs, Secure: isSecure}
 	authH := &handler.AuthHandler{JWT: jwtMgr}
 	if dbPool != nil {
-		authH.DB = dbPool
-		authH.AuthStore = &handler.AuthStoreAdapter{Inner: store.NewAuthStore(dbPool)}
+		authH.AuthStore = store.NewAuthStore(dbPool)
 	}
 	reportsH := &handler.ReportsHandler{
-		DB:                 dbPool,
 		AuditStore:         auditStore,
 		QualityGateStore:   qgStore,
 		Webhooks:           whNotifier,
@@ -179,13 +177,12 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		AllowBackdate:      cfg.DisableRateLimit,
 	}
 	if dbPool != nil {
-		reportsH.ReportStore = &handler.ReportsStoreAdapter{Inner: store.NewReportsStore(dbPool)}
+		reportsH.ReportStore = store.NewReportsStore(dbPool)
 	}
 	if triageStore != nil {
 		reportsH.TriageStore = triageStore
 	}
 	execH := &handler.ExecutionsHandler{
-		DB:          dbPool,
 		Hub:         wsHub,
 		AuditStore:  auditStore,
 		K8s:         k8sClient,
@@ -195,24 +192,27 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		Webhooks:    whNotifier,
 	}
 	if dbPool != nil {
-		execH.ExecStore = &handler.ExecutionsStoreAdapter{Inner: store.NewExecutionsStore(dbPool)}
+		execH.ExecStore = store.NewExecutionsStore(dbPool)
 	}
-	analyticsH := &handler.AnalyticsHandler{DB: dbPool}
+	analyticsH := &handler.AnalyticsHandler{}
 	if dbPool != nil {
-		analyticsH.AnalyticsStore = &handler.AnalyticsStoreAdapter{Inner: store.NewAnalyticsStore(dbPool)}
+		analyticsH.AnalyticsStore = store.NewAnalyticsStore(dbPool)
 	}
-	qgH := &handler.QualityGatesHandler{DB: dbPool, AuditStore: auditStore}
+	qgH := &handler.QualityGatesHandler{AuditStore: auditStore}
 	if qgStore != nil {
 		qgH.Store = qgStore
+	}
+	if dbPool != nil {
+		qgH.ReportStore = store.NewReportsStore(dbPool)
 	}
 	teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
 	if dbPool != nil {
 		teamsH.Store = store.NewTeamsStore(dbPool)
 	}
 	shardH := &handler.ShardingHandler{DurationStore: durStore}
-	adminH := &handler.AdminHandler{AuditStore: auditStore, DB: dbPool}
+	adminH := &handler.AdminHandler{AuditStore: auditStore}
 	if dbPool != nil {
-		adminH.AdminStore = &handler.AdminStoreAdapter{Inner: store.NewAdminStore(dbPool)}
+		adminH.AdminStore = store.NewAdminStore(dbPool)
 	}
 	whH := &handler.WebhooksHandler{Dispatcher: webhook.NewDispatcher(), AuditStore: auditStore}
 	if whStore != nil {
