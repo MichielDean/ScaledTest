@@ -10,6 +10,18 @@ All notable changes to this project will be documented here.
 
 - **Bulk test result inserts**: Report ingestion now uses `pgx.Batch` to insert test results in bulk instead of one query per result. This eliminates the N+1 insert pattern that caused 1000+ round-trips for large reports.
 
+### Added
+
+- **Sharding duration-balanced strategy activated**: `DurationStore.UpsertFromResults()` is now called during report ingestion (inside the same transaction), populating the `test_duration_history` table that the `duration_balanced` sharding strategy depends on. Previously, this strategy always fell back to no-history defaults because the duration store was never written to.
+
+- **Targeted duration query**: `GET /api/v1/sharding/durations/{testName}` now uses a `WHERE team_id = $1 AND test_name = $2` SQL query instead of fetching all team durations and filtering in Go (O(1) DB query vs O(N) in-memory scan). The endpoint returns a JSON array of duration entries across all suites for the named test, or 404 if no history exists.
+
+- **Composite-key duration map**: `DurationStore.GetByTeamMap` now uses composite keys (`testName\x00suite`) to preserve entries for the same test name across different suites, preventing data loss in `EnrichWithHistory`.
+
+- **DurationStore integration tests**: Added comprehensive integration tests for `DurationStore` covering `GetByTeam`, `GetByTeamAndTest`, `UpsertFromResults` (insert, rolling average, within-transaction, transaction rollback, empty input), `GetBySuite`, `GetByTeamMap`, p95 conflict behavior, and same-name-different-suite scenarios.
+
+- **Sharding API endpoints documented**: Added `POST /api/v1/sharding/plan`, `POST /api/v1/sharding/rebalance`, `GET /api/v1/sharding/durations`, and `GET /api/v1/sharding/durations/{testName}` to the README Key Endpoints table.
+
 ### Fixed
 
 - **IDOR vulnerability in invitation handlers**: `Create`, `List`, and `Revoke` invitation endpoints (`POST/GET/DELETE /api/v1/teams/{teamID}/invitations`) now verify that the authenticated user's team matches the URL `teamID` before checking role permissions. Previously, any maintainer or owner could list, create, or revoke invitations for any team regardless of membership.

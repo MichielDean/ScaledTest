@@ -3,6 +3,7 @@ package store
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"strconv"
 	"time"
 
@@ -120,6 +121,7 @@ type CreateReportParams struct {
 	Raw                json.RawMessage
 	CreatedAt          time.Time
 	TriageGitHubStatus bool
+	DurationStore      *DurationStore
 }
 
 func (s *ReportsStore) CreateWithResults(ctx context.Context, p CreateReportParams, results []model.TestResult) error {
@@ -171,6 +173,12 @@ func (s *ReportsStore) CreateWithResults(ctx context.Context, p CreateReportPara
 		}
 		if tag.RowsAffected() == 0 {
 			return pgx.ErrNoRows
+		}
+	}
+
+	if p.DurationStore != nil && len(results) > 0 {
+		if err := p.DurationStore.UpsertFromResults(ctx, p.TeamID, results, tx); err != nil {
+			return fmt.Errorf("upsert duration history: %w", err)
 		}
 	}
 
