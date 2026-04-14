@@ -148,7 +148,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize all user-controlled string fields to prevent stored XSS
 	ctrf.Sanitize(report)
 
 	executionID := r.URL.Query().Get("execution_id")
@@ -162,7 +161,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	reportID := uuid.New().String()
 	now := h.resolveReportTime(r)
 
-	// Validate execution_id as UUID and verify team ownership if provided
 	var execIDPtr *string
 	if executionID != "" {
 		if _, err := uuid.Parse(executionID); err != nil {
@@ -182,14 +180,12 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		execIDPtr = &executionID
 	}
 
-	// Build summary JSON
 	summaryJSON, err := ctrf.SummaryJSON(report.Results.Summary)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to marshal summary")
 		return
 	}
 
-	// Normalize test results
 	results := ctrf.Normalize(report, reportID, claims.TeamID)
 
 	rawJSON := json.RawMessage(body)
@@ -214,8 +210,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Enqueue async triage — non-blocking, best-effort. Must be called after
-	// the transaction commits so the triage job can read the persisted rows.
 	if h.TriageEnqueuer != nil {
 		h.TriageEnqueuer.Enqueue(claims.TeamID, reportID)
 	}
@@ -234,7 +228,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		resp["triage_github_status"] = true
 	}
 
-	// Evaluate quality gates for this team
 	if h.QualityGateStore != nil {
 		gateResult := h.evaluateQualityGates(r, claims.TeamID, reportID, report, results)
 		if gateResult != nil {
@@ -261,7 +254,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 
-	// Fire webhook: report.submitted
 	h.Webhooks.Notify(claims.TeamID, webhook.EventReportSubmitted, map[string]interface{}{
 		"report_id":    reportID,
 		"tool":         report.Results.Tool.Name,
@@ -271,7 +263,6 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		"failed":       report.Results.Summary.Failed,
 	})
 
-	// Fire webhook: gate.failed if any quality gate failed
 	if gateResult, ok := resp["qualityGate"].(*QualityGateResponse); ok && gateResult != nil && !gateResult.Passed {
 		h.Webhooks.Notify(claims.TeamID, webhook.EventGateFailed, map[string]interface{}{
 			"report_id": reportID,
@@ -427,11 +418,9 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 	var fixed []TestDiff
 	var durationRegressions []TestDiff
 
-	// Tests in head: compare against base
 	for name, headRes := range headResults {
 		baseRes, existed := baseResults[name]
 		if !existed {
-			// New test — only flag if it failed
 			if headRes.Status == "failed" {
 				newFailures = append(newFailures, TestDiff{
 					Name:           name,
@@ -445,7 +434,6 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Status changes
 		if baseRes.Status != "failed" && headRes.Status == "failed" {
 			newFailures = append(newFailures, TestDiff{
 				Name:           name,
@@ -469,7 +457,6 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 			})
 		}
 
-		// Duration regression: >20% slower AND at least 100ms longer
 		if baseRes.DurationMs > 0 {
 			delta := headRes.DurationMs - baseRes.DurationMs
 			pct := float64(delta) / float64(baseRes.DurationMs) * 100
@@ -488,9 +475,6 @@ func (h *ReportsHandler) Compare(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 	}
-
-	// Tests that existed in base but are gone from head (treat as removed, not failure)
-	// No action needed per spec — just track new failures / fixed.
 
 	type DiffSummary struct {
 		BaseTests           int `json:"base_tests"`
@@ -558,7 +542,6 @@ func (h *ReportsHandler) GetTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Index classifications by cluster ID for O(1) look-up when building output.
 	classByCluster := make(map[string][]map[string]string)
 	for _, c := range classifications {
 		key := ""
@@ -637,13 +620,11 @@ func (h *ReportsHandler) RetryTriage(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Prevent destructive reset when no job can be enqueued to regenerate the data.
 	if h.TriageEnqueuer == nil {
 		Error(w, http.StatusServiceUnavailable, "triage not available")
 		return
 	}
 
-	// Reset from complete or failed back to pending.
 	resetResult, err := h.TriageStore.ForceReset(r.Context(), claims.TeamID, reportID)
 	if err != nil {
 		log.Error().Err(err).Str("report_id", reportID).Msg("failed to reset triage for retry")
@@ -849,7 +830,6 @@ func (h *ReportsHandler) evaluateQualityGates(
 			continue
 		}
 
-		// Store evaluation in DB
 		detailsJSON, _ := json.Marshal(evalResult.Results)
 		_, storeErr := h.QualityGateStore.CreateEvaluation(
 			r.Context(), gate.ID, reportID, evalResult.Passed, detailsJSON,
@@ -858,7 +838,6 @@ func (h *ReportsHandler) evaluateQualityGates(
 			log.Error().Err(storeErr).Str("gate_id", gate.ID).Msg("failed to store gate evaluation")
 		}
 
-		// Build response detail
 		rules := make([]QualityGateRuleResult, len(evalResult.Results))
 		for i, rr := range evalResult.Results {
 			rules[i] = QualityGateRuleResult{

@@ -5,7 +5,6 @@ import (
 	"net"
 	"time"
 
-	"github.com/jackc/pgx/v5"
 	"github.com/jackc/pgx/v5/pgxpool"
 )
 
@@ -89,8 +88,4 @@ func (s *OAuthStore) CreateSession(ctx context.Context, userID, refreshToken, us
 		userID, refreshToken, userAgent, ipAddr, expiresAt,
 	)
 	return err
-}
-
-func IsNoRows(err error) bool {
-	return err == pgx.ErrNoRows
 }

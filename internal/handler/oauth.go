@@ -5,12 +5,14 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
 	"time"
 
+	"github.com/jackc/pgx/v5"
 	"golang.org/x/oauth2"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
@@ -291,7 +293,7 @@ func (h *OAuthHandler) completeOAuth(w http.ResponseWriter, r *http.Request, pro
 
 	// Check if this OAuth account is already linked
 	user, err := h.OAuthStore.FindLinkedUser(ctx, provider, providerID)
-	if err != nil && !store.IsNoRows(err) {
+	if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 		Error(w, http.StatusInternalServerError, "internal error")
 		return
 	}
@@ -299,7 +301,7 @@ func (h *OAuthHandler) completeOAuth(w http.ResponseWriter, r *http.Request, pro
 	if user == nil {
 		// Check if a user with this email already exists (link account)
 		existing, err := h.OAuthStore.FindUserByEmail(ctx, email)
-		if err != nil && !store.IsNoRows(err) {
+		if err != nil && !errors.Is(err, pgx.ErrNoRows) {
 			Error(w, http.StatusInternalServerError, "internal error")
 			return
 		}

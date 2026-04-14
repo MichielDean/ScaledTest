@@ -121,6 +121,17 @@ func teamIDFromURL(w http.ResponseWriter, r *http.Request, claims *auth.Claims) 
 	return teamID, true
 }
 
+// gateIDFromURL extracts the gateID URL parameter.
+// Returns the gateID or writes an error.
+func gateIDFromURL(w http.ResponseWriter, r *http.Request) (string, bool) {
+	gateID := chi.URLParam(r, "gateID")
+	if gateID == "" {
+		Error(w, http.StatusBadRequest, "missing gate ID")
+		return "", false
+	}
+	return gateID, true
+}
+
 // List handles GET /api/v1/teams/:teamID/quality-gates.
 func (h *QualityGatesHandler) List(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())
@@ -193,7 +204,6 @@ func (h *QualityGatesHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.Name = sanitize.String(req.Name)
 	req.Description = sanitize.String(req.Description)
 
@@ -229,9 +239,8 @@ func (h *QualityGatesHandler) Get(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -266,9 +275,8 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -288,7 +296,6 @@ func (h *QualityGatesHandler) Update(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Sanitize user-provided strings
 	req.Name = sanitize.String(req.Name)
 	req.Description = sanitize.String(req.Description)
 
@@ -333,9 +340,8 @@ func (h *QualityGatesHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -379,9 +385,8 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
@@ -425,19 +430,11 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 
 	var totalDurationMs int64
 	currentFailed := make(map[string]bool)
-	var flakyTests []struct {
-		name, suite, filePath string
-	}
 
 	for _, res := range testResults {
 		totalDurationMs += res.DurationMs
 		if res.Status == "failed" {
 			currentFailed[res.Name] = true
-		}
-		if res.Flaky {
-			flakyTests = append(flakyTests, struct {
-				name, suite, filePath string
-			}{res.Name, res.Suite, res.FilePath})
 		}
 	}
 
@@ -464,7 +461,6 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Store evaluation result
 	detailsJSON, _ := json.Marshal(evalResult.Results)
 	eval, err := h.Store.CreateEvaluation(r.Context(), gateID, req.ReportID, evalResult.Passed, detailsJSON)
 	if err != nil {
@@ -472,7 +468,6 @@ func (h *QualityGatesHandler) Evaluate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Build response
 	rules := make([]QualityGateRuleResult, len(evalResult.Results))
 	for i, rr := range evalResult.Results {
 		rules[i] = QualityGateRuleResult{
@@ -506,9 +501,8 @@ func (h *QualityGatesHandler) ListEvaluations(w http.ResponseWriter, r *http.Req
 		return
 	}
 
-	gateID := chi.URLParam(r, "gateID")
-	if gateID == "" {
-		Error(w, http.StatusBadRequest, "missing gate ID")
+	gateID, ok := gateIDFromURL(w, r)
+	if !ok {
 		return
 	}
 
