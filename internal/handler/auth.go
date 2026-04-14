@@ -55,11 +55,6 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password" validate:"required,min=8,max=72"`
 }
 
-// UpdateProfileRequest is the request body for updating the authenticated user's profile.
-type UpdateProfileRequest struct {
-	DisplayName string `json:"display_name" validate:"required,min=1,max=255"`
-}
-
 // ChangePassword handles POST /api/v1/auth/change-password.
 func (h *AuthHandler) ChangePassword(w http.ResponseWriter, r *http.Request) {
 	claims := auth.GetClaims(r.Context())

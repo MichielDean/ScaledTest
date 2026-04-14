@@ -129,7 +129,7 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	var result []analytics.ErrorCluster
+	result := make([]analytics.ErrorCluster, 0, len(clusters))
 	for _, ec := range clusters {
 		result = append(result, analytics.ErrorCluster{
 			Message:   ec.Message,
@@ -138,9 +138,6 @@ func (h *AnalyticsHandler) ErrorAnalysis(w http.ResponseWriter, r *http.Request)
 			FirstSeen: ec.FirstSeen,
 			LastSeen:  ec.LastSeen,
 		})
-	}
-	if result == nil {
-		result = []analytics.ErrorCluster{}
 	}
 
 	JSON(w, http.StatusOK, map[string]interface{}{
