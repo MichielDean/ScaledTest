@@ -240,27 +240,25 @@ func suiteGrouped(groups []testGroup, numWorkers int) []model.Shard {
 	return durationBalanced(suiteGroups, numWorkers)
 }
 
+// durationAggregate holds per-test-name totals built from the composite-keyed history map.
+type durationAggregate struct {
+	totalDurationMs int64
+	suite           string
+}
+
 // EnrichWithHistory takes a list of test names and enriches them with
 // historical duration data. Tests without history get the default estimate.
 // The history map uses composite keys "testName\x00suite" to preserve entries
 // across different suites. For each test name, we aggregate durations across
 // all suites (summing avg_duration_ms).
 func EnrichWithHistory(testNames []string, history map[string]*model.TestDurationHistory) []TestInfo {
-	// Build a per-test-name aggregate from the composite-keyed map.
-	agg := make(map[string]struct {
-		totalDurationMs int64
-		suite           string
-		count           int
-	}, len(testNames))
+	agg := make(map[string]*durationAggregate, len(testNames))
 	for _, h := range history {
-		agg[h.TestName] = struct {
-			totalDurationMs int64
-			suite           string
-			count           int
-		}{
-			totalDurationMs: agg[h.TestName].totalDurationMs + h.AvgDurationMs,
-			suite:           h.Suite,
-			count:           agg[h.TestName].count + 1,
+		a := agg[h.TestName]
+		if a == nil {
+			agg[h.TestName] = &durationAggregate{totalDurationMs: h.AvgDurationMs, suite: h.Suite}
+		} else {
+			a.totalDurationMs += h.AvgDurationMs
 		}
 	}
 
