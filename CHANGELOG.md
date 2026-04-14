@@ -6,6 +6,10 @@ All notable changes to this project will be documented here.
 
 ### Fixed
 
+- **IDOR vulnerability in invitation handlers**: `Create`, `List`, and `Revoke` invitation endpoints (`POST/GET/DELETE /api/v1/teams/{teamID}/invitations`) now verify that the authenticated user's team matches the URL `teamID` before checking role permissions. Previously, any maintainer or owner could list, create, or revoke invitations for any team regardless of membership.
+
+- **Worker callback authorization gap**: `ReportProgress`, `ReportTestResult`, and `ReportWorkerStatus` endpoints (`POST /api/v1/executions/{executionID}/progress|test-result|worker-status`) now verify that the execution belongs to the caller's team before proceeding. Previously, any authenticated user could broadcast WebSocket messages for any execution by guessing IDs. Unauthorized or cross-team requests return 404 (to avoid information leakage); database errors return 500 (fail closed).
+
 - **`GET /api/v1/reports/compare` endpoint returning 500**: Fixed a database query issue where NULL values in optional text columns (`message`, `trace`, `file_path`, `suite`) could not be scanned into string destinations in pgx v5, causing the compare endpoint to return HTTP 500 for reports with missing optional fields. The fix wraps these columns with `COALESCE(..., '')` to convert NULL to empty string, ensuring the endpoint returns HTTP 200 with a valid diff payload. The fix maintains team isolation — reports from different teams return HTTP 404.
 
 - **`GET /api/v1/reports` (ListReports) query parameter validation**: The `since` and `until` query parameters now return HTTP 400 with a clear error message when provided in a malformed format (not RFC3339). Previously, malformed dates were silently ignored, causing the endpoint to return all records instead of signaling a bad request. Empty string values for these parameters continue to be accepted and ignored as before.
