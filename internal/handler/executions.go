@@ -458,6 +458,32 @@ func (h *ExecutionsHandler) ownsExecution(ctx context.Context, executionID, team
 	return exists
 }
 
+func (h *ExecutionsHandler) requireWorkerCallback(w http.ResponseWriter, r *http.Request) (*auth.Claims, string, bool) {
+	claims := auth.GetClaims(r.Context())
+	if claims == nil {
+		Error(w, http.StatusUnauthorized, "unauthorized")
+		return nil, "", false
+	}
+
+	executionID := chi.URLParam(r, "executionID")
+	if executionID == "" {
+		Error(w, http.StatusBadRequest, "missing execution ID")
+		return nil, "", false
+	}
+
+	if h.DB == nil {
+		Error(w, http.StatusServiceUnavailable, "database not configured")
+		return nil, "", false
+	}
+
+	if !h.ownsExecution(r.Context(), executionID, claims.TeamID) {
+		Error(w, http.StatusNotFound, "execution not found")
+		return nil, "", false
+	}
+
+	return claims, executionID, true
+}
+
 // ProgressRequest is the request body for reporting test progress.
 type ProgressRequest struct {
 	Passed       int     `json:"passed"`
@@ -471,31 +497,14 @@ type ProgressRequest struct {
 // ReportProgress handles POST /api/v1/executions/{executionID}/progress.
 // Called by workers to stream live test counters.
 func (h *ExecutionsHandler) ReportProgress(w http.ResponseWriter, r *http.Request) {
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 
 	var req ProgressRequest
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
-		return
-	}
-
-	if h.DB == nil {
-		Error(w, http.StatusServiceUnavailable, "database not configured")
-		return
-	}
-
-	if !h.ownsExecution(r.Context(), executionID, claims.TeamID) {
-		Error(w, http.StatusNotFound, "execution not found")
 		return
 	}
 
@@ -531,31 +540,14 @@ type TestResultEvent struct {
 // ReportTestResult handles POST /api/v1/executions/{executionID}/test-result.
 // Called by workers to stream individual test results as they complete.
 func (h *ExecutionsHandler) ReportTestResult(w http.ResponseWriter, r *http.Request) {
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 
 	var req TestResultEvent
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
-		return
-	}
-
-	if h.DB == nil {
-		Error(w, http.StatusServiceUnavailable, "database not configured")
-		return
-	}
-
-	if !h.ownsExecution(r.Context(), executionID, claims.TeamID) {
-		Error(w, http.StatusNotFound, "execution not found")
 		return
 	}
 
@@ -589,31 +581,14 @@ type WorkerStatusEvent struct {
 // ReportWorkerStatus handles POST /api/v1/executions/{executionID}/worker-status.
 // Called by workers to report their health and progress.
 func (h *ExecutionsHandler) ReportWorkerStatus(w http.ResponseWriter, r *http.Request) {
-	claims := auth.GetClaims(r.Context())
-	if claims == nil {
-		Error(w, http.StatusUnauthorized, "unauthorized")
-		return
-	}
-
-	executionID := chi.URLParam(r, "executionID")
-	if executionID == "" {
-		Error(w, http.StatusBadRequest, "missing execution ID")
+	_, executionID, ok := h.requireWorkerCallback(w, r)
+	if !ok {
 		return
 	}
 
 	var req WorkerStatusEvent
 	if err := Decode(r, &req); err != nil {
 		Error(w, http.StatusBadRequest, "invalid request: "+err.Error())
-		return
-	}
-
-	if h.DB == nil {
-		Error(w, http.StatusServiceUnavailable, "database not configured")
-		return
-	}
-
-	if !h.ownsExecution(r.Context(), executionID, claims.TeamID) {
-		Error(w, http.StatusNotFound, "execution not found")
 		return
 	}
 
