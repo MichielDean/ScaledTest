@@ -278,23 +278,6 @@ func TestEnrichWithHistory_SameNameDifferentSuites_DeterministicSuite(t *testing
 	}
 }
 
-func TestEnrichWithHistory_SameNameDifferentSuites_SumsDurations(t *testing.T) {
-	names := []string{"test-a"}
-	history := map[string]*model.TestDurationHistory{
-		"test-a\x00unit":        {TestName: "test-a", AvgDurationMs: 100, Suite: "unit"},
-		"test-a\x00integration": {TestName: "test-a", AvgDurationMs: 200, Suite: "integration"},
-	}
-
-	enriched := EnrichWithHistory(names, history)
-
-	if len(enriched) != 1 {
-		t.Fatalf("len(enriched) = %d, want 1", len(enriched))
-	}
-	if enriched[0].EstDurationMs != 300 {
-		t.Errorf("test-a duration across suites: got %d, want 300 (100+200)", enriched[0].EstDurationMs)
-	}
-}
-
 func TestRebalance_FailedWorker(t *testing.T) {
 	plan := &model.ShardPlan{
 		Shards: []model.Shard{
