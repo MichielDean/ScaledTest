@@ -206,13 +206,13 @@ jobs:
             curl -sf http://localhost:3000/api/v1/health && break || sleep 2
           done
 
-      - name: Install Playwright
-        working-directory: e2e
-        run: npx playwright install chromium --with-deps
-
       - name: Install e2e dependencies
         working-directory: e2e
         run: npm ci
+
+      - name: Install Playwright
+        working-directory: e2e
+        run: npx playwright install chromium --with-deps
 
       - name: Run E2E tests
         working-directory: e2e
