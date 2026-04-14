@@ -67,6 +67,11 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if claims.TeamID != teamID {
+		Error(w, http.StatusForbidden, "not a member of this team")
+		return
+	}
+
 	if claims.Role != "maintainer" && claims.Role != "owner" {
 		Error(w, http.StatusForbidden, "maintainer or owner role required")
 		return
@@ -145,6 +150,11 @@ func (h *InvitationsHandler) List(w http.ResponseWriter, r *http.Request) {
 	teamID := chi.URLParam(r, "teamID")
 	if teamID == "" {
 		Error(w, http.StatusBadRequest, "missing team ID")
+		return
+	}
+
+	if claims.TeamID != teamID {
+		Error(w, http.StatusForbidden, "not a member of this team")
 		return
 	}
 
@@ -296,6 +306,11 @@ func (h *InvitationsHandler) Revoke(w http.ResponseWriter, r *http.Request) {
 	invitationID := chi.URLParam(r, "invitationID")
 	if teamID == "" || invitationID == "" {
 		Error(w, http.StatusBadRequest, "missing team ID or invitation ID")
+		return
+	}
+
+	if claims.TeamID != teamID {
+		Error(w, http.StatusForbidden, "not a member of this team")
 		return
 	}
 
