@@ -37,15 +37,11 @@ func (a *AuthStoreAdapter) UpdateProfile(ctx context.Context, userID, displayNam
 func (a *AuthStoreAdapter) GetPrimaryTeamID(ctx context.Context, userID string) (string, error) {
 	return a.Inner.GetPrimaryTeamID(ctx, userID)
 }
-func (a *AuthStoreAdapter) CreateSession(ctx context.Context, userID, refreshToken string, userAgent string, ipAddr net.IP, expiresAt time.Time) error {
+func (a *AuthStoreAdapter) CreateSession(ctx context.Context, userID, refreshToken, userAgent string, ipAddr net.IP, expiresAt time.Time) error {
 	return a.Inner.CreateSession(ctx, userID, refreshToken, userAgent, ipAddr, expiresAt)
 }
-func (a *AuthStoreAdapter) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*storeSessionInfo, error) {
-	si, err := a.Inner.GetSessionByRefreshToken(ctx, refreshToken)
-	if err != nil {
-		return nil, err
-	}
-	return &storeSessionInfo{ID: si.ID, UserID: si.UserID, ExpiresAt: si.ExpiresAt}, nil
+func (a *AuthStoreAdapter) GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*store.SessionInfo, error) {
+	return a.Inner.GetSessionByRefreshToken(ctx, refreshToken)
 }
 func (a *AuthStoreAdapter) DeleteSession(ctx context.Context, sessionID string) error {
 	return a.Inner.DeleteSession(ctx, sessionID)
@@ -58,61 +54,17 @@ type AnalyticsStoreAdapter struct {
 	Inner *store.AnalyticsStore
 }
 
-func (a *AnalyticsStoreAdapter) QueryTrends(ctx context.Context, groupBy, teamID string, start, end time.Time) ([]analyticsTrendRow, error) {
-	rows, err := a.Inner.QueryTrends(ctx, groupBy, teamID, start, end)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]analyticsTrendRow, len(rows))
-	for i, r := range rows {
-		result[i] = analyticsTrendRow{
-			Date:     r.Date,
-			Total:    r.Total,
-			Passed:   r.Passed,
-			Failed:   r.Failed,
-			Skipped:  r.Skipped,
-			PassRate: r.PassRate,
-		}
-	}
-	return result, nil
+func (a *AnalyticsStoreAdapter) QueryTrends(ctx context.Context, groupBy, teamID string, start, end time.Time) ([]store.TrendRow, error) {
+	return a.Inner.QueryTrends(ctx, groupBy, teamID, start, end)
 }
 func (a *AnalyticsStoreAdapter) QueryDurationBuckets(ctx context.Context, teamID string, start, end time.Time) ([]int64, error) {
 	return a.Inner.QueryDurationBuckets(ctx, teamID, start, end)
 }
-func (a *AnalyticsStoreAdapter) QueryErrorClusters(ctx context.Context, teamID string, start, end time.Time, limit int) ([]analyticsErrorClusterRow, error) {
-	rows, err := a.Inner.QueryErrorClusters(ctx, teamID, start, end, limit)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]analyticsErrorClusterRow, len(rows))
-	for i, r := range rows {
-		result[i] = analyticsErrorClusterRow{
-			Message:   r.Message,
-			Count:     r.Count,
-			TestNames: r.TestNames,
-			FirstSeen: r.FirstSeen,
-			LastSeen:  r.LastSeen,
-		}
-	}
-	return result, nil
+func (a *AnalyticsStoreAdapter) QueryErrorClusters(ctx context.Context, teamID string, start, end time.Time, limit int) ([]store.ErrorClusterRow, error) {
+	return a.Inner.QueryErrorClusters(ctx, teamID, start, end, limit)
 }
-func (a *AnalyticsStoreAdapter) QueryFlakyTests(ctx context.Context, teamID string, cutoff time.Time, minRuns int) ([]analyticsFlakyRow, error) {
-	rows, err := a.Inner.QueryFlakyTests(ctx, teamID, cutoff, minRuns)
-	if err != nil {
-		return nil, err
-	}
-	result := make([]analyticsFlakyRow, len(rows))
-	for i, r := range rows {
-		result[i] = analyticsFlakyRow{
-			Name:       r.Name,
-			Suite:      r.Suite,
-			FilePath:   r.FilePath,
-			Statuses:   r.Statuses,
-			LastStatus: r.LastStatus,
-			TotalRuns:  r.TotalRuns,
-		}
-	}
-	return result, nil
+func (a *AnalyticsStoreAdapter) QueryFlakyTests(ctx context.Context, teamID string, cutoff time.Time, minRuns int) ([]store.FlakyRow, error) {
+	return a.Inner.QueryFlakyTests(ctx, teamID, cutoff, minRuns)
 }
 
 type ExecutionsStoreAdapter struct {
@@ -151,30 +103,11 @@ type ReportsStoreAdapter struct {
 	Inner *store.ReportsStore
 }
 
-func (a *ReportsStoreAdapter) List(ctx context.Context, filter reportsListFilter) ([]map[string]interface{}, int, error) {
-	f := store.ReportListFilter{
-		TeamID: filter.TeamID,
-		Since:  filter.Since,
-		Until:  filter.Until,
-		Limit:  filter.Limit,
-		Offset: filter.Offset,
-	}
-	return a.Inner.List(ctx, f)
+func (a *ReportsStoreAdapter) List(ctx context.Context, filter store.ReportListFilter) ([]map[string]interface{}, int, error) {
+	return a.Inner.List(ctx, filter)
 }
-func (a *ReportsStoreAdapter) CreateWithResults(ctx context.Context, p createReportParams, results []model.TestResult) error {
-	cp := store.CreateReportParams{
-		ID:                 p.ID,
-		TeamID:             p.TeamID,
-		ExecutionID:        p.ExecutionID,
-		ToolName:           p.ToolName,
-		ToolVersion:        p.ToolVersion,
-		Environment:        p.Environment,
-		Summary:            p.Summary,
-		Raw:                p.Raw,
-		CreatedAt:          p.CreatedAt,
-		TriageGitHubStatus: p.TriageGitHubStatus,
-	}
-	return a.Inner.CreateWithResults(ctx, cp, results)
+func (a *ReportsStoreAdapter) CreateWithResults(ctx context.Context, p store.CreateReportParams, results []model.TestResult) error {
+	return a.Inner.CreateWithResults(ctx, p, results)
 }
 func (a *ReportsStoreAdapter) Get(ctx context.Context, id, teamID string) (*model.TestReport, error) {
 	return a.Inner.Get(ctx, id, teamID)

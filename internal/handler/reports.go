@@ -116,7 +116,7 @@ func (h *ReportsHandler) List(w http.ResponseWriter, r *http.Request) {
 		if hasUntil {
 			untilPtr = &untilTime
 		}
-		reports, total, err := h.ReportStore.List(r.Context(), reportsListFilter{
+		reports, total, err := h.ReportStore.List(r.Context(), store.ReportListFilter{
 			TeamID: claims.TeamID,
 			Since:  sincePtr,
 			Until:  untilPtr,
@@ -285,7 +285,7 @@ func (h *ReportsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	if h.ReportStore != nil {
 		// Use store layer with pgx.Batch for bulk inserts (avoids N+1)
 		rawJSON := json.RawMessage(body)
-		params := createReportParams{
+		params := store.CreateReportParams{
 			ID:                 reportID,
 			TeamID:             claims.TeamID,
 			ExecutionID:        execIDPtr,

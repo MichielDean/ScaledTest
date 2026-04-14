@@ -2,11 +2,11 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"net"
 	"time"
 
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 // authStore abstracts auth persistence operations.
@@ -19,50 +19,18 @@ type authStore interface {
 	UpdatePassword(ctx context.Context, userID, passwordHash string) (int64, error)
 	UpdateProfile(ctx context.Context, userID, displayName string) (*model.User, error)
 	GetPrimaryTeamID(ctx context.Context, userID string) (string, error)
-	CreateSession(ctx context.Context, userID, refreshToken string, userAgent string, ipAddr net.IP, expiresAt time.Time) error
-	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*storeSessionInfo, error)
+	CreateSession(ctx context.Context, userID, refreshToken, userAgent string, ipAddr net.IP, expiresAt time.Time) error
+	GetSessionByRefreshToken(ctx context.Context, refreshToken string) (*store.SessionInfo, error)
 	DeleteSession(ctx context.Context, sessionID string) error
 	DeleteSessionByRefreshToken(ctx context.Context, refreshToken string) error
 }
 
-type storeSessionInfo struct {
-	ID        string
-	UserID    string
-	ExpiresAt time.Time
-}
-
 // analyticsStore abstracts analytics query operations.
 type analyticsStore interface {
-	QueryTrends(ctx context.Context, groupBy, teamID string, start, end time.Time) ([]analyticsTrendRow, error)
+	QueryTrends(ctx context.Context, groupBy, teamID string, start, end time.Time) ([]store.TrendRow, error)
 	QueryDurationBuckets(ctx context.Context, teamID string, start, end time.Time) ([]int64, error)
-	QueryErrorClusters(ctx context.Context, teamID string, start, end time.Time, limit int) ([]analyticsErrorClusterRow, error)
-	QueryFlakyTests(ctx context.Context, teamID string, cutoff time.Time, minRuns int) ([]analyticsFlakyRow, error)
-}
-
-type analyticsTrendRow struct {
-	Date     time.Time
-	Total    int
-	Passed   int
-	Failed   int
-	Skipped  int
-	PassRate float64
-}
-
-type analyticsErrorClusterRow struct {
-	Message   string
-	Count     int
-	TestNames []string
-	FirstSeen time.Time
-	LastSeen  time.Time
-}
-
-type analyticsFlakyRow struct {
-	Name       string
-	Suite      string
-	FilePath   string
-	Statuses   []string
-	LastStatus string
-	TotalRuns  int
+	QueryErrorClusters(ctx context.Context, teamID string, start, end time.Time, limit int) ([]store.ErrorClusterRow, error)
+	QueryFlakyTests(ctx context.Context, teamID string, cutoff time.Time, minRuns int) ([]store.FlakyRow, error)
 }
 
 // executionsStore abstracts execution persistence operations.
@@ -80,34 +48,13 @@ type executionsStore interface {
 
 // reportsStore abstracts report persistence operations.
 type reportsStore interface {
-	List(ctx context.Context, filter reportsListFilter) ([]map[string]interface{}, int, error)
-	CreateWithResults(ctx context.Context, p createReportParams, results []model.TestResult) error
+	List(ctx context.Context, filter store.ReportListFilter) ([]map[string]interface{}, int, error)
+	CreateWithResults(ctx context.Context, p store.CreateReportParams, results []model.TestResult) error
 	Get(ctx context.Context, id, teamID string) (*model.TestReport, error)
 	Delete(ctx context.Context, id, teamID string) (int64, error)
 	ExecutionExists(ctx context.Context, executionID, teamID string) (bool, error)
 	GetReportAndResults(ctx context.Context, id, teamID string) (*model.TestReport, map[string]*model.TestResult, error)
 	GetPreviousFailedTests(ctx context.Context, teamID, currentReportID string) (map[string]bool, error)
-}
-
-type reportsListFilter struct {
-	TeamID string
-	Since  *time.Time
-	Until  *time.Time
-	Limit  int
-	Offset int
-}
-
-type createReportParams struct {
-	ID                 string
-	TeamID             string
-	ExecutionID        *string
-	ToolName           string
-	ToolVersion        string
-	Environment        json.RawMessage
-	Summary            json.RawMessage
-	Raw                json.RawMessage
-	CreatedAt          time.Time
-	TriageGitHubStatus bool
 }
 
 // adminStore abstracts admin query operations.

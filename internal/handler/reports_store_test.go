@@ -12,11 +12,12 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 type mockReportsStore struct {
-	listFunc                   func(ctx context.Context, filter reportsListFilter) ([]map[string]interface{}, int, error)
-	createWithResultsFunc      func(ctx context.Context, p createReportParams, results []model.TestResult) error
+	listFunc                   func(ctx context.Context, filter store.ReportListFilter) ([]map[string]interface{}, int, error)
+	createWithResultsFunc      func(ctx context.Context, p store.CreateReportParams, results []model.TestResult) error
 	getFunc                    func(ctx context.Context, id, teamID string) (*model.TestReport, error)
 	deleteFunc                 func(ctx context.Context, id, teamID string) (int64, error)
 	executionExistsFunc        func(ctx context.Context, executionID, teamID string) (bool, error)
@@ -24,10 +25,10 @@ type mockReportsStore struct {
 	getPreviousFailedTestsFunc func(ctx context.Context, teamID, currentReportID string) (map[string]bool, error)
 }
 
-func (m *mockReportsStore) List(ctx context.Context, filter reportsListFilter) ([]map[string]interface{}, int, error) {
+func (m *mockReportsStore) List(ctx context.Context, filter store.ReportListFilter) ([]map[string]interface{}, int, error) {
 	return m.listFunc(ctx, filter)
 }
-func (m *mockReportsStore) CreateWithResults(ctx context.Context, p createReportParams, results []model.TestResult) error {
+func (m *mockReportsStore) CreateWithResults(ctx context.Context, p store.CreateReportParams, results []model.TestResult) error {
 	return m.createWithResultsFunc(ctx, p, results)
 }
 func (m *mockReportsStore) Get(ctx context.Context, id, teamID string) (*model.TestReport, error) {
@@ -138,7 +139,7 @@ func TestReportsHandler_Create_WithStore_BulkInsert(t *testing.T) {
 		executionExistsFunc: func(_ context.Context, _, _ string) (bool, error) {
 			return false, nil
 		},
-		createWithResultsFunc: func(_ context.Context, p createReportParams, results []model.TestResult) error {
+		createWithResultsFunc: func(_ context.Context, p store.CreateReportParams, results []model.TestResult) error {
 			capturedResults = results
 			return nil
 		},
@@ -161,7 +162,7 @@ func TestReportsHandler_Create_WithStore_BulkInsert(t *testing.T) {
 
 func TestReportsHandler_List_WithStore(t *testing.T) {
 	ms := &mockReportsStore{
-		listFunc: func(_ context.Context, filter reportsListFilter) ([]map[string]interface{}, int, error) {
+		listFunc: func(_ context.Context, filter store.ReportListFilter) ([]map[string]interface{}, int, error) {
 			reports := []map[string]interface{}{
 				{"id": "r1", "tool_name": "jest", "total": 10},
 				{"id": "r2", "tool_name": "mocha", "total": 20},
@@ -186,7 +187,7 @@ func TestReportsHandler_Create_WithStore_ExecutionExists(t *testing.T) {
 		executionExistsFunc: func(_ context.Context, executionID, teamID string) (bool, error) {
 			return executionID == "550e8400-e29b-41d4-a716-446655440000" && teamID == "team-1", nil
 		},
-		createWithResultsFunc: func(_ context.Context, p createReportParams, results []model.TestResult) error {
+		createWithResultsFunc: func(_ context.Context, p store.CreateReportParams, results []model.TestResult) error {
 			return nil
 		},
 	}
@@ -277,32 +278,5 @@ func TestAdminHandler_ListUsers_WithStore_Empty(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("ListUsers empty: status = %d, want %d", w.Code, http.StatusOK)
-	}
-}
-
-// Benchmark for report ingestion with bulk inserts via store
-func BenchmarkReportStore_CreateWithResults_100Results(b *testing.B) {
-	results := make([]model.TestResult, 100)
-	for i := range results {
-		results[i] = model.TestResult{
-			ReportID:   "bench-report",
-			TeamID:     "bench-team",
-			Name:       "bench-test-" + strings.Repeat("x", 20),
-			Status:     "passed",
-			DurationMs: int64(i * 10),
-			Tags:       []string{},
-			Retry:      0,
-			Flaky:      false,
-		}
-	}
-	_ = results
-
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		// This benchmark measures the normalization + result creation overhead
-		// without a real database. The actual pgx.Batch insertion speed depends
-		// on the database connection and is measured in integration benchmarks.
-		// Here we verify that the in-memory processing for 100 results completes
-		// in reasonable time (<1ms per report).
 	}
 }
