@@ -49,10 +49,10 @@ func (m *mockInvitationStore) AcceptInvitation(_ context.Context, _, _, _, _, _,
 
 // mockMailer is a test double for mailer.Mailer.
 type mockMailer struct {
-	called bool
-	sentTo string
+	called  bool
+	sentTo  string
 	sentURL string
-	err    error
+	err     error
 }
 
 func (m *mockMailer) SendInvitation(_ context.Context, to, url string) error {
@@ -248,9 +248,9 @@ func TestRevokeInvitation_Unauthorized(t *testing.T) {
 func TestRevokeInvitation_ReadonlyForbidden(t *testing.T) {
 	h := &InvitationsHandler{}
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("DELETE", "/api/v1/teams/t1/invitations/inv1", nil)
+	r := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/invitations/inv1", nil)
 	r = testWithClaimsAndParams(r, invClaims("user-1", "team-1", "readonly"), map[string]string{
-		"teamID":       "t1",
+		"teamID":       "team-1",
 		"invitationID": "inv1",
 	})
 
@@ -264,9 +264,9 @@ func TestRevokeInvitation_ReadonlyForbidden(t *testing.T) {
 func TestRevokeInvitation_NoDB(t *testing.T) {
 	h := &InvitationsHandler{Store: nil}
 	w := httptest.NewRecorder()
-	r := httptest.NewRequest("DELETE", "/api/v1/teams/t1/invitations/inv1", nil)
+	r := httptest.NewRequest("DELETE", "/api/v1/teams/team-1/invitations/inv1", nil)
 	r = testWithClaimsAndParams(r, invClaims("user-1", "team-1", "owner"), map[string]string{
-		"teamID":       "t1",
+		"teamID":       "team-1",
 		"invitationID": "inv1",
 	})
 
@@ -521,6 +521,49 @@ func TestCreateInvitation_NilAuditStore_NoPanic(t *testing.T) {
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("Create with nil audit: got %d, want %d", w.Code, http.StatusCreated)
+	}
+}
+
+func TestListInvitations_WrongTeam_Forbidden(t *testing.T) {
+	h := &InvitationsHandler{Store: &mockInvitationStore{}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("GET", "/api/v1/teams/team-other/invitations", nil)
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-other")
+
+	h.List(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("List with wrong team: got %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestCreateInvitation_WrongTeam_Forbidden(t *testing.T) {
+	h := &InvitationsHandler{Store: &mockInvitationStore{}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/teams/team-other/invitations", strings.NewReader(`{"email":"x@example.com","role":"readonly"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsAndParam(r, invClaims("user-1", "team-1", "owner"), "teamID", "team-other")
+
+	h.Create(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Create with wrong team: got %d, want %d", w.Code, http.StatusForbidden)
+	}
+}
+
+func TestRevokeInvitation_WrongTeam_Forbidden(t *testing.T) {
+	h := &InvitationsHandler{Store: &mockInvitationStore{}}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("DELETE", "/api/v1/teams/team-other/invitations/inv1", nil)
+	r = testWithClaimsAndParams(r, invClaims("user-1", "team-1", "owner"), map[string]string{
+		"teamID":       "team-other",
+		"invitationID": "inv1",
+	})
+
+	h.Revoke(w, r)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("Revoke with wrong team: got %d, want %d", w.Code, http.StatusForbidden)
 	}
 }
 

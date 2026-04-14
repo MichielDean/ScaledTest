@@ -8,7 +8,6 @@ import (
 	"testing"
 )
 
-
 func TestListExecutions_Unauthorized(t *testing.T) {
 	h := &ExecutionsHandler{}
 	w := httptest.NewRecorder()
@@ -220,6 +219,93 @@ func TestUpdateStatus_NoDB(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("UpdateStatus without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestReportProgress_Unauthorized(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/progress", strings.NewReader(`{"total":1,"passed":1}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportProgress(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ReportProgress without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestReportProgress_NoDB(t *testing.T) {
+	h := &ExecutionsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/progress", strings.NewReader(`{"total":1,"passed":1}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportProgress(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("ReportProgress without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestReportTestResult_Unauthorized(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/test-result", strings.NewReader(`{"name":"test","status":"passed"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportTestResult(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ReportTestResult without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestReportTestResult_NoDB(t *testing.T) {
+	h := &ExecutionsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/test-result", strings.NewReader(`{"name":"test","status":"passed"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportTestResult(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("ReportTestResult without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestReportWorkerStatus_Unauthorized(t *testing.T) {
+	h := &ExecutionsHandler{}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/worker-status", strings.NewReader(`{"worker_id":"w1","status":"running"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportWorkerStatus(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("ReportWorkerStatus without claims: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+}
+
+func TestReportWorkerStatus_NoDB(t *testing.T) {
+	h := &ExecutionsHandler{DB: nil}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/abc/worker-status", strings.NewReader(`{"worker_id":"w1","status":"running"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "executionID", "abc")
+
+	h.ReportWorkerStatus(w, r)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("ReportWorkerStatus without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
 	}
 }
 
