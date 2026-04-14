@@ -975,9 +975,6 @@ func TestCreateReport_NoDB_Returns503(t *testing.T) {
 	if len(calls) > 0 {
 		t.Errorf("expected no webhook calls without ReportStore, got %d", len(calls))
 	}
-	if len(calls) > 0 {
-		t.Errorf("expected no webhook calls in no-DB fallback, got %d", len(calls))
-	}
 }
 
 func TestCreateReport_NoDB_NilWebhookNotifierSafe(t *testing.T) {

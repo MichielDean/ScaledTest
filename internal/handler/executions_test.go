@@ -25,7 +25,6 @@ type mockExecutionsStore struct {
 	getK8sJobNameFn func(ctx context.Context, id string) (*string, error)
 	setK8sJobNameFn func(ctx context.Context, id, jobName string, now time.Time) error
 	markFailedFn    func(ctx context.Context, id, errorMsg string, now time.Time) error
-	linkReportFn    func(ctx context.Context, executionID, teamID, reportID string, now time.Time) (int64, error)
 }
 
 func (m *mockExecutionsStore) List(ctx context.Context, teamID string, limit, offset int) ([]model.TestExecution, int, error) {
@@ -54,9 +53,6 @@ func (m *mockExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName str
 }
 func (m *mockExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error {
 	return m.markFailedFn(ctx, id, errorMsg, now)
-}
-func (m *mockExecutionsStore) LinkReport(ctx context.Context, executionID, teamID, reportID string, now time.Time) (int64, error) {
-	return m.linkReportFn(ctx, executionID, teamID, reportID, now)
 }
 
 func TestListExecutions_Unauthorized(t *testing.T) {

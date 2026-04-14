@@ -91,10 +91,6 @@ func (s *OAuthStore) CreateSession(ctx context.Context, userID, refreshToken, us
 	return err
 }
 
-func (s *OAuthStore) DB() *pgxpool.Pool {
-	return s.pool
-}
-
 func IsNoRows(err error) bool {
 	return err == pgx.ErrNoRows
 }
