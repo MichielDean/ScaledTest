@@ -16,6 +16,7 @@ import (
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/db"
 	"github.com/scaledtest/scaledtest/internal/handler"
+	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/testutil"
 )
 
@@ -23,7 +24,7 @@ import (
 func postCompare(t *testing.T, pool *db.Pool, teamID, baseID, headID string) *httptest.ResponseRecorder {
 	t.Helper()
 	h := &handler.ReportsHandler{
-		DB: pool,
+		ReportStore: store.NewReportsStore(pool),
 	}
 	req := httptest.NewRequest(http.MethodGet,
 		fmt.Sprintf("/api/v1/reports/compare?base=%s&head=%s", baseID, headID),
@@ -49,7 +50,7 @@ func postCompare(t *testing.T, pool *db.Pool, teamID, baseID, headID string) *ht
 //
 // Before the fix, the fetchResults query scanned nullable TEXT columns directly
 // into string destinations. pgx v5 returns "cannot scan NULL into *string" for
-// NULL TEXT values, causing a 500. The fix uses COALESCE to convert NULL to ''.
+// NULL TEXT values, causing a 500. The fix uses COALESCE to convert NULL to ”.
 //
 // Given: two reports whose test results have no message, trace, file_path, or suite
 // When: the Compare endpoint is called with those report IDs
