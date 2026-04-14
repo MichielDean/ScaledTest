@@ -10,9 +10,11 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/jackc/pgx/v5"
 
 	"github.com/scaledtest/scaledtest/internal/auth"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 )
 
 var testClaims = &auth.Claims{
@@ -239,16 +241,28 @@ func TestDeleteToken_NoDB(t *testing.T) {
 	}
 }
 
-// mockTeamsStore implements teamsStore for audit logging tests.
+// mockTeamsStore implements teamsStore for unit tests.
 type mockTeamsStore struct {
-	team    *model.Team
-	token   *model.APIToken
-	role    string
-	roleErr error
-	delErr  error
-	delRows int64
+	team         *model.Team
+	teamWithRole *store.TeamWithRole
+	teamsList    []store.TeamWithRole
+	token        *model.APIToken
+	tokensList   []model.APIToken
+	role         string
+	roleErr      error
+	delErr       error
+	delRows      int64
 }
 
+func (m *mockTeamsStore) ListTeams(_ context.Context, _ string) ([]store.TeamWithRole, error) {
+	return m.teamsList, nil
+}
+func (m *mockTeamsStore) GetTeam(_ context.Context, _, _ string) (*store.TeamWithRole, error) {
+	if m.teamWithRole != nil {
+		return m.teamWithRole, nil
+	}
+	return nil, pgx.ErrNoRows
+}
 func (m *mockTeamsStore) CreateTeam(_ context.Context, _, _ string) (*model.Team, error) {
 	return m.team, nil
 }
@@ -261,6 +275,9 @@ func (m *mockTeamsStore) DeleteTeam(_ context.Context, _ string) error {
 	return m.delErr
 }
 
+func (m *mockTeamsStore) ListTokens(_ context.Context, _ string) ([]model.APIToken, error) {
+	return m.tokensList, nil
+}
 func (m *mockTeamsStore) CreateToken(_ context.Context, _, _, _, _, _ string) (*model.APIToken, error) {
 	return m.token, nil
 }
@@ -270,6 +287,142 @@ func (m *mockTeamsStore) DeleteToken(_ context.Context, _, _ string) (int64, err
 }
 
 // --- Audit logging tests ---
+
+func TestTeamsHandler_List_WithStore(t *testing.T) {
+	ms := &mockTeamsStore{
+		teamsList: []store.TeamWithRole{
+			{Team: model.Team{ID: "team-1", Name: "Alpha"}, Role: "owner"},
+			{Team: model.Team{ID: "team-2", Name: "Beta"}, Role: "maintainer"},
+		},
+	}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams", nil)
+	req = testWithClaims(req, testClaims)
+	w := httptest.NewRecorder()
+
+	h.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("List with store: got %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	teams, ok := resp["teams"].([]interface{})
+	if !ok || len(teams) != 2 {
+		t.Errorf("expected 2 teams, got %v", resp["teams"])
+	}
+}
+
+func TestTeamsHandler_List_WithStore_Empty(t *testing.T) {
+	ms := &mockTeamsStore{}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams", nil)
+	req = testWithClaims(req, testClaims)
+	w := httptest.NewRecorder()
+
+	h.List(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("List empty: got %d, want %d", w.Code, http.StatusOK)
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	teams, ok := resp["teams"].([]interface{})
+	if !ok || len(teams) != 0 {
+		t.Errorf("expected empty teams array, got %v", resp["teams"])
+	}
+}
+
+func TestTeamsHandler_Get_WithStore_Found(t *testing.T) {
+	twr := &store.TeamWithRole{Team: model.Team{ID: "team-1", Name: "Alpha"}, Role: "owner"}
+	ms := &mockTeamsStore{teamWithRole: twr}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1", nil)
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Get(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("Get with store: got %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp["role"] != "owner" {
+		t.Errorf("role = %v, want owner", resp["role"])
+	}
+}
+
+func TestTeamsHandler_Get_WithStore_NotFound(t *testing.T) {
+	ms := &mockTeamsStore{}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1", nil)
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.Get(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("Get not found: got %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestTeamsHandler_ListTokens_WithStore(t *testing.T) {
+	ms := &mockTeamsStore{
+		role: "owner",
+		tokensList: []model.APIToken{
+			{ID: "tok-1", TeamID: "team-1", Name: "ci", Prefix: "sct_ci"},
+		},
+	}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/tokens", nil)
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.ListTokens(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("ListTokens with store: got %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
+	}
+
+	var resp map[string]interface{}
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	tokens, ok := resp["tokens"].([]interface{})
+	if !ok || len(tokens) != 1 {
+		t.Errorf("expected 1 token, got %v", resp["tokens"])
+	}
+}
+
+func TestTeamsHandler_ListTokens_WithStore_NotMember(t *testing.T) {
+	ms := &mockTeamsStore{roleErr: pgx.ErrNoRows}
+	h := &TeamsHandler{Store: ms, AuditStore: &capAuditLogger{}}
+
+	req := httptest.NewRequest("GET", "/api/v1/teams/team-1/tokens", nil)
+	req = testWithClaimsAndParam(req, testClaims, "teamID", "team-1")
+	w := httptest.NewRecorder()
+
+	h.ListTokens(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("ListTokens not member: got %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
 
 func TestTeamsCreate_LogsAuditEvent(t *testing.T) {
 	team := &model.Team{ID: "team-1", Name: "My Team", CreatedAt: time.Now()}

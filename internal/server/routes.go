@@ -205,7 +205,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	if dbPool != nil {
 		qgH.ReportStore = store.NewReportsStore(dbPool)
 	}
-	teamsH := &handler.TeamsHandler{DB: dbPool, AuditStore: auditStore}
+	teamsH := &handler.TeamsHandler{AuditStore: auditStore}
 	if dbPool != nil {
 		teamsH.Store = store.NewTeamsStore(dbPool)
 	}

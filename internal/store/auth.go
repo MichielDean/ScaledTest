@@ -33,9 +33,9 @@ func (s *AuthStore) GetUserByEmail(ctx context.Context, email string) (*model.Us
 func (s *AuthStore) GetUserByID(ctx context.Context, id string) (*model.User, error) {
 	var u model.User
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, email, display_name, role FROM users WHERE id = $1`,
+		`SELECT id, email, password_hash, display_name, role FROM users WHERE id = $1`,
 		id,
-	).Scan(&u.ID, &u.Email, &u.DisplayName, &u.Role)
+	).Scan(&u.ID, &u.Email, &u.PasswordHash, &u.DisplayName, &u.Role)
 	if err != nil {
 		return nil, err
 	}
