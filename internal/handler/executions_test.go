@@ -1,11 +1,15 @@
 package handler
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 func TestListExecutions_Unauthorized(t *testing.T) {
@@ -306,6 +310,86 @@ func TestReportWorkerStatus_NoDB(t *testing.T) {
 
 	if w.Code != http.StatusServiceUnavailable {
 		t.Errorf("ReportWorkerStatus without DB: got %d, want %d", w.Code, http.StatusServiceUnavailable)
+	}
+}
+
+func TestReportProgress_CrossTeam_Forbidden(t *testing.T) {
+	h := &ExecutionsHandler{
+		DB: new(pgxpool.Pool),
+		ownsExecFunc: func(_ context.Context, executionID, teamID string) (bool, error) {
+			return false, nil
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/progress", strings.NewReader(`{"total":1,"passed":1}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-other", "owner")
+	r = testWithChiParam(r, "executionID", "exec-1")
+
+	h.ReportProgress(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("ReportProgress cross-team: got %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestReportTestResult_CrossTeam_Forbidden(t *testing.T) {
+	h := &ExecutionsHandler{
+		DB: new(pgxpool.Pool),
+		ownsExecFunc: func(_ context.Context, executionID, teamID string) (bool, error) {
+			return false, nil
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/test-result", strings.NewReader(`{"name":"test","status":"passed"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-other", "owner")
+	r = testWithChiParam(r, "executionID", "exec-1")
+
+	h.ReportTestResult(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("ReportTestResult cross-team: got %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestReportWorkerStatus_CrossTeam_Forbidden(t *testing.T) {
+	h := &ExecutionsHandler{
+		DB: new(pgxpool.Pool),
+		ownsExecFunc: func(_ context.Context, executionID, teamID string) (bool, error) {
+			return false, nil
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/worker-status", strings.NewReader(`{"worker_id":"w1","status":"running"}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-other", "owner")
+	r = testWithChiParam(r, "executionID", "exec-1")
+
+	h.ReportWorkerStatus(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("ReportWorkerStatus cross-team: got %d, want %d", w.Code, http.StatusNotFound)
+	}
+}
+
+func TestReportProgress_DBError_Returns500(t *testing.T) {
+	h := &ExecutionsHandler{
+		DB: new(pgxpool.Pool),
+		ownsExecFunc: func(_ context.Context, executionID, teamID string) (bool, error) {
+			return false, fmt.Errorf("connection refused")
+		},
+	}
+	w := httptest.NewRecorder()
+	r := httptest.NewRequest("POST", "/api/v1/executions/exec-1/progress", strings.NewReader(`{"total":1,"passed":1}`))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+	r = testWithChiParam(r, "executionID", "exec-1")
+
+	h.ReportProgress(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("ReportProgress DB error: got %d, want %d", w.Code, http.StatusInternalServerError)
 	}
 }
 
