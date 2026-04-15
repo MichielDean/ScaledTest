@@ -35,7 +35,7 @@ func createWebhookForDelivery(t *testing.T, tdb *integration.TestDB, teamName st
 	t.Helper()
 	teamID := tdb.CreateTeam(t, teamName)
 	ws := store.NewWebhookStore(tdb.Pool)
-	wh, err := ws.Create(context.Background(), teamID, "https://example.com", "hash", []string{"report.submitted"})
+	wh, err := ws.Create(context.Background(), teamID, "https://example.com", "hash", "", []string{"report.submitted"})
 	if err != nil {
 		t.Fatalf("create webhook: %v", err)
 	}

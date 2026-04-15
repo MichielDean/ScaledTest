@@ -175,6 +175,17 @@ type WebhookRecord struct {
 	ID         string
 	URL        string
 	SecretHash string
+	SigningKey string
+}
+
+// SigningSecret returns the signing key if set, otherwise falls back to the
+// secret hash. This provides a migration path from secret-hash-based signing
+// to dedicated signing keys.
+func (r WebhookRecord) SigningSecret() string {
+	if r.SigningKey != "" {
+		return r.SigningKey
+	}
+	return r.SecretHash
 }
 
 // Notifier looks up matching webhooks and dispatches payloads asynchronously.
@@ -243,7 +254,7 @@ func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 					dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer dCancel()
 					start := time.Now()
-					delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+					delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SigningSecret(), payload)
 					durationMs := int(time.Since(start).Milliseconds())
 					if err != nil {
 						log.Warn().Err(err).

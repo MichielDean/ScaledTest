@@ -513,6 +513,44 @@ func TestReadonlyCanListExecutions(t *testing.T) {
 	}
 }
 
+func TestReadonlyCannotUpdateExecutionStatus(t *testing.T) {
+	router, _ := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
+
+	req := httptest.NewRequest("PUT", "/api/v1/executions/some-exec-id/status", strings.NewReader(`{"status":"running"}`))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code != http.StatusForbidden {
+		t.Errorf("readonly PUT /api/v1/executions/{id}/status: status = %d, want %d (body: %s)", w.Code, http.StatusForbidden, w.Body.String())
+	}
+}
+
+func TestMaintainerCanUpdateExecutionStatus(t *testing.T) {
+	router, _ := NewRouter(testConfig(), nil)
+	csrfToken, csrfCookie := testCSRFToken(t, router)
+
+	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
+	pair, _ := mgr.GenerateTokenPair("user-m", "maint@example.com", "maintainer", "team-1")
+
+	req := httptest.NewRequest("PUT", "/api/v1/executions/some-exec-id/status", strings.NewReader(`{"status":"running"}`))
+	req.Header.Set("Authorization", "Bearer "+pair.AccessToken)
+	req.Header.Set("Content-Type", "application/json")
+	addCSRF(req, csrfToken, csrfCookie)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	if w.Code == http.StatusForbidden {
+		t.Errorf("maintainer PUT /api/v1/executions/{id}/status: got 403 forbidden, maintainer should be allowed (body: %s)", w.Body.String())
+	}
+}
+
 func TestReadonlyCanListReports(t *testing.T) {
 	router, _ := NewRouter(testConfig(), nil)
 

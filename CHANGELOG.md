@@ -24,6 +24,8 @@ All notable changes to this project will be documented here.
 
 ### Added
 
+- **SDK parity — all missing API methods**: The `@scaledtest/sdk` TypeScript client now exposes every server endpoint. New methods: `compareReports`, `deleteReport`, `getReportTriage`, `retryReportTriage`, `getExecution`, `createExecution` (with `image` and `env_vars` options), `updateExecutionStatus`, `reportExecutionProgress`, `reportTestResult`, `reportWorkerStatus`, `getShardDuration`, `createShardPlan`, `rebalanceShards`, `getTeam`, `deleteTeam`, `listTokens`, `createToken`, `deleteToken`, `listWebhooks`, `createWebhook`, `getWebhook`, `updateWebhook`, `deleteWebhook`, `listWebhookDeliveries`, `retryWebhookDelivery`, `listInvitations`, `createInvitation`, `revokeInvitation`, `previewInvitation`, `acceptInvitation`, `listUsers` (with pagination), `listAuditLog` (with filter params). All new methods have proper TypeScript types — no `unknown` or `void` return types.
+
 - **Frontend error boundaries**: A root-level `ErrorBoundary` wraps the entire app in `main.tsx`, a TanStack Router `errorComponent` on the root route catches routing errors, and `ErrorBoundary` wrappers around all Recharts chart sections in `dashboard.tsx` and `analytics.tsx` prevent chart crashes from unmounting the app. The error UI includes both "Try Again" and "Reload" buttons.
 
 - **Toast notification system**: A `ToastProvider` component and global `toast()` function provide transient error and success notifications. All mutations surface errors to users via a global `mutations.onError` handler in `main.tsx` that calls `toast(error.message, 'error')`. Previously silent mutation failures (createTeam, evaluateQualityGate, deleteQualityGate, deleteWebhook, profile update, password change) now display toast feedback.
@@ -71,6 +73,14 @@ All notable changes to this project will be documented here.
 ### Fixed
 
 - **IDOR vulnerability in invitation handlers**: `Create`, `List`, and `Revoke` invitation endpoints (`POST/GET/DELETE /api/v1/teams/{teamID}/invitations`) now verify that the authenticated user's team matches the URL `teamID` before checking role permissions. Previously, any maintainer or owner could list, create, or revoke invitations for any team regardless of membership.
+
+- **`evaluateQualityGate` missing `report_id`**: The SDK's `evaluateQualityGate(teamId, id)` method previously sent no `report_id` in the request body, causing the API to always return HTTP 400. Fixed by adding a `reportId` parameter: `evaluateQualityGate(teamId, id, reportId)`.
+
+- **`PUT /api/v1/executions/{id}/status` privilege escalation**: The UpdateStatus endpoint previously had no role check, allowing any authenticated user (including `readonly`) to change execution status. Fixed by adding `RequireRole("maintainer", "owner")` to the route.
+
+- **`getReports` pagination**: `client.getReports()` now accepts optional `{ limit, offset, since, until }` parameters for paginated and date-filtered queries. Previously the method accepted no arguments.
+
+- **SDK type accuracy fixes**: Multiple interface corrections to match server response shapes — `Execution.status` typed as union enum, `Execution.completed_at` renamed to `finished_at`, `QualityGateRule.params` allows `null`, `QualityGateEvaluation.details` typed as `QualityGateEvalRuleResult[]`, `Report.name` and `tool_name` optionality corrected, `TrendPoint.skipped` added, `FlakyTest` fields aligned (flip_count, total_runs, flip_rate), analytics methods return proper wrapped types, `TeamWithRole` for team listings, `WebhookEventType` union type, and `UploadReportResponse`/`CreateExecutionResponse` return types for upload/create methods.
 
 - **Worker callback authorization gap**: `ReportProgress`, `ReportTestResult`, and `ReportWorkerStatus` endpoints (`POST /api/v1/executions/{executionID}/progress|test-result|worker-status`) now verify that the execution belongs to the caller's team before proceeding. Previously, any authenticated user could broadcast WebSocket messages for any execution by guessing IDs. Unauthorized or cross-team requests return 404 (to avoid information leakage); database errors return 500 (fail closed).
 
