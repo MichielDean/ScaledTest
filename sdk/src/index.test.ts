@@ -1822,23 +1822,30 @@ describe('type alignment with server responses', () => {
     expect(result.command).toBe('npm test');
   });
 
-  it('ReportTriageResult has required clusters and metadata', () => {
-    const result: ReportTriageResult = {
-      triage_status: 'completed',
-      clusters: [],
-      metadata: { generated_at: '2024-01-01T00:00:00Z' },
+  it('ReportTriageResult clusters and metadata are optional — 202 pending state omits them', () => {
+    const pending: ReportTriageResult = {
+      triage_status: 'pending',
     };
-    expect(result.clusters).toEqual([]);
-    expect(result.metadata.generated_at).toBe('2024-01-01T00:00:00Z');
-    expect(result.metadata.model).toBeUndefined();
+    expect(pending.triage_status).toBe('pending');
+    expect(pending.clusters).toBeUndefined();
+    expect(pending.metadata).toBeUndefined();
 
-    const resultWithModel: ReportTriageResult = {
+    const completed: ReportTriageResult = {
       triage_status: 'completed',
       clusters: [{ id: 'c-1', root_cause: 'timeout', failures: [{ test_result_id: 'tr-1', classification: 'flaky' }] }],
       metadata: { generated_at: '2024-01-01T00:00:00Z', model: 'gpt-4' },
     };
-    expect(resultWithModel.clusters).toHaveLength(1);
-    expect(resultWithModel.metadata.model).toBe('gpt-4');
+    expect(completed.clusters).toHaveLength(1);
+    expect(completed.metadata?.model).toBe('gpt-4');
+
+    const completedNoModel: ReportTriageResult = {
+      triage_status: 'completed',
+      clusters: [],
+      metadata: { generated_at: '2024-01-01T00:00:00Z' },
+    };
+    expect(completedNoModel.clusters).toEqual([]);
+    expect(completedNoModel.metadata?.generated_at).toBe('2024-01-01T00:00:00Z');
+    expect(completedNoModel.metadata?.model).toBeUndefined();
   });
 
   it('WebhookEventType restricts events to server-supported values', () => {
@@ -1913,8 +1920,8 @@ describe('type alignment with server responses', () => {
     expect(result).toEqual({ id: 'e-2', status: 'cancelled' });
   });
 
-  it('Report.summary has required start and stop fields', () => {
-    const report: Report = {
+  it('Report.summary.start and .stop are optional — server omits via omitempty', () => {
+    const reportWithTimestamps: Report = {
       id: 'r-1',
       team_id: 'team-1',
       name: 'Report r-1',
@@ -1922,8 +1929,18 @@ describe('type alignment with server responses', () => {
       summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0, start: 1700000000, stop: 1700001000 },
       created_at: '2024-01-01T00:00:00Z',
     };
-    expect(report.summary.start).toBe(1700000000);
-    expect(report.summary.stop).toBe(1700001000);
+    expect(reportWithTimestamps.summary.start).toBe(1700000000);
+    expect(reportWithTimestamps.summary.stop).toBe(1700001000);
+
+    const reportWithoutTimestamps: Report = {
+      id: 'r-2',
+      team_id: 'team-1',
+      name: 'Report r-2',
+      summary: { tests: 5, passed: 5, failed: 0, skipped: 0, pending: 0, other: 0 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(reportWithoutTimestamps.summary.start).toBeUndefined();
+    expect(reportWithoutTimestamps.summary.stop).toBeUndefined();
   });
 
   it('QualityGateRule.params is required (not optional) and accepts null', () => {
