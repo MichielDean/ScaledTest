@@ -55,7 +55,7 @@ func TestWebhookStore_List(t *testing.T) {
 	// Create webhooks for two teams
 	s.Create(ctx, teamID, "https://example.com/a", "hash-a", "", []string{"report.created"})
 	s.Create(ctx, teamID, "https://example.com/b", "hash-b", "", []string{"execution.completed"})
-	s.Create(ctx, otherTeamID, "https://other.com/c", "hash-c", []string{"report.created"})
+	s.Create(ctx, otherTeamID, "https://other.com/c", "hash-c", "", []string{"report.created"})
 
 	list, err := s.List(ctx, teamID)
 	if err != nil {
