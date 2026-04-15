@@ -25,7 +25,7 @@ func tokenForTeam(t *testing.T, userID, email, role, teamID string) string {
 }
 
 func TestTeamIsolation_DifferentTeamTokensAccepted(t *testing.T) {
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	teamAToken := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 	teamBToken := tokenForTeam(t, "user-b", "b@example.com", "owner", "team-beta")
@@ -159,7 +159,7 @@ func TestTeamIsolation_CrossTeamTokensDiffer(t *testing.T) {
 }
 
 func TestTeamIsolation_AdminEndpointRequiresOwnerRole(t *testing.T) {
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	tests := []struct {
 		name       string
@@ -189,7 +189,7 @@ func TestTeamIsolation_AdminEndpointRequiresOwnerRole(t *testing.T) {
 }
 
 func TestTeamIsolation_NoTokenReturnsUnauthorized(t *testing.T) {
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	endpoints := []string{
 		"/api/v1/reports",
@@ -217,7 +217,7 @@ func TestTeamIsolation_NoTokenReturnsUnauthorized(t *testing.T) {
 }
 
 func TestTeamIsolation_InvalidTokenRejected(t *testing.T) {
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	invalidTokens := []struct {
 		name  string
@@ -297,7 +297,7 @@ func TestTeamIsolation_APITokenWithTeamScope(t *testing.T) {
 func TestTeamIsolation_TeamScopedEndpointResponses(t *testing.T) {
 	// Verify that team-scoped endpoints return valid JSON with expected structure.
 	// When DB is wired, these should return only data for the requesting team.
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	teamAToken := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 
@@ -342,7 +342,7 @@ func TestTeamIsolation_TeamScopedEndpointResponses(t *testing.T) {
 }
 
 func TestTeamIsolation_CTRFIngestionAcceptsBothTeams(t *testing.T) {
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	report := `{"results":{"tool":{"name":"jest"},"summary":{"tests":1,"passed":1,"failed":0,"skipped":0,"pending":0,"other":0},"tests":[{"name":"test1","status":"passed","duration":50}]}}`
 
@@ -377,7 +377,7 @@ func TestTeamIsolation_CTRFIngestionAcceptsBothTeams(t *testing.T) {
 func TestTeamIsolation_RoleScopingAcrossTeams(t *testing.T) {
 	// Verify that role enforcement applies regardless of which team the user belongs to.
 	// A readonly user from ANY team should be denied admin access.
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	tests := []struct {
 		name       string
@@ -417,7 +417,7 @@ func TestTeamIsolation_RoleScopingAcrossTeams(t *testing.T) {
 func TestTeamIsolation_EmptyTeamIDAllowed(t *testing.T) {
 	// Tokens without a team_id (e.g., during initial login before team assignment)
 	// should still be accepted by the auth middleware.
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	token := tokenForTeam(t, "user-new", "new@example.com", "owner", "")
 
@@ -433,7 +433,7 @@ func TestTeamIsolation_EmptyTeamIDAllowed(t *testing.T) {
 
 func TestTeamIsolation_TeamTokenURLParams(t *testing.T) {
 	// Verify team-scoped URL params are accepted (e.g., /teams/{teamID}).
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	tokenA := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 
@@ -463,7 +463,7 @@ func TestTeamIsolation_TeamTokenURLParams(t *testing.T) {
 
 func TestTeamIsolation_TeamTokenSubresources(t *testing.T) {
 	// Verify team-scoped sub-resource routes (e.g., /teams/{teamID}/tokens).
-	router := NewRouter(testConfig())
+	router, _ := NewRouter(testConfig())
 
 	tokenA := tokenForTeam(t, "user-a", "a@example.com", "owner", "team-alpha")
 

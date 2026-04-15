@@ -42,8 +42,12 @@ type executionsStore interface {
 	UpdateStatus(ctx context.Context, id, teamID, status string, now time.Time, errorMsg *string) (int64, error)
 	Exists(ctx context.Context, id, teamID string) (bool, error)
 	GetK8sJobName(ctx context.Context, id string) (*string, error)
+	GetK8sJobNameByTeam(ctx context.Context, id, teamID string) (*string, error)
 	SetK8sJobName(ctx context.Context, id, jobName string, now time.Time) error
+	GetWorkerTokenSecret(ctx context.Context, id string) (*string, error)
+	GetWorkerTokenSecretByTeam(ctx context.Context, id, teamID string) (*string, error)
 	MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error
+	ListRunning(ctx context.Context) ([]model.TestExecution, error)
 }
 
 // reportsStore abstracts report persistence operations.

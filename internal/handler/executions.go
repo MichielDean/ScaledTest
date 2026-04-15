@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
@@ -148,16 +149,17 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			APIBaseURL:  h.APIBaseURL,
 			ExecutionID: id,
 		}
-		if _, err := h.K8s.CreateJob(r.Context(), jobCfg); err != nil {
+		result, err := h.K8s.CreateJob(r.Context(), jobCfg)
+		if err != nil {
 			log.Error().Err(err).Str("execution_id", id).Msg("failed to launch k8s job")
 			markExecutionFailed(r.Context(), h.DB, id, "job launch failed: "+err.Error())
 			Error(w, http.StatusInternalServerError, "execution created but job launch failed")
 			return
 		}
-		// Store K8s job name on the execution record (best-effort)
+		// Store K8s job name and worker token secret on the execution record (best-effort)
 		_, _ = h.DB.Exec(r.Context(),
-			`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
-			jobName, time.Now(), id)
+			`UPDATE test_executions SET k8s_job_name = $1, worker_token_secret = $2, updated_at = $3 WHERE id = $4`,
+			jobName, result.WorkerTokenSecret, time.Now(), id)
 	}
 
 	// Log audit event after commit
@@ -243,10 +245,16 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.K8s != nil {
-		jobName, _ := h.ExecStore.GetK8sJobName(r.Context(), executionID)
+		jobName, _ := h.ExecStore.GetK8sJobNameByTeam(r.Context(), executionID, claims.TeamID)
 		if jobName != nil && *jobName != "" {
 			if err := h.K8s.DeleteJob(r.Context(), *jobName); err != nil {
 				log.Error().Err(err).Str("job", *jobName).Msg("failed to delete k8s job on cancel")
+			}
+		}
+		secretName, _ := h.ExecStore.GetWorkerTokenSecretByTeam(r.Context(), executionID, claims.TeamID)
+		if secretName != nil && *secretName != "" && strings.HasPrefix(*secretName, k8s.WorkerTokenSecretPrefix) {
+			if err := h.K8s.DeleteSecret(r.Context(), *secretName); err != nil {
+				log.Warn().Err(err).Str("secret", *secretName).Msg("failed to delete worker token secret on cancel")
 			}
 		}
 	}
@@ -375,7 +383,7 @@ func markExecutionFailed(ctx context.Context, pool *db.Pool, id, errMsg string) 
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx,
-		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`,
 		errMsg, time.Now(), id); err != nil {
 		log.Error().Err(err).Str("execution_id", id).Msg("failed to update execution failure status")
 		return

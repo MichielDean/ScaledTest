@@ -68,19 +68,20 @@ type APIToken struct {
 
 // TestExecution tracks a K8s Job-based test execution.
 type TestExecution struct {
-	ID         string           `json:"id"`
-	TeamID     string           `json:"team_id"`
-	Status     string           `json:"status"` // pending, running, completed, failed, cancelled
-	Command    string           `json:"command"`
-	Config     json.RawMessage  `json:"config,omitempty"`
-	ReportID   *string          `json:"report_id,omitempty"`
-	K8sJobName *string          `json:"k8s_job_name,omitempty"`
-	K8sPodName *string          `json:"k8s_pod_name,omitempty"`
-	ErrorMsg   *string          `json:"error_msg,omitempty"`
-	StartedAt  *time.Time       `json:"started_at,omitempty"`
-	FinishedAt *time.Time       `json:"finished_at,omitempty"`
-	CreatedAt  time.Time        `json:"created_at"`
-	UpdatedAt  time.Time        `json:"updated_at"`
+	ID                string          `json:"id"`
+	TeamID            string          `json:"team_id"`
+	Status            string          `json:"status"` // pending, running, completed, failed, cancelled
+	Command           string          `json:"command"`
+	Config            json.RawMessage `json:"config,omitempty"`
+	ReportID          *string         `json:"report_id,omitempty"`
+	K8sJobName        *string         `json:"k8s_job_name,omitempty"`
+	WorkerTokenSecret *string         `json:"-"`
+	K8sPodName        *string         `json:"k8s_pod_name,omitempty"`
+	ErrorMsg          *string         `json:"error_msg,omitempty"`
+	StartedAt         *time.Time      `json:"started_at,omitempty"`
+	FinishedAt        *time.Time      `json:"finished_at,omitempty"`
+	CreatedAt         time.Time       `json:"created_at"`
+	UpdatedAt         time.Time       `json:"updated_at"`
 }
 
 // TestReport represents a CTRF test report.
@@ -150,18 +151,18 @@ type QualityGateEvaluation struct {
 
 // TestDurationHistory tracks historical test durations for intelligent sharding.
 type TestDurationHistory struct {
-	ID             string    `json:"id"`
-	TeamID         string    `json:"team_id"`
-	TestName       string    `json:"test_name"`
-	Suite          string    `json:"suite"`
-	AvgDurationMs  int64     `json:"avg_duration_ms"`
-	P95DurationMs  int64     `json:"p95_duration_ms"`
-	MinDurationMs  int64     `json:"min_duration_ms"`
-	MaxDurationMs  int64     `json:"max_duration_ms"`
-	RunCount       int       `json:"run_count"`
-	LastStatus     string    `json:"last_status"`
-	UpdatedAt      time.Time `json:"updated_at"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID            string    `json:"id"`
+	TeamID        string    `json:"team_id"`
+	TestName      string    `json:"test_name"`
+	Suite         string    `json:"suite"`
+	AvgDurationMs int64     `json:"avg_duration_ms"`
+	P95DurationMs int64     `json:"p95_duration_ms"`
+	MinDurationMs int64     `json:"min_duration_ms"`
+	MaxDurationMs int64     `json:"max_duration_ms"`
+	RunCount      int       `json:"run_count"`
+	LastStatus    string    `json:"last_status"`
+	UpdatedAt     time.Time `json:"updated_at"`
+	CreatedAt     time.Time `json:"created_at"`
 }
 
 // AuditLog records a user action for compliance and observability.
@@ -180,28 +181,28 @@ type AuditLog struct {
 
 // ShardAssignment represents a test assigned to a specific worker shard.
 type ShardAssignment struct {
-	WorkerID       string `json:"worker_id"`
-	TestName       string `json:"test_name"`
-	Suite          string `json:"suite,omitempty"`
-	EstDurationMs  int64  `json:"est_duration_ms"`
+	WorkerID      string `json:"worker_id"`
+	TestName      string `json:"test_name"`
+	Suite         string `json:"suite,omitempty"`
+	EstDurationMs int64  `json:"est_duration_ms"`
 }
 
 // ShardPlan is the complete distribution plan for a sharded execution.
 type ShardPlan struct {
-	ExecutionID    string            `json:"execution_id"`
-	TotalWorkers   int               `json:"total_workers"`
-	Strategy       string            `json:"strategy"` // duration_balanced, round_robin, suite_grouped
-	Shards         []Shard           `json:"shards"`
-	EstTotalMs     int64             `json:"est_total_ms"`
-	EstWallClockMs int64             `json:"est_wall_clock_ms"`
+	ExecutionID    string  `json:"execution_id"`
+	TotalWorkers   int     `json:"total_workers"`
+	Strategy       string  `json:"strategy"` // duration_balanced, round_robin, suite_grouped
+	Shards         []Shard `json:"shards"`
+	EstTotalMs     int64   `json:"est_total_ms"`
+	EstWallClockMs int64   `json:"est_wall_clock_ms"`
 }
 
 // Shard represents one worker's assigned tests.
 type Shard struct {
-	WorkerID       string   `json:"worker_id"`
-	TestNames      []string `json:"test_names"`
-	EstDurationMs  int64    `json:"est_duration_ms"`
-	TestCount      int      `json:"test_count"`
+	WorkerID      string   `json:"worker_id"`
+	TestNames     []string `json:"test_names"`
+	EstDurationMs int64    `json:"est_duration_ms"`
+	TestCount     int      `json:"test_count"`
 }
 
 // Webhook represents a webhook subscription.
