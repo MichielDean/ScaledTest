@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"html"
-	"math"
 	"net/http"
 	"strings"
 	"time"
@@ -104,7 +103,7 @@ func (c *Client) SendMessage(ctx context.Context, text string) error {
 		}
 
 		if attempt < c.maxRetries {
-			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
 			if re.retryAfter > 0 {
 				backoff = time.Duration(re.retryAfter) * time.Second
 			}

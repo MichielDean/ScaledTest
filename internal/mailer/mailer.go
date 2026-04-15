@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"html"
-	"math"
 	"net"
 	"net/smtp"
 	"strings"
@@ -135,7 +134,7 @@ func (m *SMTPMailer) sendWithRetry(ctx context.Context, to string, msg []byte) e
 		}
 
 		if attempt < m.maxRetries {
-			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
 			log.Warn().Err(lastErr).
 				Int("attempt", attempt+1).
 				Str("to", to).

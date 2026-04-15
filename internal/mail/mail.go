@@ -5,7 +5,6 @@ import (
 	"crypto/tls"
 	"errors"
 	"fmt"
-	"math"
 	"net"
 	"net/smtp"
 	"strings"
@@ -74,7 +73,7 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 		}
 
 		if attempt < s.maxRetries {
-			backoff := time.Duration(math.Pow(2, float64(attempt))) * time.Second
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
 			log.Warn().Err(lastErr).
 				Int("attempt", attempt+1).
 				Str("to", msg.To).
