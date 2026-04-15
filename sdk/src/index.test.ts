@@ -497,6 +497,18 @@ describe('analytics', () => {
     expect(result.trends).toEqual([]);
   });
 
+  it('getTrends passes start, end, group_by query params', async () => {
+    const fetchMock = mockFetchOk({ trends: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getTrends({ start: '2024-01-01T00:00:00Z', end: '2024-12-31T23:59:59Z', group_by: 'week' });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('start=2024-01-01T00%3A00%3A00Z');
+    expect(url).toContain('end=2024-12-31T23%3A59%3A59Z');
+    expect(url).toContain('group_by=week');
+  });
+
   it('getFlakyTests sends GET /api/v1/analytics/flaky-tests', async () => {
     const fetchMock = mockFetchOk({ flaky_tests: [] });
     globalThis.fetch = fetchMock;
@@ -505,6 +517,18 @@ describe('analytics', () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/analytics/flaky-tests`);
     expect(result.flaky_tests).toEqual([]);
+  });
+
+  it('getFlakyTests passes window_days, min_runs, limit query params', async () => {
+    const fetchMock = mockFetchOk({ flaky_tests: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getFlakyTests({ window_days: 14, min_runs: 3, limit: 10 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('window_days=14');
+    expect(url).toContain('min_runs=3');
+    expect(url).toContain('limit=10');
   });
 
   it('getErrorAnalysis sends GET /api/v1/analytics/error-analysis', async () => {
@@ -516,6 +540,18 @@ describe('analytics', () => {
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/analytics/error-analysis`);
   });
 
+  it('getErrorAnalysis passes start, end, limit query params', async () => {
+    const fetchMock = mockFetchOk({ errors: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getErrorAnalysis({ start: '2024-01-01T00:00:00Z', end: '2024-06-30T23:59:59Z', limit: 5 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('start=2024-01-01T00%3A00%3A00Z');
+    expect(url).toContain('end=2024-06-30T23%3A59%3A59Z');
+    expect(url).toContain('limit=5');
+  });
+
   it('getDurationDistribution sends GET /api/v1/analytics/duration-distribution', async () => {
     const fetchMock = mockFetchOk({});
     globalThis.fetch = fetchMock;
@@ -523,6 +559,17 @@ describe('analytics', () => {
     await client.getDurationDistribution();
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/analytics/duration-distribution`);
+  });
+
+  it('getDurationDistribution passes start, end query params', async () => {
+    const fetchMock = mockFetchOk({ distribution: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getDurationDistribution({ start: '2024-01-01T00:00:00Z', end: '2024-12-31T23:59:59Z' });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('start=2024-01-01T00%3A00%3A00Z');
+    expect(url).toContain('end=2024-12-31T23%3A59%3A59Z');
   });
 });
 

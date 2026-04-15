@@ -543,20 +543,20 @@ export class ScaledTestClient {
   }
 
   // Analytics
-  async getTrends(): Promise<{ trends: TrendPoint[] }> {
-    return this.request('GET', '/api/v1/analytics/trends');
+  async getTrends(params?: { start?: string; end?: string; group_by?: string }): Promise<{ trends: TrendPoint[] }> {
+    return this.request('GET', '/api/v1/analytics/trends', undefined, params);
   }
 
-  async getFlakyTests(): Promise<{ flaky_tests: FlakyTest[] }> {
-    return this.request('GET', '/api/v1/analytics/flaky-tests');
+  async getFlakyTests(params?: { window_days?: number; min_runs?: number; limit?: number }): Promise<{ flaky_tests: FlakyTest[] }> {
+    return this.request('GET', '/api/v1/analytics/flaky-tests', undefined, params);
   }
 
-  async getErrorAnalysis(): Promise<{ errors: ErrorCluster[] }> {
-    return this.request('GET', '/api/v1/analytics/error-analysis');
+  async getErrorAnalysis(params?: { start?: string; end?: string; limit?: number }): Promise<{ errors: ErrorCluster[] }> {
+    return this.request('GET', '/api/v1/analytics/error-analysis', undefined, params);
   }
 
-  async getDurationDistribution(): Promise<{ distribution: DurationBucket[] }> {
-    return this.request('GET', '/api/v1/analytics/duration-distribution');
+  async getDurationDistribution(params?: { start?: string; end?: string }): Promise<{ distribution: DurationBucket[] }> {
+    return this.request('GET', '/api/v1/analytics/duration-distribution', undefined, params);
   }
 
   // Quality Gates (nested under /teams/{teamID})
