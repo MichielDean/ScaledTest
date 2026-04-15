@@ -73,6 +73,16 @@ export OPENAI_API_KEY=your_api_key       # Required if ST_LLM_PROVIDER=openai
 
 # Optional: disable rate limiting (test environments only — never use in production)
 export ST_DISABLE_RATE_LIMIT=true
+
+# Optional: Kubernetes worker resource limits (defaults shown)
+export ST_WORKER_CPU_REQUEST=250m
+export ST_WORKER_CPU_LIMIT=500m
+export ST_WORKER_MEMORY_REQUEST=128Mi
+export ST_WORKER_MEMORY_LIMIT=512Mi
+
+# Optional: execution reconciler — detects orphaned K8s jobs and marks them failed
+export ST_RECONCILE_INTERVAL=60s          # How often to check for orphans
+export ST_RECONCILE_ORPHAN_TIMEOUT=5m     # Grace period before declaring an execution orphaned
 ```
 
 When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.

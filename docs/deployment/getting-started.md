@@ -69,10 +69,18 @@ OAuth is optional. Email/password login works without it.
 | Variable | Default | Description |
 |---|---|---|
 | `ST_WORKER_IMAGE` | `scaledtest/worker:latest` | Container image used for distributed test worker Jobs |
-| `ST_WORKER_TOKEN` | _(none)_ | API token injected into worker pods for authenticated reporting |
+| `ST_WORKER_TOKEN` | _(none)_ | API token injected into worker pods via K8s Secret for authenticated reporting |
 | `ST_K8S_NAMESPACE` | `default` | Kubernetes namespace where worker Jobs are created |
 | `ST_K8S_IN_CLUSTER` | `false` | Set `true` when running inside a Kubernetes cluster |
 | `ST_K8S_KUBECONFIG` | _(none)_ | Path to kubeconfig file when running outside a cluster |
+| `ST_WORKER_CPU_REQUEST` | `250m` | CPU request per worker container |
+| `ST_WORKER_CPU_LIMIT` | `500m` | CPU limit per worker container |
+| `ST_WORKER_MEMORY_REQUEST` | `128Mi` | Memory request per worker container |
+| `ST_WORKER_MEMORY_LIMIT` | `512Mi` | Memory limit per worker container |
+| `ST_RECONCILE_INTERVAL` | `60s` | How often the execution reconciler checks for orphaned jobs |
+| `ST_RECONCILE_ORPHAN_TIMEOUT` | `5m` | Grace period before an execution without a K8s job is considered orphaned |
+
+Worker pods run with a hardened security context (non-root user, read-only filesystem, dropped capabilities, seccomp profile) and resource limits by default. The `ST_WORKER_TOKEN` is stored in a dedicated K8s Secret per execution rather than a plain environment variable, preventing exposure via `kubectl describe pod`.
 
 ---
 

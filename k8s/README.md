@@ -116,11 +116,50 @@ pick up the new image value.
 
 | Variable | Source | Purpose |
 |---|---|---|
+| `ST_WORKER_TOKEN` | K8s Secret (`st-worker-token-<execution-id>`) | API token used by the worker to authenticate |
 | `ST_API_URL` | Config/secret | ScaledTest API base URL for progress reporting |
-| `ST_WORKER_TOKEN` | Secret | API token used by the worker to authenticate |
 | `ST_EXECUTION_ID` | Runtime | Execution record the worker reports results into |
 | `ST_COMMAND` | Runtime | Playwright command, e.g. `npx playwright test` |
 | `E2E_BASE_URL` | Optional | Target app URL (default: `http://localhost:5173`) |
+
+The `ST_WORKER_TOKEN` is no longer passed as a plain environment variable. Instead, each execution creates a dedicated Kubernetes Secret (`st-worker-token-<execution-id>`) and injects it via `secretKeyRef`. This prevents the token from being visible via `kubectl describe pod`. The Secret is automatically cleaned up when the execution is cancelled or when the reconciler detects an orphaned job.
+
+### Worker pod security context
+
+All worker pods run with a hardened security context:
+
+- **Non-root**: `runAsUser: 1000`, `runAsNonRoot: true`
+- **Read-only root filesystem**: `readOnlyRootFilesystem: true`
+- **Dropped capabilities**: `drop ALL`
+- **No privilege escalation**: `allowPrivilegeEscalation: false`
+- **Seccomp profile**: `RuntimeDefault`
+- **Service account token**: not auto-mounted (`automountServiceAccountToken: false`)
+
+### Worker pod resource limits
+
+Each worker pod has default resource requests and limits, configurable via environment variables:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ST_WORKER_CPU_REQUEST` | `250m` | CPU request per worker container |
+| `ST_WORKER_CPU_LIMIT` | `500m` | CPU limit per worker container |
+| `ST_WORKER_MEMORY_REQUEST` | `128Mi` | Memory request per worker container |
+| `ST_WORKER_MEMORY_LIMIT` | `512Mi` | Memory limit per worker container |
+
+Values use Kubernetes resource quantity format (e.g. `250m`, `1`, `128Mi`, `1Gi`).
+
+### Execution reconciler
+
+When the server is running with K8s and a database, an execution reconciler runs as a background goroutine. It periodically scans for `running` executions whose K8s job has finished (completed or failed) but the worker never reported status back. These orphaned executions are marked as `failed`.
+
+Configuration:
+
+| Variable | Default | Description |
+|---|---|---|
+| `ST_RECONCILE_INTERVAL` | `60s` | How often the reconciler checks for orphans |
+| `ST_RECONCILE_ORPHAN_TIMEOUT` | `5m` | Grace period before an execution without a K8s job is considered orphaned |
+
+Values use Go duration format (e.g. `60s`, `5m`, `1h`). Invalid values fall back to the default with a warning log.
 
 ## Production Considerations
 
