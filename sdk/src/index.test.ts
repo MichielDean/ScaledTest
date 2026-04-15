@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, Invitation, TeamToken, AdminUser } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -345,12 +345,38 @@ describe('executions', () => {
     const fetchMock = mockFetchOk({ id: 'e-1', command: 'npm test', status: 'pending' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.createExecution('npm test');
+    const result = await client.createExecution('npm test');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/executions`);
     expect((init as RequestInit).method).toBe('POST');
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ command: 'npm test' });
+    expect(result.id).toBe('e-1');
+    expect(result.status).toBe('pending');
+  });
+
+  it('createExecution includes image and env_vars when provided', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', command: 'npm test', status: 'pending' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createExecution('npm test', { image: 'node:18', env_vars: { NODE_ENV: 'test' } });
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.command).toBe('npm test');
+    expect(body.image).toBe('node:18');
+    expect(body.env_vars).toEqual({ NODE_ENV: 'test' });
+  });
+
+  it('createExecution omits image and env_vars when not provided', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', command: 'npm test', status: 'pending' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createExecution('npm test');
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.command).toBe('npm test');
+    expect('image' in body).toBe(false);
+    expect('env_vars' in body).toBe(false);
   });
 
   it('getExecution sends GET /api/v1/executions/{id}', async () => {
@@ -462,21 +488,23 @@ describe('executions', () => {
 
 describe('analytics', () => {
   it('getTrends sends GET /api/v1/analytics/trends', async () => {
-    const fetchMock = mockFetchOk([]);
+    const fetchMock = mockFetchOk({ trends: [] });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.getTrends();
+    const result = await client.getTrends();
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/analytics/trends`);
+    expect(result.trends).toEqual([]);
   });
 
   it('getFlakyTests sends GET /api/v1/analytics/flaky-tests', async () => {
-    const fetchMock = mockFetchOk([]);
+    const fetchMock = mockFetchOk({ flaky_tests: [] });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.getFlakyTests();
+    const result = await client.getFlakyTests();
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/analytics/flaky-tests`);
+    expect(result.flaky_tests).toEqual([]);
   });
 
   it('getErrorAnalysis sends GET /api/v1/analytics/error-analysis', async () => {
@@ -1261,25 +1289,17 @@ describe('type alignment with server responses', () => {
     expect(shard.test_count).toBe(2);
   });
 
-  it('QualityGateEvaluation.created_at is optional (evaluate endpoint omits it)', () => {
-    const evalWithoutCreatedAt: QualityGateEvaluation = {
+  it('QualityGateEvaluation uses details field (matching listEvaluations) with created_at required', () => {
+    const evalResult: QualityGateEvaluation = {
       id: 'eval-1',
       gate_id: 'qg-1',
       report_id: 'r-1',
       passed: true,
-      rules: [],
-    };
-    expect(evalWithoutCreatedAt.created_at).toBeUndefined();
-
-    const evalWithCreatedAt: QualityGateEvaluation = {
-      id: 'eval-1',
-      gate_id: 'qg-1',
-      report_id: 'r-1',
-      passed: true,
-      rules: [],
+      details: [],
       created_at: '2024-01-01T00:00:00Z',
     };
-    expect(evalWithCreatedAt.created_at).toBe('2024-01-01T00:00:00Z');
+    expect(evalResult.details).toEqual([]);
+    expect(evalResult.created_at).toBe('2024-01-01T00:00:00Z');
   });
 
   it('TestDurationHistory has id, min/max, last_status, timestamps (no median_duration_ms)', () => {
@@ -1459,5 +1479,220 @@ describe('type alignment with server responses', () => {
       updated_at: '2024-06-15T10:00:00Z',
     };
     expect(user.updated_at).toBe('2024-06-15T10:00:00Z');
+  });
+
+  it('getTrends returns wrapped response with trends key', async () => {
+    const trendPoint: TrendPoint = {
+      date: '2024-01-15',
+      total: 100,
+      passed: 90,
+      failed: 5,
+      skipped: 5,
+      pass_rate: 0.9,
+    };
+    const fetchMock = mockFetchOk({ trends: [trendPoint] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getTrends();
+
+    expect(result.trends).toHaveLength(1);
+    expect(result.trends[0].date).toBe('2024-01-15');
+    expect(result.trends[0].skipped).toBe(5);
+  });
+
+  it('getFlakyTests returns wrapped response with flaky_tests key', async () => {
+    const flaky: FlakyTest = {
+      name: 'Login Test',
+      flip_count: 3,
+      total_runs: 10,
+      flip_rate: 0.333,
+      last_status: 'failed',
+    };
+    const fetchMock = mockFetchOk({ flaky_tests: [flaky] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getFlakyTests();
+
+    expect(result.flaky_tests).toHaveLength(1);
+    expect(result.flaky_tests[0].flip_count).toBe(3);
+    expect(result.flaky_tests[0].total_runs).toBe(10);
+    expect(result.flaky_tests[0].flip_rate).toBe(0.333);
+    expect(result.flaky_tests[0].last_status).toBe('failed');
+  });
+
+  it('FlakyTest has flip_rate (not flake_rate), flip_count (not occurrences), total_runs, file_path, last_status', () => {
+    const minimal: FlakyTest = {
+      name: 'test-a',
+      flip_count: 2,
+      total_runs: 10,
+      flip_rate: 0.2,
+      last_status: 'passed',
+    };
+    expect(minimal.flip_count).toBe(2);
+    expect(minimal.total_runs).toBe(10);
+    expect(minimal.flip_rate).toBe(0.2);
+    expect(minimal.last_status).toBe('passed');
+    expect(minimal.file_path).toBeUndefined();
+
+    const full: FlakyTest = {
+      name: 'test-b',
+      suite: 'auth',
+      file_path: 'src/auth.test.ts',
+      flip_count: 5,
+      total_runs: 20,
+      flip_rate: 0.25,
+      last_status: 'failed',
+    };
+    expect(full.file_path).toBe('src/auth.test.ts');
+  });
+
+  it('TrendPoint includes skipped field', () => {
+    const point: TrendPoint = {
+      date: '2024-01-15',
+      total: 100,
+      passed: 90,
+      failed: 5,
+      skipped: 5,
+      pass_rate: 0.9,
+    };
+    expect(point.skipped).toBe(5);
+  });
+
+  it('QualityGateEvaluation.details uses QualityGateEvalRuleResult with type field', () => {
+    const evalResult: QualityGateEvaluation = {
+      id: 'eval-1',
+      gate_id: 'qg-1',
+      report_id: 'r-1',
+      passed: true,
+      details: [{ type: 'pass_rate', passed: true, threshold: 95, actual: 98, message: 'pass rate 98% >= 95%' }],
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(evalResult.details[0].type).toBe('pass_rate');
+    expect(evalResult.details[0].passed).toBe(true);
+  });
+
+  it('QualityGateRuleResult uses metric field (for evaluate endpoint)', () => {
+    const rule: QualityGateRuleResult = {
+      metric: 'pass_rate',
+      threshold: 95,
+      actual: 98,
+      passed: true,
+      message: 'pass rate 98% >= 95%',
+    };
+    expect(rule.metric).toBe('pass_rate');
+  });
+
+  it('Execution has config, report_id, k8s fields, error_msg, updated_at', () => {
+    const full: Execution = {
+      id: 'e-1',
+      team_id: 'team-1',
+      command: 'npm test',
+      status: 'running',
+      config: { image: 'node:18', env_vars: { NODE_ENV: 'test' } },
+      report_id: 'r-1',
+      k8s_job_name: 'test-job-123',
+      k8s_pod_name: 'test-pod-456',
+      error_msg: 'something failed',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-02T00:00:00Z',
+      started_at: '2024-01-01T01:00:00Z',
+      completed_at: '2024-01-01T02:00:00Z',
+    };
+    expect(full.config).toBeDefined();
+    expect(full.report_id).toBe('r-1');
+    expect(full.k8s_job_name).toBe('test-job-123');
+    expect(full.k8s_pod_name).toBe('test-pod-456');
+    expect(full.error_msg).toBe('something failed');
+    expect(full.updated_at).toBe('2024-01-02T00:00:00Z');
+
+    const minimal: Execution = {
+      id: 'e-2',
+      team_id: 'team-1',
+      command: 'npm test',
+      status: 'pending',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
+    expect(minimal.config).toBeUndefined();
+    expect(minimal.report_id).toBeUndefined();
+    expect(minimal.k8s_job_name).toBeUndefined();
+  });
+
+  it('Report has optional name field', () => {
+    const withName: Report = {
+      id: 'r-1',
+      team_id: 'team-1',
+      name: 'My Report',
+      tool_name: 'jest',
+      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(withName.name).toBe('My Report');
+
+    const withoutName: Report = {
+      id: 'r-2',
+      team_id: 'team-1',
+      tool_name: 'jest',
+      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(withoutName.name).toBeUndefined();
+  });
+
+  it('Team has optional role field', () => {
+    const teamWithRole: Team = {
+      id: 't-1',
+      name: 'My Team',
+      role: 'owner',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(teamWithRole.role).toBe('owner');
+
+    const teamWithoutRole: Team = {
+      id: 't-2',
+      name: 'Other Team',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(teamWithoutRole.role).toBeUndefined();
+  });
+
+  it('uploadReport returns full UploadReportResponse type', async () => {
+    const response: UploadReportResponse = {
+      id: 'r-1',
+      message: 'report accepted',
+      tool: 'jest',
+      tests: 42,
+      results: 42,
+    };
+    expect(response.id).toBe('r-1');
+    expect(response.message).toBe('report accepted');
+    expect(response.execution_id).toBeUndefined();
+    expect(response.qualityGate).toBeUndefined();
+
+    const withGate: UploadReportResponse = {
+      id: 'r-2',
+      message: 'report accepted',
+      tool: 'jest',
+      tests: 10,
+      results: 10,
+      execution_id: 'e-1',
+      qualityGate: {
+        passed: true,
+        gates: [{ id: 'qg-1', name: 'prod-gate', passed: true, rules: [{ metric: 'pass_rate', threshold: 95, actual: 98, passed: true, message: 'pass rate ok' }] }],
+      },
+    };
+    expect(withGate.execution_id).toBe('e-1');
+    expect(withGate.qualityGate?.passed).toBe(true);
+  });
+
+  it('createExecution returns CreateExecutionResponse with id, status, command', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'pending', command: 'npm test' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.createExecution('npm test');
+
+    expect(result.id).toBe('e-1');
+    expect(result.status).toBe('pending');
+    expect(result.command).toBe('npm test');
   });
 });

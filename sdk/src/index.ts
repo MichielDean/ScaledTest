@@ -63,6 +63,7 @@ export interface CtrfReport {
 export interface Report {
   id: string;
   team_id: string;
+  name?: string;
   tool_name: string;
   tool_version?: string;
   summary: {
@@ -89,7 +90,13 @@ export interface Execution {
   team_id: string;
   command: string;
   status: string;
+  config?: Record<string, unknown>;
+  report_id?: string;
+  k8s_job_name?: string;
+  k8s_pod_name?: string;
+  error_msg?: string;
   created_at: string;
+  updated_at: string;
   started_at?: string;
   completed_at?: string;
 }
@@ -118,13 +125,21 @@ export interface QualityGateRuleResult {
   message: string;
 }
 
+export interface QualityGateEvalRuleResult {
+  type: string;
+  passed: boolean;
+  threshold: unknown;
+  actual: unknown;
+  message: string;
+}
+
 export interface QualityGateEvaluation {
   id: string;
   gate_id: string;
   report_id: string;
   passed: boolean;
-  rules: QualityGateRuleResult[];
-  created_at?: string;
+  details: QualityGateEvalRuleResult[];
+  created_at: string;
 }
 
 export interface UserProfile {
@@ -140,13 +155,17 @@ export interface TrendPoint {
   total: number;
   passed: number;
   failed: number;
+  skipped: number;
 }
 
 export interface FlakyTest {
   name: string;
   suite?: string;
-  flake_rate: number;
-  occurrences: number;
+  file_path?: string;
+  flip_count: number;
+  total_runs: number;
+  flip_rate: number;
+  last_status: string;
 }
 
 export interface ErrorCluster {
@@ -167,6 +186,7 @@ export interface DurationBucket {
 export interface Team {
   id: string;
   name: string;
+  role?: string;
   created_at: string;
 }
 
@@ -330,6 +350,31 @@ export interface TeamToken {
   created_at: string;
 }
 
+export interface UploadReportResponse {
+  id: string;
+  message: string;
+  tool: string;
+  tests: number;
+  results: number;
+  execution_id?: string;
+  triage_github_status?: boolean;
+  qualityGate?: {
+    passed: boolean;
+    gates: Array<{
+      id: string;
+      name: string;
+      passed: boolean;
+      rules: QualityGateRuleResult[];
+    }>;
+  };
+}
+
+export interface CreateExecutionResponse {
+  id: string;
+  status: string;
+  command: string;
+}
+
 // ── Client ───────────────────────────────────────────────────────────────────
 
 export class ScaledTestClient {
@@ -410,7 +455,7 @@ export class ScaledTestClient {
   }
 
   // Reports
-  async uploadReport(report: CtrfReport): Promise<{ id: string }> {
+  async uploadReport(report: CtrfReport): Promise<UploadReportResponse> {
     return this.request('POST', '/api/v1/reports', report);
   }
 
@@ -448,8 +493,11 @@ export class ScaledTestClient {
     return this.request('GET', '/api/v1/executions', undefined, params);
   }
 
-  async createExecution(command: string): Promise<Execution> {
-    return this.request('POST', '/api/v1/executions', { command });
+  async createExecution(command: string, options?: { image?: string; env_vars?: Record<string, string> }): Promise<CreateExecutionResponse> {
+    const body: Record<string, unknown> = { command };
+    if (options?.image !== undefined) body.image = options.image;
+    if (options?.env_vars !== undefined) body.env_vars = options.env_vars;
+    return this.request('POST', '/api/v1/executions', body);
   }
 
   async getExecution(id: string): Promise<Execution> {
@@ -487,11 +535,11 @@ export class ScaledTestClient {
   }
 
   // Analytics
-  async getTrends(): Promise<TrendPoint[]> {
+  async getTrends(): Promise<{ trends: TrendPoint[] }> {
     return this.request('GET', '/api/v1/analytics/trends');
   }
 
-  async getFlakyTests(): Promise<FlakyTest[]> {
+  async getFlakyTests(): Promise<{ flaky_tests: FlakyTest[] }> {
     return this.request('GET', '/api/v1/analytics/flaky-tests');
   }
 
