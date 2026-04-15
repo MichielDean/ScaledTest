@@ -157,3 +157,29 @@ func (s *ExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, n
 		errorMsg, now, id)
 	return err
 }
+
+func (s *ExecutionsStore) ListRunning(ctx context.Context) ([]model.TestExecution, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
+		        error_msg, started_at, finished_at, created_at, updated_at
+		 FROM test_executions
+		 WHERE status = 'running'`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var executions []model.TestExecution
+	for rows.Next() {
+		var e model.TestExecution
+		if err := rows.Scan(
+			&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
+			&e.K8sJobName, &e.K8sPodName, &e.ErrorMsg, &e.StartedAt,
+			&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		executions = append(executions, e)
+	}
+	return executions, rows.Err()
+}

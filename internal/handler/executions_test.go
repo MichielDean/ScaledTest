@@ -54,6 +54,9 @@ func (m *mockExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName str
 func (m *mockExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error {
 	return m.markFailedFn(ctx, id, errorMsg, now)
 }
+func (m *mockExecutionsStore) ListRunning(ctx context.Context) ([]model.TestExecution, error) {
+	return nil, nil
+}
 
 func TestListExecutions_Unauthorized(t *testing.T) {
 	h := &ExecutionsHandler{}

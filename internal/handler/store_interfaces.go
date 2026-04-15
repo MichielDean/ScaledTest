@@ -44,6 +44,7 @@ type executionsStore interface {
 	GetK8sJobName(ctx context.Context, id string) (*string, error)
 	SetK8sJobName(ctx context.Context, id, jobName string, now time.Time) error
 	MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error
+	ListRunning(ctx context.Context) ([]model.TestExecution, error)
 }
 
 // reportsStore abstracts report persistence operations.
