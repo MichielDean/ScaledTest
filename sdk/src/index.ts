@@ -126,7 +126,7 @@ export interface QualityGateRuleResult {
 }
 
 export interface QualityGateEvalRuleResult {
-  metric: string;
+  type: string;
   passed: boolean;
   threshold: unknown;
   actual: unknown;

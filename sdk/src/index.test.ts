@@ -1559,16 +1559,16 @@ describe('type alignment with server responses', () => {
     expect(point.skipped).toBe(5);
   });
 
-  it('QualityGateEvaluation.details uses QualityGateEvalRuleResult with metric field', () => {
+  it('QualityGateEvaluation.details uses QualityGateEvalRuleResult with type field', () => {
     const evalResult: QualityGateEvaluation = {
       id: 'eval-1',
       gate_id: 'qg-1',
       report_id: 'r-1',
       passed: true,
-      details: [{ metric: 'pass_rate', passed: true, threshold: 95, actual: 98, message: 'pass rate 98% >= 95%' }],
+      details: [{ type: 'pass_rate', passed: true, threshold: 95, actual: 98, message: 'pass rate 98% >= 95%' }],
       created_at: '2024-01-01T00:00:00Z',
     };
-    expect(evalResult.details[0].metric).toBe('pass_rate');
+    expect(evalResult.details[0].type).toBe('pass_rate');
     expect(evalResult.details[0].passed).toBe(true);
   });
 
