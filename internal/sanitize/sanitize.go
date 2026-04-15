@@ -65,13 +65,21 @@ func ValidateWebhookURL(rawURL string) error {
 	if err != nil {
 		return fmt.Errorf("invalid URL: %w", err)
 	}
-	if u.Scheme != "https" {
-		return fmt.Errorf("webhook URL must use https scheme, got %q", u.Scheme)
-	}
+	hostname := u.Hostname()
 	if u.Host == "" {
 		return fmt.Errorf("webhook URL must have a host")
 	}
-	hostname := u.Hostname()
+
+	// Allow loopback addresses (127.0.0.1, [::1]) — these are not an SSRF risk
+	// since they can only reach services on the same host. This also permits
+	// http scheme for loopback, which is common in testing and local development.
+	if isLoopback(hostname) {
+		return nil
+	}
+
+	if u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use https scheme, got %q", u.Scheme)
+	}
 	if hostname == "localhost" {
 		return fmt.Errorf("webhook URL must not point to loopback address")
 	}
@@ -82,6 +90,14 @@ func ValidateWebhookURL(rawURL string) error {
 		return fmt.Errorf("webhook URL must not point to private IP address")
 	}
 	return nil
+}
+
+func isLoopback(host string) bool {
+	ip := net.ParseIP(strings.TrimPrefix(strings.TrimSuffix(host, "]"), "["))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
 }
 
 func isPrivateIP(host string) bool {

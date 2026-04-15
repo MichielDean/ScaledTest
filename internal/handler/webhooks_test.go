@@ -952,7 +952,6 @@ func TestWebhooksCreate_RejectsPrivateIPURL(t *testing.T) {
 	h := &WebhooksHandler{Store: ms}
 
 	privateURLs := []string{
-		"https://127.0.0.1/hook",
 		"https://10.0.0.1/hook",
 		"https://192.168.1.1/hook",
 		"https://localhost/hook",
@@ -969,6 +968,31 @@ func TestWebhooksCreate_RejectsPrivateIPURL(t *testing.T) {
 
 		if w.Code != http.StatusBadRequest {
 			t.Errorf("Create with private URL %q: status = %d, want %d", u, w.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestWebhooksCreate_AllowsLoopbackURL(t *testing.T) {
+	ms := &mockWebhookStore{createWebhook: &model.Webhook{ID: "wh-1", TeamID: "team-1"}}
+	h := &WebhooksHandler{Store: ms}
+
+	loopbackURLs := []string{
+		"http://127.0.0.1/hook",
+		"https://127.0.0.1/hook",
+		"http://[::1]/hook",
+	}
+	for _, u := range loopbackURLs {
+		body := fmt.Sprintf(`{"url":%q,"events":["report.submitted"]}`, u)
+		req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = webhookWithClaims(req, "maintainer")
+		req = webhookWithTeamParam(req, "team-1")
+		w := httptest.NewRecorder()
+
+		h.Create(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Create with loopback URL %q: status = %d, want %d", u, w.Code, http.StatusCreated)
 		}
 	}
 }

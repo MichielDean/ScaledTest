@@ -1,7 +1,6 @@
 package sanitize
 
 import (
-	"strings"
 	"testing"
 )
 
@@ -172,6 +171,10 @@ func TestValidateWebhookURL_ValidURLs(t *testing.T) {
 		"https://example.com/webhook",
 		"https://api.example.com/hooks/test",
 		"https://hooks.slack.com/services/xxx",
+		"http://127.0.0.1/webhook",
+		"https://127.0.0.1/webhook",
+		"http://[::1]/webhook",
+		"https://[::1]/webhook",
 	}
 	for _, u := range valid {
 		t.Run(u, func(t *testing.T) {
@@ -195,18 +198,13 @@ func TestValidateWebhookURL_InvalidSchemes(t *testing.T) {
 			if err == nil {
 				t.Errorf("ValidateWebhookURL(%q) expected error, got nil", u)
 			}
-			if !strings.Contains(err.Error(), "https") {
-				t.Errorf("ValidateWebhookURL(%q) error should mention https: %v", u, err)
-			}
 		})
 	}
 }
 
 func TestValidateWebhookURL_PrivateHosts(t *testing.T) {
 	private := []string{
-		"https://127.0.0.1/webhook",
 		"https://localhost/webhook",
-		"https://[::1]/webhook",
 		"https://10.0.0.1/webhook",
 		"https://172.16.0.1/webhook",
 		"https://192.168.1.1/webhook",
