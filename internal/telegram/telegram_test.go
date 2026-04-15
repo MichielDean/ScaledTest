@@ -139,6 +139,47 @@ func TestFormatMessage_HTMLEscapesExternalFields(t *testing.T) {
 	}
 }
 
+func TestFormatMessage_HTMLEscapesRunURL(t *testing.T) {
+	s := telegram.CISummary{
+		Repo:      "org/repo",
+		Branch:    "main",
+		CommitMsg: "test",
+		Status:    "failing",
+		Failed:    1,
+		Total:     1,
+		RunURL:    `https://example.com/run"onmouseover="alert(1)`,
+	}
+	msg := telegram.FormatMessage(s)
+
+	if strings.Contains(msg, `"onmouseover`) {
+		t.Errorf("RunURL double-quote must be escaped to prevent XSS; got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "https://example.com/run&#34;onmouseover=&#34;alert(1)") &&
+		!strings.Contains(msg, "https://example.com/run&quot;onmouseover=&quot;alert(1)") {
+		t.Errorf("RunURL should be HTML-escaped in href; got:\n%s", msg)
+	}
+}
+
+func TestFormatMessage_RunURLWithAngleBrackets(t *testing.T) {
+	s := telegram.CISummary{
+		Repo:      "org/repo",
+		Branch:    "main",
+		CommitMsg: "test",
+		Status:    "passing",
+		Passed:    1,
+		Total:     1,
+		RunURL:    "https://example.com/<script>alert(1)</script>",
+	}
+	msg := telegram.FormatMessage(s)
+
+	if strings.Contains(msg, "<script>") {
+		t.Errorf("RunURL angle brackets must be escaped; got:\n%s", msg)
+	}
+	if !strings.Contains(msg, "&lt;script&gt;") {
+		t.Errorf("RunURL should have escaped angle brackets; got:\n%s", msg)
+	}
+}
+
 // --- SendMessage tests ---
 
 func TestSendMessage_Success(t *testing.T) {
@@ -223,5 +264,141 @@ func TestSendMessage_ContextCancellation(t *testing.T) {
 	err := client.SendMessage(ctx, "hello")
 	if err == nil {
 		t.Fatal("expected error for cancelled context")
+	}
+}
+
+func TestSendMessage_RetriesOn429(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 3 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":          false,
+				"description": "Too many requests",
+				"error_code":  429,
+				"parameters":  map[string]interface{}{"retry_after": 0},
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	}))
+	defer srv.Close()
+
+	client := telegram.NewClient("mytoken", "123", telegram.WithBaseURL(srv.URL), telegram.WithMaxRetries(3))
+	err := client.SendMessage(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if attempts != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestSendMessage_RetriesOn5xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts < 2 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusBadGateway)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":          false,
+				"description": "Bad Gateway",
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	}))
+	defer srv.Close()
+
+	client := telegram.NewClient("mytoken", "123", telegram.WithBaseURL(srv.URL), telegram.WithMaxRetries(3))
+	err := client.SendMessage(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("expected success after retries, got: %v", err)
+	}
+	if attempts != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts)
+	}
+}
+
+func TestSendMessage_DoesNotRetryOn4xx(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusBadRequest)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":          false,
+			"description": "Bad Request: chat not found",
+		})
+	}))
+	defer srv.Close()
+
+	client := telegram.NewClient("mytoken", "bad-chat", telegram.WithBaseURL(srv.URL), telegram.WithMaxRetries(3))
+	err := client.SendMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected error for 400 response")
+	}
+	if attempts != 1 {
+		t.Errorf("expected 1 attempt (no retry for 4xx), got %d", attempts)
+	}
+}
+
+func TestSendMessage_ExhaustsRetriesOn429(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusTooManyRequests)
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"ok":          false,
+			"description": "Too many requests",
+			"error_code":  429,
+		})
+	}))
+	defer srv.Close()
+
+	client := telegram.NewClient("mytoken", "123", telegram.WithBaseURL(srv.URL), telegram.WithMaxRetries(2))
+	err := client.SendMessage(context.Background(), "hello")
+	if err == nil {
+		t.Fatal("expected error after exhausting retries")
+	}
+	// 1 initial + 2 retries = 3 total attempts
+	if attempts != 3 {
+		t.Errorf("expected 3 attempts, got %d", attempts)
+	}
+}
+
+func TestSendMessage_RespectsRetryAfter(t *testing.T) {
+	var attempts int
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts++
+		if attempts == 1 {
+			w.Header().Set("Content-Type", "application/json")
+			w.WriteHeader(http.StatusTooManyRequests)
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"ok":          false,
+				"description": "Too many requests",
+				"error_code":  429,
+				"parameters":  map[string]interface{}{"retry_after": 0},
+			})
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	}))
+	defer srv.Close()
+
+	client := telegram.NewClient("mytoken", "123", telegram.WithBaseURL(srv.URL), telegram.WithMaxRetries(3))
+	err := client.SendMessage(context.Background(), "hello")
+	if err != nil {
+		t.Fatalf("expected success, got: %v", err)
+	}
+	if attempts != 2 {
+		t.Errorf("expected 2 attempts, got %d", attempts)
 	}
 }

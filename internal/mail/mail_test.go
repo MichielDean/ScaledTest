@@ -2,6 +2,7 @@ package mail_test
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"testing"
@@ -138,5 +139,53 @@ func TestSMTPSender_Send_CancelledContext_ReturnsError(t *testing.T) {
 	})
 	if err == nil {
 		t.Fatal("expected error with cancelled context, got nil")
+	}
+}
+
+func TestIsTransientSMTPError_Nil(t *testing.T) {
+	if mail.IsTransientSMTPError(nil) {
+		t.Error("nil error should not be transient")
+	}
+}
+
+func TestIsTransientSMTPError_ConnectionRefused(t *testing.T) {
+	err := fmt.Errorf("smtp dial: connection refused")
+	if !mail.IsTransientSMTPError(err) {
+		t.Error("connection refused should be transient")
+	}
+}
+
+func TestIsTransientSMTPError_Timeout(t *testing.T) {
+	err := fmt.Errorf("smtp dial: i/o timeout")
+	if !mail.IsTransientSMTPError(err) {
+		t.Error("i/o timeout should be transient")
+	}
+}
+
+func TestIsTransientSMTPError_StartTLSError(t *testing.T) {
+	err := fmt.Errorf("smtp starttls: handshake failure")
+	if !mail.IsTransientSMTPError(err) {
+		t.Error("STARTTLS error should be transient")
+	}
+}
+
+func TestIsTransientSMTPError_ClientError(t *testing.T) {
+	err := fmt.Errorf("smtp auth: invalid credentials")
+	if mail.IsTransientSMTPError(err) {
+		t.Error("auth error should not be transient")
+	}
+}
+
+func TestIsTransientSMTPError_5xxResponse(t *testing.T) {
+	err := fmt.Errorf("smtp RCPT TO: 552 5.2.2 mailbox full")
+	if !mail.IsTransientSMTPError(err) {
+		t.Error("5xx response should be transient")
+	}
+}
+
+func TestIsTransientSMTPError_4xxResponse(t *testing.T) {
+	err := fmt.Errorf("smtp RCPT TO: 451 4.3.0 try again later")
+	if !mail.IsTransientSMTPError(err) {
+		t.Error("4xx response should be transient")
 	}
 }

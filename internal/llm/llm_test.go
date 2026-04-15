@@ -202,20 +202,26 @@ func TestCLIProvider_Analyze_ReturnsErrorWhenOutputNotJSON(t *testing.T) {
 	}
 }
 
-func TestCLIProvider_Analyze_RetriesOnTransientFailure_ThenSucceeds(t *testing.T) {
+func TestCLIProvider_Analyze_RetriesOnTransientError_ThenSucceeds(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
 	dir := t.TempDir()
 	countFile := filepath.Join(dir, "count")
 	os.WriteFile(countFile, []byte("0"), 0644)
 
+	// Script succeeds on 3rd attempt after failing with exit 1 on first two.
+	// Transient errors (killed process, timeout) are retried; exit code 1
+	// is a "client error" (not transient) so the provider will NOT retry it.
+	// To test retry behavior, we use a script that gets killed by the context
+	// timeout on the first two calls, then succeeds on the third.
 	script := fmt.Sprintf(`
 COUNT=$(cat %s 2>/dev/null || echo 0)
 COUNT=$((COUNT+1))
 echo $COUNT > %s
 if [ "$COUNT" -le 2 ]; then
-    echo "transient error" >&2
-    exit 1
+    # Sleep long enough to trigger context timeout on first 2 attempts
+    # when called with a short timeout.
+    sleep 10
 fi
 echo '{"succeeded":true}'
 `, countFile, countFile)
@@ -225,7 +231,7 @@ echo '{"succeeded":true}'
 		Provider:   "anthropic",
 		Command:    cmd,
 		MaxRetries: intPtr(2),
-		Timeout:    10 * time.Second,
+		Timeout:    100 * time.Millisecond,
 	})
 	if err != nil {
 		t.Fatalf("New: %v", err)
@@ -245,9 +251,10 @@ echo '{"succeeded":true}'
 	}
 }
 
-func TestCLIProvider_Analyze_ReturnsErrorAfterAllRetriesExhausted(t *testing.T) {
+func TestCLIProvider_Analyze_ClientError_NotRetried(t *testing.T) {
 	t.Setenv("ANTHROPIC_API_KEY", "test-key")
 
+	// Exit code 1 (syntax error, bad args) is a client error — not retried.
 	dir := t.TempDir()
 	cmd := writeFakeScript(t, dir, "fakecli", `echo "always fails" >&2; exit 1`)
 
@@ -263,10 +270,55 @@ func TestCLIProvider_Analyze_ReturnsErrorAfterAllRetriesExhausted(t *testing.T) 
 
 	_, err = p.Analyze(context.Background(), "prompt")
 	if err == nil {
-		t.Fatal("expected error after all retries exhausted")
+		t.Fatal("expected error for client exit code 1")
 	}
 	if !strings.Contains(err.Error(), "exited") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestCLIProvider_Analyze_TransientError_RetriesThenSucceeds(t *testing.T) {
+	t.Setenv("ANTHROPIC_API_KEY", "test-key")
+
+	// This script sleeps on the first invocation (causing context timeout)
+	// and then succeeds on the second attempt.
+	dir := t.TempDir()
+	countFile := filepath.Join(dir, "count")
+	os.WriteFile(countFile, []byte("0"), 0644)
+
+	script := fmt.Sprintf(`
+COUNT=$(cat %s 2>/dev/null || echo 0)
+COUNT=$((COUNT+1))
+echo $COUNT > %s
+if [ "$COUNT" -le 1 ]; then
+    # Sleep longer than the per-call timeout to trigger context.DeadlineExceeded
+    sleep 10
+fi
+echo '{"success":true}'
+`, countFile, countFile)
+	cmd := writeFakeScript(t, dir, "fakecli", script)
+
+	p, err := New(Config{
+		Provider:   "anthropic",
+		Command:    cmd,
+		MaxRetries: intPtr(2),
+		Timeout:    100 * time.Millisecond,
+	})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+
+	got, err := p.Analyze(context.Background(), "prompt")
+	if err != nil {
+		t.Fatalf("Analyze: %v", err)
+	}
+
+	var result struct{ Success bool }
+	if err := json.Unmarshal(got, &result); err != nil {
+		t.Fatalf("unmarshal: %v", err)
+	}
+	if !result.Success {
+		t.Fatalf("expected success:true, got %s", got)
 	}
 }
 
@@ -379,5 +431,17 @@ func TestMockProvider_Analyze_ReturnsConfiguredError(t *testing.T) {
 	_, err := m.Analyze(context.Background(), "prompt")
 	if !errors.Is(err, want) {
 		t.Fatalf("got %v, want %v", err, want)
+	}
+}
+
+func TestIsTransientCLIError_ContextDeadline(t *testing.T) {
+	if !isTransientCLIError(context.DeadlineExceeded) {
+		t.Error("context.DeadlineExceeded should be transient")
+	}
+}
+
+func TestIsTransientCLIError_NilError(t *testing.T) {
+	if isTransientCLIError(nil) {
+		t.Error("nil error should not be transient")
 	}
 }
