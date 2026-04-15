@@ -3,7 +3,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminPage } from '../admin';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth-store';
-import { ToastProvider } from '../../components/toast';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -16,7 +16,14 @@ vi.mock('../../lib/api', () => ({
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
   return render(
     <QueryClientProvider client={client}>
@@ -241,7 +248,7 @@ describe('AdminPage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Create Team' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to create team: Team already exists/)).toBeInTheDocument();
+      expect(screen.getByText(/Team already exists/)).toBeInTheDocument();
     });
   });
 

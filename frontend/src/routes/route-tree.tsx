@@ -24,10 +24,8 @@ function requireAuth() {
 }
 
 function requireOwner() {
+  requireAuth();
   const state = useAuthStore.getState();
-  if (!state.isAuthenticated) {
-    throw redirect({ to: '/login' });
-  }
   if (state.user?.role !== 'owner') {
     throw redirect({ to: '/' });
   }

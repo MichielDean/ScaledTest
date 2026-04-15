@@ -260,9 +260,6 @@ function TeamsSection() {
       setNewTeamName('');
       toast('Team created successfully.', 'success');
     },
-    onError: (err: Error) => {
-      toast(`Failed to create team: ${err.message}`, 'error');
-    },
   });
 
   const handleCreateTeam = (e: React.FormEvent) => {

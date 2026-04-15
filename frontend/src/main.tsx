@@ -4,8 +4,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { RouterProvider, createRouter } from '@tanstack/react-router';
 import { routeTree } from './routes/route-tree';
 import { ErrorBoundary } from './components/error-boundary';
-import { ToastProvider } from './components/toast';
-import { toast } from './components/toast';
+import { ToastProvider, toast } from './components/toast';
 import './index.css';
 
 const queryClient = new QueryClient({

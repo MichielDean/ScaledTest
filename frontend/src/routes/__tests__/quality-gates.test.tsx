@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QualityGatesPage } from '../quality-gates';
 import { api } from '../../lib/api';
-import { ToastProvider } from '../../components/toast';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -20,7 +20,14 @@ const TEAM = { id: 't1', name: 'Alpha Team' };
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
   return render(
     <QueryClientProvider client={client}>
@@ -261,7 +268,7 @@ describe('QualityGatesPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to delete quality gate: Cannot delete/)).toBeInTheDocument();
+      expect(screen.getByText(/Cannot delete/)).toBeInTheDocument();
     });
   });
 
@@ -288,7 +295,7 @@ describe('QualityGatesPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Evaluate' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Evaluation failed: Server error/)).toBeInTheDocument();
+      expect(screen.getByText(/Server error/)).toBeInTheDocument();
     });
   });
 

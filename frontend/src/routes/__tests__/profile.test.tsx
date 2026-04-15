@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProfilePage } from '../profile';
-import { ToastProvider } from '../../components/toast';
+import { ToastProvider, toast } from '../../components/toast';
 
 const { mockUpdateProfile, mockChangePassword, mockSetUser } = vi.hoisted(() => ({
   mockUpdateProfile: vi.fn(),
@@ -33,7 +33,14 @@ vi.mock('../../lib/query-keys', () => ({
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
   return render(
     <QueryClientProvider client={client}>
@@ -226,7 +233,7 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to update profile: Network error/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Network error/).length).toBeGreaterThan(0);
     });
   });
 
@@ -244,7 +251,7 @@ describe('ProfilePage', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Change Password' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to change password: Weak password/)).toBeInTheDocument();
+      expect(screen.getAllByText(/Weak password/).length).toBeGreaterThan(0);
     });
   });
 });

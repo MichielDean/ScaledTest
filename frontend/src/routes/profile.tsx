@@ -3,7 +3,6 @@ import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/auth-store';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
-import { toast } from '../components/toast';
 
 export function ProfilePage() {
   const { user, setUser } = useAuthStore();
@@ -30,7 +29,6 @@ export function ProfilePage() {
     onError: (err: Error) => {
       setProfileError(err.message);
       setProfileSuccess('');
-      toast(`Failed to update profile: ${err.message}`, 'error');
     },
   });
 
@@ -47,7 +45,6 @@ export function ProfilePage() {
     onError: (err: Error) => {
       setPasswordError(err.message);
       setPasswordSuccess('');
-      toast(`Failed to change password: ${err.message}`, 'error');
     },
   });
 

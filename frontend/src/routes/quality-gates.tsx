@@ -84,9 +84,6 @@ export function QualityGatesPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
       toast('Quality gate deleted.', 'success');
     },
-    onError: (err: Error) => {
-      toast(`Failed to delete quality gate: ${err.message}`, 'error');
-    },
   });
 
   function handleEdit(gate: QualityGate) {
@@ -239,9 +236,6 @@ function GateCard({
     onSuccess: result => {
       setLastEvaluation(result);
       void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.evaluations(teamId, gate.id) });
-    },
-    onError: (err: Error) => {
-      toast(`Evaluation failed: ${err.message}`, 'error');
     },
   });
 

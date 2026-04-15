@@ -2,7 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WebhooksPage } from '../webhooks';
 import { api } from '../../lib/api';
-import { ToastProvider } from '../../components/toast';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -18,7 +18,14 @@ vi.mock('../../lib/api', () => ({
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
   return render(
     <QueryClientProvider client={client}>
@@ -382,7 +389,7 @@ describe('WebhooksPage', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
 
     await waitFor(() => {
-      expect(screen.getByText(/Failed to delete webhook: Cannot delete webhook/)).toBeInTheDocument();
+      expect(screen.getByText(/Cannot delete webhook/)).toBeInTheDocument();
     });
   });
 

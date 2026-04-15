@@ -87,9 +87,6 @@ export function WebhooksPage() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.all(teamId!) });
       toast('Webhook deleted.', 'success');
     },
-    onError: (err: Error) => {
-      toast(`Failed to delete webhook: ${err.message}`, 'error');
-    },
   });
 
   function handleEdit(webhook: Webhook) {
