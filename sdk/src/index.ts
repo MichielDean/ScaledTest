@@ -507,10 +507,13 @@ export class ScaledTestClient {
     description?: string,
     enabled?: boolean,
   ): Promise<QualityGate> {
+    const body: Record<string, unknown> = { name, rules };
+    if (description !== undefined) body.description = description;
+    if (enabled !== undefined) body.enabled = enabled;
     return this.request(
       'PUT',
       `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}`,
-      { name, rules, description, enabled },
+      body,
     );
   }
 
