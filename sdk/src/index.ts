@@ -64,7 +64,7 @@ export interface Report {
   id: string;
   team_id: string;
   name: string;
-  tool_name: string;
+  tool_name?: string;
   tool_version?: string;
   summary: {
     tests: number;

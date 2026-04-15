@@ -1752,6 +1752,17 @@ describe('type alignment with server responses', () => {
     expect(report.summary.stop).toBe(1700001000);
   });
 
+  it('Report.tool_name is optional — server omits when empty via omitempty', () => {
+    const report: Report = {
+      id: 'r-1',
+      team_id: 'team-1',
+      name: 'My Report',
+      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0, start: 1700000000, stop: 1700001000 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(report.tool_name).toBeUndefined();
+  });
+
   it('Team has no role field; TeamWithRole extends Team with role', () => {
     const team: Team = {
       id: 't-1',
