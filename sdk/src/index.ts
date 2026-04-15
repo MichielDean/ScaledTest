@@ -73,6 +73,8 @@ export interface Report {
     skipped: number;
     pending: number;
     other: number;
+    start?: number;
+    stop?: number;
   };
   // Flattened summary fields (top-level) for convenience; available when summary is parseable
   test_count?: number;
@@ -109,7 +111,7 @@ export interface Execution {
 
 export interface QualityGateRule {
   type: string;
-  params?: Record<string, unknown>;
+  params: Record<string, unknown> | null;
 }
 
 export interface QualityGate {

@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, QualityGateRule, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -645,7 +645,7 @@ describe('quality gates', () => {
   });
 
   it('updateQualityGate omits optional fields when not provided', async () => {
-    const rules = [{ type: 'zero_failures' }];
+    const rules = [{ type: 'zero_failures', params: null }];
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'gate', rules });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -1303,9 +1303,9 @@ describe('endpoint alignment with routes.go', () => {
       case 'GET /api/v1/analytics/error-analysis': await client.getErrorAnalysis(); break;
       case 'GET /api/v1/analytics/duration-distribution': await client.getDurationDistribution(); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates': await client.getQualityGates('team-1'); break;
-      case 'POST /api/v1/teams/{teamID}/quality-gates': await client.createQualityGate('team-1', 'g', []); break;
+      case 'POST /api/v1/teams/{teamID}/quality-gates': await client.createQualityGate('team-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.getQualityGate('team-1', 'gate-1'); break;
-      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', []); break;
+      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
       case 'DELETE /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.deleteQualityGate('team-1', 'gate-1'); break;
       case 'POST /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate': await client.evaluateQualityGate('team-1', 'gate-1', 'report-1'); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations': await client.listEvaluations('team-1', 'gate-1'); break;
@@ -1865,5 +1865,41 @@ describe('type alignment with server responses', () => {
     const client = makeClient();
     const result = await client.deleteExecution('e-2');
     expect(result).toEqual({ id: 'e-2', status: 'cancelled' });
+  });
+
+  it('Report.summary includes optional start and stop fields', () => {
+    const report: Report = {
+      id: 'r-1',
+      team_id: 'team-1',
+      tool_name: 'jest',
+      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0, start: 1700000000, stop: 1700001000 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(report.summary.start).toBe(1700000000);
+    expect(report.summary.stop).toBe(1700001000);
+
+    const reportWithoutTimestamps: Report = {
+      id: 'r-2',
+      team_id: 'team-1',
+      tool_name: 'jest',
+      summary: { tests: 5, passed: 5, failed: 0, skipped: 0, pending: 0, other: 0 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(reportWithoutTimestamps.summary.start).toBeUndefined();
+    expect(reportWithoutTimestamps.summary.stop).toBeUndefined();
+  });
+
+  it('QualityGateRule.params is required (not optional) and allows null', () => {
+    const ruleWithParams: QualityGateRule = {
+      type: 'pass_rate',
+      params: { threshold: 95 },
+    };
+    expect(ruleWithParams.params).toEqual({ threshold: 95 });
+
+    const ruleWithNull: QualityGateRule = {
+      type: 'zero_failures',
+      params: null,
+    };
+    expect(ruleWithNull.params).toBeNull();
   });
 });
