@@ -119,8 +119,9 @@ func isTransientCLIError(err error) bool {
 	if errors.As(err, &ee) {
 		return !ee.Exited()
 	}
-	// Other errors (network, exec failures) are transient.
-	// Client errors that produce normal exit codes are NOT transient.
+	// Other errors (network, exec failures) fall through here and are
+	// NOT retried — only the explicit cases above are transient.
+	// Client errors that produce normal exit codes are also NOT transient.
 	return false
 }
 
