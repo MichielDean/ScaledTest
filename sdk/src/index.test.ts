@@ -737,17 +737,17 @@ describe('quality gates', () => {
     expect(body.enabled).toBe(true);
   });
 
-  it('updateQualityGate sends description as required field', async () => {
+  it('updateQualityGate omits description when not provided', async () => {
     const rules = [{ type: 'zero_failures', params: null }];
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'gate', rules });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.updateQualityGate('team-1', 'qg-1', 'gate', rules, '');
+    await client.updateQualityGate('team-1', 'qg-1', 'gate', rules);
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.name).toBe('gate');
     expect(body.rules).toEqual(rules);
-    expect(body.description).toBe('');
+    expect('description' in body).toBe(false);
     expect('enabled' in body).toBe(false);
   });
 
@@ -1414,7 +1414,7 @@ describe('endpoint alignment with routes.go', () => {
       case 'GET /api/v1/teams/{teamID}/quality-gates': await client.getQualityGates('team-1'); break;
       case 'POST /api/v1/teams/{teamID}/quality-gates': await client.createQualityGate('team-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.getQualityGate('team-1', 'gate-1'); break;
-      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }], ''); break;
+      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
       case 'DELETE /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.deleteQualityGate('team-1', 'gate-1'); break;
       case 'POST /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate': await client.evaluateQualityGate('team-1', 'gate-1', 'report-1'); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations': await client.listEvaluations('team-1', 'gate-1'); break;

@@ -615,10 +615,11 @@ export class ScaledTestClient {
     id: string,
     name: string,
     rules: QualityGateRule[],
-    description: string,
+    description?: string,
     enabled?: boolean,
   ): Promise<QualityGate> {
-    const body: Record<string, unknown> = { name, rules, description };
+    const body: Record<string, unknown> = { name, rules };
+    if (description !== undefined) body.description = description;
     if (enabled !== undefined) body.enabled = enabled;
     return this.request(
       'PUT',
