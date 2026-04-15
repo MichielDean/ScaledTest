@@ -268,7 +268,7 @@ export class ScaledTestClient {
     this.timeoutMs = options.timeoutMs ?? 30_000;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string | number | undefined>): Promise<T> {
+  private async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string | number | boolean | undefined>): Promise<T> {
     let url = `${this.baseUrl}${path}`;
     if (params) {
       const searchParams = new URLSearchParams();
@@ -324,7 +324,7 @@ export class ScaledTestClient {
   }
 
   async getReports(params?: { limit?: number; offset?: number; since?: string; until?: string }): Promise<{ reports: Report[]; total: number }> {
-    return this.request('GET', '/api/v1/reports', undefined, params as Record<string, string | number | undefined> | undefined);
+    return this.request('GET', '/api/v1/reports', undefined, params);
   }
 
   async getReport(id: string): Promise<Report> {
@@ -354,7 +354,7 @@ export class ScaledTestClient {
 
   // Executions
   async getExecutions(params?: { limit?: number; offset?: number }): Promise<{ executions: Execution[]; total: number }> {
-    return this.request('GET', '/api/v1/executions', undefined, params as Record<string, string | number | undefined> | undefined);
+    return this.request('GET', '/api/v1/executions', undefined, params);
   }
 
   async createExecution(command: string): Promise<Execution> {
@@ -374,10 +374,12 @@ export class ScaledTestClient {
   }
 
   async updateExecutionStatus(id: string, status: string, errorMsg?: string): Promise<{ id: string; status: string }> {
+    const body: Record<string, string> = { status };
+    if (errorMsg !== undefined) body.error_msg = errorMsg;
     return this.request(
       'PUT',
       `/api/v1/executions/${encodeURIComponent(id)}/status`,
-      { status, error_msg: errorMsg },
+      body,
     );
   }
 
@@ -421,7 +423,9 @@ export class ScaledTestClient {
     rules: QualityGateRule[],
     description?: string,
   ): Promise<QualityGate> {
-    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, { name, rules, description });
+    const body: Record<string, unknown> = { name, rules };
+    if (description !== undefined) body.description = description;
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, body);
   }
 
   async getQualityGate(teamId: string, id: string): Promise<QualityGate> {
@@ -593,7 +597,7 @@ export class ScaledTestClient {
   }
 
   async listAuditLog(params?: { action?: string; resource_type?: string; actor_id?: string; since?: string; until?: string; limit?: number; offset?: number }): Promise<{ audit_log: AuditLogEntry[]; total: number }> {
-    return this.request('GET', '/api/v1/admin/audit-log', undefined, params as Record<string, string | number | undefined> | undefined);
+    return this.request('GET', '/api/v1/admin/audit-log', undefined, params);
   }
 
   // User profile

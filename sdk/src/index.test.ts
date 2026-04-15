@@ -521,7 +521,8 @@ describe('quality gates', () => {
     expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates`);
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toEqual({ name: 'prod-gate', rules, description: undefined });
+    expect(body).toEqual({ name: 'prod-gate', rules });
+    expect(body).not.toHaveProperty('description');
   });
 
   it('createQualityGate includes description when provided', async () => {
