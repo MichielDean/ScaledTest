@@ -14,6 +14,7 @@ import (
 
 	"github.com/scaledtest/scaledtest/internal/analytics"
 	"github.com/scaledtest/scaledtest/internal/model"
+	"github.com/scaledtest/scaledtest/internal/store"
 	"github.com/scaledtest/scaledtest/internal/webhook"
 )
 
@@ -38,8 +39,38 @@ type triageStorer interface {
 	CreateOrReset(ctx context.Context, teamID, reportID string) (*model.TriageResult, error)
 	Complete(ctx context.Context, teamID, triageID, summary, llmProvider, llmModel string, inputTokens, outputTokens int, costUSD float64) (*model.TriageResult, error)
 	Fail(ctx context.Context, teamID, triageID, errorMsg string) (*model.TriageResult, error)
-	CreateCluster(ctx context.Context, triageID, teamID, rootCause string, label *string) (*model.TriageCluster, error)
-	CreateClassification(ctx context.Context, triageID string, clusterID *string, testResultID, teamID, classification string) (*model.TriageFailureClassification, error)
+	// PersistOutput atomically persists all clusters and classifications for a
+	// triage result. In production this wraps all inserts in a single database
+	// transaction so a partial write cannot leave the record inconsistent.
+	PersistOutput(ctx context.Context, teamID, triageID string, output *store.OutputData) error
+}
+
+// persistOutput writes clusters and classifications from output to the DB
+// atomically in a single transaction.
+func (r *Runner) persistOutput(ctx context.Context, teamID, triageID string, output *TriageOutput) error {
+	clusters := make([]store.ClusterInput, len(output.Clusters))
+	for i, c := range output.Clusters {
+		clusters[i] = store.ClusterInput{RootCause: c.RootCause, Label: labelPtr(c.Label)}
+	}
+	classifications := make([]store.ClassificationInput, len(output.Classifications))
+	for i, cl := range output.Classifications {
+		classifications[i] = store.ClassificationInput{
+			ClusterIndex:   cl.ClusterIndex,
+			TestResultID:   cl.TestResultID,
+			Classification: cl.Classification,
+		}
+	}
+	return r.store.PersistOutput(ctx, teamID, triageID, &store.OutputData{
+		Clusters:        clusters,
+		Classifications: classifications,
+	})
+}
+
+func labelPtr(s string) *string {
+	if s == "" {
+		return nil
+	}
+	return &s
 }
 
 // webhookNotifier is the subset of webhook.Notifier used by Runner to fire
@@ -99,6 +130,7 @@ type Runner struct {
 	webhooks     webhookNotifier
 	statusPoster githubStatusPoster // nil when GitHub integration is disabled
 	baseURL      string             // used to construct target URLs in GitHub statuses
+	parentCtx    context.Context    // optional parent context for cancellation
 }
 
 // NewRunner constructs a Runner backed by a live pgxpool. historyRdr and
@@ -141,12 +173,20 @@ func (r *Runner) SetStatusPoster(poster githubStatusPoster, baseURL string) {
 //
 // Concurrency is bounded: if triageWorkerLimit jobs are already in flight the
 // new job is dropped with a warning log rather than spawning an extra goroutine.
+//
+// The parent parameter, if non-nil, is used as the base context for the job,
+// linking the job's lifetime to the server's shutdown. When parent is nil,
+// context.Background() is used (the previous behaviour).
 func (r *Runner) Enqueue(teamID, reportID string) {
 	select {
 	case r.sem <- struct{}{}:
 		go func() {
 			defer func() { <-r.sem }()
-			ctx, cancel := context.WithTimeout(context.Background(), jobTimeout)
+			baseCtx := context.Background()
+			if r.parentCtx != nil {
+				baseCtx = r.parentCtx
+			}
+			ctx, cancel := context.WithTimeout(baseCtx, jobTimeout)
 			defer cancel()
 			if err := r.run(ctx, teamID, reportID); err != nil {
 				log.Error().Err(err).
@@ -161,6 +201,13 @@ func (r *Runner) Enqueue(teamID, reportID string) {
 			Str("report_id", reportID).
 			Msg("triage: worker limit reached, triage job dropped")
 	}
+}
+
+// SetParentContext sets the parent context for triage jobs. When non-nil,
+// triage jobs will be cancelled when this context is cancelled (e.g. during
+// graceful server shutdown).
+func (r *Runner) SetParentContext(ctx context.Context) {
+	r.parentCtx = ctx
 }
 
 // run executes the triage pipeline synchronously.
@@ -283,38 +330,6 @@ func (r *Runner) buildInput(ctx context.Context, teamID, reportID string, failur
 	}
 
 	return input
-}
-
-// persistOutput writes clusters and classifications from output to the DB.
-// It uses the cluster insertion order to map ClassificationResult.ClusterIndex
-// back to the UUID assigned by the DB.
-func (r *Runner) persistOutput(ctx context.Context, teamID, triageID string, output *TriageOutput) error {
-	// Insert clusters and collect their assigned UUIDs.
-	clusterIDs := make([]*string, len(output.Clusters))
-	for i, cluster := range output.Clusters {
-		var lblPtr *string
-		if cluster.Label != "" {
-			lbl := cluster.Label
-			lblPtr = &lbl
-		}
-		c, err := r.store.CreateCluster(ctx, triageID, teamID, cluster.RootCause, lblPtr)
-		if err != nil {
-			return fmt.Errorf("create cluster[%d]: %w", i, err)
-		}
-		clusterIDs[i] = &c.ID
-	}
-
-	// Insert per-failure classifications.
-	for _, cl := range output.Classifications {
-		var clusterID *string
-		if cl.ClusterIndex >= 0 && cl.ClusterIndex < len(clusterIDs) {
-			clusterID = clusterIDs[cl.ClusterIndex]
-		}
-		if _, err := r.store.CreateClassification(ctx, triageID, clusterID, cl.TestResultID, teamID, cl.Classification); err != nil {
-			return fmt.Errorf("create classification for %s: %w", cl.TestResultID, err)
-		}
-	}
-	return nil
 }
 
 // notifyTriageComplete fires a run.triage_complete webhook event. It is a

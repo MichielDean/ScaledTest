@@ -10,6 +10,69 @@ import (
 	"time"
 )
 
+func TestUniqueBoundary_IsUniqueAcrossCalls(t *testing.T) {
+	seen := make(map[string]bool)
+	for i := 0; i < 100; i++ {
+		b := uniqueBoundary()
+		if seen[b] {
+			t.Fatalf("duplicate boundary: %s", b)
+		}
+		seen[b] = true
+		if !strings.HasPrefix(b, "boundary_") {
+			t.Errorf("boundary %q should start with 'boundary_'", b)
+		}
+	}
+}
+
+func TestUniqueBoundary_HasSufficientLength(t *testing.T) {
+	b := uniqueBoundary()
+	minLen := len("boundary_") + 32
+	if len(b) < minLen {
+		t.Errorf("boundary %q is too short (%d chars, need >= %d)", b, len(b), minLen)
+	}
+	if len(b) > 128 {
+		t.Errorf("boundary %q is too long (%d chars)", b, len(b))
+	}
+}
+
+func TestSendInvitation_UsesMultipartWithBoundary(t *testing.T) {
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+
+	_, portStr, _ := net.SplitHostPort(ln.Addr().String())
+	var port int
+	fmt.Sscanf(portStr, "%d", &port)
+
+	received := make(chan string, 1)
+	go fakeSMTP(t, ln, received)
+
+	m := New("127.0.0.1", port, "", "", "noreply@test.com")
+	err = m.SendInvitation(context.Background(), "invitee@example.com", "http://app.example.com/invitations/inv_testboundary")
+	if err != nil {
+		t.Fatalf("SendInvitation error: %v", err)
+	}
+
+	body := <-received
+	if !strings.Contains(body, "multipart/alternative") {
+		t.Errorf("message missing multipart/alternative content type, got:\n%s", body)
+	}
+	if !strings.Contains(body, "text/plain") {
+		t.Errorf("message missing text/plain part, got:\n%s", body)
+	}
+	if !strings.Contains(body, "text/html") {
+		t.Errorf("message missing text/html part, got:\n%s", body)
+	}
+	if !strings.Contains(body, "boundary_") {
+		t.Errorf("message uses hardcoded boundary instead of unique boundary, got:\n%s", body)
+	}
+	if strings.Contains(body, "boundary123") {
+		t.Errorf("message uses hardcoded 'boundary123' boundary, got:\n%s", body)
+	}
+}
+
 // compile-time interface check
 var _ Mailer = (*SMTPMailer)(nil)
 

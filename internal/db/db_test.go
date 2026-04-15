@@ -32,8 +32,8 @@ func TestMigrationsEmbedded(t *testing.T) {
 		t.Errorf("migration up/down mismatch: %d up, %d down", ups, downs)
 	}
 
-	if ups != 23 {
-		t.Errorf("expected 23 migration pairs, got %d", ups)
+	if ups != 24 {
+		t.Errorf("expected 24 migration pairs, got %d", ups)
 	}
 
 	// Verify each up has a matching down

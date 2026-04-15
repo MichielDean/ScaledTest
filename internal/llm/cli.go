@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"time"
@@ -61,7 +62,10 @@ type cliProvider struct {
 }
 
 // Analyze invokes the CLI with prompt and returns the JSON response.
-// It retries on transient exec failures with configurable back-off.
+// It retries on transient exec failures (timeouts, process signals) with
+// configurable back-off. Client errors (syntax errors, invalid model names)
+// are not retried — only transient failures where the CLI exited with a signal
+// or the context deadline was exceeded.
 func (c *cliProvider) Analyze(ctx context.Context, prompt string) (json.RawMessage, error) {
 	var (
 		out []byte
@@ -76,6 +80,9 @@ func (c *cliProvider) Analyze(ctx context.Context, prompt string) (json.RawMessa
 		cancel()
 		if err == nil {
 			break
+		}
+		if !isTransientCLIError(err) {
+			return nil, err
 		}
 		if attempt < c.maxRetries {
 			select {
@@ -93,6 +100,29 @@ func (c *cliProvider) Analyze(ctx context.Context, prompt string) (json.RawMessa
 		return nil, fmt.Errorf("llm: response is not valid JSON: %q", truncate(string(out), 200))
 	}
 	return json.RawMessage(out), nil
+}
+
+// isTransientCLIError returns true for errors that are worth retrying:
+// context deadlines/timeouts and process signals (killed by SIGKILL from
+// timeout). Non-transient errors like invalid model names or syntax errors
+// (exit code 1) are NOT retried.
+func isTransientCLIError(err error) bool {
+	if err == nil {
+		return false
+	}
+	// Context deadline/timeout errors are transient.
+	if errors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+	// Process killed by a signal (e.g. SIGKILL from timeout) is transient.
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return !ee.Exited()
+	}
+	// Other errors (network, exec failures) fall through here and are
+	// NOT retried — only the explicit cases above are transient.
+	// Client errors that produce normal exit codes are also NOT transient.
+	return false
 }
 
 // run executes one CLI invocation and returns its stdout.

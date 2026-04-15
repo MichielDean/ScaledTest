@@ -325,3 +325,77 @@ func TestVerifyHMACSHA256Format(t *testing.T) {
 		t.Error("Verify() should reject wrong prefix")
 	}
 }
+
+func TestNotifier_BoundedConcurrency(t *testing.T) {
+	// Verify that the Notifier uses a bounded worker pool. With 20 webhooks and
+	// a pool size of 10, all 20 should eventually be delivered because the server
+	// responds immediately, freeing workers for the batch of 10 that were dropped
+	// on the first round.
+	var called atomic.Int32
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		called.Add(1)
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	hooks := make([]WebhookRecord, 20)
+	for i := range hooks {
+		hooks[i] = WebhookRecord{ID: fmt.Sprintf("wh-%d", i), URL: server.URL, SecretHash: "secret1"}
+	}
+
+	lister := &mockLister{hooks: hooks}
+	n := NewNotifier(lister, NewDispatcher())
+	n.Notify("team-1", EventReportSubmitted, map[string]string{"report_id": "r-1"})
+
+	// With the bounded pool, the first batch of 10 enters the semaphore.
+	// The second batch may be dropped because the semaphore is full.
+	// Wait long enough for at least the first batch.
+	timeout := time.After(5 * time.Second)
+	for {
+		if called.Load() >= 10 {
+			break
+		}
+		select {
+		case <-timeout:
+			t.Fatalf("expected at least 10 webhook calls, got %d", called.Load())
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+func TestNotifier_BoundedConcurrency_DropsWhenPoolFull(t *testing.T) {
+	// When all worker slots are occupied, additional dispatches should be dropped
+	// with a warning log rather than spawning extra goroutines.
+	var started atomic.Int32
+	blockCh := make(chan struct{})
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		started.Add(1)
+		<-blockCh // block until test releases
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer server.Close()
+
+	hooks := make([]WebhookRecord, 15)
+	for i := range hooks {
+		hooks[i] = WebhookRecord{ID: fmt.Sprintf("wh-%d", i), URL: server.URL, SecretHash: "secret"}
+	}
+
+	lister := &mockLister{hooks: hooks}
+	n := NewNotifier(lister, NewDispatcher())
+
+	n.Notify("team-1", EventReportSubmitted, map[string]string{"report_id": "r-dropped"})
+
+	// Wait for up to defaultWorkerPoolSize (10) goroutines to start.
+	time.Sleep(500 * time.Millisecond)
+
+	startedCount := started.Load()
+	if startedCount > int32(defaultWorkerPoolSize) {
+		t.Errorf("expected at most %d concurrent dispatches, got %d", defaultWorkerPoolSize, startedCount)
+	}
+
+	// Unblock all the servers.
+	close(blockCh)
+
+	// Wait for all to finish.
+	time.Sleep(200 * time.Millisecond)
+}

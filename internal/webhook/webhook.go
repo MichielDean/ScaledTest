@@ -178,18 +178,26 @@ type WebhookRecord struct {
 }
 
 // Notifier looks up matching webhooks and dispatches payloads asynchronously.
+// Concurrency is bounded by a semaphore with configurable capacity (default 10).
 type Notifier struct {
 	lister     WebhookLister
 	dispatcher *Dispatcher
 	recorder   DeliveryRecorder // optional; nil means no persistence
+	sem        chan struct{}    // bounded semaphore
 }
+
+const defaultWorkerPoolSize = 10
 
 // NewNotifier creates a Notifier. Returns nil if lister or dispatcher is nil.
 func NewNotifier(lister WebhookLister, dispatcher *Dispatcher) *Notifier {
 	if lister == nil || dispatcher == nil {
 		return nil
 	}
-	return &Notifier{lister: lister, dispatcher: dispatcher}
+	return &Notifier{
+		lister:     lister,
+		dispatcher: dispatcher,
+		sem:        make(chan struct{}, defaultWorkerPoolSize),
+	}
 }
 
 // SetRecorder sets the delivery recorder for persisting delivery results.
@@ -199,7 +207,7 @@ func (n *Notifier) SetRecorder(r DeliveryRecorder) {
 	}
 }
 
-// Notify fires webhooks for the given event asynchronously (fire-and-forget).
+// Notify fires webhooks for the given event asynchronously with bounded concurrency.
 // Safe to call on a nil Notifier.
 func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 	if n == nil {
@@ -228,27 +236,36 @@ func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 
 		for _, hook := range hooks {
 			h := hook // capture
-			// Each delivery gets its own timeout context.
-			dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
-			go func() {
-				defer dCancel()
-				start := time.Now()
-				delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
-				durationMs := int(time.Since(start).Milliseconds())
-				if err != nil {
-					log.Warn().Err(err).
-						Str("webhook_id", h.ID).
-						Str("url", h.URL).
-						Str("event", string(event)).
-						Msg("webhook: delivery failed")
-				}
+			select {
+			case n.sem <- struct{}{}:
+				go func() {
+					defer func() { <-n.sem }()
+					dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
+					defer dCancel()
+					start := time.Now()
+					delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+					durationMs := int(time.Since(start).Milliseconds())
+					if err != nil {
+						log.Warn().Err(err).
+							Str("webhook_id", h.ID).
+							Str("url", h.URL).
+							Str("event", string(event)).
+							Msg("webhook: delivery failed")
+					}
 
-				// Persist delivery result if recorder is configured.
-				if n.recorder != nil && delivery != nil {
-					_ = n.recorder.Record(dCtx, h.ID, h.URL, string(event),
-						delivery.Payload, delivery.Attempt, delivery.StatusCode, delivery.Error, durationMs)
-				}
-			}()
+					// Persist delivery result if recorder is configured.
+					if n.recorder != nil && delivery != nil {
+						_ = n.recorder.Record(dCtx, h.ID, h.URL, string(event),
+							delivery.Payload, delivery.Attempt, delivery.StatusCode, delivery.Error, durationMs)
+					}
+				}()
+			default:
+				log.Warn().
+					Str("webhook_id", h.ID).
+					Str("url", h.URL).
+					Str("event", string(event)).
+					Msg("webhook: worker pool full, delivery dropped")
+			}
 		}
 	}()
 }

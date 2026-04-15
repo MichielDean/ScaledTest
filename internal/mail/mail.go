@@ -7,8 +7,12 @@ import (
 	"net"
 	"net/smtp"
 	"strings"
+	"time"
+
+	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/config"
+	"github.com/scaledtest/scaledtest/internal/smtptransient"
 )
 
 // Message is an email to be sent.
@@ -33,11 +37,12 @@ func (n *NoopSender) Send(_ context.Context, _ Message) error {
 
 // SMTPSender delivers email via SMTP using the configured credentials.
 type SMTPSender struct {
-	host string
-	port int
-	user string
-	pass string
-	from string
+	host       string
+	port       int
+	user       string
+	pass       string
+	from       string
+	maxRetries int
 }
 
 // sanitizeHeader strips CR and LF characters from an email header value
@@ -47,8 +52,43 @@ func sanitizeHeader(s string) string {
 }
 
 // Send delivers msg via SMTP, respecting ctx for cancellation and timeouts.
-// Header fields are sanitized to prevent header injection.
+// It retries on transient SMTP errors (5xx responses and connection timeouts)
+// with exponential backoff. Client errors (auth, invalid recipient) are not retried.
 func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
+	var lastErr error
+	for attempt := 0; attempt <= s.maxRetries; attempt++ {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+
+		lastErr = s.sendOnce(ctx, msg)
+		if lastErr == nil {
+			return nil
+		}
+
+		if !smtptransient.IsTransient(lastErr) {
+			return lastErr
+		}
+
+		if attempt < s.maxRetries {
+			backoff := time.Duration(1<<uint(attempt)) * time.Second
+			log.Warn().Err(lastErr).
+				Int("attempt", attempt+1).
+				Str("to", msg.To).
+				Dur("backoff", backoff).
+				Msg("mail: retrying SMTP send")
+
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(backoff):
+			}
+		}
+	}
+	return lastErr
+}
+
+func (s *SMTPSender) sendOnce(ctx context.Context, msg Message) error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 
 	// Sanitize header fields to prevent CRLF injection.
@@ -124,10 +164,11 @@ func New(cfg *config.Config) Sender {
 		return &NoopSender{}
 	}
 	return &SMTPSender{
-		host: cfg.SMTPHost,
-		port: cfg.SMTPPort,
-		user: cfg.SMTPUser,
-		pass: cfg.SMTPPass,
-		from: cfg.SMTPFrom,
+		host:       cfg.SMTPHost,
+		port:       cfg.SMTPPort,
+		user:       cfg.SMTPUser,
+		pass:       cfg.SMTPPass,
+		from:       cfg.SMTPFrom,
+		maxRetries: smtptransient.DefaultRetries,
 	}
 }

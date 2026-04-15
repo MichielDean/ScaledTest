@@ -264,3 +264,69 @@ func (s *TriageStore) ListClassifications(ctx context.Context, teamID, triageID 
 	}
 	return classifications, rows.Err()
 }
+
+// ClusterInput is the data needed to persist a single triage cluster.
+type ClusterInput struct {
+	RootCause string
+	Label     *string
+}
+
+// ClassificationInput is the data needed to persist a single failure classification.
+type ClassificationInput struct {
+	ClusterIndex   int
+	TestResultID   string
+	Classification string
+}
+
+// OutputData holds all clusters and classifications to persist atomically.
+type OutputData struct {
+	Clusters        []ClusterInput
+	Classifications []ClassificationInput
+}
+
+// PersistOutput atomically writes all clusters and classifications for a triage
+// result in a single database transaction. If any insert fails, all inserts are
+// rolled back so the triage record is not left in an inconsistent state.
+func (s *TriageStore) PersistOutput(ctx context.Context, teamID, triageID string, output *OutputData) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return fmt.Errorf("persist triage output: begin tx: %w", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck // rollback on early return is intentional
+
+	// Insert clusters and collect their assigned UUIDs for linking classifications.
+	clusterIDs := make([]string, len(output.Clusters))
+	for i, cluster := range output.Clusters {
+		err := tx.QueryRow(ctx,
+			`INSERT INTO triage_clusters (triage_id, team_id, root_cause, label)
+			 VALUES ($1, $2, $3, $4)
+			 RETURNING id`,
+			triageID, teamID, cluster.RootCause, cluster.Label,
+		).Scan(&clusterIDs[i])
+		if err != nil {
+			return fmt.Errorf("persist cluster[%d]: %w", i, err)
+		}
+	}
+
+	// Insert per-failure classifications linked to their cluster.
+	for _, cl := range output.Classifications {
+		var clusterID *string
+		if cl.ClusterIndex >= 0 && cl.ClusterIndex < len(clusterIDs) {
+			cid := clusterIDs[cl.ClusterIndex]
+			clusterID = &cid
+		}
+		_, err := tx.Exec(ctx,
+			`INSERT INTO triage_failure_classifications (triage_id, cluster_id, test_result_id, team_id, classification)
+			 VALUES ($1, $2, $3, $4, $5)`,
+			triageID, clusterID, cl.TestResultID, teamID, cl.Classification,
+		)
+		if err != nil {
+			return fmt.Errorf("persist classification for %s: %w", cl.TestResultID, err)
+		}
+	}
+
+	if err := tx.Commit(ctx); err != nil {
+		return fmt.Errorf("persist triage output: commit: %w", err)
+	}
+	return nil
+}

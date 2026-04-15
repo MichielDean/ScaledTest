@@ -261,7 +261,7 @@ type Invitation struct {
 	TeamID     string     `json:"team_id"`
 	Email      string     `json:"email"`
 	Role       string     `json:"role"`
-	InvitedBy  string     `json:"invited_by"`
+	InvitedBy  *string    `json:"invited_by,omitempty"`
 	AcceptedAt *time.Time `json:"accepted_at,omitempty"`
 	ExpiresAt  time.Time  `json:"expires_at"`
 	CreatedAt  time.Time  `json:"created_at"`
