@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"os"
-	"strconv"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -96,15 +95,6 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
-func envOrInt(key string, fallback int64) int64 {
-	if v := os.Getenv(key); v != "" {
-		if n, err := strconv.ParseInt(v, 10, 64); err == nil {
-			return n
-		}
-	}
-	return fallback
-}
-
 // ResourceDefaults returns the effective resource values, falling back to env
 // vars then built-in defaults.
 func (cfg *JobConfig) ResourceDefaults() (cpuReq, cpuLim, memReq, memLim string) {
@@ -175,7 +165,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 
 	cpuReq, cpuLim, memReq, memLim := cfg.ResourceDefaults()
 
-	var containerSecurityContext = &corev1.SecurityContext{
+	containerSecurityContext := &corev1.SecurityContext{
 		RunAsNonRoot:             ptrBool(true),
 		RunAsUser:                ptrInt64(1000),
 		ReadOnlyRootFilesystem:   ptrBool(true),
@@ -185,7 +175,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 		},
 	}
 
-	var podSecurityContext = &corev1.PodSecurityContext{
+	podSecurityContext := &corev1.PodSecurityContext{
 		RunAsNonRoot: ptrBool(true),
 		RunAsUser:    ptrInt64(1000),
 		FSGroup:      ptrInt64(1000),
