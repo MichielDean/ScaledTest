@@ -88,12 +88,6 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 	return lastErr
 }
 
-// IsTransientSMTPError returns true for errors that are worth retrying.
-// Delegates to the shared smtptransient package.
-func IsTransientSMTPError(err error) bool {
-	return smtptransient.IsTransient(err)
-}
-
 func (s *SMTPSender) sendOnce(ctx context.Context, msg Message) error {
 	addr := fmt.Sprintf("%s:%d", s.host, s.port)
 
