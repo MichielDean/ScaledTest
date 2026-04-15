@@ -19,14 +19,17 @@ func strPtr(s string) *string { return &s }
 
 // mockInvitationStore is a test double for invitationStore.
 type mockInvitationStore struct {
-	inv            *model.Invitation
-	err            error
-	tokenInv       *model.Invitation
-	tokenErr       error
-	acceptedUserID string
-	acceptErr      error
-	teamName       string
-	teamNameErr    error
+	inv             *model.Invitation
+	err             error
+	tokenInv        *model.Invitation
+	tokenErr        error
+	acceptedUserID  string
+	acceptErr       error
+	teamName        string
+	teamNameErr     error
+	existingUser    *model.User
+	existingUserErr error
+	addTeamErr      error
 }
 
 func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _ string, _ *string, _ time.Time) (*model.Invitation, error) {
@@ -47,6 +50,14 @@ func (m *mockInvitationStore) Delete(_ context.Context, _, _ string) error {
 
 func (m *mockInvitationStore) AcceptInvitation(_ context.Context, _, _, _, _, _, _ string) (string, error) {
 	return m.acceptedUserID, m.acceptErr
+}
+
+func (m *mockInvitationStore) AddTeamMembership(_ context.Context, _, _, _, _ string) error {
+	return m.addTeamErr
+}
+
+func (m *mockInvitationStore) GetUserByEmail(_ context.Context, _ string) (*model.User, error) {
+	return m.existingUser, m.existingUserErr
 }
 
 func (m *mockInvitationStore) GetTeamName(_ context.Context, _ string) (string, error) {
@@ -309,6 +320,93 @@ func TestAcceptInvitation_OwnerAlreadyExists_Returns409(t *testing.T) {
 
 	if w.Code != http.StatusConflict {
 		t.Errorf("Accept with owner conflict: got %d, want %d", w.Code, http.StatusConflict)
+	}
+}
+
+func TestAcceptInvitation_ExistingUserWrongPassword_Returns401(t *testing.T) {
+	now := time.Now()
+	inv := &model.Invitation{
+		ID:        "inv-existing",
+		TeamID:    "team-1",
+		Email:     "existing@example.com",
+		Role:      "readonly",
+		InvitedBy: strPtr("user-1"),
+		ExpiresAt: now.Add(7 * 24 * time.Hour),
+		CreatedAt: now,
+	}
+
+	hashedPw, _ := auth.HashPassword("correct-password")
+	existingUser := &model.User{
+		ID:           "user-existing",
+		Email:        "existing@example.com",
+		PasswordHash: hashedPw,
+		DisplayName:  "Existing User",
+		Role:         "readonly",
+	}
+
+	ms := &mockInvitationStore{
+		tokenInv:        inv,
+		acceptErr:       store.ErrUserExists,
+		existingUser:    existingUser,
+		existingUserErr: nil,
+	}
+	h := &InvitationsHandler{Store: ms}
+
+	body := `{"password":"wrong-password","display_name":"Existing User"}`
+	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Accept(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("Accept with wrong password: got %d, want %d", w.Code, http.StatusUnauthorized)
+	}
+	if !strings.Contains(w.Body.String(), "invalid password") {
+		t.Errorf("Accept with wrong password: body = %s, want 'invalid password'", w.Body.String())
+	}
+}
+
+func TestAcceptInvitation_ExistingUserCorrectPassword_GrantsMembership(t *testing.T) {
+	now := time.Now()
+	inv := &model.Invitation{
+		ID:        "inv-existing",
+		TeamID:    "team-1",
+		Email:     "existing@example.com",
+		Role:      "readonly",
+		InvitedBy: strPtr("user-1"),
+		ExpiresAt: now.Add(7 * 24 * time.Hour),
+		CreatedAt: now,
+	}
+
+	hashedPw, _ := auth.HashPassword("correct-password")
+	existingUser := &model.User{
+		ID:           "user-existing",
+		Email:        "existing@example.com",
+		PasswordHash: hashedPw,
+		DisplayName:  "Existing User",
+		Role:         "readonly",
+	}
+
+	ms := &mockInvitationStore{
+		tokenInv:        inv,
+		acceptErr:       store.ErrUserExists,
+		existingUser:    existingUser,
+		existingUserErr: nil,
+	}
+	h := &InvitationsHandler{Store: ms}
+
+	body := `{"password":"correct-password","display_name":"Existing User"}`
+	r := httptest.NewRequest("POST", "/api/v1/invitations/inv_abc/accept", strings.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	r = testWithChiParam(r, "token", "inv_abc")
+	w := httptest.NewRecorder()
+
+	h.Accept(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("Accept with correct password: got %d, want %d (body: %s)", w.Code, http.StatusOK, w.Body.String())
 	}
 }
 

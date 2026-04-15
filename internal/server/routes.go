@@ -327,7 +327,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) (http.Handler, *k8s.Executi
 			r.With(auth.RequireRole("maintainer", "owner"), rateLimitMW(cfg.DisableRateLimit, 20, 1*time.Minute)).Post("/", execH.Create)
 			r.Get("/{executionID}", execH.Get)
 			r.With(auth.RequireRole("maintainer", "owner")).Delete("/{executionID}", execH.Cancel)
-			r.Put("/{executionID}/status", execH.UpdateStatus)
+			r.With(auth.RequireRole("maintainer", "owner")).Put("/{executionID}/status", execH.UpdateStatus)
 			r.Post("/{executionID}/progress", execH.ReportProgress)
 			r.Post("/{executionID}/test-result", execH.ReportTestResult)
 			r.Post("/{executionID}/worker-status", execH.ReportWorkerStatus)

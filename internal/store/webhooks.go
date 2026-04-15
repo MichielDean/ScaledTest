@@ -23,7 +23,7 @@ func NewWebhookStore(pool *pgxpool.Pool) *WebhookStore {
 // List returns all webhooks for a team.
 func (s *WebhookStore) List(ctx context.Context, teamID string) ([]model.Webhook, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, team_id, url, events, secret_hash, enabled, created_at, updated_at
+		`SELECT id, team_id, url, events, secret_hash, signing_key, enabled, created_at, updated_at
 		 FROM webhooks WHERE team_id = $1 ORDER BY created_at DESC`, teamID)
 	if err != nil {
 		return nil, fmt.Errorf("query webhooks: %w", err)
@@ -33,7 +33,7 @@ func (s *WebhookStore) List(ctx context.Context, teamID string) ([]model.Webhook
 	var webhooks []model.Webhook
 	for rows.Next() {
 		var w model.Webhook
-		if err := rows.Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.Enabled, &w.CreatedAt, &w.UpdatedAt); err != nil {
+		if err := rows.Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.SigningKey, &w.Enabled, &w.CreatedAt, &w.UpdatedAt); err != nil {
 			return nil, fmt.Errorf("scan webhook: %w", err)
 		}
 		webhooks = append(webhooks, w)
@@ -45,9 +45,9 @@ func (s *WebhookStore) List(ctx context.Context, teamID string) ([]model.Webhook
 func (s *WebhookStore) Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error) {
 	var w model.Webhook
 	err := s.pool.QueryRow(ctx,
-		`SELECT id, team_id, url, events, secret_hash, enabled, created_at, updated_at
+		`SELECT id, team_id, url, events, secret_hash, signing_key, enabled, created_at, updated_at
 		 FROM webhooks WHERE id = $1 AND team_id = $2`, webhookID, teamID).
-		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
+		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.SigningKey, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("get webhook: %w", err)
 	}
@@ -55,14 +55,14 @@ func (s *WebhookStore) Get(ctx context.Context, teamID, webhookID string) (*mode
 }
 
 // Create inserts a new webhook.
-func (s *WebhookStore) Create(ctx context.Context, teamID, url, secretHash string, events []string) (*model.Webhook, error) {
+func (s *WebhookStore) Create(ctx context.Context, teamID, url, secretHash, signingKey string, events []string) (*model.Webhook, error) {
 	var w model.Webhook
 	err := s.pool.QueryRow(ctx,
-		`INSERT INTO webhooks (team_id, url, secret_hash, events)
-		 VALUES ($1, $2, $3, $4)
-		 RETURNING id, team_id, url, events, secret_hash, enabled, created_at, updated_at`,
-		teamID, url, secretHash, events).
-		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
+		`INSERT INTO webhooks (team_id, url, secret_hash, signing_key, events)
+		 VALUES ($1, $2, $3, $4, $5)
+		 RETURNING id, team_id, url, events, secret_hash, signing_key, enabled, created_at, updated_at`,
+		teamID, url, secretHash, signingKey, events).
+		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.SigningKey, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("create webhook: %w", err)
 	}
@@ -75,9 +75,9 @@ func (s *WebhookStore) Update(ctx context.Context, teamID, webhookID, url string
 	err := s.pool.QueryRow(ctx,
 		`UPDATE webhooks SET url = $3, events = $4, enabled = $5, updated_at = now()
 		 WHERE id = $1 AND team_id = $2
-		 RETURNING id, team_id, url, events, secret_hash, enabled, created_at, updated_at`,
+		 RETURNING id, team_id, url, events, secret_hash, signing_key, enabled, created_at, updated_at`,
 		webhookID, teamID, url, events, enabled).
-		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
+		Scan(&w.ID, &w.TeamID, &w.URL, &w.Events, &w.SecretHash, &w.SigningKey, &w.Enabled, &w.CreatedAt, &w.UpdatedAt)
 	if err != nil {
 		return nil, fmt.Errorf("update webhook: %w", err)
 	}
@@ -88,7 +88,7 @@ func (s *WebhookStore) Update(ctx context.Context, teamID, webhookID, url string
 // to the given event type. It implements webhook.WebhookLister.
 func (s *WebhookStore) ListByTeamAndEvent(ctx context.Context, teamID string, event string) ([]webhook.WebhookRecord, error) {
 	rows, err := s.pool.Query(ctx,
-		`SELECT id, url, secret_hash
+		`SELECT id, url, secret_hash, signing_key
 		 FROM webhooks
 		 WHERE team_id = $1 AND enabled = true AND $2 = ANY(events)`,
 		teamID, event)
@@ -100,7 +100,7 @@ func (s *WebhookStore) ListByTeamAndEvent(ctx context.Context, teamID string, ev
 	var result []webhook.WebhookRecord
 	for rows.Next() {
 		var r webhook.WebhookRecord
-		if err := rows.Scan(&r.ID, &r.URL, &r.SecretHash); err != nil {
+		if err := rows.Scan(&r.ID, &r.URL, &r.SecretHash, &r.SigningKey); err != nil {
 			return nil, fmt.Errorf("scan webhook record: %w", err)
 		}
 		result = append(result, r)

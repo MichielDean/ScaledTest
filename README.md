@@ -420,11 +420,29 @@ const client = new ScaledTestClient({
 
 // Upload a report
 const report = await client.uploadReport(ctrfReport);
+const report2 = await client.uploadReport(ctrfReport, { execution_id: 'exec-1' });
+
+// Reports: pagination, compare, delete, triage
+const { reports, total } = await client.getReports({ limit: 10, offset: 0, since: '2024-01-01T00:00:00Z' });
+const diff = await client.compareReports(baseId, headId);
+await client.deleteReport(reportId);
+const triage = await client.getReportTriage(reportId);
+
+// Executions: create, get, status, worker callbacks
+const exec = await client.createExecution('npm test', { image: 'node:22' });
+const execution = await client.getExecution(execId);
+await client.updateExecutionStatus(execId, 'completed');
+await client.reportExecutionProgress(execId, { passed: 5, failed: 0, skipped: 1, total: 6 });
+await client.reportTestResult(execId, { name: 'test-a', status: 'passed' });
+await client.reportWorkerStatus(execId, { worker_id: 'w1', status: 'running' });
+
+// Quality gates (evaluate now requires reportId)
+const result = await client.evaluateQualityGate(teamId, gateId, reportId);
 
 // Manage webhooks
 const { webhooks } = await client.listWebhooks(teamId);
 const { webhook, secret } = await client.createWebhook(teamId, url, events);
-await client.updateWebhook(teamId, webhookId, { enabled: false });
+await client.updateWebhook(teamId, webhookId, url, events, false);
 await client.retryWebhookDelivery(teamId, webhookId, deliveryId);
 
 // Manage invitations
@@ -433,14 +451,23 @@ const { invitations } = await client.listInvitations(teamId);
 const preview = await client.previewInvitation(token);
 await client.acceptInvitation(token, password, displayName);
 
+// Teams
+const { team, role } = await client.getTeam(teamId);
+await client.deleteTeam(teamId);
+
 // Manage API tokens
 const { tokens } = await client.listTokens(teamId);
 const { token: newToken } = await client.createToken(teamId, name);
 await client.deleteToken(teamId, tokenId);
 
+// Sharding
+const plan = await client.createShardPlan({ test_names: [...], num_workers: 4 });
+const durations = await client.getShardDuration('test-name');
+const rebalanced = await client.rebalanceShards({ execution_id, failed_worker_id, current_plan });
+
 // Admin operations (owner only)
-const { users } = await client.listUsers();
-const { audit_log } = await client.listAuditLog();
+const { users } = await client.listUsers({ limit: 50 });
+const { audit_log } = await client.listAuditLog({ action: 'team.create' });
 ```
 
 All methods properly URL-encode path parameters and handle errors via `ScaledTestError`.

@@ -16,7 +16,7 @@ func TestWebhookStore_CreateAndGet(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "webhook-test-team")
 	s := store.NewWebhookStore(tdb.Pool)
 
-	wh, err := s.Create(ctx, teamID, "https://example.com/hook", "secret-hash-1", []string{"report.created"})
+	wh, err := s.Create(ctx, teamID, "https://example.com/hook", "secret-hash-1", "", []string{"report.created"})
 	if err != nil {
 		t.Fatalf("Create: %v", err)
 	}
@@ -53,9 +53,9 @@ func TestWebhookStore_List(t *testing.T) {
 	s := store.NewWebhookStore(tdb.Pool)
 
 	// Create webhooks for two teams
-	s.Create(ctx, teamID, "https://example.com/a", "hash-a", []string{"report.created"})
-	s.Create(ctx, teamID, "https://example.com/b", "hash-b", []string{"execution.completed"})
-	s.Create(ctx, otherTeamID, "https://other.com/c", "hash-c", []string{"report.created"})
+	s.Create(ctx, teamID, "https://example.com/a", "hash-a", "", []string{"report.created"})
+	s.Create(ctx, teamID, "https://example.com/b", "hash-b", "", []string{"execution.completed"})
+	s.Create(ctx, otherTeamID, "https://other.com/c", "hash-c", "", []string{"report.created"})
 
 	list, err := s.List(ctx, teamID)
 	if err != nil {
@@ -81,7 +81,7 @@ func TestWebhookStore_Update(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "webhook-update-team")
 	s := store.NewWebhookStore(tdb.Pool)
 
-	wh, _ := s.Create(ctx, teamID, "https://example.com/old", "hash-1", []string{"report.created"})
+	wh, _ := s.Create(ctx, teamID, "https://example.com/old", "hash-1", "", []string{"report.created"})
 
 	updated, err := s.Update(ctx, teamID, wh.ID, "https://example.com/new", []string{"report.created", "execution.completed"}, false)
 	if err != nil {
@@ -104,7 +104,7 @@ func TestWebhookStore_Delete(t *testing.T) {
 	teamID := tdb.CreateTeam(t, "webhook-delete-team")
 	s := store.NewWebhookStore(tdb.Pool)
 
-	wh, _ := s.Create(ctx, teamID, "https://example.com/delete-me", "hash-d", []string{"report.created"})
+	wh, _ := s.Create(ctx, teamID, "https://example.com/delete-me", "hash-d", "", []string{"report.created"})
 
 	if err := s.Delete(ctx, teamID, wh.ID); err != nil {
 		t.Fatalf("Delete: %v", err)
@@ -130,12 +130,12 @@ func TestWebhookStore_ListByTeamAndEvent(t *testing.T) {
 	s := store.NewWebhookStore(tdb.Pool)
 
 	// Create webhooks with different events
-	s.Create(ctx, teamID, "https://example.com/reports", "hash-r", []string{"report.created"})
-	s.Create(ctx, teamID, "https://example.com/executions", "hash-e", []string{"execution.completed"})
-	s.Create(ctx, teamID, "https://example.com/both", "hash-b", []string{"report.created", "execution.completed"})
+	s.Create(ctx, teamID, "https://example.com/reports", "hash-r", "", []string{"report.created"})
+	s.Create(ctx, teamID, "https://example.com/executions", "hash-e", "", []string{"execution.completed"})
+	s.Create(ctx, teamID, "https://example.com/both", "hash-b", "", []string{"report.created", "execution.completed"})
 
 	// Create a disabled webhook for report.created
-	wh, _ := s.Create(ctx, teamID, "https://example.com/disabled", "hash-dis", []string{"report.created"})
+	wh, _ := s.Create(ctx, teamID, "https://example.com/disabled", "hash-dis", "", []string{"report.created"})
 	s.Update(ctx, teamID, wh.ID, wh.URL, wh.Events, false)
 
 	records, err := s.ListByTeamAndEvent(ctx, teamID, "report.created")

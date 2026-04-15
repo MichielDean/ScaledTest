@@ -1126,3 +1126,42 @@ func TestReconcileOnce_NilWorkerTokenSecret_SkipsDeletion(t *testing.T) {
 		t.Errorf("nil WorkerTokenSecret should not trigger deletion, but got: %v", sd.deleted)
 	}
 }
+
+func TestCreateJob_STEnvVarsFiltered(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset(&corev1.SecretList{})
+	client := &Client{clientset: fakeClient, namespace: "test-ns"}
+
+	cfg := JobConfig{
+		Name:        "st-exec-env",
+		Image:       "scaledtest/worker:latest",
+		Command:     "npm test",
+		ExecutionID: "envtest",
+		WorkerToken: "tok",
+		APIBaseURL:  "http://api:8080",
+		EnvVars: map[string]string{
+			"MY_VAR":   "good",
+			"ST_EVIL":  "blocked",
+			"st_lower": "also-blocked",
+		},
+	}
+
+	result, err := client.CreateJob(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	container := result.Job.Spec.Template.Spec.Containers[0]
+
+	foundMyVar := false
+	for _, env := range container.Env {
+		if env.Name == "ST_EVIL" || env.Name == "st_lower" {
+			t.Errorf("ST_ prefixed env var %q should have been filtered out", env.Name)
+		}
+		if env.Name == "MY_VAR" && env.Value == "good" {
+			foundMyVar = true
+		}
+	}
+	if !foundMyVar {
+		t.Error("MY_VAR env var not found in container spec")
+	}
+}

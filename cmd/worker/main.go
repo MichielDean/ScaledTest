@@ -18,6 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 )
 
 func main() {
@@ -29,6 +31,12 @@ func main() {
 	executionID := requireEnv("ST_EXECUTION_ID")
 	command := requireEnv("ST_COMMAND")
 
+	if err := sanitize.ValidateCommand(command); err != nil {
+		log.Error().Err(err).Str("command", command).Msg("command validation failed")
+		reportStatus(apiURL, workerToken, executionID, "failed", "command rejected: "+err.Error())
+		os.Exit(1)
+	}
+
 	log.Info().
 		Str("execution_id", executionID).
 		Str("command", command).
@@ -37,11 +45,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Report status: running
 	reportStatus(apiURL, workerToken, executionID, "running", "")
 
-	// Execute the test command
-	exitCode, output, err := runCommand(ctx, command)
+	exitCode, _, err := runCommand(ctx, command)
 
 	if ctx.Err() != nil {
 		log.Warn().Msg("worker cancelled")
@@ -70,8 +76,6 @@ func main() {
 		log.Warn().Msg("no CTRF report found")
 	}
 
-	_ = output // Could be logged or sent as execution output
-
 	reportStatus(apiURL, workerToken, executionID, "completed", "")
 	log.Info().Msg("worker done")
 }
@@ -86,7 +90,11 @@ func requireEnv(key string) string {
 }
 
 func runCommand(ctx context.Context, command string) (int, string, error) {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return -1, "", fmt.Errorf("empty command")
+	}
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = "/workspace"
 
 	// Capture output

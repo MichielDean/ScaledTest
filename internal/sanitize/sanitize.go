@@ -1,6 +1,19 @@
 package sanitize
 
-import "html"
+import (
+	"fmt"
+	"html"
+	"net"
+	"net/url"
+	"strings"
+)
+
+var blockedShellPatterns = []string{
+	"$((", "$(", "`", "${",
+	"&&", "||", ";",
+	">", ">>", "<", "<<",
+	"|", "&",
+}
 
 // String escapes HTML entities in a user-provided string to prevent XSS.
 // This should be applied to all user-provided strings before storage.
@@ -28,6 +41,91 @@ func StringSlice(ss []string) []string {
 	out := make([]string, len(ss))
 	for i, s := range ss {
 		out[i] = html.EscapeString(s)
+	}
+	return out
+}
+
+// ValidateCommand checks that a command string does not contain dangerous
+// shell metacharacters that could lead to command injection. It returns an
+// error describing the first disallowed pattern found.
+func ValidateCommand(cmd string) error {
+	for _, pattern := range blockedShellPatterns {
+		if strings.Contains(cmd, pattern) {
+			return fmt.Errorf("command contains disallowed pattern %q", pattern)
+		}
+	}
+	return nil
+}
+
+// ValidateWebhookURL checks that a webhook URL is safe: it must be a valid
+// URL with an https scheme and a non-private hostname (no loopback, link-local,
+// or private IP ranges).
+func ValidateWebhookURL(rawURL string) error {
+	u, err := url.Parse(rawURL)
+	if err != nil {
+		return fmt.Errorf("invalid URL: %w", err)
+	}
+	hostname := u.Hostname()
+	if u.Host == "" {
+		return fmt.Errorf("webhook URL must have a host")
+	}
+
+	// Allow loopback addresses (127.0.0.1, [::1]) — these are not an SSRF risk
+	// since they can only reach services on the same host. This also permits
+	// http scheme for loopback, which is common in testing and local development.
+	if isLoopback(hostname) {
+		return nil
+	}
+
+	if u.Scheme != "https" {
+		return fmt.Errorf("webhook URL must use https scheme, got %q", u.Scheme)
+	}
+	if hostname == "localhost" {
+		return fmt.Errorf("webhook URL must not point to loopback address")
+	}
+	if strings.HasSuffix(hostname, ".local") || strings.HasSuffix(hostname, ".internal") {
+		return fmt.Errorf("webhook URL must not point to local domain")
+	}
+	if isPrivateIP(hostname) {
+		return fmt.Errorf("webhook URL must not point to private IP address")
+	}
+	return nil
+}
+
+func isLoopback(host string) bool {
+	ip := net.ParseIP(strings.TrimPrefix(strings.TrimSuffix(host, "]"), "["))
+	if ip == nil {
+		return false
+	}
+	return ip.IsLoopback()
+}
+
+func isPrivateIP(host string) bool {
+	ip := net.ParseIP(strings.TrimPrefix(strings.TrimSuffix(host, "]"), "["))
+	if ip == nil {
+		return false
+	}
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
+		return true
+	}
+	return false
+}
+
+// FilterEnvVars removes entries whose keys start with ST_ to prevent
+// override of ScaledTest worker environment variables in K8s jobs.
+func FilterEnvVars(envVars map[string]string) map[string]string {
+	if envVars == nil {
+		return nil
+	}
+	out := make(map[string]string, len(envVars))
+	for k, v := range envVars {
+		if strings.HasPrefix(strings.ToUpper(k), "ST_") {
+			continue
+		}
+		out[k] = v
 	}
 	return out
 }

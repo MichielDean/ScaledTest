@@ -35,7 +35,7 @@ var validWebhookEvents = map[string]bool{
 type WebhookStoreProvider interface {
 	List(ctx context.Context, teamID string) ([]model.Webhook, error)
 	Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error)
-	Create(ctx context.Context, teamID, url, secretHash string, events []string) (*model.Webhook, error)
+	Create(ctx context.Context, teamID, url, secretHash, signingKey string, events []string) (*model.Webhook, error)
 	Update(ctx context.Context, teamID, webhookID, url string, events []string, enabled bool) (*model.Webhook, error)
 	Delete(ctx context.Context, teamID, webhookID string) error
 }
@@ -149,14 +149,9 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := make([]interface{}, len(webhooks))
-	for i := range webhooks {
-		result[i] = webhooks[i]
-	}
-
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"webhooks": result,
-		"total":    len(result),
+		"webhooks": webhooks,
+		"total":    len(webhooks),
 	})
 }
 
@@ -188,6 +183,11 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := sanitize.ValidateWebhookURL(req.URL); err != nil {
+		Error(w, http.StatusBadRequest, "invalid webhook URL: "+err.Error())
+		return
+	}
+
 	// Generate secret server-side
 	secret, secretHash, err := generateWebhookSecret()
 	if err != nil {
@@ -202,7 +202,7 @@ func (h *WebhooksHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	req.URL = sanitize.String(req.URL)
 
-	webhook, err := h.Store.Create(r.Context(), teamID, req.URL, secretHash, req.Events)
+	webhook, err := h.Store.Create(r.Context(), teamID, req.URL, secretHash, secret, req.Events)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create webhook")
 		return
@@ -289,6 +289,11 @@ func (h *WebhooksHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	if err := validateWebhookEvents(req.Events); err != nil {
 		Error(w, http.StatusBadRequest, err.Error())
+		return
+	}
+
+	if err := sanitize.ValidateWebhookURL(req.URL); err != nil {
+		Error(w, http.StatusBadRequest, "invalid webhook URL: "+err.Error())
 		return
 	}
 
@@ -437,7 +442,7 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	start := time.Now()
-	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, wh.SecretHash, payload)
+	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, wh.SigningSecret(), payload)
 	durationMs := int(time.Since(start).Milliseconds())
 
 	statusCode := 0
@@ -525,5 +530,3 @@ func (h *WebhooksHandler) ListDeliveries(w http.ResponseWriter, r *http.Request)
 		"total":      len(deliveries),
 	})
 }
-
-

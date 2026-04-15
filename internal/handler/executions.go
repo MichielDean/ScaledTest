@@ -83,6 +83,11 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if err := sanitize.ValidateCommand(req.Command); err != nil {
+		Error(w, http.StatusBadRequest, "invalid command: "+err.Error())
+		return
+	}
+
 	if h.DB == nil {
 		Error(w, http.StatusServiceUnavailable, "database not configured")
 		return
@@ -90,7 +95,7 @@ func (h *ExecutionsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	req.Command = sanitize.String(req.Command)
 	req.Image = sanitize.String(req.Image)
-	req.EnvVars = sanitize.StringMap(req.EnvVars)
+	req.EnvVars = sanitize.FilterEnvVars(sanitize.StringMap(req.EnvVars))
 
 	var configJSON []byte
 	if req.Image != "" || len(req.EnvVars) > 0 {

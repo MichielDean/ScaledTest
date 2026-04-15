@@ -422,14 +422,16 @@ type mockWebhookStore struct {
 	updateWebhook *model.Webhook
 }
 
-func (m *mockWebhookStore) List(_ context.Context, _ string) ([]model.Webhook, error) { return nil, nil }
+func (m *mockWebhookStore) List(_ context.Context, _ string) ([]model.Webhook, error) {
+	return nil, nil
+}
 func (m *mockWebhookStore) Get(ctx context.Context, teamID, webhookID string) (*model.Webhook, error) {
 	if m.getFunc != nil {
 		return m.getFunc(ctx, teamID, webhookID)
 	}
 	return &model.Webhook{ID: webhookID, TeamID: teamID, URL: "https://example.com/hook", SecretHash: "hash"}, nil
 }
-func (m *mockWebhookStore) Create(_ context.Context, _, _, _ string, _ []string) (*model.Webhook, error) {
+func (m *mockWebhookStore) Create(_ context.Context, _, _, _, _ string, _ []string) (*model.Webhook, error) {
 	if m.createWebhook != nil {
 		return m.createWebhook, nil
 	}
@@ -927,3 +929,89 @@ func TestGenerateWebhookSecret(t *testing.T) {
 	}
 }
 
+func TestWebhooksCreate_RejectsNonHTTPSURL(t *testing.T) {
+	ms := &mockWebhookStore{createWebhook: &model.Webhook{ID: "wh-1", TeamID: "team-1", URL: "http://evil.com"}}
+	h := &WebhooksHandler{Store: ms}
+
+	body := `{"url":"http://evil.com/webhook","events":["report.submitted"]}`
+	req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	w := httptest.NewRecorder()
+
+	h.Create(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Create with http URL: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
+
+func TestWebhooksCreate_RejectsPrivateIPURL(t *testing.T) {
+	ms := &mockWebhookStore{createWebhook: &model.Webhook{ID: "wh-1", TeamID: "team-1"}}
+	h := &WebhooksHandler{Store: ms}
+
+	privateURLs := []string{
+		"https://10.0.0.1/hook",
+		"https://192.168.1.1/hook",
+		"https://localhost/hook",
+	}
+	for _, u := range privateURLs {
+		body := fmt.Sprintf(`{"url":%q,"events":["report.submitted"]}`, u)
+		req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = webhookWithClaims(req, "maintainer")
+		req = webhookWithTeamParam(req, "team-1")
+		w := httptest.NewRecorder()
+
+		h.Create(w, req)
+
+		if w.Code != http.StatusBadRequest {
+			t.Errorf("Create with private URL %q: status = %d, want %d", u, w.Code, http.StatusBadRequest)
+		}
+	}
+}
+
+func TestWebhooksCreate_AllowsLoopbackURL(t *testing.T) {
+	ms := &mockWebhookStore{createWebhook: &model.Webhook{ID: "wh-1", TeamID: "team-1"}}
+	h := &WebhooksHandler{Store: ms}
+
+	loopbackURLs := []string{
+		"http://127.0.0.1/hook",
+		"https://127.0.0.1/hook",
+		"http://[::1]/hook",
+	}
+	for _, u := range loopbackURLs {
+		body := fmt.Sprintf(`{"url":%q,"events":["report.submitted"]}`, u)
+		req := httptest.NewRequest("POST", "/api/v1/teams/team-1/webhooks", strings.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		req = webhookWithClaims(req, "maintainer")
+		req = webhookWithTeamParam(req, "team-1")
+		w := httptest.NewRecorder()
+
+		h.Create(w, req)
+
+		if w.Code != http.StatusCreated {
+			t.Errorf("Create with loopback URL %q: status = %d, want %d", u, w.Code, http.StatusCreated)
+		}
+	}
+}
+
+func TestWebhooksUpdate_RejectsNonHTTPSURL(t *testing.T) {
+	ms := &mockWebhookStore{updateWebhook: &model.Webhook{ID: "wh-1", TeamID: "team-1"}}
+	h := &WebhooksHandler{Store: ms}
+
+	body := `{"url":"http://evil.com/webhook","events":["execution.completed"]}`
+	req := httptest.NewRequest("PUT", "/api/v1/teams/team-1/webhooks/wh-1", strings.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	req = webhookWithClaims(req, "maintainer")
+	req = webhookWithTeamParam(req, "team-1")
+	req = webhookWithIDParam(req, "wh-1")
+	w := httptest.NewRecorder()
+
+	h.Update(w, req)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("Update with http URL: status = %d, want %d", w.Code, http.StatusBadRequest)
+	}
+}
