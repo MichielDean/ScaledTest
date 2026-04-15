@@ -774,7 +774,7 @@ describe('webhooks', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
-  it('updateWebhook sends PUT /api/v1/teams/{teamId}/webhooks/{webhookId}', async () => {
+  it('updateWebhook sends PUT /api/v1/teams/{teamId}/webhooks/{webhookId} with enabled', async () => {
     const fetchMock = mockFetchOk({ id: 'wh-1', url: 'https://new.example.com' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -787,6 +787,18 @@ describe('webhooks', () => {
     expect(body.url).toBe('https://new.example.com');
     expect(body.events).toEqual(['report.submitted']);
     expect(body.enabled).toBe(true);
+  });
+
+  it('updateWebhook omits enabled when not provided (server defaults to true)', async () => {
+    const fetchMock = mockFetchOk({ id: 'wh-1', url: 'https://new.example.com' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.updateWebhook('team-1', 'wh-1', 'https://new.example.com', ['report.submitted']);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.url).toBe('https://new.example.com');
+    expect(body.events).toEqual(['report.submitted']);
+    expect('enabled' in body).toBe(false);
   });
 
   it('deleteWebhook sends DELETE /api/v1/teams/{teamId}/webhooks/{webhookId}', async () => {
@@ -1006,6 +1018,17 @@ describe('admin', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
+  it('listUsers supports pagination params', async () => {
+    const fetchMock = mockFetchOk({ users: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listUsers({ limit: 10, offset: 20 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=10');
+    expect(url).toContain('offset=20');
+  });
+
   it('listAuditLog sends GET /api/v1/admin/audit-log', async () => {
     const fetchMock = mockFetchOk({ audit_log: [], total: 0 });
     globalThis.fetch = fetchMock;
@@ -1195,7 +1218,7 @@ describe('endpoint alignment with routes.go', () => {
       case 'GET /api/v1/teams/{teamID}/webhooks': await client.listWebhooks('team-1'); break;
       case 'POST /api/v1/teams/{teamID}/webhooks': await client.createWebhook('team-1', 'https://example.com', ['report.submitted']); break;
       case 'GET /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.getWebhook('team-1', 'wh-1'); break;
-      case 'PUT /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.updateWebhook('team-1', 'wh-1', 'https://example.com', ['report.submitted'], true); break;
+      case 'PUT /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.updateWebhook('team-1', 'wh-1', 'https://example.com', ['report.submitted']); break;
       case 'DELETE /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.deleteWebhook('team-1', 'wh-1'); break;
       case 'GET /api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries': await client.listWebhookDeliveries('team-1', 'wh-1'); break;
       case 'POST /api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries/{deliveryID}/retry': await client.retryWebhookDelivery('team-1', 'wh-1', 'del-1'); break;

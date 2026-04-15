@@ -110,12 +110,20 @@ export interface QualityGate {
   updated_at: string;
 }
 
+export interface QualityGateRuleResult {
+  metric: string;
+  threshold: unknown;
+  actual: unknown;
+  passed: boolean;
+  message: string;
+}
+
 export interface QualityGateEvaluation {
   id: string;
   gate_id: string;
   report_id: string;
   passed: boolean;
-  details: unknown;
+  rules: QualityGateRuleResult[];
   created_at: string;
 }
 
@@ -232,6 +240,62 @@ export interface AdminUser {
   created_at: string;
 }
 
+export interface ReportTestDiff {
+  name: string;
+  suite?: string;
+  file_path?: string;
+  base_status?: string;
+  head_status?: string;
+  base_duration_ms?: number;
+  head_duration_ms?: number;
+  duration_delta_ms?: number;
+  duration_delta_pct?: number;
+  message?: string;
+}
+
+export interface ReportDiffSummary {
+  base_tests: number;
+  head_tests: number;
+  new_failures: number;
+  fixed: number;
+  duration_regressions: number;
+}
+
+export interface ReportCompareResult {
+  base: Report;
+  head: Report;
+  diff: {
+    new_failures: ReportTestDiff[];
+    fixed: ReportTestDiff[];
+    duration_regressions: ReportTestDiff[];
+    summary: ReportDiffSummary;
+  };
+}
+
+export interface TriageFailureEntry {
+  test_result_id: string;
+  classification: string;
+}
+
+export interface TriageCluster {
+  id: string;
+  root_cause: string;
+  failures: TriageFailureEntry[];
+  label?: string;
+}
+
+export interface ReportTriageResult {
+  triage_status: string;
+  clusters?: TriageCluster[];
+  unclustered_failures?: TriageFailureEntry[];
+  summary?: string;
+  error?: string;
+  metadata?: {
+    generated_at: string;
+    model?: string;
+  };
+}
+
 export interface TeamToken {
   id: string;
   name: string;
@@ -335,7 +399,7 @@ export class ScaledTestClient {
     return this.request('DELETE', `/api/v1/reports/${encodeURIComponent(id)}`);
   }
 
-  async compareReports(baseId: string, headId: string): Promise<unknown> {
+  async compareReports(baseId: string, headId: string): Promise<ReportCompareResult> {
     return this.request(
       'GET',
       '/api/v1/reports/compare',
@@ -344,7 +408,7 @@ export class ScaledTestClient {
     );
   }
 
-  async getReportTriage(reportId: string): Promise<unknown> {
+  async getReportTriage(reportId: string): Promise<ReportTriageResult> {
     return this.request('GET', `/api/v1/reports/${encodeURIComponent(reportId)}/triage`);
   }
 
@@ -520,8 +584,10 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
   }
 
-  async updateWebhook(teamId: string, webhookId: string, url: string, events: string[], enabled: boolean): Promise<Webhook> {
-    return this.request('PUT', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`, { url, events, enabled });
+  async updateWebhook(teamId: string, webhookId: string, url: string, events: string[], enabled?: boolean): Promise<Webhook> {
+    const body: Record<string, unknown> = { url, events };
+    if (enabled !== undefined) body.enabled = enabled;
+    return this.request('PUT', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`, body);
   }
 
   async deleteWebhook(teamId: string, webhookId: string): Promise<{ message: string }> {
@@ -592,8 +658,8 @@ export class ScaledTestClient {
   }
 
   // Admin
-  async listUsers(): Promise<{ users: AdminUser[]; total: number }> {
-    return this.request('GET', '/api/v1/admin/users');
+  async listUsers(params?: { limit?: number; offset?: number }): Promise<{ users: AdminUser[]; total: number }> {
+    return this.request('GET', '/api/v1/admin/users', undefined, params);
   }
 
   async listAuditLog(params?: { action?: string; resource_type?: string; actor_id?: string; since?: string; until?: string; limit?: number; offset?: number }): Promise<{ audit_log: AuditLogEntry[]; total: number }> {
