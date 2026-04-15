@@ -85,7 +85,11 @@ Branch: main  Commit: def5678
 View run
 ```
 
-All external fields (`CI_REPO`, `CI_BRANCH`, `CI_COMMIT_MSG`) are HTML-escaped before interpolation to prevent invalid HTML from breaking the Telegram API call.
+All external fields (`CI_REPO`, `CI_BRANCH`, `CI_COMMIT_MSG`) and `CI_RUN_URL` are HTML-escaped before interpolation to prevent invalid or malicious content from breaking the Telegram API call or injecting HTML/JavaScript.
+
+## Retry behavior
+
+The Telegram client retries on transient failures (429 rate-limited and 5xx server errors) with exponential backoff (1s, 2s, 4s, up to 3 retries). When the Telegram API returns a 429 response with a `retry_after` parameter, the client respects that value as the backoff duration instead of the default exponential backoff. Client errors (4xx except 429) are not retried.
 
 ## Graceful degradation
 

@@ -85,9 +85,9 @@ export ST_RECONCILE_INTERVAL=60s          # How often to check for orphans
 export ST_RECONCILE_ORPHAN_TIMEOUT=5m     # Grace period before declaring an execution orphaned
 ```
 
-When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications.
+When `ST_SMTP_HOST` is not set the mailer runs in no-op mode — all outbound email is silently discarded. Set it to enable email notifications. SMTP sends retry up to 3 times with exponential backoff on transient errors (5xx, connection timeout).
 
-When `ST_GITHUB_TOKEN` is not set, GitHub commit status posting is disabled. When set, passing `github_owner`, `github_repo`, and `github_sha` query parameters to `POST /api/v1/reports` will post a `scaledtest/e2e` commit status back to GitHub after the report is ingested.
+When `ST_GITHUB_TOKEN` is not set, GitHub commit status posting is disabled. When set, passing `github_owner`, `github_repo`, and `github_sha` query parameters to `POST /api/v1/reports` will post a `scaledtest/e2e` commit status back to GitHub after the report is ingested. GitHub status posts retry up to 3 times with exponential backoff on 429 and 5xx responses, respecting the `Retry-After` header.
 
 When `ST_DISABLE_RATE_LIMIT=true` is set, all rate-limit middleware is bypassed and a warning is logged at startup. Use this only in controlled test environments (e.g. CI running E2E suites with many per-test user registrations). **Never set this in production** — it removes brute-force protection on auth endpoints.
 
@@ -515,6 +515,8 @@ internal/
   github/             # GitHub commit status client
   llm/                # LLM provider abstraction (Anthropic, OpenAI, mock)
   mail/               # Email sender interface and SMTP implementation
+  mailer/              # Invitation email composer (SMTP, multipart HTML)
+  smtptransient/       # Shared SMTP transient-error classification (4xx/5xx/timeout)
   webhook/            # Outbound webhook dispatch
   ws/                 # WebSocket hub for real-time updates
   k8s/                # Kubernetes job management
