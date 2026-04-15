@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, QualityGateRule, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, QualityGateRule, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, UpdateExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -417,7 +417,7 @@ describe('executions', () => {
     expect(result.status).toBe('cancelled');
   });
 
-  it('updateExecutionStatus accepts ExecutionStatus values', async () => {
+  it('updateExecutionStatus accepts UpdateExecutionStatus values (excludes pending)', async () => {
     const fetchMock = mockFetchOk({ id: 'e-1', status: 'running' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -645,7 +645,7 @@ describe('quality gates', () => {
   });
 
   it('updateQualityGate omits optional fields when not provided', async () => {
-    const rules = [{ type: 'zero_failures', params: null }];
+    const rules = [{ type: 'zero_failures', params: {} }];
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'gate', rules });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -1703,25 +1703,18 @@ describe('type alignment with server responses', () => {
     expect(minimal.k8s_job_name).toBeUndefined();
   });
 
-  it('Report has optional name field', () => {
-    const withName: Report = {
+  it('Report has required name field and required start/stop in summary', () => {
+    const report: Report = {
       id: 'r-1',
       team_id: 'team-1',
       name: 'My Report',
       tool_name: 'jest',
-      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0 },
+      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0, start: 1700000000, stop: 1700001000 },
       created_at: '2024-01-01T00:00:00Z',
     };
-    expect(withName.name).toBe('My Report');
-
-    const withoutName: Report = {
-      id: 'r-2',
-      team_id: 'team-1',
-      tool_name: 'jest',
-      summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0 },
-      created_at: '2024-01-01T00:00:00Z',
-    };
-    expect(withoutName.name).toBeUndefined();
+    expect(report.name).toBe('My Report');
+    expect(report.summary.start).toBe(1700000000);
+    expect(report.summary.stop).toBe(1700001000);
   });
 
   it('Team has no role field; TeamWithRole extends Team with role', () => {
@@ -1818,6 +1811,11 @@ describe('type alignment with server responses', () => {
     expect(allStatuses).toHaveLength(5);
   });
 
+  it('UpdateExecutionStatus excludes pending — only running/completed/failed/cancelled', () => {
+    const validStatuses: UpdateExecutionStatus[] = ['running', 'completed', 'failed', 'cancelled'];
+    expect(validStatuses).toHaveLength(4);
+  });
+
   it('TestResultStatus covers all server-validated values', () => {
     const allStatuses: TestResultStatus[] = ['passed', 'failed', 'skipped', 'pending', 'other'];
     expect(allStatuses).toHaveLength(5);
@@ -1867,39 +1865,67 @@ describe('type alignment with server responses', () => {
     expect(result).toEqual({ id: 'e-2', status: 'cancelled' });
   });
 
-  it('Report.summary includes optional start and stop fields', () => {
+  it('Report.summary has required start and stop fields', () => {
     const report: Report = {
       id: 'r-1',
       team_id: 'team-1',
+      name: 'Report r-1',
       tool_name: 'jest',
       summary: { tests: 10, passed: 9, failed: 1, skipped: 0, pending: 0, other: 0, start: 1700000000, stop: 1700001000 },
       created_at: '2024-01-01T00:00:00Z',
     };
     expect(report.summary.start).toBe(1700000000);
     expect(report.summary.stop).toBe(1700001000);
-
-    const reportWithoutTimestamps: Report = {
-      id: 'r-2',
-      team_id: 'team-1',
-      tool_name: 'jest',
-      summary: { tests: 5, passed: 5, failed: 0, skipped: 0, pending: 0, other: 0 },
-      created_at: '2024-01-01T00:00:00Z',
-    };
-    expect(reportWithoutTimestamps.summary.start).toBeUndefined();
-    expect(reportWithoutTimestamps.summary.stop).toBeUndefined();
   });
 
-  it('QualityGateRule.params is required (not optional) and allows null', () => {
+  it('QualityGateRule.params is required (not optional) with no null', () => {
     const ruleWithParams: QualityGateRule = {
       type: 'pass_rate',
       params: { threshold: 95 },
     };
     expect(ruleWithParams.params).toEqual({ threshold: 95 });
 
-    const ruleWithNull: QualityGateRule = {
+    const ruleNoParams: QualityGateRule = {
       type: 'zero_failures',
-      params: null,
+      params: {},
     };
-    expect(ruleWithNull.params).toBeNull();
+    expect(ruleNoParams.params).toEqual({});
+  });
+
+  it('QualityGateRuleResult threshold and actual are number type', () => {
+    const result: QualityGateRuleResult = {
+      metric: 'pass_rate',
+      threshold: 95,
+      actual: 98.5,
+      passed: true,
+      message: 'pass rate ok',
+    };
+    expect(result.threshold).toBe(95);
+    expect(result.actual).toBe(98.5);
+  });
+
+  it('QualityGateEvalRuleResult threshold and actual are number type', () => {
+    const result: QualityGateEvalRuleResult = {
+      type: 'pass_rate',
+      threshold: 95,
+      actual: 88.5,
+      passed: false,
+      message: 'pass rate 88.5% < 95%',
+    };
+    expect(result.threshold).toBe(95);
+    expect(result.actual).toBe(88.5);
+  });
+
+  it('Report.environment accepts Record<string, unknown> values', () => {
+    const report: Report = {
+      id: 'r-1',
+      team_id: 'team-1',
+      name: 'Report',
+      tool_name: 'jest',
+      summary: { tests: 1, passed: 1, failed: 0, skipped: 0, pending: 0, other: 0, start: 0, stop: 1 },
+      created_at: '2024-01-01T00:00:00Z',
+      environment: { CI: true, nested: { key: 'value' } },
+    };
+    expect((report.environment as Record<string, unknown>)?.CI).toBe(true);
   });
 });

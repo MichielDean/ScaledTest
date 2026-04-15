@@ -63,7 +63,7 @@ export interface CtrfReport {
 export interface Report {
   id: string;
   team_id: string;
-  name?: string;
+  name: string;
   tool_name: string;
   tool_version?: string;
   summary: {
@@ -73,8 +73,8 @@ export interface Report {
     skipped: number;
     pending: number;
     other: number;
-    start?: number;
-    stop?: number;
+    start: number;
+    stop: number;
   };
   // Flattened summary fields (top-level) for convenience; available when summary is parseable
   test_count?: number;
@@ -84,10 +84,12 @@ export interface Report {
   pending?: number;
   created_at: string;
   execution_id?: string;
-  environment?: Record<string, string>;
+  environment?: Record<string, unknown>;
 }
 
 export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export type UpdateExecutionStatus = 'running' | 'completed' | 'failed' | 'cancelled';
 
 export type TestResultStatus = 'passed' | 'failed' | 'skipped' | 'pending' | 'other';
 
@@ -111,7 +113,7 @@ export interface Execution {
 
 export interface QualityGateRule {
   type: string;
-  params: Record<string, unknown> | null;
+  params: Record<string, unknown>;
 }
 
 export interface QualityGate {
@@ -127,8 +129,8 @@ export interface QualityGate {
 
 export interface QualityGateRuleResult {
   metric: string;
-  threshold: unknown;
-  actual: unknown;
+  threshold: number;
+  actual: number;
   passed: boolean;
   message: string;
 }
@@ -136,8 +138,8 @@ export interface QualityGateRuleResult {
 export interface QualityGateEvalRuleResult {
   type: string;
   passed: boolean;
-  threshold: unknown;
-  actual: unknown;
+  threshold: number;
+  actual: number;
   message: string;
 }
 
@@ -533,7 +535,7 @@ export class ScaledTestClient {
     return this.cancelExecution(id);
   }
 
-  async updateExecutionStatus(id: string, status: ExecutionStatus, errorMsg?: string): Promise<{ id: string; status: string }> {
+  async updateExecutionStatus(id: string, status: UpdateExecutionStatus, errorMsg?: string): Promise<{ id: string; status: string }> {
     const body: Record<string, string> = { status };
     if (errorMsg !== undefined) body.error_msg = errorMsg;
     return this.request(
