@@ -16,6 +16,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 	"k8s.io/apimachinery/pkg/api/resource"
+
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 )
 
 func ptrBool(v bool) *bool    { return &v }
@@ -219,7 +221,8 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*CreateJobResult
 		corev1.EnvVar{Name: "ST_COMMAND", Value: cfg.Command},
 	)
 
-	for k, v := range cfg.EnvVars {
+	filteredEnvVars := sanitize.FilterEnvVars(cfg.EnvVars)
+	for k, v := range filteredEnvVars {
 		envVars = append(envVars, corev1.EnvVar{Name: k, Value: v})
 	}
 

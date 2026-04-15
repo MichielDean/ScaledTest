@@ -35,7 +35,9 @@ type invitationStore interface {
 	GetByTokenHash(ctx context.Context, tokenHash string) (*model.Invitation, error)
 	Delete(ctx context.Context, teamID, id string) error
 	AcceptInvitation(ctx context.Context, invID, email, passwordHash, displayName, role, teamID string) (string, error)
+	AddTeamMembership(ctx context.Context, invID, userID, role, teamID string) error
 	GetTeamName(ctx context.Context, teamID string) (string, error)
+	GetUserByEmail(ctx context.Context, email string) (*model.User, error)
 }
 
 // InvitationsHandler handles invitation endpoints.
@@ -266,12 +268,28 @@ func (h *InvitationsHandler) Accept(w http.ResponseWriter, r *http.Request) {
 
 	userID, err := h.Store.AcceptInvitation(r.Context(), inv.ID, inv.Email, passwordHash, req.DisplayName, inv.Role, inv.TeamID)
 	if err != nil {
-		if errors.Is(err, store.ErrOwnerAlreadyExists) {
+		if errors.Is(err, store.ErrUserExists) {
+			existingUser, lookupErr := h.Store.GetUserByEmail(r.Context(), inv.Email)
+			if lookupErr != nil {
+				Error(w, http.StatusInternalServerError, "failed to look up existing user")
+				return
+			}
+			if !auth.CheckPassword(req.Password, existingUser.PasswordHash) {
+				Error(w, http.StatusUnauthorized, "invalid password")
+				return
+			}
+			if addErr := h.Store.AddTeamMembership(r.Context(), inv.ID, existingUser.ID, inv.Role, inv.TeamID); addErr != nil {
+				Error(w, http.StatusInternalServerError, "failed to add team membership")
+				return
+			}
+			userID = existingUser.ID
+		} else if errors.Is(err, store.ErrOwnerAlreadyExists) {
 			Error(w, http.StatusConflict, "an owner already exists")
 			return
+		} else {
+			Error(w, http.StatusInternalServerError, "failed to accept invitation")
+			return
 		}
-		Error(w, http.StatusInternalServerError, "failed to accept invitation")
-		return
 	}
 
 	logAudit(r.Context(), h.AuditStore, store.Entry{

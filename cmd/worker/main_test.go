@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"testing"
 )
@@ -18,12 +19,12 @@ import (
 
 func TestSubmitReport_Success(t *testing.T) {
 	var (
-		mu          sync.Mutex
-		gotPath     string
-		gotAuth     string
-		gotCType    string
-		gotBody     []byte
-		gotExecID   string
+		mu        sync.Mutex
+		gotPath   string
+		gotAuth   string
+		gotCType  string
+		gotBody   []byte
+		gotExecID string
 	)
 
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -270,5 +271,37 @@ func TestSetAuthHeader_BearerToken(t *testing.T) {
 	got := req.Header.Get("Authorization")
 	if got != "Bearer eyJhbGciOi..." {
 		t.Errorf("Authorization = %q, want 'Bearer eyJhbGciOi...'", got)
+	}
+}
+
+func TestRunCommand_ExecDirectly(t *testing.T) {
+	if err := os.MkdirAll("/workspace", 0o755); err != nil {
+		t.Skip("cannot create /workspace (need write permission)")
+	}
+	defer os.Remove("/workspace")
+
+	ctx := context.Background()
+	exitCode, output, err := runCommand(ctx, "echo direct-exec")
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if exitCode != 0 {
+		t.Errorf("exitCode = %d, want 0", exitCode)
+	}
+	if !strings.Contains(output, "direct-exec") {
+		t.Errorf("output = %q, want to contain 'direct-exec'", output)
+	}
+}
+
+func TestRunCommand_EmptyCommand(t *testing.T) {
+	if err := os.MkdirAll("/workspace", 0o755); err != nil {
+		t.Skip("cannot create /workspace (need write permission)")
+	}
+	defer os.Remove("/workspace")
+
+	ctx := context.Background()
+	_, _, err := runCommand(ctx, "")
+	if err == nil {
+		t.Fatal("expected error for empty command, got nil")
 	}
 }

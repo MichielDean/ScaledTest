@@ -212,6 +212,7 @@ type Webhook struct {
 	URL        string    `json:"url"`
 	Events     []string  `json:"events"`
 	SecretHash string    `json:"-"`
+	SigningKey string    `json:"-"`
 	Enabled    bool      `json:"enabled"`
 	CreatedAt  time.Time `json:"created_at"`
 	UpdatedAt  time.Time `json:"updated_at"`

@@ -18,6 +18,8 @@ import (
 
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
+
+	"github.com/scaledtest/scaledtest/internal/sanitize"
 )
 
 func main() {
@@ -28,6 +30,12 @@ func main() {
 	workerToken := requireEnv("ST_WORKER_TOKEN")
 	executionID := requireEnv("ST_EXECUTION_ID")
 	command := requireEnv("ST_COMMAND")
+
+	if err := sanitize.ValidateCommand(command); err != nil {
+		log.Error().Err(err).Str("command", command).Msg("command validation failed")
+		reportStatus(apiURL, workerToken, executionID, "failed", "command rejected: "+err.Error())
+		os.Exit(1)
+	}
 
 	log.Info().
 		Str("execution_id", executionID).
@@ -86,7 +94,11 @@ func requireEnv(key string) string {
 }
 
 func runCommand(ctx context.Context, command string) (int, string, error) {
-	cmd := exec.CommandContext(ctx, "sh", "-c", command)
+	parts := strings.Fields(command)
+	if len(parts) == 0 {
+		return -1, "", fmt.Errorf("empty command")
+	}
+	cmd := exec.CommandContext(ctx, parts[0], parts[1:]...)
 	cmd.Dir = "/workspace"
 
 	// Capture output

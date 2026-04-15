@@ -175,6 +175,7 @@ type WebhookRecord struct {
 	ID         string
 	URL        string
 	SecretHash string
+	SigningKey string
 }
 
 // Notifier looks up matching webhooks and dispatches payloads asynchronously.
@@ -243,7 +244,11 @@ func (n *Notifier) Notify(teamID string, event EventType, data interface{}) {
 					dCtx, dCancel := context.WithTimeout(context.Background(), 30*time.Second)
 					defer dCancel()
 					start := time.Now()
-					delivery, err := n.dispatcher.Send(dCtx, h.URL, h.SecretHash, payload)
+					secret := h.SigningKey
+					if secret == "" {
+						secret = h.SecretHash
+					}
+					delivery, err := n.dispatcher.Send(dCtx, h.URL, secret, payload)
 					durationMs := int(time.Since(start).Milliseconds())
 					if err != nil {
 						log.Warn().Err(err).
