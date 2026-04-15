@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { QualityGatesPage } from '../quality-gates';
 import { api } from '../../lib/api';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -19,9 +20,20 @@ const TEAM = { id: 't1', name: 'Alpha Team' };
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe('QualityGatesPage', () => {
@@ -230,5 +242,166 @@ describe('QualityGatesPage', () => {
     fireEvent.click(evalBtn);
 
     expect(await screen.findByText('Failed')).toBeInTheDocument();
+  });
+
+  it('shows toast error when delete mutation fails', async () => {
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'Delete Me',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.deleteQualityGate).mockRejectedValue(new Error('Cannot delete'));
+
+    renderWithClient(<QualityGatesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cannot delete/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows toast error when evaluate mutation fails', async () => {
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'Eval Gate',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.evaluateQualityGate).mockRejectedValue(new Error('Server error'));
+
+    renderWithClient(<QualityGatesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Evaluate' }));
+
+    await waitFor(() => {
+      const matches = screen.getAllByText('Server error');
+      const inlineError = matches.find(el => el.closest('p')?.className.includes('destructive'));
+      expect(inlineError).toBeTruthy();
+    });
+  });
+
+  it('shows inline error message when evaluate mutation fails', async () => {
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'Inline Gate',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.evaluateQualityGate).mockRejectedValue(new Error('Evaluation failed'));
+
+    renderWithClient(<QualityGatesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Evaluate' }));
+
+    const inlineErrors = await screen.findAllByText('Evaluation failed');
+    const inlineError = inlineErrors.find(el => el.closest('p')?.className.includes('destructive'));
+    expect(inlineError).toBeTruthy();
+  });
+
+  it('clears inline evaluate error on successful evaluation', async () => {
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'Clear Gate',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.evaluateQualityGate)
+      .mockRejectedValueOnce(new Error('First fail'))
+      .mockResolvedValueOnce({
+        id: 'eval-1',
+        gate_id: 'g1',
+        report_id: 'r1',
+        passed: true,
+        details: { passed: true, results: [] },
+        created_at: '2026-01-01T00:00:00Z',
+      });
+
+    renderWithClient(<QualityGatesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Evaluate' }));
+
+    await screen.findAllByText('First fail');
+
+    fireEvent.click(screen.getByRole('button', { name: 'Evaluate' }));
+
+    await waitFor(() => {
+      const inlineErrors = screen.queryAllByText('First fail');
+      const persisted = inlineErrors.find(el => el.closest('p')?.className.includes('destructive'));
+      expect(persisted).toBeUndefined();
+    });
+  });
+
+  it('invalidates evaluations cache after successful evaluation', async () => {
+    const invalidateFn = vi.fn();
+    vi.mocked(api.getQualityGates).mockResolvedValue({
+      quality_gates: [
+        {
+          id: 'g1',
+          team_id: 't1',
+          name: 'Eval Gate',
+          description: '',
+          rules: [{ type: 'pass_rate', params: { threshold: 90 } }],
+          active: true,
+          created_at: '2026-01-01T00:00:00Z',
+          updated_at: '2026-01-01T00:00:00Z',
+        },
+      ],
+      total: 1,
+    });
+    vi.mocked(api.evaluateQualityGate).mockResolvedValue({
+      id: 'eval-1',
+      gate_id: 'g1',
+      report_id: 'r1',
+      passed: true,
+      details: { passed: true, results: [] },
+      created_at: '2026-01-01T00:00:00Z',
+    });
+
+    renderWithClient(<QualityGatesPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Evaluate' }));
+
+    await waitFor(() => {
+      expect(api.evaluateQualityGate).toHaveBeenCalledWith('t1', 'g1');
+    });
   });
 });

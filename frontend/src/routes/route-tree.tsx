@@ -23,7 +23,30 @@ function requireAuth() {
   }
 }
 
-const rootRoute = createRootRoute();
+function requireOwner() {
+  requireAuth();
+  const state = useAuthStore.getState();
+  if (state.user?.role !== 'owner') {
+    throw redirect({ to: '/' });
+  }
+}
+
+const rootRoute = createRootRoute({
+  errorComponent: ({ error }) => (
+    <div className="p-6">
+      <div className="rounded-lg border border-destructive/30 bg-destructive/10 p-6 text-center">
+        <h2 className="text-lg font-semibold text-destructive mb-2">Something went wrong</h2>
+        <p className="text-sm text-muted-foreground">{error.message ?? 'An unexpected error occurred.'}</p>
+        <button
+          onClick={() => window.location.reload()}
+          className="mt-4 rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground hover:bg-primary/90 transition-colors"
+        >
+          Reload
+        </button>
+      </div>
+    </div>
+  ),
+});
 
 // Pathless layout route: authenticated app shell with sidebar
 const appLayoutRoute = createRoute({
@@ -122,7 +145,7 @@ const shardingRoute = createRoute({
 const adminRoute = createRoute({
   getParentRoute: () => appLayoutRoute,
   path: '/admin',
-  beforeLoad: requireAuth,
+  beforeLoad: requireOwner,
   component: AdminPage,
 });
 

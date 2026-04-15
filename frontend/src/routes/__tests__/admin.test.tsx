@@ -3,20 +3,33 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AdminPage } from '../admin';
 import { api } from '../../lib/api';
 import { useAuthStore } from '../../stores/auth-store';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
     adminListUsers: vi.fn(),
     getTeams: vi.fn(),
     adminListAuditLog: vi.fn(),
+    createTeam: vi.fn(),
   },
 }));
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 describe('AdminPage', () => {
@@ -223,6 +236,32 @@ describe('AdminPage', () => {
     fireEvent.change(select, { target: { value: 'report.submitted' } });
     await waitFor(() => {
       expect(vi.mocked(api.adminListAuditLog)).toHaveBeenCalledWith(20, 0, 'report.submitted');
+    });
+  });
+
+  it('shows toast error when createTeam mutation fails', async () => {
+    vi.mocked(api.createTeam).mockRejectedValue(new Error('Team already exists'));
+    renderWithClient(<AdminPage />);
+
+    const input = screen.getByPlaceholderText('New team name');
+    fireEvent.change(input, { target: { value: 'Duplicate Team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Team' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Team already exists/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows toast success when createTeam mutation succeeds', async () => {
+    vi.mocked(api.createTeam).mockResolvedValue({ id: 't2', name: 'New Team', created_at: '2026-01-01T00:00:00Z' });
+    renderWithClient(<AdminPage />);
+
+    const input = screen.getByPlaceholderText('New team name');
+    fireEvent.change(input, { target: { value: 'New Team' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Create Team' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Team created successfully.')).toBeInTheDocument();
     });
   });
 });

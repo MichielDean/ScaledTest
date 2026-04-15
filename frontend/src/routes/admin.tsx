@@ -4,6 +4,7 @@ import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { useAuthStore } from '../stores/auth-store';
 import { formatDate, formatDateTime } from '../lib/date';
+import { toast } from '../components/toast';
 
 const AUDIT_PAGE_SIZE = 20;
 const TH_CLASS = 'text-left p-3 text-muted-foreground text-xs uppercase tracking-wider font-medium';
@@ -257,6 +258,7 @@ function TeamsSection() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.teams.list() });
       setNewTeamName('');
+      toast('Team created successfully.', 'success');
     },
   });
 

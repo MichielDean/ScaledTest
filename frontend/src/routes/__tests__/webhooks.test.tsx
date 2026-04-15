@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { WebhooksPage } from '../webhooks';
 import { api } from '../../lib/api';
+import { ToastProvider, toast } from '../../components/toast';
 
 vi.mock('../../lib/api', () => ({
   api: {
@@ -17,9 +18,20 @@ vi.mock('../../lib/api', () => ({
 
 function renderWithClient(ui: React.ReactElement) {
   const client = new QueryClient({
-    defaultOptions: { queries: { retry: false } },
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
   });
-  return render(<QueryClientProvider client={client}>{ui}</QueryClientProvider>);
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>
+  );
 }
 
 const mockTeams = { teams: [{ id: 'team-1', name: 'Test Team' }] };
@@ -364,5 +376,38 @@ describe('WebhooksPage', () => {
 
     // Second call should pass the ID of the last delivery from the first page
     expect(vi.mocked(api.getWebhookDeliveries)).toHaveBeenCalledWith('team-1', 'wh-1', 'del-19');
+  });
+
+  it('shows toast error when delete webhook mutation fails', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks).mockResolvedValue(mockWebhooks);
+    vi.mocked(api.deleteWebhook).mockRejectedValue(new Error('Cannot delete webhook'));
+
+    renderWithClient(<WebhooksPage />);
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(screen.getByText(/Cannot delete webhook/)).toBeInTheDocument();
+    });
+  });
+
+  it('shows toast success when delete webhook mutation succeeds', async () => {
+    vi.mocked(api.getTeams).mockResolvedValue(mockTeams);
+    vi.mocked(api.getWebhooks)
+      .mockResolvedValueOnce(mockWebhooks)
+      .mockResolvedValueOnce({ webhooks: [], total: 0 });
+    vi.mocked(api.deleteWebhook).mockResolvedValue(undefined);
+
+    renderWithClient(<WebhooksPage />);
+
+    expect(await screen.findByText('https://example.com/hook')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Delete' }));
+    fireEvent.click(await screen.findByRole('button', { name: 'Confirm' }));
+
+    await waitFor(() => {
+      expect(screen.getByText('Webhook deleted.')).toBeInTheDocument();
+    });
   });
 });
