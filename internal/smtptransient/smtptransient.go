@@ -26,13 +26,5 @@ func IsTransient(err error) bool {
 		strings.Contains(msg, "i/o timeout") {
 		return true
 	}
-	matches := transientSMTPCodeRe.FindAllStringSubmatch(msg, -1)
-	for _, m := range matches {
-		code := m[1]
-		c := code[0]
-		if c == '5' || c == '4' {
-			return true
-		}
-	}
-	return false
+	return transientSMTPCodeRe.MatchString(msg)
 }
