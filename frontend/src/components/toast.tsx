@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect, useRef } from 'react';
 import * as ToastPrimitive from '@radix-ui/react-toast';
 
 interface Toast {
@@ -7,26 +7,44 @@ interface Toast {
   variant: 'error' | 'success';
 }
 
-let addToastFn: ((toast: Omit<Toast, 'id'>) => void) | null = null;
+type AddToastFn = (toast: Omit<Toast, 'id'>) => void;
+
+let addToastFn: AddToastFn | null = null;
+
+const pendingToasts: Array<Omit<Toast, 'id'>> = [];
 
 export function toast(title: string, variant: 'error' | 'success' = 'error') {
   if (addToastFn) {
     addToastFn({ title, variant });
+  } else {
+    pendingToasts.push({ title, variant });
   }
 }
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
+  const addToastRef = useRef<AddToastFn | null>(null);
 
-  const addToast = useCallback((toast: Omit<Toast, 'id'>) => {
+  const addToast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).slice(2);
-    setToasts(prev => [...prev, { ...toast, id }]);
+    setToasts(prev => [...prev, { ...t, id }]);
     setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
+      setToasts(prev => prev.filter(item => item.id !== id));
     }, 5000);
   }, []);
 
-  addToastFn = addToast;
+  useEffect(() => {
+    addToastRef.current = addToast;
+    addToastFn = addToast;
+    while (pendingToasts.length > 0) {
+      addToast(pendingToasts.shift()!);
+    }
+    return () => {
+      if (addToastFn === addToast) {
+        addToastFn = null;
+      }
+    };
+  }, [addToast]);
 
   return (
     <ToastPrimitive.Provider swipeDirection="right">

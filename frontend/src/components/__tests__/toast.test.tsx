@@ -81,4 +81,32 @@ describe('ToastProvider', () => {
     expect(screen.getByText('Error one')).toBeInTheDocument();
     expect(screen.getByText('Success two')).toBeInTheDocument();
   });
+
+  it('queues toasts called before mount and renders them after mount', () => {
+    toast('Before mount message', 'error');
+
+    expect(screen.queryByText('Before mount message')).not.toBeInTheDocument();
+
+    render(
+      <ToastProvider>
+        <p>Content</p>
+      </ToastProvider>
+    );
+
+    expect(screen.getByText('Before mount message')).toBeInTheDocument();
+  });
+
+  it('cleans up addToastFn on unmount to prevent stale closures', () => {
+    const { unmount } = render(
+      <ToastProvider>
+        <p>Content</p>
+      </ToastProvider>
+    );
+
+    unmount();
+
+    toast('After unmount', 'error');
+
+    expect(screen.queryByText('After unmount')).not.toBeInTheDocument();
+  });
 });

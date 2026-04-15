@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, fireEvent } from '@testing-library/react';
 import { ErrorBoundary } from '../error-boundary';
 
 describe('ErrorBoundary', () => {
@@ -50,7 +50,7 @@ describe('ErrorBoundary', () => {
     expect(screen.getByText('Custom fallback')).toBeInTheDocument();
   });
 
-  it('renders Try Again button in default error UI', () => {
+  it('renders Try Again and Reload buttons in default error UI', () => {
     function ThrowingComponent(): React.ReactNode {
       throw new Error('failure');
     }
@@ -62,5 +62,30 @@ describe('ErrorBoundary', () => {
     );
 
     expect(screen.getByRole('button', { name: 'Try Again' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reload' })).toBeInTheDocument();
+  });
+
+  it('Resetting error boundary allows retry via Try Again', () => {
+    let shouldThrow = true;
+
+    function MaybeThrowingComponent(): React.ReactNode {
+      if (shouldThrow) {
+        throw new Error('failure');
+      }
+      return <p>Recovered</p>;
+    }
+
+    render(
+      <ErrorBoundary>
+        <MaybeThrowingComponent />
+      </ErrorBoundary>
+    );
+
+    expect(screen.getByText('Something went wrong')).toBeInTheDocument();
+
+    shouldThrow = false;
+    fireEvent.click(screen.getByRole('button', { name: 'Try Again' }));
+
+    expect(screen.getByText('Recovered')).toBeInTheDocument();
   });
 });
