@@ -3,7 +3,6 @@ package mail
 import (
 	"context"
 	"crypto/tls"
-	"errors"
 	"fmt"
 	"net"
 	"net/smtp"
@@ -13,9 +12,8 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/scaledtest/scaledtest/internal/config"
+	"github.com/scaledtest/scaledtest/internal/smtptransient"
 )
-
-const defaultSMTPRetries = 3
 
 // Message is an email to be sent.
 type Message struct {
@@ -68,7 +66,7 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 			return nil
 		}
 
-		if !IsTransientSMTPError(lastErr) {
+		if !smtptransient.IsTransient(lastErr) {
 			return lastErr
 		}
 
@@ -90,33 +88,10 @@ func (s *SMTPSender) Send(ctx context.Context, msg Message) error {
 	return lastErr
 }
 
-// IsTransientSMTPError returns true for errors that are worth retrying:
-// connection timeouts, network errors, and SMTP 5xx responses.
+// IsTransientSMTPError returns true for errors that are worth retrying.
+// Delegates to the shared smtptransient package.
 func IsTransientSMTPError(err error) bool {
-	if err == nil {
-		return false
-	}
-	// Network/timeout errors are transient.
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	// Connection-level errors (dial, TLS) are transient.
-	msg := err.Error()
-	if strings.Contains(msg, "smtp dial:") ||
-		strings.Contains(msg, "smtp starttls:") ||
-		strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "i/o timeout") {
-		return true
-	}
-	// SMTP 5xx errors from the mail server are transient.
-	// The net/smtp package wraps these in formatted error strings.
-	if strings.Contains(msg, "55") || strings.Contains(msg, "54") ||
-		strings.Contains(msg, "451") || strings.Contains(msg, "452") ||
-		strings.Contains(msg, "421") {
-		return true
-	}
-	return false
+	return smtptransient.IsTransient(err)
 }
 
 func (s *SMTPSender) sendOnce(ctx context.Context, msg Message) error {
@@ -200,6 +175,6 @@ func New(cfg *config.Config) Sender {
 		user:       cfg.SMTPUser,
 		pass:       cfg.SMTPPass,
 		from:       cfg.SMTPFrom,
-		maxRetries: defaultSMTPRetries,
+		maxRetries: smtptransient.DefaultRetries,
 	}
 }

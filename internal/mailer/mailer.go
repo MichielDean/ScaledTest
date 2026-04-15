@@ -2,8 +2,9 @@ package mailer
 
 import (
 	"context"
+	"crypto/rand"
 	"crypto/tls"
-	"errors"
+	"encoding/hex"
 	"fmt"
 	"html"
 	"net"
@@ -12,9 +13,9 @@ import (
 	"time"
 
 	"github.com/rs/zerolog/log"
-)
 
-const defaultSMTPRetries = 3
+	"github.com/scaledtest/scaledtest/internal/smtptransient"
+)
 
 // Mailer sends invitation emails.
 type Mailer interface {
@@ -46,33 +47,19 @@ func New(host string, port int, username, password, from string) Mailer {
 		username:   username,
 		password:   password,
 		from:       from,
-		maxRetries: defaultSMTPRetries,
+		maxRetries: smtptransient.DefaultRetries,
 		dial:       (&net.Dialer{}).DialContext,
 	}
 }
 
-// isTransientSMTPError determines if an SMTP error is worth retrying.
-func isTransientSMTPError(err error) bool {
-	if err == nil {
-		return false
+// uniqueBoundary returns a MIME boundary string that is extremely unlikely
+// to appear in any email body, using crypto/rand for uniqueness.
+func uniqueBoundary() string {
+	b := make([]byte, 16)
+	if _, err := rand.Read(b); err != nil {
+		panic("crypto/rand failed: " + err.Error())
 	}
-	var netErr net.Error
-	if errors.As(err, &netErr) {
-		return true
-	}
-	msg := err.Error()
-	if strings.Contains(msg, "smtp dial:") ||
-		strings.Contains(msg, "smtp starttls:") ||
-		strings.Contains(msg, "connection refused") ||
-		strings.Contains(msg, "i/o timeout") {
-		return true
-	}
-	if strings.Contains(msg, "55") || strings.Contains(msg, "54") ||
-		strings.Contains(msg, "451") || strings.Contains(msg, "452") ||
-		strings.Contains(msg, "421") {
-		return true
-	}
-	return false
+	return "boundary_" + hex.EncodeToString(b)
 }
 
 // SendInvitation sends an invitation email to the given address with both
@@ -83,6 +70,7 @@ func (m *SMTPMailer) SendInvitation(ctx context.Context, to, inviteURL string) e
 		return fmt.Errorf("invalid recipient address: contains CRLF")
 	}
 
+	boundary := uniqueBoundary()
 	textBody := fmt.Sprintf(
 		"You have been invited to join ScaledTest.\r\n\r\n"+
 			"Accept your invitation:\r\n%s\r\n",
@@ -90,10 +78,10 @@ func (m *SMTPMailer) SendInvitation(ctx context.Context, to, inviteURL string) e
 	)
 	htmlBody := buildInvitationHTML(inviteURL)
 	msg := fmt.Sprintf("From: %s\r\nTo: %s\r\nSubject: You've been invited to ScaledTest\r\n"+
-		"MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=boundary123\r\n\r\n"+
-		"--boundary123\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n"+
-		"--boundary123\r\nContent-Type: text/html; charset=utf-8\r\n\r\n%s\r\n--boundary123--\r\n",
-		m.from, to, textBody, htmlBody)
+		"MIME-Version: 1.0\r\nContent-Type: multipart/alternative; boundary=%s\r\n\r\n"+
+		"--%s\r\nContent-Type: text/plain; charset=utf-8\r\n\r\n%s\r\n"+
+		"--%s\r\nContent-Type: text/html; charset=utf-8\r\n\r\n%s\r\n--%s--\r\n",
+		m.from, to, boundary, boundary, textBody, boundary, htmlBody, boundary)
 
 	return m.sendWithRetry(ctx, to, []byte(msg))
 }
@@ -129,7 +117,7 @@ func (m *SMTPMailer) sendWithRetry(ctx context.Context, to string, msg []byte) e
 			return nil
 		}
 
-		if !isTransientSMTPError(lastErr) {
+		if !smtptransient.IsTransient(lastErr) {
 			return lastErr
 		}
 
