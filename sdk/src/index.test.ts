@@ -645,7 +645,7 @@ describe('quality gates', () => {
   });
 
   it('updateQualityGate omits optional fields when not provided', async () => {
-    const rules = [{ type: 'zero_failures', params: {} }];
+    const rules = [{ type: 'zero_failures', params: null }];
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'gate', rules });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -1878,7 +1878,7 @@ describe('type alignment with server responses', () => {
     expect(report.summary.stop).toBe(1700001000);
   });
 
-  it('QualityGateRule.params is required (not optional) with no null', () => {
+  it('QualityGateRule.params is required (not optional) and accepts null', () => {
     const ruleWithParams: QualityGateRule = {
       type: 'pass_rate',
       params: { threshold: 95 },
@@ -1887,9 +1887,9 @@ describe('type alignment with server responses', () => {
 
     const ruleNoParams: QualityGateRule = {
       type: 'zero_failures',
-      params: {},
+      params: null,
     };
-    expect(ruleNoParams.params).toEqual({});
+    expect(ruleNoParams.params).toBeNull();
   });
 
   it('QualityGateRuleResult threshold and actual are number type', () => {

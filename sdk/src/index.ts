@@ -113,7 +113,7 @@ export interface Execution {
 
 export interface QualityGateRule {
   type: string;
-  params: Record<string, unknown>;
+  params: Record<string, unknown> | null;
 }
 
 export interface QualityGate {
