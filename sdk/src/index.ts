@@ -36,6 +36,7 @@ export interface ClientOptions {
 export interface CtrfReport {
   results: {
     tool: { name: string; version?: string };
+    environment?: Record<string, unknown>;
     summary: {
       tests: number;
       passed: number;
@@ -55,7 +56,8 @@ export interface CtrfReport {
       suite?: string;
       tags?: string[];
       flaky?: boolean;
-      retries?: number;
+      retry?: number;
+      filePath?: string;
     }>;
   };
 }
@@ -489,8 +491,8 @@ export class ScaledTestClient {
   }
 
   // Reports
-  async uploadReport(report: CtrfReport): Promise<UploadReportResponse> {
-    return this.request('POST', '/api/v1/reports', report);
+  async uploadReport(report: CtrfReport, params?: { execution_id?: string; triage_github_status?: boolean }): Promise<UploadReportResponse> {
+    return this.request('POST', '/api/v1/reports', report, params as Record<string, string | number | boolean | undefined> | undefined);
   }
 
   async getReports(params?: { limit?: number; offset?: number; since?: string; until?: string }): Promise<{ reports: Report[]; total: number }> {
@@ -613,11 +615,10 @@ export class ScaledTestClient {
     id: string,
     name: string,
     rules: QualityGateRule[],
-    description?: string,
+    description: string,
     enabled?: boolean,
   ): Promise<QualityGate> {
-    const body: Record<string, unknown> = { name, rules };
-    if (description !== undefined) body.description = description;
+    const body: Record<string, unknown> = { name, rules, description };
     if (enabled !== undefined) body.enabled = enabled;
     return this.request(
       'PUT',

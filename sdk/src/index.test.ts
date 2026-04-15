@@ -205,6 +205,64 @@ describe('reports', () => {
     expect(body.results.tool.name).toBe('jest');
   });
 
+  it('uploadReport includes environment and filePath and retry fields', async () => {
+    const fetchMock = mockFetchOk({ id: 'r-1' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    const report = {
+      results: {
+        tool: { name: 'jest' },
+        environment: { OS: 'linux', nodeVersion: '18' },
+        summary: { tests: 1, passed: 1, failed: 0, skipped: 0, pending: 0, other: 0, start: 0, stop: 1 },
+        tests: [{ name: 't1', status: 'passed' as const, duration: 10, retry: 1, filePath: 'src/test.spec.ts' }],
+      },
+    };
+    await client.uploadReport(report as any);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.results.environment).toEqual({ OS: 'linux', nodeVersion: '18' });
+    expect(body.results.tests[0].retry).toBe(1);
+    expect(body.results.tests[0].filePath).toBe('src/test.spec.ts');
+  });
+
+  it('uploadReport sends execution_id and triage_github_status query params', async () => {
+    const fetchMock = mockFetchOk({ id: 'r-1' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    const report = {
+      results: {
+        tool: { name: 'jest' },
+        summary: { tests: 1, passed: 1, failed: 0, skipped: 0, pending: 0, other: 0, start: 0, stop: 1 },
+        tests: [{ name: 't1', status: 'passed' as const, duration: 10 }],
+      },
+    };
+    await client.uploadReport(report, { execution_id: 'e-1', triage_github_status: true });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('execution_id=e-1');
+    expect(url).toContain('triage_github_status=true');
+  });
+
+  it('uploadReport without params sends clean URL', async () => {
+    const fetchMock = mockFetchOk({ id: 'r-1' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    const report = {
+      results: {
+        tool: { name: 'jest' },
+        summary: { tests: 1, passed: 1, failed: 0, skipped: 0, pending: 0, other: 0, start: 0, stop: 1 },
+        tests: [{ name: 't1', status: 'passed' as const, duration: 10 }],
+      },
+    };
+    await client.uploadReport(report);
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(`${BASE}/api/v1/reports`);
+  });
+
   it('getReports sends GET /api/v1/reports', async () => {
     const fetchMock = mockFetchOk({ reports: [], total: 0 });
     globalThis.fetch = fetchMock;
@@ -679,17 +737,31 @@ describe('quality gates', () => {
     expect(body.enabled).toBe(true);
   });
 
-  it('updateQualityGate omits optional fields when not provided', async () => {
+  it('updateQualityGate sends description as required field', async () => {
     const rules = [{ type: 'zero_failures', params: null }];
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'gate', rules });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.updateQualityGate('team-1', 'qg-1', 'gate', rules);
+    await client.updateQualityGate('team-1', 'qg-1', 'gate', rules, '');
 
     const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
     expect(body.name).toBe('gate');
     expect(body.rules).toEqual(rules);
-    expect('description' in body).toBe(false);
+    expect(body.description).toBe('');
+    expect('enabled' in body).toBe(false);
+  });
+
+  it('updateQualityGate omits enabled when not provided', async () => {
+    const rules = [{ type: 'pass_rate', params: { threshold: 90 } }];
+    const fetchMock = mockFetchOk({ id: 'qg-1', name: 'updated', rules });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.updateQualityGate('team-1', 'qg-1', 'updated', rules, 'a desc');
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.name).toBe('updated');
+    expect(body.rules).toEqual(rules);
+    expect(body.description).toBe('a desc');
     expect('enabled' in body).toBe(false);
   });
 
@@ -1342,7 +1414,7 @@ describe('endpoint alignment with routes.go', () => {
       case 'GET /api/v1/teams/{teamID}/quality-gates': await client.getQualityGates('team-1'); break;
       case 'POST /api/v1/teams/{teamID}/quality-gates': await client.createQualityGate('team-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.getQualityGate('team-1', 'gate-1'); break;
-      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }]); break;
+      case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', [{ type: 'pass_rate', params: { threshold: 100 } }], ''); break;
       case 'DELETE /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.deleteQualityGate('team-1', 'gate-1'); break;
       case 'POST /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate': await client.evaluateQualityGate('team-1', 'gate-1', 'report-1'); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations': await client.listEvaluations('team-1', 'gate-1'); break;
