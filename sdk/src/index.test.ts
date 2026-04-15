@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -391,29 +391,33 @@ describe('executions', () => {
     expect(result.id).toBe('e-1');
   });
 
-  it('cancelExecution sends DELETE /api/v1/executions/{id}', async () => {
-    const fetchMock = mockFetchOk({});
+  it('cancelExecution sends DELETE /api/v1/executions/{id} and returns {id, status}', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'cancelled' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.cancelExecution('e-1');
+    const result = await client.cancelExecution('e-1');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/executions/e-1`);
     expect((init as RequestInit).method).toBe('DELETE');
+    expect(result.id).toBe('e-1');
+    expect(result.status).toBe('cancelled');
   });
 
-  it('deleteExecution sends DELETE /api/v1/executions/{id}', async () => {
-    const fetchMock = mockFetchOk({});
+  it('deleteExecution sends DELETE /api/v1/executions/{id} and returns {id, status}', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'cancelled' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.deleteExecution('e-1');
+    const result = await client.deleteExecution('e-1');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/executions/e-1`);
     expect((init as RequestInit).method).toBe('DELETE');
+    expect(result.id).toBe('e-1');
+    expect(result.status).toBe('cancelled');
   });
 
-  it('updateExecutionStatus sends PUT /api/v1/executions/{id}/status', async () => {
+  it('updateExecutionStatus accepts ExecutionStatus values', async () => {
     const fetchMock = mockFetchOk({ id: 'e-1', status: 'running' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -453,7 +457,7 @@ describe('executions', () => {
     expect(result.received).toBe(true);
   });
 
-  it('reportTestResult sends POST /api/v1/executions/{id}/test-result', async () => {
+  it('reportTestResult accepts TestResultStatus values', async () => {
     const fetchMock = mockFetchOk({ execution_id: 'e-1', received: true });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -468,7 +472,7 @@ describe('executions', () => {
     expect(result.received).toBe(true);
   });
 
-  it('reportWorkerStatus sends POST /api/v1/executions/{id}/worker-status', async () => {
+  it('reportWorkerStatus accepts WorkerStatus values', async () => {
     const fetchMock = mockFetchOk({ execution_id: 'e-1', received: true });
     globalThis.fetch = fetchMock;
     const client = makeClient();
@@ -1807,5 +1811,59 @@ describe('type alignment with server responses', () => {
       'run.triage_complete',
     ];
     expect(allEvents).toHaveLength(5);
+  });
+
+  it('ExecutionStatus covers all server-validated values', () => {
+    const allStatuses: ExecutionStatus[] = ['pending', 'running', 'completed', 'failed', 'cancelled'];
+    expect(allStatuses).toHaveLength(5);
+  });
+
+  it('TestResultStatus covers all server-validated values', () => {
+    const allStatuses: TestResultStatus[] = ['passed', 'failed', 'skipped', 'pending', 'other'];
+    expect(allStatuses).toHaveLength(5);
+  });
+
+  it('WorkerStatus covers all server-validated values', () => {
+    const allStatuses: WorkerStatus[] = ['starting', 'running', 'idle', 'completed', 'failed'];
+    expect(allStatuses).toHaveLength(5);
+  });
+
+  it('Execution.status uses ExecutionStatus type', () => {
+    const exec: Execution = {
+      id: 'e-1',
+      team_id: 'team-1',
+      command: 'npm test',
+      status: 'running',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-01-01T00:00:00Z',
+    };
+    expect(exec.status).toBe('running');
+  });
+
+  it('createWebhook and updateWebhook accept WebhookEventType[] not string[]', async () => {
+    const fetchMock = mockFetchOk({ webhook: { id: 'wh-1', url: '', events: [], team_id: '', enabled: true, created_at: '', updated_at: '' }, secret: 's' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const events: WebhookEventType[] = ['report.submitted', 'gate.failed'];
+    await client.createWebhook('team-1', 'https://example.com', events);
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.events).toEqual(['report.submitted', 'gate.failed']);
+  });
+
+  it('cancelExecution returns {id, status} not void', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'cancelled' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.cancelExecution('e-1');
+    expect(result).toEqual({ id: 'e-1', status: 'cancelled' });
+  });
+
+  it('deleteExecution returns {id, status} not void', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-2', status: 'cancelled' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.deleteExecution('e-2');
+    expect(result).toEqual({ id: 'e-2', status: 'cancelled' });
   });
 });

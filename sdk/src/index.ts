@@ -85,11 +85,17 @@ export interface Report {
   environment?: Record<string, string>;
 }
 
+export type ExecutionStatus = 'pending' | 'running' | 'completed' | 'failed' | 'cancelled';
+
+export type TestResultStatus = 'passed' | 'failed' | 'skipped' | 'pending' | 'other';
+
+export type WorkerStatus = 'starting' | 'running' | 'idle' | 'completed' | 'failed';
+
 export interface Execution {
   id: string;
   team_id: string;
   command: string;
-  status: string;
+  status: ExecutionStatus;
   config?: Record<string, unknown>;
   report_id?: string;
   k8s_job_name?: string;
@@ -517,15 +523,15 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/executions/${encodeURIComponent(id)}`);
   }
 
-  async cancelExecution(id: string): Promise<void> {
-    await this.request('DELETE', `/api/v1/executions/${encodeURIComponent(id)}`);
+  async cancelExecution(id: string): Promise<{ id: string; status: string }> {
+    return this.request('DELETE', `/api/v1/executions/${encodeURIComponent(id)}`);
   }
 
-  async deleteExecution(id: string): Promise<void> {
+  async deleteExecution(id: string): Promise<{ id: string; status: string }> {
     return this.cancelExecution(id);
   }
 
-  async updateExecutionStatus(id: string, status: string, errorMsg?: string): Promise<{ id: string; status: string }> {
+  async updateExecutionStatus(id: string, status: ExecutionStatus, errorMsg?: string): Promise<{ id: string; status: string }> {
     const body: Record<string, string> = { status };
     if (errorMsg !== undefined) body.error_msg = errorMsg;
     return this.request(
@@ -539,11 +545,11 @@ export class ScaledTestClient {
     return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/progress`, progress);
   }
 
-  async reportTestResult(id: string, result: { name: string; status: string; duration_ms?: number; message?: string; suite?: string; worker_id?: string }): Promise<{ execution_id: string; received: boolean }> {
+  async reportTestResult(id: string, result: { name: string; status: TestResultStatus; duration_ms?: number; message?: string; suite?: string; worker_id?: string }): Promise<{ execution_id: string; received: boolean }> {
     return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/test-result`, result);
   }
 
-  async reportWorkerStatus(id: string, status: { worker_id: string; status: string; message?: string; tests_assigned?: number; tests_completed?: number }): Promise<{ execution_id: string; received: boolean }> {
+  async reportWorkerStatus(id: string, status: { worker_id: string; status: WorkerStatus; message?: string; tests_assigned?: number; tests_completed?: number }): Promise<{ execution_id: string; received: boolean }> {
     return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/worker-status`, status);
   }
 
@@ -667,7 +673,7 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`);
   }
 
-  async createWebhook(teamId: string, url: string, events: string[]): Promise<{ webhook: Webhook; secret: string }> {
+  async createWebhook(teamId: string, url: string, events: WebhookEventType[]): Promise<{ webhook: Webhook; secret: string }> {
     return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`, { url, events });
   }
 
@@ -675,7 +681,7 @@ export class ScaledTestClient {
     return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
   }
 
-  async updateWebhook(teamId: string, webhookId: string, url: string, events: string[], enabled?: boolean): Promise<Webhook> {
+  async updateWebhook(teamId: string, webhookId: string, url: string, events: WebhookEventType[], enabled?: boolean): Promise<Webhook> {
     const body: Record<string, unknown> = { url, events };
     if (enabled !== undefined) body.enabled = enabled;
     return this.request('PUT', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`, body);
