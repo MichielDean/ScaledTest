@@ -328,9 +328,20 @@ export interface ReportDiffSummary {
   duration_regressions: number;
 }
 
+export interface CompareReport {
+  id: string;
+  team_id: string;
+  tool_name?: string;
+  tool_version?: string;
+  summary: Record<string, unknown>;
+  created_at: string;
+  execution_id?: string;
+  environment?: Record<string, unknown>;
+}
+
 export interface ReportCompareResult {
-  base: Report;
-  head: Report;
+  base: CompareReport;
+  head: CompareReport;
   diff: {
     new_failures: ReportTestDiff[];
     fixed: ReportTestDiff[];

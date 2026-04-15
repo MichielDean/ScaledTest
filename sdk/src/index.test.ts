@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, QualityGateRule, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, ExecutionStatus, UpdateExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, QualityGateRule, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, CompareReport, Execution, ExecutionStatus, UpdateExecutionStatus, TestResultStatus, WorkerStatus, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -292,6 +292,41 @@ describe('reports', () => {
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toContain('base=a%2Fb');
     expect(url).toContain('head=c%2Fd');
+  });
+
+  it('compareReports returns CompareReport without name and with optional tool_name', async () => {
+    const baseReport: CompareReport = {
+      id: 'r-base',
+      team_id: 'team-1',
+      summary: { tests: 10, passed: 8, failed: 2 },
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    const headReport: CompareReport = {
+      id: 'r-head',
+      team_id: 'team-1',
+      tool_name: 'jest',
+      summary: { tests: 10, passed: 10, failed: 0 },
+      created_at: '2024-01-02T00:00:00Z',
+    };
+    const fetchMock = mockFetchOk({
+      base: baseReport,
+      head: headReport,
+      diff: {
+        new_failures: [],
+        fixed: [{ name: 'test-a', head_status: 'passed', base_status: 'failed' }],
+        duration_regressions: [],
+        summary: { base_tests: 10, head_tests: 10, new_failures: 0, fixed: 1, duration_regressions: 0 },
+      },
+    });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.compareReports('r-base', 'r-head');
+
+    expect(result.base.id).toBe('r-base');
+    expect(result.head.id).toBe('r-head');
+    expect('name' in result.base).toBe(false);
+    expect(result.head.tool_name).toBe('jest');
+    expect(result.diff.fixed!.length).toBe(1);
   });
 
   it('getReportTriage sends GET /api/v1/reports/{id}/triage', async () => {
