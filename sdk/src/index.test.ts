@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1244,5 +1244,158 @@ describe('endpoint alignment with routes.go', () => {
     const calledUrlWithoutQuery = calledUrl.split('?')[0];
     expect(calledUrlWithoutQuery).toBe(`${BASE}${resolvedPath}`);
     expect(calledMethod).toBe(method);
+  });
+});
+
+// ── Type alignment with server ───────────────────────────────────────────────
+
+describe('type alignment with server responses', () => {
+  it('Shard uses test_names (not tests) and includes test_count', () => {
+    const shard: Shard = {
+      worker_id: 'w-1',
+      test_names: ['test-a', 'test-b'],
+      est_duration_ms: 5000,
+      test_count: 2,
+    };
+    expect(shard.test_names).toEqual(['test-a', 'test-b']);
+    expect(shard.test_count).toBe(2);
+  });
+
+  it('QualityGateEvaluation.created_at is optional (evaluate endpoint omits it)', () => {
+    const evalWithoutCreatedAt: QualityGateEvaluation = {
+      id: 'eval-1',
+      gate_id: 'qg-1',
+      report_id: 'r-1',
+      passed: true,
+      rules: [],
+    };
+    expect(evalWithoutCreatedAt.created_at).toBeUndefined();
+
+    const evalWithCreatedAt: QualityGateEvaluation = {
+      id: 'eval-1',
+      gate_id: 'qg-1',
+      report_id: 'r-1',
+      passed: true,
+      rules: [],
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(evalWithCreatedAt.created_at).toBe('2024-01-01T00:00:00Z');
+  });
+
+  it('TestDurationHistory has id, min/max, last_status, timestamps (no median_duration_ms)', () => {
+    const history: TestDurationHistory = {
+      id: 'dur-1',
+      test_name: 'Login Test',
+      suite: 'auth',
+      team_id: 'team-1',
+      avg_duration_ms: 1200,
+      min_duration_ms: 800,
+      max_duration_ms: 2000,
+      p95_duration_ms: 1800,
+      run_count: 50,
+      last_status: 'passed',
+      updated_at: '2024-01-15T10:00:00Z',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(history.id).toBe('dur-1');
+    expect(history.min_duration_ms).toBe(800);
+    expect(history.max_duration_ms).toBe(2000);
+    expect(history.last_status).toBe('passed');
+    expect(history.updated_at).toBeDefined();
+    expect(history.created_at).toBeDefined();
+  });
+
+  it('AuditLog has optional team_id, team_name, resource_type, resource_id', () => {
+    const minimalEntry: AuditLog = {
+      id: 'log-1',
+      actor_id: 'u-1',
+      actor_email: 'a@b.com',
+      action: 'report.upload',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(minimalEntry.team_id).toBeUndefined();
+    expect(minimalEntry.team_name).toBeUndefined();
+    expect(minimalEntry.resource_type).toBeUndefined();
+    expect(minimalEntry.resource_id).toBeUndefined();
+
+    const fullEntry: AuditLog = {
+      id: 'log-2',
+      actor_id: 'u-1',
+      actor_email: 'a@b.com',
+      team_id: 'team-1',
+      team_name: 'My Team',
+      action: 'report.upload',
+      resource_type: 'report',
+      resource_id: 'r-1',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(fullEntry.team_id).toBe('team-1');
+    expect(fullEntry.team_name).toBe('My Team');
+  });
+
+  it('WebhookDelivery uses delivered_at (not created_at), optional error and payload', () => {
+    const delivery: WebhookDelivery = {
+      id: 'del-1',
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'report.submitted',
+      attempt: 1,
+      status_code: 200,
+      duration_ms: 150,
+      delivered_at: '2024-01-01T00:00:00Z',
+    };
+    expect(delivery.delivered_at).toBeDefined();
+    expect(delivery.error).toBeUndefined();
+    expect(delivery.payload).toBeUndefined();
+
+    const deliveryWithError: WebhookDelivery = {
+      id: 'del-2',
+      webhook_id: 'wh-1',
+      url: 'https://example.com/hook',
+      event_type: 'report.submitted',
+      attempt: 2,
+      status_code: 500,
+      duration_ms: 300,
+      error: 'connection refused',
+      payload: { event: 'report.submitted', data: { id: 'r-1' } },
+      delivered_at: '2024-01-01T00:00:00Z',
+    };
+    expect(deliveryWithError.error).toBe('connection refused');
+    expect(deliveryWithError.payload).toBeDefined();
+  });
+
+  it('getErrorAnalysis returns typed ErrorCluster response', async () => {
+    const errorCluster: ErrorCluster = {
+      message: 'TypeError: Cannot read property',
+      count: 5,
+      test_names: ['test-a', 'test-b'],
+      first_seen: '2024-01-01T00:00:00Z',
+      last_seen: '2024-01-15T00:00:00Z',
+    };
+    const fetchMock = mockFetchOk({ errors: [errorCluster] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getErrorAnalysis();
+
+    expect(result.errors).toHaveLength(1);
+    expect(result.errors[0].message).toBe('TypeError: Cannot read property');
+    expect(result.errors[0].test_names).toEqual(['test-a', 'test-b']);
+  });
+
+  it('getDurationDistribution returns typed DurationBucket response', async () => {
+    const bucket: DurationBucket = {
+      range: '0-100ms',
+      min_ms: 0,
+      max_ms: 100,
+      count: 42,
+    };
+    const fetchMock = mockFetchOk({ distribution: [bucket] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getDurationDistribution();
+
+    expect(result.distribution).toHaveLength(1);
+    expect(result.distribution[0].range).toBe('0-100ms');
+    expect(result.distribution[0].count).toBe(42);
   });
 });

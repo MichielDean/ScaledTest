@@ -124,7 +124,7 @@ export interface QualityGateEvaluation {
   report_id: string;
   passed: boolean;
   rules: QualityGateRuleResult[];
-  created_at: string;
+  created_at?: string;
 }
 
 export interface UserProfile {
@@ -149,6 +149,21 @@ export interface FlakyTest {
   occurrences: number;
 }
 
+export interface ErrorCluster {
+  message: string;
+  count: number;
+  test_names: string[];
+  first_seen: string;
+  last_seen: string;
+}
+
+export interface DurationBucket {
+  range: string;
+  min_ms: number;
+  max_ms: number;
+  count: number;
+}
+
 export interface Team {
   id: string;
   name: string;
@@ -170,11 +185,12 @@ export interface WebhookDelivery {
   webhook_id: string;
   url: string;
   event_type: string;
-  status_code: number;
   attempt: number;
+  status_code: number;
   duration_ms: number;
-  error: string;
-  created_at: string;
+  error?: string;
+  payload?: Record<string, unknown>;
+  delivered_at: string;
 }
 
 export interface Invitation {
@@ -206,29 +222,36 @@ export interface ShardPlan {
 
 export interface Shard {
   worker_id: string;
-  tests: string[];
+  test_names: string[];
   est_duration_ms: number;
+  test_count: number;
 }
 
 export interface TestDurationHistory {
+  id: string;
   test_name: string;
   suite: string;
+  team_id: string;
   avg_duration_ms: number;
-  median_duration_ms: number;
+  min_duration_ms: number;
+  max_duration_ms: number;
   p95_duration_ms: number;
   run_count: number;
-  team_id: string;
+  last_status: string;
+  updated_at: string;
+  created_at: string;
 }
 
-export interface AuditLogEntry {
+export interface AuditLog {
   id: string;
   actor_id: string;
   actor_email: string;
-  team_id: string;
+  team_id?: string;
+  team_name?: string;
   action: string;
-  resource_type: string;
-  resource_id: string;
-  metadata: Record<string, unknown>;
+  resource_type?: string;
+  resource_id?: string;
+  metadata?: Record<string, unknown>;
   created_at: string;
 }
 
@@ -468,11 +491,11 @@ export class ScaledTestClient {
     return this.request('GET', '/api/v1/analytics/flaky-tests');
   }
 
-  async getErrorAnalysis(): Promise<unknown> {
+  async getErrorAnalysis(): Promise<{ errors: ErrorCluster[] }> {
     return this.request('GET', '/api/v1/analytics/error-analysis');
   }
 
-  async getDurationDistribution(): Promise<unknown> {
+  async getDurationDistribution(): Promise<{ distribution: DurationBucket[] }> {
     return this.request('GET', '/api/v1/analytics/duration-distribution');
   }
 
@@ -665,7 +688,7 @@ export class ScaledTestClient {
     return this.request('GET', '/api/v1/admin/users', undefined, params);
   }
 
-  async listAuditLog(params?: { action?: string; resource_type?: string; actor_id?: string; since?: string; until?: string; limit?: number; offset?: number }): Promise<{ audit_log: AuditLogEntry[]; total: number }> {
+  async listAuditLog(params?: { action?: string; resource_type?: string; actor_id?: string; since?: string; until?: string; limit?: number; offset?: number }): Promise<{ audit_log: AuditLog[]; total: number }> {
     return this.request('GET', '/api/v1/admin/audit-log', undefined, params);
   }
 
