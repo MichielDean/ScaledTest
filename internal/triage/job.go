@@ -332,8 +332,6 @@ func (r *Runner) buildInput(ctx context.Context, teamID, reportID string, failur
 	return input
 }
 
-// persistOutput writes clusters and classifications from output to the DB
-
 // notifyTriageComplete fires a run.triage_complete webhook event. It is a
 // no-op when the notifier is nil.
 func (r *Runner) notifyTriageComplete(teamID, reportID, status, summary string, clusterCount, newCount, flakyCount int) {

@@ -3,7 +3,9 @@ package mailer
 import (
 	"context"
 	"crypto/tls"
+	"errors"
 	"fmt"
+	"html"
 	"math"
 	"net"
 	"net/smtp"
@@ -56,7 +58,7 @@ func isTransientSMTPError(err error) bool {
 		return false
 	}
 	var netErr net.Error
-	if netErr != nil {
+	if errors.As(err, &netErr) {
 		return true
 	}
 	msg := err.Error()
@@ -98,7 +100,7 @@ func (m *SMTPMailer) SendInvitation(ctx context.Context, to, inviteURL string) e
 }
 
 func buildInvitationHTML(inviteURL string) string {
-	escapedURL := htmlEscapeAttr(inviteURL)
+	escapedURL := html.EscapeString(inviteURL)
 	return fmt.Sprintf(`<!DOCTYPE html>
 <html>
 <head><meta charset="utf-8"></head>
@@ -114,15 +116,6 @@ func buildInvitationHTML(inviteURL string) string {
 </table>
 </body>
 </html>`, escapedURL)
-}
-
-func htmlEscapeAttr(s string) string {
-	s = strings.ReplaceAll(s, "&", "&amp;")
-	s = strings.ReplaceAll(s, `"`, "&quot;")
-	s = strings.ReplaceAll(s, "'", "&#39;")
-	s = strings.ReplaceAll(s, "<", "&lt;")
-	s = strings.ReplaceAll(s, ">", "&gt;")
-	return s
 }
 
 func (m *SMTPMailer) sendWithRetry(ctx context.Context, to string, msg []byte) error {
