@@ -4,7 +4,23 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Added
+
+- **Frontend error boundaries**: A root-level `ErrorBoundary` wraps the entire app in `main.tsx`, a TanStack Router `errorComponent` on the root route catches routing errors, and `ErrorBoundary` wrappers around all Recharts chart sections in `dashboard.tsx` and `analytics.tsx` prevent chart crashes from unmounting the app. The error UI includes both "Try Again" and "Reload" buttons.
+
+- **Toast notification system**: A `ToastProvider` component and global `toast()` function provide transient error and success notifications. All mutations surface errors to users via a global `mutations.onError` handler in `main.tsx` that calls `toast(error.message, 'error')`. Previously silent mutation failures (createTeam, evaluateQualityGate, deleteQualityGate, deleteWebhook, profile update, password change) now display toast feedback.
+
+- **Inline error display for evaluateMutation**: The quality gates evaluate button shows an inline error message below the gate card when evaluation fails, persisted until the next successful evaluation or a new attempt. This complements the global toast for visibility.
+
+- **Admin route role guard**: The `/admin` route now uses a `requireOwner` `beforeLoad` guard that redirects non-owners to `/` at the router level, replacing the previous component-side "Access Denied" rendering.
+
+- **Success toasts for destructive actions**: `deleteQualityGate` and `deleteWebhook` mutations now show success toasts on completion.
+
 ### Changed
+
+- **Profile page refactored to useMutation**: The profile display name and password forms have been refactored from manual `useState` + `try/catch` to TanStack Query `useMutation` with proper `onSuccess`/`onError` callbacks. Profile changes now invalidate the `queryKeys.admin.users()` cache so other pages showing user names stay current.
+
+- **Evaluate mutation cache invalidation**: `evaluateMutation.onSuccess` now invalidates `queryKeys.qualityGates.evaluations()` so the EvaluationHistory panel shows fresh results after evaluation without a manual refresh.
 
 - **Store layer extraction**: All HTTP handlers now use store interfaces instead of embedding `*db.Pool` directly. Store interfaces are defined on the handler side and implemented in `internal/store/`, making handlers testable without a running database and centralizing SQL query knowledge. Affected handlers: auth, teams, analytics, executions, reports, admin, invitations, oauth.
 
