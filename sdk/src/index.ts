@@ -194,15 +194,20 @@ export interface DurationBucket {
 export interface Team {
   id: string;
   name: string;
-  role?: string;
   created_at: string;
 }
+
+export interface TeamWithRole extends Team {
+  role: string;
+}
+
+export type WebhookEventType = 'report.submitted' | 'gate.failed' | 'execution.completed' | 'execution.failed' | 'run.triage_complete';
 
 export interface Webhook {
   id: string;
   team_id: string;
   url: string;
-  events: string[];
+  events: WebhookEventType[];
   enabled: boolean;
   created_at: string;
   updated_at: string;
@@ -338,11 +343,11 @@ export interface TriageCluster {
 
 export interface ReportTriageResult {
   triage_status: string;
-  clusters?: TriageCluster[];
+  clusters: TriageCluster[];
   unclustered_failures?: TriageFailureEntry[];
   summary?: string;
   error?: string;
-  metadata?: {
+  metadata: {
     generated_at: string;
     model?: string;
   };
@@ -629,7 +634,7 @@ export class ScaledTestClient {
   }
 
   // Teams
-  async getTeams(): Promise<{ teams: Team[] }> {
+  async getTeams(): Promise<{ teams: TeamWithRole[] }> {
     return this.request('GET', '/api/v1/teams');
   }
 

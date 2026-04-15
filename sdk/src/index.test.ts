@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team, TeamWithRole, ReportTriageResult, WebhookEventType } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1720,21 +1720,21 @@ describe('type alignment with server responses', () => {
     expect(withoutName.name).toBeUndefined();
   });
 
-  it('Team has optional role field', () => {
-    const teamWithRole: Team = {
+  it('Team has no role field; TeamWithRole extends Team with role', () => {
+    const team: Team = {
       id: 't-1',
       name: 'My Team',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect('role' in team).toBe(false);
+
+    const teamWithRole: TeamWithRole = {
+      id: 't-2',
+      name: 'Other Team',
       role: 'owner',
       created_at: '2024-01-01T00:00:00Z',
     };
     expect(teamWithRole.role).toBe('owner');
-
-    const teamWithoutRole: Team = {
-      id: 't-2',
-      name: 'Other Team',
-      created_at: '2024-01-01T00:00:00Z',
-    };
-    expect(teamWithoutRole.role).toBeUndefined();
   });
 
   it('uploadReport returns full UploadReportResponse type', async () => {
@@ -1775,5 +1775,37 @@ describe('type alignment with server responses', () => {
     expect(result.id).toBe('e-1');
     expect(result.status).toBe('pending');
     expect(result.command).toBe('npm test');
+  });
+
+  it('ReportTriageResult has required clusters and metadata', () => {
+    const result: ReportTriageResult = {
+      triage_status: 'completed',
+      clusters: [],
+      metadata: { generated_at: '2024-01-01T00:00:00Z' },
+    };
+    expect(result.clusters).toEqual([]);
+    expect(result.metadata.generated_at).toBe('2024-01-01T00:00:00Z');
+    expect(result.metadata.model).toBeUndefined();
+
+    const resultWithModel: ReportTriageResult = {
+      triage_status: 'completed',
+      clusters: [{ id: 'c-1', root_cause: 'timeout', failures: [{ test_result_id: 'tr-1', classification: 'flaky' }] }],
+      metadata: { generated_at: '2024-01-01T00:00:00Z', model: 'gpt-4' },
+    };
+    expect(resultWithModel.clusters).toHaveLength(1);
+    expect(resultWithModel.metadata.model).toBe('gpt-4');
+  });
+
+  it('WebhookEventType restricts events to server-supported values', () => {
+    const event: WebhookEventType = 'report.submitted';
+    expect(event).toBe('report.submitted');
+    const allEvents: WebhookEventType[] = [
+      'report.submitted',
+      'gate.failed',
+      'execution.completed',
+      'execution.failed',
+      'run.triage_complete',
+    ];
+    expect(allEvents).toHaveLength(5);
   });
 });
