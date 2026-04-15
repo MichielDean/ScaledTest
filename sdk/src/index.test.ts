@@ -697,7 +697,8 @@ describe('quality gates', () => {
     const fetchMock = mockFetchOk({ message: 'quality gate deleted' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.deleteQualityGate('team-1', 'qg-1');
+    const result = await client.deleteQualityGate('team-1', 'qg-1');
+    expect(result.message).toBe('quality gate deleted');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates/qg-1`);
@@ -1222,7 +1223,8 @@ describe('user profile', () => {
     const fetchMock = mockFetchOk({ message: 'password changed' });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.changePassword('old-pass', 'new-pass-123');
+    const result = await client.changePassword('old-pass', 'new-pass-123');
+    expect(result.message).toBe('password changed');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/auth/change-password`);

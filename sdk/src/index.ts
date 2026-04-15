@@ -626,8 +626,8 @@ export class ScaledTestClient {
     );
   }
 
-  async deleteQualityGate(teamId: string, id: string): Promise<void> {
-    await this.request(
+  async deleteQualityGate(teamId: string, id: string): Promise<{message: string}> {
+    return this.request(
       'DELETE',
       `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}`
     );
@@ -787,8 +787,8 @@ export class ScaledTestClient {
     return this.request('PATCH', '/api/v1/auth/me', { display_name: displayName });
   }
 
-  async changePassword(currentPassword: string, newPassword: string): Promise<void> {
-    await this.request('POST', '/api/v1/auth/change-password', {
+  async changePassword(currentPassword: string, newPassword: string): Promise<{message: string}> {
+    return this.request('POST', '/api/v1/auth/change-password', {
       current_password: currentPassword,
       new_password: newPassword,
     });
