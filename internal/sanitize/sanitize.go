@@ -3,8 +3,8 @@ package sanitize
 import (
 	"fmt"
 	"html"
+	"net"
 	"net/url"
-	"strconv"
 	"strings"
 )
 
@@ -72,7 +72,7 @@ func ValidateWebhookURL(rawURL string) error {
 		return fmt.Errorf("webhook URL must have a host")
 	}
 	hostname := u.Hostname()
-	if hostname == "localhost" || hostname == "127.0.0.1" || hostname == "::1" || hostname == "[::1]" {
+	if hostname == "localhost" {
 		return fmt.Errorf("webhook URL must not point to loopback address")
 	}
 	if strings.HasSuffix(hostname, ".local") || strings.HasSuffix(hostname, ".internal") {
@@ -85,35 +85,14 @@ func ValidateWebhookURL(rawURL string) error {
 }
 
 func isPrivateIP(host string) bool {
-	h := strings.TrimPrefix(strings.TrimSuffix(host, "]"), "[")
-	if h == "::1" {
-		return true
-	}
-	parts := strings.Split(h, ".")
-	if len(parts) != 4 {
+	ip := net.ParseIP(strings.TrimPrefix(strings.TrimSuffix(host, "]"), "["))
+	if ip == nil {
 		return false
 	}
-	octets := make([]int, 4)
-	for i, p := range parts {
-		n, err := strconv.Atoi(p)
-		if err != nil {
-			return false
-		}
-		octets[i] = n
-	}
-	if octets[0] == 10 {
+	if ip.IsLoopback() || ip.IsPrivate() || ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return true
 	}
-	if octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31 {
-		return true
-	}
-	if octets[0] == 192 && octets[1] == 168 {
-		return true
-	}
-	if octets[0] == 169 && octets[1] == 254 {
-		return true
-	}
-	if octets[0] == 100 && octets[1] >= 64 && octets[1] <= 127 {
+	if ip4 := ip.To4(); ip4 != nil && ip4[0] == 100 && ip4[1] >= 64 && ip4[1] <= 127 {
 		return true
 	}
 	return false

@@ -45,11 +45,9 @@ func main() {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	defer stop()
 
-	// Report status: running
 	reportStatus(apiURL, workerToken, executionID, "running", "")
 
-	// Execute the test command
-	exitCode, output, err := runCommand(ctx, command)
+	exitCode, _, err := runCommand(ctx, command)
 
 	if ctx.Err() != nil {
 		log.Warn().Msg("worker cancelled")
@@ -77,8 +75,6 @@ func main() {
 	} else {
 		log.Warn().Msg("no CTRF report found")
 	}
-
-	_ = output // Could be logged or sent as execution output
 
 	reportStatus(apiURL, workerToken, executionID, "completed", "")
 	log.Info().Msg("worker done")

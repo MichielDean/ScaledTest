@@ -149,14 +149,9 @@ func (h *WebhooksHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	result := make([]interface{}, len(webhooks))
-	for i := range webhooks {
-		result[i] = webhooks[i]
-	}
-
 	JSON(w, http.StatusOK, map[string]interface{}{
-		"webhooks": result,
-		"total":    len(result),
+		"webhooks": webhooks,
+		"total":    len(webhooks),
 	})
 }
 
