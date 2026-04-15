@@ -106,10 +106,9 @@ func (s *InvitationStore) AcceptInvitation(ctx context.Context, invID, email, pa
 	defer tx.Rollback(ctx)
 
 	var userID string
-	var existingHash *string
 	err = tx.QueryRow(ctx,
-		`SELECT id, password_hash FROM users WHERE email = $1`, email,
-	).Scan(&userID, &existingHash)
+		`SELECT id FROM users WHERE email = $1`, email,
+	).Scan(&userID)
 	if err == nil {
 		return "", ErrUserExists
 	}
