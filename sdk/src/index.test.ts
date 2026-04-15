@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, EvaluateQualityGateResponse, QualityGateRuleResult, QualityGateEvalRuleResult, Invitation, TeamToken, AdminUser, TrendPoint, FlakyTest, Report, Execution, UploadReportResponse, CreateExecutionResponse, Team } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -640,16 +640,17 @@ describe('quality gates', () => {
   });
 
   it('evaluateQualityGate sends POST with report_id in body', async () => {
-    const fetchMock = mockFetchOk({ id: 'eval-1', passed: true, rules: [] });
+    const fetchMock = mockFetchOk({ id: 'eval-1', gate_id: 'qg-1', report_id: 'report-1', passed: true, rules: [] });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.evaluateQualityGate('team-1', 'qg-1', 'report-1');
+    const result = await client.evaluateQualityGate('team-1', 'qg-1', 'report-1');
 
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates/qg-1/evaluate`);
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
     expect(body.report_id).toBe('report-1');
+    expect(result.rules).toEqual([]);
   });
 
   it('quality gate single-gate methods encode teamId and gateId', async () => {
@@ -1558,16 +1559,16 @@ describe('type alignment with server responses', () => {
     expect(point.skipped).toBe(5);
   });
 
-  it('QualityGateEvaluation.details uses QualityGateEvalRuleResult with type field', () => {
+  it('QualityGateEvaluation.details uses QualityGateEvalRuleResult with metric field', () => {
     const evalResult: QualityGateEvaluation = {
       id: 'eval-1',
       gate_id: 'qg-1',
       report_id: 'r-1',
       passed: true,
-      details: [{ type: 'pass_rate', passed: true, threshold: 95, actual: 98, message: 'pass rate 98% >= 95%' }],
+      details: [{ metric: 'pass_rate', passed: true, threshold: 95, actual: 98, message: 'pass rate 98% >= 95%' }],
       created_at: '2024-01-01T00:00:00Z',
     };
-    expect(evalResult.details[0].type).toBe('pass_rate');
+    expect(evalResult.details[0].metric).toBe('pass_rate');
     expect(evalResult.details[0].passed).toBe(true);
   });
 
@@ -1580,6 +1581,18 @@ describe('type alignment with server responses', () => {
       message: 'pass rate 98% >= 95%',
     };
     expect(rule.metric).toBe('pass_rate');
+  });
+
+  it('EvaluateQualityGateResponse uses rules (not details) and has no created_at', () => {
+    const response: EvaluateQualityGateResponse = {
+      id: 'eval-1',
+      gate_id: 'qg-1',
+      report_id: 'r-1',
+      passed: true,
+      rules: [{ metric: 'pass_rate', threshold: 95, actual: 98, passed: true, message: 'pass rate ok' }],
+    };
+    expect(response.rules).toHaveLength(1);
+    expect(response.rules[0].metric).toBe('pass_rate');
   });
 
   it('Execution has config, report_id, k8s fields, error_msg, updated_at', () => {
@@ -1596,7 +1609,7 @@ describe('type alignment with server responses', () => {
       created_at: '2024-01-01T00:00:00Z',
       updated_at: '2024-01-02T00:00:00Z',
       started_at: '2024-01-01T01:00:00Z',
-      completed_at: '2024-01-01T02:00:00Z',
+      finished_at: '2024-01-01T02:00:00Z',
     };
     expect(full.config).toBeDefined();
     expect(full.report_id).toBe('r-1');

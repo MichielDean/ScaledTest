@@ -98,7 +98,7 @@ export interface Execution {
   created_at: string;
   updated_at: string;
   started_at?: string;
-  completed_at?: string;
+  finished_at?: string;
 }
 
 export interface QualityGateRule {
@@ -126,7 +126,7 @@ export interface QualityGateRuleResult {
 }
 
 export interface QualityGateEvalRuleResult {
-  type: string;
+  metric: string;
   passed: boolean;
   threshold: unknown;
   actual: unknown;
@@ -140,6 +140,14 @@ export interface QualityGateEvaluation {
   passed: boolean;
   details: QualityGateEvalRuleResult[];
   created_at: string;
+}
+
+export interface EvaluateQualityGateResponse {
+  id: string;
+  gate_id: string;
+  report_id: string;
+  passed: boolean;
+  rules: QualityGateRuleResult[];
 }
 
 export interface UserProfile {
@@ -612,7 +620,7 @@ export class ScaledTestClient {
     );
   }
 
-  async evaluateQualityGate(teamId: string, id: string, reportId: string): Promise<QualityGateEvaluation> {
+  async evaluateQualityGate(teamId: string, id: string, reportId: string): Promise<EvaluateQualityGateResponse> {
     return this.request(
       'POST',
       `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}/evaluate`,
