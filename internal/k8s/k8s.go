@@ -134,6 +134,22 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+func workerLabels(executionID string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":       "scaledtest-worker",
+		"app.kubernetes.io/managed-by": "scaledtest",
+		"scaledtest/execution-id":      executionID,
+	}
+}
+
+func workerTokenLabels(executionID string) map[string]string {
+	return map[string]string{
+		"app.kubernetes.io/name":       "scaledtest-worker-token",
+		"app.kubernetes.io/managed-by": "scaledtest",
+		"scaledtest/execution-id":      executionID,
+	}
+}
+
 // ResourceDefaults returns the effective resource values, falling back to env
 // vars then built-in defaults.
 func (cfg *JobConfig) ResourceDefaults() (cpuReq, cpuLim, memReq, memLim string) {
@@ -175,11 +191,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*CreateJobResult
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
 				Namespace: c.namespace,
-				Labels: map[string]string{
-					"app.kubernetes.io/name":       "scaledtest-worker-token",
-					"app.kubernetes.io/managed-by": "scaledtest",
-					"scaledtest/execution-id":      cfg.ExecutionID,
-				},
+				Labels:    workerTokenLabels(cfg.ExecutionID),
 			},
 			StringData: map[string]string{
 				"ST_WORKER_TOKEN": cfg.WorkerToken,
@@ -244,21 +256,14 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*CreateJobResult
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      cfg.Name,
 			Namespace: c.namespace,
-			Labels: map[string]string{
-				"app.kubernetes.io/name":       "scaledtest-worker",
-				"app.kubernetes.io/managed-by": "scaledtest",
-				"scaledtest/execution-id":      cfg.ExecutionID,
-			},
+			Labels:    workerLabels(cfg.ExecutionID),
 		},
 		Spec: batchv1.JobSpec{
 			BackoffLimit:            &backoffLimit,
 			TTLSecondsAfterFinished: &ttlSeconds,
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: map[string]string{
-						"app.kubernetes.io/name":  "scaledtest-worker",
-						"scaledtest/execution-id": cfg.ExecutionID,
-					},
+					Labels: workerLabels(cfg.ExecutionID),
 				},
 				Spec: corev1.PodSpec{
 					RestartPolicy:                corev1.RestartPolicyNever,
