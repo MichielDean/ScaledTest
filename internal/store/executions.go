@@ -153,17 +153,25 @@ func (s *ExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName string,
 
 func (s *ExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`,
 		errorMsg, now, id)
 	return err
 }
 
+const defaultListRunningLimit = 1000
+
 func (s *ExecutionsStore) ListRunning(ctx context.Context) ([]model.TestExecution, error) {
+	return s.ListRunningLimit(ctx, defaultListRunningLimit)
+}
+
+func (s *ExecutionsStore) ListRunningLimit(ctx context.Context, limit int) ([]model.TestExecution, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
 		        error_msg, started_at, finished_at, created_at, updated_at
 		 FROM test_executions
-		 WHERE status = 'running'`)
+		 WHERE status = 'running'
+		 ORDER BY created_at ASC
+		 LIMIT $1`, limit)
 	if err != nil {
 		return nil, err
 	}

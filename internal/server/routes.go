@@ -113,6 +113,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) (http.Handler, *k8s.Executi
 		execStore := store.NewExecutionsStore(dbPool)
 		reconciler = k8s.NewExecutionReconciler(
 			k8sClient,
+			k8sClient,
 			func(ctx context.Context) ([]k8s.RunningExecution, error) {
 				executions, err := execStore.ListRunning(ctx)
 				if err != nil {
@@ -123,6 +124,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) (http.Handler, *k8s.Executi
 					result = append(result, k8s.RunningExecution{
 						ID:         e.ID,
 						K8sJobName: e.K8sJobName,
+						StartedAt:  e.StartedAt,
 					})
 				}
 				return result, nil

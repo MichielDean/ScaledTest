@@ -20,9 +20,12 @@ import (
 func ptrBool(v bool) *bool    { return &v }
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt32(v int32) *int32 { return &v }
-func resourceQty(s string) resource.Quantity {
-	q, _ := resource.ParseQuantity(s)
-	return q
+func resourceQty(s string) (resource.Quantity, error) {
+	q, err := resource.ParseQuantity(s)
+	if err != nil {
+		return resource.Quantity{}, fmt.Errorf("parse resource quantity %q: %w", s, err)
+	}
+	return q, nil
 }
 
 // Client wraps the Kubernetes clientset for test execution Job management.
@@ -165,6 +168,23 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 
 	cpuReq, cpuLim, memReq, memLim := cfg.ResourceDefaults()
 
+	cpuReqQty, err := resourceQty(cpuReq)
+	if err != nil {
+		return nil, fmt.Errorf("cpu request: %w", err)
+	}
+	cpuLimQty, err := resourceQty(cpuLim)
+	if err != nil {
+		return nil, fmt.Errorf("cpu limit: %w", err)
+	}
+	memReqQty, err := resourceQty(memReq)
+	if err != nil {
+		return nil, fmt.Errorf("memory request: %w", err)
+	}
+	memLimQty, err := resourceQty(memLim)
+	if err != nil {
+		return nil, fmt.Errorf("memory limit: %w", err)
+	}
+
 	containerSecurityContext := &corev1.SecurityContext{
 		RunAsNonRoot:             ptrBool(true),
 		RunAsUser:                ptrInt64(1000),
@@ -219,12 +239,12 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 							SecurityContext: containerSecurityContext,
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    resourceQty(cpuReq),
-									corev1.ResourceMemory: resourceQty(memReq),
+									corev1.ResourceCPU:    cpuReqQty,
+									corev1.ResourceMemory: memReqQty,
 								},
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    resourceQty(cpuLim),
-									corev1.ResourceMemory: resourceQty(memLim),
+									corev1.ResourceCPU:    cpuLimQty,
+									corev1.ResourceMemory: memLimQty,
 								},
 							},
 						},
@@ -258,6 +278,16 @@ func (c *Client) DeleteJob(ctx context.Context, jobName string) error {
 	}
 
 	log.Info().Str("job", jobName).Msg("k8s job deleted")
+	return nil
+}
+
+// DeleteSecret deletes a Kubernetes Secret (for cleanup after job completion).
+func (c *Client) DeleteSecret(ctx context.Context, name string) error {
+	err := c.clientset.CoreV1().Secrets(c.namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("delete secret: %w", err)
+	}
+	log.Info().Str("secret", name).Msg("k8s secret deleted")
 	return nil
 }
 
@@ -306,6 +336,7 @@ func (s *JobStatus) IsFinished() bool {
 type RunningExecution struct {
 	ID         string
 	K8sJobName *string
+	StartedAt  *time.Time
 }
 
 // JobStatusGetter abstracts K8s job status lookup for reconciliation.
@@ -317,10 +348,16 @@ type JobStatusGetter interface {
 // K8s job has finished but the worker never reported status back.
 type ExecutionReconciler struct {
 	JobStatusGetter   JobStatusGetter
+	SecretDeleter     SecretDeleter
 	ListRunning       func(ctx context.Context) ([]RunningExecution, error)
 	MarkFailed        func(ctx context.Context, id, errorMsg string, now time.Time) error
 	OrphanTimeout     time.Duration
 	ReconcileInterval time.Duration
+}
+
+// SecretDeleter abstracts K8s Secret deletion for cleanup after job completion.
+type SecretDeleter interface {
+	DeleteSecret(ctx context.Context, name string) error
 }
 
 const (
@@ -329,9 +366,10 @@ const (
 )
 
 // NewExecutionReconciler creates a reconciler with sensible defaults.
-func NewExecutionReconciler(k8sClient JobStatusGetter, listRunning func(ctx context.Context) ([]RunningExecution, error), markFailed func(ctx context.Context, id, errorMsg string, now time.Time) error) *ExecutionReconciler {
+func NewExecutionReconciler(k8sClient JobStatusGetter, secretDeleter SecretDeleter, listRunning func(ctx context.Context) ([]RunningExecution, error), markFailed func(ctx context.Context, id, errorMsg string, now time.Time) error) *ExecutionReconciler {
 	return &ExecutionReconciler{
 		JobStatusGetter:   k8sClient,
+		SecretDeleter:     secretDeleter,
 		ListRunning:       listRunning,
 		MarkFailed:        markFailed,
 		OrphanTimeout:     envOrDuration("ST_RECONCILE_ORPHAN_TIMEOUT", defaultOrphanTimeout),
@@ -349,6 +387,13 @@ func envOrDuration(key string, fallback time.Duration) time.Duration {
 }
 
 // ReconcileOnce performs a single reconciliation pass over running executions.
+// It handles two cases:
+//  1. Executions with a K8s job name whose job has finished — marks them failed
+//     and cleans up the associated worker token Secret.
+//  2. Executions without a K8s job name that have been running longer than
+//     OrphanTimeout — marks them failed (the job was never created).
+//  3. Executions with a K8s job name but still within OrphanTimeout of their
+//     start time — skipped to give recently-started jobs a grace period.
 func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int, err error) {
 	executions, err := r.ListRunning(ctx)
 	if err != nil {
@@ -358,6 +403,21 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 	now := time.Now()
 	for _, exec := range executions {
 		if exec.K8sJobName == nil || *exec.K8sJobName == "" {
+			if exec.StartedAt != nil && now.Sub(*exec.StartedAt) > r.OrphanTimeout {
+				errMsg := "execution orphaned: no k8s job assigned and running beyond timeout"
+				if markErr := r.MarkFailed(ctx, exec.ID, errMsg, now); markErr != nil {
+					log.Error().Err(markErr).Str("execution_id", exec.ID).Msg("reconcile: failed to mark execution failed")
+					continue
+				}
+				log.Info().
+					Str("execution_id", exec.ID).
+					Msg("reconcile: marked orphaned execution (no k8s job) as failed")
+				reconciled++
+			}
+			continue
+		}
+
+		if exec.StartedAt != nil && now.Sub(*exec.StartedAt) < r.OrphanTimeout {
 			continue
 		}
 
@@ -386,6 +446,13 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 			Str("job", *exec.K8sJobName).
 			Str("failure", errMsg).
 			Msg("reconcile: marked orphaned execution as failed")
+
+		if r.SecretDeleter != nil {
+			secretName := "st-worker-token-" + exec.ID
+			if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
+				log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
+			}
+		}
 
 		reconciled++
 	}

@@ -15,6 +15,16 @@ func (t *testJobStatusGetter) GetJobStatus(ctx context.Context, jobName string) 
 	return t.Fn(ctx, jobName)
 }
 
+type testSecretDeleter struct {
+	deleted []string
+	err     error
+}
+
+func (t *testSecretDeleter) DeleteSecret(ctx context.Context, name string) error {
+	t.deleted = append(t.deleted, name)
+	return t.err
+}
+
 func TestJobStatusIsFinished(t *testing.T) {
 	tests := []struct {
 		name   string
@@ -192,13 +202,26 @@ func TestPtrHelpers(t *testing.T) {
 }
 
 func TestResourceQty(t *testing.T) {
-	q := resourceQty("250m")
+	q, err := resourceQty("250m")
+	if err != nil {
+		t.Fatalf("resourceQty(\"250m\") error = %v", err)
+	}
 	if q.String() != "250m" {
 		t.Errorf("resourceQty(\"250m\") = %q", q.String())
 	}
-	q = resourceQty("128Mi")
+	q, err = resourceQty("128Mi")
+	if err != nil {
+		t.Fatalf("resourceQty(\"128Mi\") error = %v", err)
+	}
 	if q.String() != "128Mi" {
 		t.Errorf("resourceQty(\"128Mi\") = %q", q.String())
+	}
+}
+
+func TestResourceQty_InvalidInput(t *testing.T) {
+	_, err := resourceQty("not-a-quantity")
+	if err == nil {
+		t.Error("resourceQty should return error for invalid input")
 	}
 }
 
@@ -221,6 +244,7 @@ func TestReconcileOnce_WhenJobFinished(t *testing.T) {
 	jobName := "st-exec-orphan1"
 	var markedID string
 	var markedMsg string
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -228,11 +252,13 @@ func TestReconcileOnce_WhenJobFinished(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "orphan1", K8sJobName: &jobName},
+				{ID: "orphan1", K8sJobName: &jobName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -257,11 +283,15 @@ func TestReconcileOnce_WhenJobFinished(t *testing.T) {
 	if markedMsg != "OOMKilled" {
 		t.Errorf("marked message = %q, want %q", markedMsg, "OOMKilled")
 	}
+	if len(sd.deleted) != 1 || sd.deleted[0] != "st-worker-token-orphan1" {
+		t.Errorf("secret deletion = %v, want [st-worker-token-orphan1]", sd.deleted)
+	}
 }
 
 func TestReconcileOnce_WhenJobStillRunning(t *testing.T) {
 	jobName := "st-exec-active1"
 	called := false
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -269,11 +299,13 @@ func TestReconcileOnce_WhenJobStillRunning(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "active1", K8sJobName: &jobName},
+				{ID: "active1", K8sJobName: &jobName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -296,16 +328,59 @@ func TestReconcileOnce_WhenJobStillRunning(t *testing.T) {
 	}
 }
 
-func TestReconcileOnce_WhenNoK8sJobName(t *testing.T) {
+func TestReconcileOnce_WhenNoK8sJobName_BeyondTimeout(t *testing.T) {
+	var markedID string
+	var markedMsg string
+	sd := &testSecretDeleter{}
+
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: &testJobStatusGetter{},
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "nojob", K8sJobName: nil},
+				{ID: "nojob", K8sJobName: nil, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
-			t.Error("MarkFailed should not be called for execution without K8s job")
+			markedID = id
+			markedMsg = errorMsg
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("reconciled count = %d, want 1", n)
+	}
+	if markedID != "nojob" {
+		t.Errorf("marked ID = %q, want %q", markedID, "nojob")
+	}
+	wantMsg := "execution orphaned: no k8s job assigned and running beyond timeout"
+	if markedMsg != wantMsg {
+		t.Errorf("marked message = %q, want %q", markedMsg, wantMsg)
+	}
+}
+
+func TestReconcileOnce_WhenNoK8sJobName_WithinTimeout(t *testing.T) {
+	sd := &testSecretDeleter{}
+
+	startedAt := time.Now().Add(-30 * time.Second)
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: &testJobStatusGetter{},
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "nojob-new", K8sJobName: nil, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			t.Error("MarkFailed should not be called for recently-started execution without K8s job")
 			return nil
 		},
 		OrphanTimeout:     defaultOrphanTimeout,
@@ -321,9 +396,78 @@ func TestReconcileOnce_WhenNoK8sJobName(t *testing.T) {
 	}
 }
 
+func TestReconcileOnce_WhenNoK8sJobName_NilStartedAt(t *testing.T) {
+	sd := &testSecretDeleter{}
+
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: &testJobStatusGetter{},
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "nojob-nil-start", K8sJobName: nil, StartedAt: nil},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			t.Error("MarkFailed should not be called when StartedAt is nil and no K8s job")
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 0 {
+		t.Errorf("reconciled count = %d, want 0", n)
+	}
+}
+
+func TestReconcileOnce_GracePeriod_SkipsRecentJob(t *testing.T) {
+	jobName := "st-exec-recent1"
+	sd := &testSecretDeleter{}
+
+	getter := &testJobStatusGetter{
+		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
+			return &JobStatus{FailedCondition: true, Failed: 1}, nil
+		},
+	}
+
+	startedAt := time.Now().Add(-30 * time.Second)
+	markCalled := false
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: getter,
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "recent1", K8sJobName: &jobName, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			markCalled = true
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 0 {
+		t.Errorf("reconciled count = %d, want 0 (within grace period)", n)
+	}
+	if markCalled {
+		t.Error("MarkFailed should not be called for execution within grace period")
+	}
+}
+
 func TestReconcileOnce_WhenGetJobStatusFails(t *testing.T) {
 	jobName := "st-exec-err1"
 	called := false
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -331,11 +475,13 @@ func TestReconcileOnce_WhenGetJobStatusFails(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "err1", K8sJobName: &jobName},
+				{ID: "err1", K8sJobName: &jobName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -359,8 +505,10 @@ func TestReconcileOnce_WhenGetJobStatusFails(t *testing.T) {
 }
 
 func TestReconcileOnce_WhenEmptyList(t *testing.T) {
+	sd := &testSecretDeleter{}
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: &testJobStatusGetter{},
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return nil, nil
 		},
@@ -383,6 +531,7 @@ func TestReconcileOnce_WhenEmptyList(t *testing.T) {
 
 func TestReconcileOnce_WhenMarkFailedFails(t *testing.T) {
 	jobName := "st-exec-mf1"
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -390,11 +539,13 @@ func TestReconcileOnce_WhenMarkFailedFails(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "mf1", K8sJobName: &jobName},
+				{ID: "mf1", K8sJobName: &jobName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -414,8 +565,10 @@ func TestReconcileOnce_WhenMarkFailedFails(t *testing.T) {
 }
 
 func TestReconcileOnce_WhenListRunningFails(t *testing.T) {
+	sd := &testSecretDeleter{}
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: &testJobStatusGetter{},
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return nil, context.DeadlineExceeded
 		},
@@ -435,6 +588,7 @@ func TestReconcileOnce_WhenListRunningFails(t *testing.T) {
 func TestReconcileOnce_DefaultErrorMessage(t *testing.T) {
 	jobName := "st-exec-default1"
 	var markedMsg string
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -442,11 +596,13 @@ func TestReconcileOnce_DefaultErrorMessage(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "default1", K8sJobName: &jobName},
+				{ID: "default1", K8sJobName: &jobName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -475,6 +631,7 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 	job2 := "st-exec-multi2"
 	job3 := "st-exec-multi3"
 	var markedIDs []string
+	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -489,13 +646,15 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 		},
 	}
 
+	startedAt := time.Now().Add(-10 * time.Minute)
 	reconciler := &ExecutionReconciler{
 		JobStatusGetter: getter,
+		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "multi1", K8sJobName: &job1},
-				{ID: "multi2", K8sJobName: &job2},
-				{ID: "multi3", K8sJobName: &job3},
+				{ID: "multi1", K8sJobName: &job1, StartedAt: &startedAt},
+				{ID: "multi2", K8sJobName: &job2, StartedAt: &startedAt},
+				{ID: "multi3", K8sJobName: &job3, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -524,8 +683,89 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 	}
 }
 
+func TestReconcileOnce_SecretCleanup(t *testing.T) {
+	jobName := "st-exec-secret1"
+	sd := &testSecretDeleter{}
+
+	getter := &testJobStatusGetter{
+		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
+			return &JobStatus{Completed: true, Succeeded: 1}, nil
+		},
+	}
+
+	startedAt := time.Now().Add(-10 * time.Minute)
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: getter,
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "secret1", K8sJobName: &jobName, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("reconciled count = %d, want 1", n)
+	}
+	if len(sd.deleted) != 1 {
+		t.Fatalf("secret deletions = %d, want 1", len(sd.deleted))
+	}
+	if sd.deleted[0] != "st-worker-token-secret1" {
+		t.Errorf("deleted secret = %q, want %q", sd.deleted[0], "st-worker-token-secret1")
+	}
+}
+
+func TestReconcileOnce_SecretCleanupError_DoesNotBlock(t *testing.T) {
+	jobName := "st-exec-secerr"
+	sd := &testSecretDeleter{err: context.DeadlineExceeded}
+	var markedID string
+
+	getter := &testJobStatusGetter{
+		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
+			return &JobStatus{FailedCondition: true, Failed: 1}, nil
+		},
+	}
+
+	startedAt := time.Now().Add(-10 * time.Minute)
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: getter,
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "secerr", K8sJobName: &jobName, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			markedID = id
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("reconciled count = %d, want 1 (secret cleanup failure should not block)", n)
+	}
+	if markedID != "secerr" {
+		t.Errorf("marked ID = %q, want %q", markedID, "secerr")
+	}
+}
+
 func TestNewExecutionReconciler_Defaults(t *testing.T) {
-	r := NewExecutionReconciler(nil, nil, nil)
+	r := NewExecutionReconciler(nil, nil, nil, nil)
 	if r.OrphanTimeout != defaultOrphanTimeout {
 		t.Errorf("OrphanTimeout = %v, want %v", r.OrphanTimeout, defaultOrphanTimeout)
 	}
@@ -542,7 +782,7 @@ func TestNewExecutionReconciler_EnvOverrides(t *testing.T) {
 		os.Unsetenv("ST_RECONCILE_INTERVAL")
 	}()
 
-	r := NewExecutionReconciler(nil, nil, nil)
+	r := NewExecutionReconciler(nil, nil, nil, nil)
 	if r.OrphanTimeout != 10*time.Minute {
 		t.Errorf("OrphanTimeout = %v, want %v", r.OrphanTimeout, 10*time.Minute)
 	}
