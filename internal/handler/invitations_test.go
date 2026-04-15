@@ -330,7 +330,7 @@ func TestAcceptInvitation_ExistingUserWrongPassword_Returns401(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "existing@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: now.Add(7 * 24 * time.Hour),
 		CreatedAt: now,
 	}
@@ -375,7 +375,7 @@ func TestAcceptInvitation_ExistingUserCorrectPassword_GrantsMembership(t *testin
 		TeamID:    "team-1",
 		Email:     "existing@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: now.Add(7 * 24 * time.Hour),
 		CreatedAt: now,
 	}
