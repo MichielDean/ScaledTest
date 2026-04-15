@@ -212,6 +212,12 @@ func TestValidateWebhookURL_PrivateHosts(t *testing.T) {
 		"https://192.168.1.1/webhook",
 		"https://myhost.local/webhook",
 		"https://myhost.internal/webhook",
+		"https://169.254.169.254/latest/meta-data/",
+		"https://169.254.0.1/webhook",
+		"https://169.254.255.255/webhook",
+		"https://100.64.0.1/webhook",
+		"https://100.127.255.255/webhook",
+		"https://100.100.100.100/webhook",
 	}
 	for _, u := range private {
 		t.Run(u, func(t *testing.T) {
@@ -227,6 +233,9 @@ func TestValidateWebhookURL_PublicIPsAllowed(t *testing.T) {
 	public := []string{
 		"https://8.8.8.8/webhook",
 		"https://1.2.3.4/hook",
+		"https://100.0.0.1/webhook",
+		"https://100.63.255.255/webhook",
+		"https://100.128.0.1/webhook",
 	}
 	for _, u := range public {
 		t.Run(u, func(t *testing.T) {

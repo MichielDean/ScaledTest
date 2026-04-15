@@ -93,15 +93,27 @@ func isPrivateIP(host string) bool {
 	if len(parts) != 4 {
 		return false
 	}
-	if parts[0] == "10" {
+	octets := make([]int, 4)
+	for i, p := range parts {
+		n, err := strconv.Atoi(p)
+		if err != nil {
+			return false
+		}
+		octets[i] = n
+	}
+	if octets[0] == 10 {
 		return true
 	}
-	if parts[0] == "172" {
-		if n, err := strconv.Atoi(parts[1]); err == nil && n >= 16 && n <= 31 {
-			return true
-		}
+	if octets[0] == 172 && octets[1] >= 16 && octets[1] <= 31 {
+		return true
 	}
-	if parts[0] == "192" && parts[1] == "168" {
+	if octets[0] == 192 && octets[1] == 168 {
+		return true
+	}
+	if octets[0] == 169 && octets[1] == 254 {
+		return true
+	}
+	if octets[0] == 100 && octets[1] >= 64 && octets[1] <= 127 {
 		return true
 	}
 	return false
