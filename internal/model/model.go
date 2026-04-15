@@ -218,6 +218,16 @@ type Webhook struct {
 	UpdatedAt  time.Time `json:"updated_at"`
 }
 
+// SigningSecret returns the signing key if set, otherwise falls back to the
+// secret hash. This provides a migration path from secret-hash-based signing
+// to dedicated signing keys.
+func (w Webhook) SigningSecret() string {
+	if w.SigningKey != "" {
+		return w.SigningKey
+	}
+	return w.SecretHash
+}
+
 // TriageResult represents an LLM triage operation for a CI report.
 type TriageResult struct {
 	ID           string    `json:"id"`

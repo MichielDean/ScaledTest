@@ -447,11 +447,7 @@ func (h *WebhooksHandler) RetryDelivery(w http.ResponseWriter, r *http.Request) 
 	defer cancel()
 
 	start := time.Now()
-	signingSecret := wh.SigningKey
-	if signingSecret == "" {
-		signingSecret = wh.SecretHash
-	}
-	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, signingSecret, payload)
+	result, dispatchErr := h.Dispatcher.Send(ctx, wh.URL, wh.SigningSecret(), payload)
 	durationMs := int(time.Since(start).Milliseconds())
 
 	statusCode := 0

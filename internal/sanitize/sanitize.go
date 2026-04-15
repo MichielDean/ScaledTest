@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"html"
 	"net/url"
+	"strconv"
 	"strings"
 )
 
@@ -95,9 +96,8 @@ func isPrivateIP(host string) bool {
 	if parts[0] == "10" {
 		return true
 	}
-	if parts[0] == "172" && len(parts[1]) == 2 {
-		n := int(parts[1][0]-'0')*10 + int(parts[1][1]-'0')
-		if n >= 16 && n <= 31 {
+	if parts[0] == "172" {
+		if n, err := strconv.Atoi(parts[1]); err == nil && n >= 16 && n <= 31 {
 			return true
 		}
 	}
