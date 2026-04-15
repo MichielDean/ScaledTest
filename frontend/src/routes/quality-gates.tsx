@@ -242,7 +242,6 @@ function GateCard({
     },
     onError: (err: Error) => {
       setEvaluateError(err.message);
-      toast(err.message, 'error');
     },
   });
 

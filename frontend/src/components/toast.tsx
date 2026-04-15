@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import * as ToastPrimitive from '@radix-ui/react-toast';
 
 interface Toast {
@@ -23,7 +23,6 @@ export function toast(title: string, variant: 'error' | 'success' = 'error') {
 
 export function ToastProvider({ children }: { children: React.ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
-  const addToastRef = useRef<AddToastFn | null>(null);
 
   const addToast = useCallback((t: Omit<Toast, 'id'>) => {
     const id = Math.random().toString(36).slice(2);
@@ -34,7 +33,6 @@ export function ToastProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   useEffect(() => {
-    addToastRef.current = addToast;
     addToastFn = addToast;
     while (pendingToasts.length > 0) {
       addToast(pendingToasts.shift()!);
