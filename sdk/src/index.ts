@@ -200,7 +200,7 @@ export interface Invitation {
   role: string;
   invited_by: string;
   expires_at: string;
-  accepted_at: string | null;
+  accepted_at?: string;
   created_at: string;
 }
 
@@ -261,6 +261,7 @@ export interface AdminUser {
   display_name: string;
   role: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface ReportTestDiff {
@@ -321,8 +322,11 @@ export interface ReportTriageResult {
 
 export interface TeamToken {
   id: string;
+  team_id: string;
+  user_id: string;
   name: string;
   prefix: string;
+  last_used_at?: string;
   created_at: string;
 }
 

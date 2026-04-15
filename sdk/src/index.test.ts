@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation } from './index';
+import { ScaledTestClient, ScaledTestError, ErrorCluster, DurationBucket, AuditLog, Shard, WebhookDelivery, TestDurationHistory, QualityGateEvaluation, Invitation, TeamToken, AdminUser } from './index';
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1397,5 +1397,67 @@ describe('type alignment with server responses', () => {
     expect(result.distribution).toHaveLength(1);
     expect(result.distribution[0].range).toBe('0-100ms');
     expect(result.distribution[0].count).toBe(42);
+  });
+
+  it('Invitation.accepted_at is optional, not string | null (server omits when nil)', () => {
+    const pending: Invitation = {
+      id: 'inv-1',
+      team_id: 'team-1',
+      email: 'a@b.com',
+      role: 'member',
+      invited_by: 'u-1',
+      expires_at: '2024-12-31T23:59:59Z',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(pending.accepted_at).toBeUndefined();
+
+    const accepted: Invitation = {
+      id: 'inv-2',
+      team_id: 'team-1',
+      email: 'c@d.com',
+      role: 'maintainer',
+      invited_by: 'u-1',
+      accepted_at: '2024-01-02T10:00:00Z',
+      expires_at: '2024-12-31T23:59:59Z',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(accepted.accepted_at).toBe('2024-01-02T10:00:00Z');
+  });
+
+  it('TeamToken includes team_id, user_id, and optional last_used_at', () => {
+    const token: TeamToken = {
+      id: 'tok-1',
+      team_id: 'team-1',
+      user_id: 'u-1',
+      name: 'ci-token',
+      prefix: 'sct_',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(token.team_id).toBe('team-1');
+    expect(token.user_id).toBe('u-1');
+    expect(token.last_used_at).toBeUndefined();
+
+    const usedToken: TeamToken = {
+      id: 'tok-2',
+      team_id: 'team-1',
+      user_id: 'u-2',
+      name: 'api-token',
+      prefix: 'sct_',
+      last_used_at: '2024-06-01T12:00:00Z',
+      created_at: '2024-01-01T00:00:00Z',
+    };
+    expect(usedToken.last_used_at).toBe('2024-06-01T12:00:00Z');
+  });
+
+  it('AdminUser includes updated_at (always present from server)', () => {
+    const user: AdminUser = {
+      id: 'u-1',
+      email: 'a@b.com',
+      display_name: 'Alice',
+      role: 'owner',
+      created_at: '2024-01-01T00:00:00Z',
+      updated_at: '2024-06-15T10:00:00Z',
+    };
+    expect(user.updated_at).toBe('2024-06-15T10:00:00Z');
   });
 });
