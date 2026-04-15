@@ -856,10 +856,31 @@ describe('webhooks', () => {
     const fetchMock = mockFetchOk({ deliveries: [], total: 0 });
     globalThis.fetch = fetchMock;
     const client = makeClient();
-    await client.listWebhookDeliveries('team-1', 'wh-1', 'del-123');
+    await client.listWebhookDeliveries('team-1', 'wh-1', { before_id: 'del-123' });
 
     const url = fetchMock.mock.calls[0][0] as string;
     expect(url).toContain('before_id=del-123');
+  });
+
+  it('listWebhookDeliveries sends limit query param', async () => {
+    const fetchMock = mockFetchOk({ deliveries: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhookDeliveries('team-1', 'wh-1', { limit: 5 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=5');
+  });
+
+  it('listWebhookDeliveries sends both before_id and limit query params', async () => {
+    const fetchMock = mockFetchOk({ deliveries: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhookDeliveries('team-1', 'wh-1', { before_id: 'del-123', limit: 10 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('before_id=del-123');
+    expect(url).toContain('limit=10');
   });
 
   it('retryWebhookDelivery sends POST to deliveries/{deliveryId}/retry', async () => {

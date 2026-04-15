@@ -680,12 +680,12 @@ export class ScaledTestClient {
     return this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
   }
 
-  async listWebhookDeliveries(teamId: string, webhookId: string, beforeId?: string): Promise<{ deliveries: WebhookDelivery[]; total: number }> {
+  async listWebhookDeliveries(teamId: string, webhookId: string, params?: { before_id?: string; limit?: number }): Promise<{ deliveries: WebhookDelivery[]; total: number }> {
     return this.request(
       'GET',
       `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}/deliveries`,
       undefined,
-      beforeId !== undefined ? { before_id: beforeId } : undefined,
+      params,
     );
   }
 
