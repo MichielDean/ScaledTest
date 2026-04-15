@@ -15,6 +15,8 @@ import (
 	"github.com/scaledtest/scaledtest/internal/store"
 )
 
+func strPtr(s string) *string { return &s }
+
 // mockInvitationStore is a test double for invitationStore.
 type mockInvitationStore struct {
 	inv            *model.Invitation
@@ -27,7 +29,7 @@ type mockInvitationStore struct {
 	teamNameErr    error
 }
 
-func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _, _ string, _ time.Time) (*model.Invitation, error) {
+func (m *mockInvitationStore) Create(_ context.Context, _, _, _, _ string, _ *string, _ time.Time) (*model.Invitation, error) {
 	return m.inv, m.err
 }
 
@@ -287,7 +289,7 @@ func TestAcceptInvitation_OwnerAlreadyExists_Returns409(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "second-owner@example.com",
 		Role:      "owner",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: now.Add(7 * 24 * time.Hour),
 		CreatedAt: now,
 	}
@@ -343,7 +345,7 @@ func TestCreateInvitation_CallsMailer(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -384,7 +386,7 @@ func TestCreateInvitation_NilMailer_ReturnsCreated(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -414,7 +416,7 @@ func TestCreateInvitation_MailerError_StillReturnsCreated(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -457,7 +459,7 @@ func TestCreateInvitation_LogsAuditEvent(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -503,7 +505,7 @@ func TestCreateInvitation_NilAuditStore_NoPanic(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -606,7 +608,7 @@ func TestAcceptInvitation_LogsAuditEvent(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -652,7 +654,7 @@ func TestPreviewInvitation_WithStore_ReturnsTeamName(t *testing.T) {
 		TeamID:    "team-1",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}
@@ -685,7 +687,7 @@ func TestPreviewInvitation_GetTeamNameFallsBackToUnknown(t *testing.T) {
 		TeamID:    "team-missing",
 		Email:     "invitee@example.com",
 		Role:      "readonly",
-		InvitedBy: "user-1",
+		InvitedBy: strPtr("user-1"),
 		ExpiresAt: time.Now().Add(7 * 24 * time.Hour),
 		CreatedAt: time.Now(),
 	}

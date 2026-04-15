@@ -30,7 +30,7 @@ var validInvitationRoles = map[string]bool{
 
 // invitationStore is the subset of store.InvitationStore used by InvitationsHandler.
 type invitationStore interface {
-	Create(ctx context.Context, teamID, email, role, tokenHash, invitedBy string, expiresAt time.Time) (*model.Invitation, error)
+	Create(ctx context.Context, teamID, email, role, tokenHash string, invitedBy *string, expiresAt time.Time) (*model.Invitation, error)
 	ListByTeam(ctx context.Context, teamID string) ([]model.Invitation, error)
 	GetByTokenHash(ctx context.Context, tokenHash string) (*model.Invitation, error)
 	Delete(ctx context.Context, teamID, id string) error
@@ -103,7 +103,8 @@ func (h *InvitationsHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	expiresAt := time.Now().Add(invitationTTL)
 
-	inv, err := h.Store.Create(r.Context(), teamID, req.Email, req.Role, tokenHash, claims.UserID, expiresAt)
+	invitedBy := claims.UserID
+	inv, err := h.Store.Create(r.Context(), teamID, req.Email, req.Role, tokenHash, &invitedBy, expiresAt)
 	if err != nil {
 		Error(w, http.StatusInternalServerError, "failed to create invitation")
 		return

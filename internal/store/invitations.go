@@ -27,7 +27,7 @@ func NewInvitationStore(pool *pgxpool.Pool) *InvitationStore {
 }
 
 // Create stores a new invitation.
-func (s *InvitationStore) Create(ctx context.Context, teamID, email, role, tokenHash, invitedBy string, expiresAt time.Time) (*model.Invitation, error) {
+func (s *InvitationStore) Create(ctx context.Context, teamID, email, role, tokenHash string, invitedBy *string, expiresAt time.Time) (*model.Invitation, error) {
 	var inv model.Invitation
 	err := s.pool.QueryRow(ctx,
 		`INSERT INTO invitations (team_id, email, role, token_hash, invited_by, expires_at)

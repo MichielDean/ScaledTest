@@ -4,6 +4,24 @@ All notable changes to this project will be documented here.
 
 ## [Unreleased]
 
+### Changed
+
+- **Triage persistOutput is atomic**: Cluster and classification inserts for triage results are now wrapped in a single database transaction. Previously, inserts were issued one at a time — a partial failure left the triage record in an inconsistent state. The new `PersistOutput` method on `TriageStore` commits atomically or rolls back entirely.
+
+- **SMTP, Telegram, and GitHub sends retry on transient failures**: SMTP email sends, Telegram messages, and GitHub commit status posts now retry up to 3 times with exponential backoff on transient errors (5xx, 429 rate limits, connection timeouts). Telegram and GitHub retries respect the `Retry-After` header. Client errors (auth failures, invalid recipients, 4xx) are not retried. The shared `internal/smtptransient` package provides consistent transient-error classification for SMTP across `mail` and `mailer`.
+
+- **Webhook dispatch uses bounded worker pool**: Outbound webhook dispatches are now bounded by a semaphore (default concurrency: 10). Under burst traffic, excess dispatches are dropped with a warning instead of spawning unbounded goroutines.
+
+- **Triage jobs respect server shutdown**: Triage jobs now accept a parent context from the server. When the server shuts down gracefully, in-flight triage jobs are cancelled instead of running for up to 5 minutes after shutdown.
+
+- **LLM retry only on transient errors**: The LLM CLI provider now retries only on transient errors (context deadlines, process signals). Non-transient errors (syntax errors, invalid model names, exit code 1) fail immediately instead of being retried.
+
+- **Invitation emails have HTML alternative part**: Invitation emails are now sent as `multipart/alternative` with both plaintext and HTML parts. The HTML part includes a styled invitation card with an "Accept Invitation" button. Plaintext-only emails frequently landed in spam; the HTML alternative part improves deliverability. The MIME boundary uses `crypto/rand` for uniqueness.
+
+- **Telegram RunURL HTML-escaped**: The `CI_RUN_URL` field in Telegram notifications is now HTML-escaped before insertion into `<a href>` attributes. Previously, a malicious RunURL containing `"` or `>` could break out of the attribute and inject HTML/JavaScript in the Telegram message (XSS). Other fields (repo, branch, commit) were already escaped.
+
+- **invited_by FK allows SET NULL on user deletion**: The `invited_by` foreign key on the `invitations` table now uses `ON DELETE SET NULL` instead of the default restrict. Previously, deleting a user who had invited others would fail with a foreign key violation. Migration 000024 drops the unnamed FK, makes `invited_by` nullable, and adds a named constraint with `ON DELETE SET NULL`. Note: the down migration for 000024 is intentionally irreversible (see the migration SQL for details).
+
 ### Added
 
 - **Frontend error boundaries**: A root-level `ErrorBoundary` wraps the entire app in `main.tsx`, a TanStack Router `errorComponent` on the root route catches routing errors, and `ErrorBoundary` wrappers around all Recharts chart sections in `dashboard.tsx` and `analytics.tsx` prevent chart crashes from unmounting the app. The error UI includes both "Try Again" and "Reload" buttons.
