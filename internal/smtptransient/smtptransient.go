@@ -3,10 +3,13 @@ package smtptransient
 import (
 	"errors"
 	"net"
+	"regexp"
 	"strings"
 )
 
 const DefaultRetries = 3
+
+var transientSMTPCodeRe = regexp.MustCompile(`(?:^|\n|\s)([45]\d{2})\s`)
 
 func IsTransient(err error) bool {
 	if err == nil {
@@ -23,10 +26,13 @@ func IsTransient(err error) bool {
 		strings.Contains(msg, "i/o timeout") {
 		return true
 	}
-	if strings.Contains(msg, "55") || strings.Contains(msg, "54") ||
-		strings.Contains(msg, "451") || strings.Contains(msg, "452") ||
-		strings.Contains(msg, "421") {
-		return true
+	matches := transientSMTPCodeRe.FindAllStringSubmatch(msg, -1)
+	for _, m := range matches {
+		code := m[1]
+		c := code[0]
+		if c == '5' || c == '4' {
+			return true
+		}
 	}
 	return false
 }

@@ -55,6 +55,41 @@ func TestIsTransient_4xxResponse(t *testing.T) {
 	}
 }
 
+func TestIsTransient_421Response(t *testing.T) {
+	err := fmt.Errorf("421 4.7.0 connection rate limit exceeded")
+	if !smtptransient.IsTransient(err) {
+		t.Error("421 response should be transient")
+	}
+}
+
+func TestIsTransient_452Response(t *testing.T) {
+	err := fmt.Errorf("452 4.3.1 insufficient system storage")
+	if !smtptransient.IsTransient(err) {
+		t.Error("452 response should be transient")
+	}
+}
+
+func TestIsTransient_FalsePositiveTimestamp(t *testing.T) {
+	err := fmt.Errorf("smtp auth: invalid credentials at 2024-01-15 12:54:33")
+	if smtptransient.IsTransient(err) {
+		t.Error("timestamp containing 54 should not be transient")
+	}
+}
+
+func TestIsTransient_FalsePositivePort(t *testing.T) {
+	err := fmt.Errorf("failed to connect on port 5555")
+	if smtptransient.IsTransient(err) {
+		t.Error("port number containing 55 should not be transient")
+	}
+}
+
+func TestIsTransient_FalsePositiveErrorID(t *testing.T) {
+	err := fmt.Errorf("smtp auth: invalid credentials for request-55abc")
+	if smtptransient.IsTransient(err) {
+		t.Error("error ID containing 55 should not be transient")
+	}
+}
+
 func TestIsTransient_NetError(t *testing.T) {
 	err := &netError{msg: "network timeout", timeout: true}
 	if !smtptransient.IsTransient(err) {
