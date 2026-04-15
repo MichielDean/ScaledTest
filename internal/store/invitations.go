@@ -124,8 +124,13 @@ func (s *InvitationStore) AcceptInvitation(ctx context.Context, invID, email, pa
 	).Scan(&userID)
 	if err != nil {
 		var pgErr *pgconn.PgError
-		if errors.As(err, &pgErr) && pgErr.Code == "23505" && pgErr.ConstraintName == "idx_users_single_owner" {
-			return "", ErrOwnerAlreadyExists
+		if errors.As(err, &pgErr) && pgErr.Code == "23505" {
+			switch pgErr.ConstraintName {
+			case "idx_users_single_owner":
+				return "", ErrOwnerAlreadyExists
+			case "users_email_key":
+				return "", ErrUserExists
+			}
 		}
 		return "", fmt.Errorf("insert user: %w", err)
 	}
