@@ -147,6 +147,98 @@ export interface Team {
   created_at: string;
 }
 
+export interface Webhook {
+  id: string;
+  team_id: string;
+  url: string;
+  events: string[];
+  enabled: boolean;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface WebhookDelivery {
+  id: string;
+  webhook_id: string;
+  url: string;
+  event_type: string;
+  status_code: number;
+  attempt: number;
+  duration_ms: number;
+  error: string;
+  created_at: string;
+}
+
+export interface Invitation {
+  id: string;
+  team_id: string;
+  email: string;
+  role: string;
+  invited_by: string;
+  expires_at: string;
+  accepted_at: string | null;
+  created_at: string;
+}
+
+export interface InvitationPreview {
+  email: string;
+  role: string;
+  team_name: string;
+  expires_at: string;
+}
+
+export interface ShardPlan {
+  execution_id: string;
+  total_workers: number;
+  strategy: string;
+  shards: Shard[];
+  est_total_ms: number;
+  est_wall_clock_ms: number;
+}
+
+export interface Shard {
+  worker_id: string;
+  tests: string[];
+  est_duration_ms: number;
+}
+
+export interface TestDurationHistory {
+  test_name: string;
+  suite: string;
+  avg_duration_ms: number;
+  median_duration_ms: number;
+  p95_duration_ms: number;
+  run_count: number;
+  team_id: string;
+}
+
+export interface AuditLogEntry {
+  id: string;
+  actor_id: string;
+  actor_email: string;
+  team_id: string;
+  action: string;
+  resource_type: string;
+  resource_id: string;
+  metadata: Record<string, unknown>;
+  created_at: string;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  created_at: string;
+}
+
+export interface TeamToken {
+  id: string;
+  name: string;
+  prefix: string;
+  created_at: string;
+}
+
 // ── Client ───────────────────────────────────────────────────────────────────
 
 export class ScaledTestClient {
@@ -176,8 +268,18 @@ export class ScaledTestClient {
     this.timeoutMs = options.timeoutMs ?? 30_000;
   }
 
-  private async request<T>(method: string, path: string, body?: unknown): Promise<T> {
-    const url = `${this.baseUrl}${path}`;
+  private async request<T>(method: string, path: string, body?: unknown, params?: Record<string, string | number | undefined>): Promise<T> {
+    let url = `${this.baseUrl}${path}`;
+    if (params) {
+      const searchParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(params)) {
+        if (value !== undefined) {
+          searchParams.set(key, String(value));
+        }
+      }
+      const qs = searchParams.toString();
+      if (qs) url += `?${qs}`;
+    }
     const headers: Record<string, string> = {
       Authorization: `Bearer ${this.token}`,
       'Content-Type': 'application/json',
@@ -221,8 +323,8 @@ export class ScaledTestClient {
     return this.request('POST', '/api/v1/reports', report);
   }
 
-  async getReports(): Promise<{ reports: Report[]; total: number }> {
-    return this.request('GET', '/api/v1/reports');
+  async getReports(params?: { limit?: number; offset?: number; since?: string; until?: string }): Promise<{ reports: Report[]; total: number }> {
+    return this.request('GET', '/api/v1/reports', undefined, params as Record<string, string | number | undefined> | undefined);
   }
 
   async getReport(id: string): Promise<Report> {
@@ -233,13 +335,34 @@ export class ScaledTestClient {
     return this.request('DELETE', `/api/v1/reports/${encodeURIComponent(id)}`);
   }
 
+  async compareReports(baseId: string, headId: string): Promise<unknown> {
+    return this.request(
+      'GET',
+      '/api/v1/reports/compare',
+      undefined,
+      { base: baseId, head: headId },
+    );
+  }
+
+  async getReportTriage(reportId: string): Promise<unknown> {
+    return this.request('GET', `/api/v1/reports/${encodeURIComponent(reportId)}/triage`);
+  }
+
+  async retryReportTriage(reportId: string): Promise<{ triage_status: string }> {
+    return this.request('POST', `/api/v1/reports/${encodeURIComponent(reportId)}/triage/retry`);
+  }
+
   // Executions
-  async getExecutions(): Promise<{ executions: Execution[]; total: number }> {
-    return this.request('GET', '/api/v1/executions');
+  async getExecutions(params?: { limit?: number; offset?: number }): Promise<{ executions: Execution[]; total: number }> {
+    return this.request('GET', '/api/v1/executions', undefined, params as Record<string, string | number | undefined> | undefined);
   }
 
   async createExecution(command: string): Promise<Execution> {
     return this.request('POST', '/api/v1/executions', { command });
+  }
+
+  async getExecution(id: string): Promise<Execution> {
+    return this.request('GET', `/api/v1/executions/${encodeURIComponent(id)}`);
   }
 
   async cancelExecution(id: string): Promise<void> {
@@ -248,6 +371,26 @@ export class ScaledTestClient {
 
   async deleteExecution(id: string): Promise<void> {
     return this.cancelExecution(id);
+  }
+
+  async updateExecutionStatus(id: string, status: string, errorMsg?: string): Promise<{ id: string; status: string }> {
+    return this.request(
+      'PUT',
+      `/api/v1/executions/${encodeURIComponent(id)}/status`,
+      { status, error_msg: errorMsg },
+    );
+  }
+
+  async reportExecutionProgress(id: string, progress: { passed: number; failed: number; skipped: number; total: number; duration_ms?: number; estimated_eta_seconds?: number }): Promise<{ execution_id: string; received: boolean }> {
+    return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/progress`, progress);
+  }
+
+  async reportTestResult(id: string, result: { name: string; status: string; duration_ms?: number; message?: string; suite?: string; worker_id?: string }): Promise<{ execution_id: string; received: boolean }> {
+    return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/test-result`, result);
+  }
+
+  async reportWorkerStatus(id: string, status: { worker_id: string; status: string; message?: string; tests_assigned?: number; tests_completed?: number }): Promise<{ execution_id: string; received: boolean }> {
+    return this.request('POST', `/api/v1/executions/${encodeURIComponent(id)}/worker-status`, status);
   }
 
   // Analytics
@@ -276,8 +419,9 @@ export class ScaledTestClient {
     teamId: string,
     name: string,
     rules: QualityGateRule[],
+    description?: string,
   ): Promise<QualityGate> {
-    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, { name, rules });
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates`, { name, rules, description });
   }
 
   async getQualityGate(teamId: string, id: string): Promise<QualityGate> {
@@ -312,17 +456,21 @@ export class ScaledTestClient {
   async listEvaluations(
     teamId: string,
     gateId: string,
+    limit?: number,
   ): Promise<{ evaluations: QualityGateEvaluation[]; total: number }> {
     return this.request(
       'GET',
-      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(gateId)}/evaluations`
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(gateId)}/evaluations`,
+      undefined,
+      limit !== undefined ? { limit } : undefined,
     );
   }
 
-  async evaluateQualityGate(teamId: string, id: string): Promise<QualityGateEvaluation> {
+  async evaluateQualityGate(teamId: string, id: string, reportId: string): Promise<QualityGateEvaluation> {
     return this.request(
       'POST',
-      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}/evaluate`
+      `/api/v1/teams/${encodeURIComponent(teamId)}/quality-gates/${encodeURIComponent(id)}/evaluate`,
+      { report_id: reportId },
     );
   }
 
@@ -333,6 +481,119 @@ export class ScaledTestClient {
 
   async createTeam(name: string): Promise<Team> {
     return this.request('POST', '/api/v1/teams', { name });
+  }
+
+  async getTeam(id: string): Promise<{ team: Team; role: string }> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(id)}`);
+  }
+
+  async deleteTeam(id: string): Promise<{ message: string }> {
+    return this.request('DELETE', `/api/v1/teams/${encodeURIComponent(id)}`);
+  }
+
+  async listTokens(teamId: string): Promise<{ tokens: TeamToken[] }> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens`);
+  }
+
+  async createToken(teamId: string, name: string): Promise<{ token: string; id: string; name: string; prefix: string; created_at: string }> {
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens`, { name });
+  }
+
+  async deleteToken(teamId: string, tokenId: string): Promise<{ message: string }> {
+    return this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/tokens/${encodeURIComponent(tokenId)}`);
+  }
+
+  // Webhooks (nested under /teams/{teamID}/webhooks)
+  async listWebhooks(teamId: string): Promise<{ webhooks: Webhook[]; total: number }> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`);
+  }
+
+  async createWebhook(teamId: string, url: string, events: string[]): Promise<{ webhook: Webhook; secret: string }> {
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks`, { url, events });
+  }
+
+  async getWebhook(teamId: string, webhookId: string): Promise<Webhook> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
+  }
+
+  async updateWebhook(teamId: string, webhookId: string, url: string, events: string[], enabled: boolean): Promise<Webhook> {
+    return this.request('PUT', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`, { url, events, enabled });
+  }
+
+  async deleteWebhook(teamId: string, webhookId: string): Promise<{ message: string }> {
+    return this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}`);
+  }
+
+  async listWebhookDeliveries(teamId: string, webhookId: string, beforeId?: string): Promise<{ deliveries: WebhookDelivery[]; total: number }> {
+    return this.request(
+      'GET',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}/deliveries`,
+      undefined,
+      beforeId !== undefined ? { before_id: beforeId } : undefined,
+    );
+  }
+
+  async retryWebhookDelivery(teamId: string, webhookId: string, deliveryId: string): Promise<{ success: boolean; status_code: number; attempt: number; duration_ms: number; error: string }> {
+    return this.request(
+      'POST',
+      `/api/v1/teams/${encodeURIComponent(teamId)}/webhooks/${encodeURIComponent(webhookId)}/deliveries/${encodeURIComponent(deliveryId)}/retry`,
+    );
+  }
+
+  // Invitations (team-scoped)
+  async listInvitations(teamId: string): Promise<{ invitations: Invitation[] }> {
+    return this.request('GET', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations`);
+  }
+
+  async createInvitation(teamId: string, email: string, role: string): Promise<{ invitation: Invitation; token: string }> {
+    return this.request('POST', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations`, { email, role });
+  }
+
+  async revokeInvitation(teamId: string, invitationId: string): Promise<{ message: string }> {
+    return this.request('DELETE', `/api/v1/teams/${encodeURIComponent(teamId)}/invitations/${encodeURIComponent(invitationId)}`);
+  }
+
+  // Invitations (public, token-scoped)
+  async previewInvitation(token: string): Promise<InvitationPreview> {
+    return this.request('GET', `/api/v1/invitations/${encodeURIComponent(token)}`);
+  }
+
+  async acceptInvitation(token: string, password: string, displayName: string): Promise<{ message: string; user_id: string; team_id: string; role: string }> {
+    return this.request('POST', `/api/v1/invitations/${encodeURIComponent(token)}/accept`, {
+      password,
+      display_name: displayName,
+    });
+  }
+
+  // Sharding
+  async getShardDurations(suite?: string): Promise<{ durations: TestDurationHistory[]; total: number }> {
+    return this.request(
+      'GET',
+      '/api/v1/sharding/durations',
+      undefined,
+      suite !== undefined ? { suite } : undefined,
+    );
+  }
+
+  async getShardDuration(testName: string): Promise<TestDurationHistory[]> {
+    return this.request('GET', `/api/v1/sharding/durations/${encodeURIComponent(testName)}`);
+  }
+
+  async createShardPlan(params: { test_names: string[]; num_workers: number; strategy?: string; execution_id?: string; dependencies?: Record<string, string[]> }): Promise<ShardPlan> {
+    return this.request('POST', '/api/v1/sharding/plan', params);
+  }
+
+  async rebalanceShards(params: { execution_id: string; failed_worker_id: string; current_plan: ShardPlan; completed_tests?: string[] }): Promise<ShardPlan> {
+    return this.request('POST', '/api/v1/sharding/rebalance', params);
+  }
+
+  // Admin
+  async listUsers(): Promise<{ users: AdminUser[]; total: number }> {
+    return this.request('GET', '/api/v1/admin/users');
+  }
+
+  async listAuditLog(params?: { action?: string; resource_type?: string; actor_id?: string; since?: string; until?: string; limit?: number; offset?: number }): Promise<{ audit_log: AuditLogEntry[]; total: number }> {
+    return this.request('GET', '/api/v1/admin/audit-log', undefined, params as Record<string, string | number | undefined> | undefined);
   }
 
   // User profile

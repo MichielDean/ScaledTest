@@ -140,6 +140,47 @@ describe('error handling', () => {
   });
 });
 
+// ── Query parameter support ──────────────────────────────────────────────────
+
+describe('query parameter support', () => {
+  it('appends query parameters to GET requests', async () => {
+    const fetchMock = mockFetchOk({ reports: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    await client.getReports({ limit: 10, offset: 20, since: '2024-01-01T00:00:00Z' });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=10');
+    expect(url).toContain('offset=20');
+    expect(url).toContain('since=2024-01-01T00%3A00%3A00Z');
+  });
+
+  it('omits undefined query parameters', async () => {
+    const fetchMock = mockFetchOk({ reports: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    await client.getReports({ limit: 10 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=10');
+    expect(url).not.toContain('offset=');
+    expect(url).not.toContain('since=');
+  });
+
+  it('sends request without parameters when none provided', async () => {
+    const fetchMock = mockFetchOk({ reports: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+
+    await client.getReports();
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(`${BASE}/api/v1/reports`);
+  });
+});
+
 // ── Reports ──────────────────────────────────────────────────────────────────
 
 describe('reports', () => {
@@ -173,6 +214,19 @@ describe('reports', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/reports`);
     expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('getReports supports pagination params', async () => {
+    const fetchMock = mockFetchOk({ reports: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getReports({ limit: 5, offset: 10, since: '2024-01-01T00:00:00Z', until: '2024-12-31T23:59:59Z' });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=5');
+    expect(url).toContain('offset=10');
+    expect(url).toContain('since=');
+    expect(url).toContain('until=');
   });
 
   it('getReport sends GET /api/v1/reports/{id}', async () => {
@@ -215,6 +269,51 @@ describe('reports', () => {
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/reports/a%2Fb`);
   });
+
+  it('compareReports sends GET /api/v1/reports/compare with query params', async () => {
+    const fetchMock = mockFetchOk({ base: {}, head: {}, diff: {} });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.compareReports('base-id', 'head-id');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/api/v1/reports/compare');
+    expect(url).toContain('base=base-id');
+    expect(url).toContain('head=head-id');
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('compareReports encodes special characters in IDs', async () => {
+    const fetchMock = mockFetchOk({ base: {}, head: {}, diff: {} });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.compareReports('a/b', 'c/d');
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('base=a%2Fb');
+    expect(url).toContain('head=c%2Fd');
+  });
+
+  it('getReportTriage sends GET /api/v1/reports/{id}/triage', async () => {
+    const fetchMock = mockFetchOk({ triage_status: 'completed', clusters: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getReportTriage('r-1');
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(`${BASE}/api/v1/reports/r-1/triage`);
+  });
+
+  it('retryReportTriage sends POST /api/v1/reports/{id}/triage/retry', async () => {
+    const fetchMock = mockFetchOk({ triage_status: 'pending' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.retryReportTriage('r-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/reports/r-1/triage/retry`);
+    expect((init as RequestInit).method).toBe('POST');
+  });
 });
 
 // ── Executions ───────────────────────────────────────────────────────────────
@@ -231,6 +330,17 @@ describe('executions', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
+  it('getExecutions supports pagination params', async () => {
+    const fetchMock = mockFetchOk({ executions: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getExecutions({ limit: 10, offset: 5 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=10');
+    expect(url).toContain('offset=5');
+  });
+
   it('createExecution sends POST /api/v1/executions with command body', async () => {
     const fetchMock = mockFetchOk({ id: 'e-1', command: 'npm test', status: 'pending' });
     globalThis.fetch = fetchMock;
@@ -241,6 +351,18 @@ describe('executions', () => {
     expect(url).toBe(`${BASE}/api/v1/executions`);
     expect((init as RequestInit).method).toBe('POST');
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ command: 'npm test' });
+  });
+
+  it('getExecution sends GET /api/v1/executions/{id}', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', command: 'npm test', status: 'running' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getExecution('e-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/executions/e-1`);
+    expect((init as RequestInit).method).toBe('GET');
+    expect(result.id).toBe('e-1');
   });
 
   it('cancelExecution sends DELETE /api/v1/executions/{id}', async () => {
@@ -263,6 +385,76 @@ describe('executions', () => {
     const [url, init] = fetchMock.mock.calls[0];
     expect(url).toBe(`${BASE}/api/v1/executions/e-1`);
     expect((init as RequestInit).method).toBe('DELETE');
+  });
+
+  it('updateExecutionStatus sends PUT /api/v1/executions/{id}/status', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'running' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.updateExecutionStatus('e-1', 'running');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/executions/e-1/status`);
+    expect((init as RequestInit).method).toBe('PUT');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.status).toBe('running');
+    expect(body.error_msg).toBeUndefined();
+    expect(result.id).toBe('e-1');
+  });
+
+  it('updateExecutionStatus includes error_msg when provided', async () => {
+    const fetchMock = mockFetchOk({ id: 'e-1', status: 'failed' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.updateExecutionStatus('e-1', 'failed', 'something went wrong');
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.error_msg).toBe('something went wrong');
+  });
+
+  it('reportExecutionProgress sends POST /api/v1/executions/{id}/progress', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', received: true });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.reportExecutionProgress('e-1', { passed: 5, failed: 1, skipped: 0, total: 10 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/executions/e-1/progress`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.passed).toBe(5);
+    expect(body.total).toBe(10);
+    expect(result.received).toBe(true);
+  });
+
+  it('reportTestResult sends POST /api/v1/executions/{id}/test-result', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', received: true });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.reportTestResult('e-1', { name: 'test-a', status: 'passed' });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/executions/e-1/test-result`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.name).toBe('test-a');
+    expect(body.status).toBe('passed');
+    expect(result.received).toBe(true);
+  });
+
+  it('reportWorkerStatus sends POST /api/v1/executions/{id}/worker-status', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', received: true });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.reportWorkerStatus('e-1', { worker_id: 'w-1', status: 'running' });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/executions/e-1/worker-status`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.worker_id).toBe('w-1');
+    expect(body.status).toBe('running');
+    expect(result.received).toBe(true);
   });
 });
 
@@ -329,7 +521,18 @@ describe('quality gates', () => {
     expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates`);
     expect((init as RequestInit).method).toBe('POST');
     const body = JSON.parse((init as RequestInit).body as string);
-    expect(body).toEqual({ name: 'prod-gate', rules });
+    expect(body).toEqual({ name: 'prod-gate', rules, description: undefined });
+  });
+
+  it('createQualityGate includes description when provided', async () => {
+    const rules = [{ type: 'pass_rate', params: { threshold: 95 } }];
+    const fetchMock = mockFetchOk({ id: 'qg-1', name: 'prod-gate', rules });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createQualityGate('team-1', 'prod-gate', rules, 'A description');
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.description).toBe('A description');
   });
 
   it('getQualityGate sends GET /api/v1/teams/{teamId}/quality-gates/{id}', async () => {
@@ -397,6 +600,29 @@ describe('quality gates', () => {
     expect((init as RequestInit).method).toBe('GET');
   });
 
+  it('listEvaluations supports limit param', async () => {
+    const fetchMock = mockFetchOk({ evaluations: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listEvaluations('team-1', 'qg-1', 50);
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('limit=50');
+  });
+
+  it('evaluateQualityGate sends POST with report_id in body', async () => {
+    const fetchMock = mockFetchOk({ id: 'eval-1', passed: true, rules: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.evaluateQualityGate('team-1', 'qg-1', 'report-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates/qg-1/evaluate`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.report_id).toBe('report-1');
+  });
+
   it('quality gate single-gate methods encode teamId and gateId', async () => {
     const fetchMock = mockFetchOk({ id: 'qg-1', name: 'g', rules: [], enabled: true, created_at: '', updated_at: '' });
     globalThis.fetch = fetchMock;
@@ -404,17 +630,6 @@ describe('quality gates', () => {
     await client.getQualityGate('team/special', 'gate/special');
 
     expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fspecial/quality-gates/gate%2Fspecial`);
-  });
-
-  it('evaluateQualityGate sends POST /api/v1/teams/{teamId}/quality-gates/{id}/evaluate', async () => {
-    const fetchMock = mockFetchOk({ id: 'eval-1', passed: true });
-    globalThis.fetch = fetchMock;
-    const client = makeClient();
-    await client.evaluateQualityGate('team-1', 'qg-1');
-
-    const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe(`${BASE}/api/v1/teams/team-1/quality-gates/qg-1/evaluate`);
-    expect((init as RequestInit).method).toBe('POST');
   });
 
   it('quality gate methods encode teamId and gateId', async () => {
@@ -449,6 +664,368 @@ describe('teams', () => {
     expect(url).toBe(`${BASE}/api/v1/teams`);
     expect((init as RequestInit).method).toBe('POST');
     expect(JSON.parse((init as RequestInit).body as string)).toEqual({ name: 'my-team' });
+  });
+
+  it('getTeam sends GET /api/v1/teams/{id}', async () => {
+    const fetchMock = mockFetchOk({ team: { id: 't-1', name: 'my-team' }, role: 'owner' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.getTeam('t-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/t-1`);
+    expect((init as RequestInit).method).toBe('GET');
+    expect(result.role).toBe('owner');
+  });
+
+  it('getTeam encodes special characters in id', async () => {
+    const fetchMock = mockFetchOk({ team: { id: 'a/b' }, role: 'member' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getTeam('a/b');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/a%2Fb`);
+  });
+
+  it('deleteTeam sends DELETE /api/v1/teams/{id}', async () => {
+    const fetchMock = mockFetchOk({ message: 'team deleted' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.deleteTeam('t-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/t-1`);
+    expect((init as RequestInit).method).toBe('DELETE');
+    expect(result.message).toBe('team deleted');
+  });
+
+  it('listTokens sends GET /api/v1/teams/{teamId}/tokens', async () => {
+    const fetchMock = mockFetchOk({ tokens: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listTokens('team-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/tokens`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('createToken sends POST /api/v1/teams/{teamId}/tokens', async () => {
+    const fetchMock = mockFetchOk({ token: 'sct_xxx', id: 'tok-1', name: 'ci', prefix: 'sct_', created_at: '' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createToken('team-1', 'ci');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/tokens`);
+    expect((init as RequestInit).method).toBe('POST');
+    expect(JSON.parse((init as RequestInit).body as string)).toEqual({ name: 'ci' });
+  });
+
+  it('deleteToken sends DELETE /api/v1/teams/{teamId}/tokens/{tokenId}', async () => {
+    const fetchMock = mockFetchOk({ message: 'token revoked' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.deleteToken('team-1', 'tok-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/tokens/tok-1`);
+    expect((init as RequestInit).method).toBe('DELETE');
+  });
+});
+
+// ── Webhooks ─────────────────────────────────────────────────────────────────
+
+describe('webhooks', () => {
+  it('listWebhooks sends GET /api/v1/teams/{teamId}/webhooks', async () => {
+    const fetchMock = mockFetchOk({ webhooks: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhooks('team-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('createWebhook sends POST /api/v1/teams/{teamId}/webhooks', async () => {
+    const fetchMock = mockFetchOk({ webhook: { id: 'wh-1', url: 'https://example.com', events: ['report.submitted'] }, secret: 'whsec_xxx' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.createWebhook('team-1', 'https://example.com', ['report.submitted']);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ url: 'https://example.com', events: ['report.submitted'] });
+    expect(result.secret).toBe('whsec_xxx');
+  });
+
+  it('getWebhook sends GET /api/v1/teams/{teamId}/webhooks/{webhookId}', async () => {
+    const fetchMock = mockFetchOk({ id: 'wh-1', url: 'https://example.com' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getWebhook('team-1', 'wh-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks/wh-1`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('updateWebhook sends PUT /api/v1/teams/{teamId}/webhooks/{webhookId}', async () => {
+    const fetchMock = mockFetchOk({ id: 'wh-1', url: 'https://new.example.com' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.updateWebhook('team-1', 'wh-1', 'https://new.example.com', ['report.submitted'], true);
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks/wh-1`);
+    expect((init as RequestInit).method).toBe('PUT');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.url).toBe('https://new.example.com');
+    expect(body.events).toEqual(['report.submitted']);
+    expect(body.enabled).toBe(true);
+  });
+
+  it('deleteWebhook sends DELETE /api/v1/teams/{teamId}/webhooks/{webhookId}', async () => {
+    const fetchMock = mockFetchOk({ message: 'webhook deleted' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.deleteWebhook('team-1', 'wh-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks/wh-1`);
+    expect((init as RequestInit).method).toBe('DELETE');
+  });
+
+  it('listWebhookDeliveries sends GET /api/v1/teams/{teamId}/webhooks/{webhookId}/deliveries', async () => {
+    const fetchMock = mockFetchOk({ deliveries: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhookDeliveries('team-1', 'wh-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks/wh-1/deliveries`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('listWebhookDeliveries sends before_id query param', async () => {
+    const fetchMock = mockFetchOk({ deliveries: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhookDeliveries('team-1', 'wh-1', 'del-123');
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('before_id=del-123');
+  });
+
+  it('retryWebhookDelivery sends POST to deliveries/{deliveryId}/retry', async () => {
+    const fetchMock = mockFetchOk({ success: true, status_code: 200, attempt: 2, duration_ms: 150, error: '' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.retryWebhookDelivery('team-1', 'wh-1', 'del-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/webhooks/wh-1/deliveries/del-1/retry`);
+    expect((init as RequestInit).method).toBe('POST');
+    expect(result.success).toBe(true);
+  });
+
+  it('webhook methods encode teamId and webhookId', async () => {
+    const fetchMock = mockFetchOk({ webhooks: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listWebhooks('team/special');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/teams/team%2Fspecial/webhooks`);
+  });
+});
+
+// ── Invitations ──────────────────────────────────────────────────────────────
+
+describe('invitations', () => {
+  it('listInvitations sends GET /api/v1/teams/{teamId}/invitations', async () => {
+    const fetchMock = mockFetchOk({ invitations: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listInvitations('team-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/invitations`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('createInvitation sends POST /api/v1/teams/{teamId}/invitations', async () => {
+    const fetchMock = mockFetchOk({ invitation: { id: 'inv-1' }, token: 'inv_abc' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.createInvitation('team-1', 'user@example.com', 'maintainer');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/invitations`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ email: 'user@example.com', role: 'maintainer' });
+    expect(result.token).toBe('inv_abc');
+  });
+
+  it('revokeInvitation sends DELETE /api/v1/teams/{teamId}/invitations/{id}', async () => {
+    const fetchMock = mockFetchOk({ message: 'invitation revoked' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.revokeInvitation('team-1', 'inv-1');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/teams/team-1/invitations/inv-1`);
+    expect((init as RequestInit).method).toBe('DELETE');
+  });
+
+  it('previewInvitation sends GET /api/v1/invitations/{token}', async () => {
+    const fetchMock = mockFetchOk({ email: 'test@example.com', role: 'maintainer', team_name: 'Team A', expires_at: '' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.previewInvitation('inv_abc');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/invitations/inv_abc`);
+    expect((init as RequestInit).method).toBe('GET');
+    expect(result.email).toBe('test@example.com');
+  });
+
+  it('previewInvitation encodes special characters in token', async () => {
+    const fetchMock = mockFetchOk({ email: 'test@example.com', role: 'member', team_name: 'Team', expires_at: '' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.previewInvitation('tok/en');
+
+    expect(fetchMock.mock.calls[0][0]).toBe(`${BASE}/api/v1/invitations/tok%2Fen`);
+  });
+
+  it('acceptInvitation sends POST /api/v1/invitations/{token}/accept', async () => {
+    const fetchMock = mockFetchOk({ message: 'invitation accepted', user_id: 'u-1', team_id: 't-1', role: 'member' });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    const result = await client.acceptInvitation('inv_abc', 'password123', 'Alice');
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/invitations/inv_abc/accept`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body).toEqual({ password: 'password123', display_name: 'Alice' });
+    expect(result.message).toBe('invitation accepted');
+  });
+});
+
+// ── Sharding ─────────────────────────────────────────────────────────────────
+
+describe('sharding', () => {
+  it('getShardDurations sends GET /api/v1/sharding/durations', async () => {
+    const fetchMock = mockFetchOk({ durations: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getShardDurations();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/sharding/durations`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('getShardDurations sends suite query param', async () => {
+    const fetchMock = mockFetchOk({ durations: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getShardDurations('integration');
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('suite=integration');
+  });
+
+  it('getShardDuration sends GET /api/v1/sharding/durations/{testName}', async () => {
+    const fetchMock = mockFetchOk([{ test_name: 'Login Test', avg_duration_ms: 1000 }]);
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.getShardDuration('Login Test');
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toBe(`${BASE}/api/v1/sharding/durations/Login%20Test`);
+  });
+
+  it('createShardPlan sends POST /api/v1/sharding/plan', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', shards: [], total_workers: 2 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createShardPlan({ test_names: ['a', 'b'], num_workers: 2 });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/sharding/plan`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.test_names).toEqual(['a', 'b']);
+    expect(body.num_workers).toBe(2);
+  });
+
+  it('createShardPlan includes optional fields', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', shards: [], total_workers: 2 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.createShardPlan({ test_names: ['a'], num_workers: 2, strategy: 'duration', execution_id: 'e-1' });
+
+    const body = JSON.parse((fetchMock.mock.calls[0][1] as RequestInit).body as string);
+    expect(body.strategy).toBe('duration');
+    expect(body.execution_id).toBe('e-1');
+  });
+
+  it('rebalanceShards sends POST /api/v1/sharding/rebalance', async () => {
+    const fetchMock = mockFetchOk({ execution_id: 'e-1', shards: [] });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.rebalanceShards({ execution_id: 'e-1', failed_worker_id: 'w-1', current_plan: { execution_id: 'e-1', total_workers: 2, strategy: 'greedy', shards: [], est_total_ms: 0, est_wall_clock_ms: 0 } });
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/sharding/rebalance`);
+    expect((init as RequestInit).method).toBe('POST');
+    const body = JSON.parse((init as RequestInit).body as string);
+    expect(body.execution_id).toBe('e-1');
+    expect(body.failed_worker_id).toBe('w-1');
+  });
+});
+
+// ── Admin ────────────────────────────────────────────────────────────────────
+
+describe('admin', () => {
+  it('listUsers sends GET /api/v1/admin/users', async () => {
+    const fetchMock = mockFetchOk({ users: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listUsers();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/admin/users`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('listAuditLog sends GET /api/v1/admin/audit-log', async () => {
+    const fetchMock = mockFetchOk({ audit_log: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listAuditLog();
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe(`${BASE}/api/v1/admin/audit-log`);
+    expect((init as RequestInit).method).toBe('GET');
+  });
+
+  it('listAuditLog sends query params', async () => {
+    const fetchMock = mockFetchOk({ audit_log: [], total: 0 });
+    globalThis.fetch = fetchMock;
+    const client = makeClient();
+    await client.listAuditLog({ action: 'report.submitted', limit: 10, offset: 5 });
+
+    const url = fetchMock.mock.calls[0][0] as string;
+    expect(url).toContain('action=report.submitted');
+    expect(url).toContain('limit=10');
+    expect(url).toContain('offset=5');
   });
 });
 
@@ -500,16 +1077,22 @@ describe('user profile', () => {
 // ── Endpoint alignment with routes.go ────────────────────────────────────────
 
 describe('endpoint alignment with routes.go', () => {
-  // These tests document the expected URL paths that must match
-  // internal/server/routes.go route definitions.
   const routes = [
     { method: 'GET', path: '/api/v1/reports' },
     { method: 'POST', path: '/api/v1/reports' },
     { method: 'GET', path: '/api/v1/reports/{id}' },
     { method: 'DELETE', path: '/api/v1/reports/{id}' },
+    { method: 'GET', path: '/api/v1/reports/compare' },
+    { method: 'GET', path: '/api/v1/reports/{reportID}/triage' },
+    { method: 'POST', path: '/api/v1/reports/{reportID}/triage/retry' },
     { method: 'GET', path: '/api/v1/executions' },
     { method: 'POST', path: '/api/v1/executions' },
+    { method: 'GET', path: '/api/v1/executions/{id}' },
     { method: 'DELETE', path: '/api/v1/executions/{id}' },
+    { method: 'PUT', path: '/api/v1/executions/{id}/status' },
+    { method: 'POST', path: '/api/v1/executions/{id}/progress' },
+    { method: 'POST', path: '/api/v1/executions/{id}/test-result' },
+    { method: 'POST', path: '/api/v1/executions/{id}/worker-status' },
     { method: 'GET', path: '/api/v1/analytics/trends' },
     { method: 'GET', path: '/api/v1/analytics/flaky-tests' },
     { method: 'GET', path: '/api/v1/analytics/error-analysis' },
@@ -523,6 +1106,29 @@ describe('endpoint alignment with routes.go', () => {
     { method: 'GET', path: '/api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations' },
     { method: 'GET', path: '/api/v1/teams' },
     { method: 'POST', path: '/api/v1/teams' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}' },
+    { method: 'DELETE', path: '/api/v1/teams/{teamID}' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}/tokens' },
+    { method: 'POST', path: '/api/v1/teams/{teamID}/tokens' },
+    { method: 'DELETE', path: '/api/v1/teams/{teamID}/tokens/{tokenID}' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}/webhooks' },
+    { method: 'POST', path: '/api/v1/teams/{teamID}/webhooks' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}/webhooks/{webhookID}' },
+    { method: 'PUT', path: '/api/v1/teams/{teamID}/webhooks/{webhookID}' },
+    { method: 'DELETE', path: '/api/v1/teams/{teamID}/webhooks/{webhookID}' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries' },
+    { method: 'POST', path: '/api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries/{deliveryID}/retry' },
+    { method: 'GET', path: '/api/v1/teams/{teamID}/invitations' },
+    { method: 'POST', path: '/api/v1/teams/{teamID}/invitations' },
+    { method: 'DELETE', path: '/api/v1/teams/{teamID}/invitations/{invitationID}' },
+    { method: 'GET', path: '/api/v1/invitations/{token}' },
+    { method: 'POST', path: '/api/v1/invitations/{token}/accept' },
+    { method: 'POST', path: '/api/v1/sharding/plan' },
+    { method: 'POST', path: '/api/v1/sharding/rebalance' },
+    { method: 'GET', path: '/api/v1/sharding/durations' },
+    { method: 'GET', path: '/api/v1/sharding/durations/{testName}' },
+    { method: 'GET', path: '/api/v1/admin/users' },
+    { method: 'GET', path: '/api/v1/admin/audit-log' },
     { method: 'GET', path: '/api/v1/auth/me' },
     { method: 'PATCH', path: '/api/v1/auth/me' },
     { method: 'POST', path: '/api/v1/auth/change-password' },
@@ -533,11 +1139,17 @@ describe('endpoint alignment with routes.go', () => {
     globalThis.fetch = fetchMock;
     const client = makeClient();
 
-    // Call the corresponding SDK method
     const resolvedPath = path
       .replace('{id}', 'test-id')
       .replace('{teamID}', 'team-1')
-      .replace('{gateID}', 'gate-1');
+      .replace('{gateID}', 'gate-1')
+      .replace('{webhookID}', 'wh-1')
+      .replace('{deliveryID}', 'del-1')
+      .replace('{invitationID}', 'inv-1')
+      .replace('{token}', 'inv_token')
+      .replace('{testName}', 'Login%20Test')
+      .replace('{tokenID}', 'tok-1')
+      .replace('{reportID}', 'r-1');
 
     switch (`${method} ${path}`) {
       case 'GET /api/v1/reports': await client.getReports(); break;
@@ -550,9 +1162,17 @@ describe('endpoint alignment with routes.go', () => {
       }); break;
       case 'GET /api/v1/reports/{id}': await client.getReport('test-id'); break;
       case 'DELETE /api/v1/reports/{id}': await client.deleteReport('test-id'); break;
+      case 'GET /api/v1/reports/compare': await client.compareReports('base-id', 'head-id'); break;
+      case 'GET /api/v1/reports/{reportID}/triage': await client.getReportTriage('r-1'); break;
+      case 'POST /api/v1/reports/{reportID}/triage/retry': await client.retryReportTriage('r-1'); break;
       case 'GET /api/v1/executions': await client.getExecutions(); break;
       case 'POST /api/v1/executions': await client.createExecution('cmd'); break;
+      case 'GET /api/v1/executions/{id}': await client.getExecution('test-id'); break;
       case 'DELETE /api/v1/executions/{id}': await client.cancelExecution('test-id'); break;
+      case 'PUT /api/v1/executions/{id}/status': await client.updateExecutionStatus('test-id', 'running'); break;
+      case 'POST /api/v1/executions/{id}/progress': await client.reportExecutionProgress('test-id', { passed: 0, failed: 0, skipped: 0, total: 1 }); break;
+      case 'POST /api/v1/executions/{id}/test-result': await client.reportTestResult('test-id', { name: 't', status: 'passed' }); break;
+      case 'POST /api/v1/executions/{id}/worker-status': await client.reportWorkerStatus('test-id', { worker_id: 'w-1', status: 'running' }); break;
       case 'GET /api/v1/analytics/trends': await client.getTrends(); break;
       case 'GET /api/v1/analytics/flaky-tests': await client.getFlakyTests(); break;
       case 'GET /api/v1/analytics/error-analysis': await client.getErrorAnalysis(); break;
@@ -562,10 +1182,33 @@ describe('endpoint alignment with routes.go', () => {
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.getQualityGate('team-1', 'gate-1'); break;
       case 'PUT /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.updateQualityGate('team-1', 'gate-1', 'g', []); break;
       case 'DELETE /api/v1/teams/{teamID}/quality-gates/{gateID}': await client.deleteQualityGate('team-1', 'gate-1'); break;
-      case 'POST /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate': await client.evaluateQualityGate('team-1', 'gate-1'); break;
+      case 'POST /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluate': await client.evaluateQualityGate('team-1', 'gate-1', 'report-1'); break;
       case 'GET /api/v1/teams/{teamID}/quality-gates/{gateID}/evaluations': await client.listEvaluations('team-1', 'gate-1'); break;
       case 'GET /api/v1/teams': await client.getTeams(); break;
       case 'POST /api/v1/teams': await client.createTeam('t'); break;
+      case 'GET /api/v1/teams/{teamID}': await client.getTeam('team-1'); break;
+      case 'DELETE /api/v1/teams/{teamID}': await client.deleteTeam('team-1'); break;
+      case 'GET /api/v1/teams/{teamID}/tokens': await client.listTokens('team-1'); break;
+      case 'POST /api/v1/teams/{teamID}/tokens': await client.createToken('team-1', 'ci'); break;
+      case 'DELETE /api/v1/teams/{teamID}/tokens/{tokenID}': await client.deleteToken('team-1', 'tok-1'); break;
+      case 'GET /api/v1/teams/{teamID}/webhooks': await client.listWebhooks('team-1'); break;
+      case 'POST /api/v1/teams/{teamID}/webhooks': await client.createWebhook('team-1', 'https://example.com', ['report.submitted']); break;
+      case 'GET /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.getWebhook('team-1', 'wh-1'); break;
+      case 'PUT /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.updateWebhook('team-1', 'wh-1', 'https://example.com', ['report.submitted'], true); break;
+      case 'DELETE /api/v1/teams/{teamID}/webhooks/{webhookID}': await client.deleteWebhook('team-1', 'wh-1'); break;
+      case 'GET /api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries': await client.listWebhookDeliveries('team-1', 'wh-1'); break;
+      case 'POST /api/v1/teams/{teamID}/webhooks/{webhookID}/deliveries/{deliveryID}/retry': await client.retryWebhookDelivery('team-1', 'wh-1', 'del-1'); break;
+      case 'GET /api/v1/teams/{teamID}/invitations': await client.listInvitations('team-1'); break;
+      case 'POST /api/v1/teams/{teamID}/invitations': await client.createInvitation('team-1', 'a@b.com', 'member'); break;
+      case 'DELETE /api/v1/teams/{teamID}/invitations/{invitationID}': await client.revokeInvitation('team-1', 'inv-1'); break;
+      case 'GET /api/v1/invitations/{token}': await client.previewInvitation('inv_token'); break;
+      case 'POST /api/v1/invitations/{token}/accept': await client.acceptInvitation('inv_token', 'pw', 'Alice'); break;
+      case 'POST /api/v1/sharding/plan': await client.createShardPlan({ test_names: ['a'], num_workers: 2 }); break;
+      case 'POST /api/v1/sharding/rebalance': await client.rebalanceShards({ execution_id: 'e-1', failed_worker_id: 'w-1', current_plan: { execution_id: 'e-1', total_workers: 2, strategy: 'greedy', shards: [], est_total_ms: 0, est_wall_clock_ms: 0 } }); break;
+      case 'GET /api/v1/sharding/durations': await client.getShardDurations(); break;
+      case 'GET /api/v1/sharding/durations/{testName}': await client.getShardDuration('Login Test'); break;
+      case 'GET /api/v1/admin/users': await client.listUsers(); break;
+      case 'GET /api/v1/admin/audit-log': await client.listAuditLog(); break;
       case 'GET /api/v1/auth/me': await client.getMe(); break;
       case 'PATCH /api/v1/auth/me': await client.updateProfile('Alice'); break;
       case 'POST /api/v1/auth/change-password': await client.changePassword('old', 'newpass1'); break;
@@ -573,7 +1216,9 @@ describe('endpoint alignment with routes.go', () => {
 
     const calledUrl = fetchMock.mock.calls[0][0] as string;
     const calledMethod = (fetchMock.mock.calls[0][1] as RequestInit).method;
-    expect(calledUrl).toBe(`${BASE}${resolvedPath}`);
+    // Strip query parameters for comparison since some routes have params
+    const calledUrlWithoutQuery = calledUrl.split('?')[0];
+    expect(calledUrlWithoutQuery).toBe(`${BASE}${resolvedPath}`);
     expect(calledMethod).toBe(method);
   });
 });
