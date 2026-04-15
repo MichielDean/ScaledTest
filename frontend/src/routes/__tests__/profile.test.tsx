@@ -1,5 +1,7 @@
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ProfilePage } from '../profile';
+import { ToastProvider, toast } from '../../components/toast';
 
 const { mockUpdateProfile, mockChangePassword, mockSetUser } = vi.hoisted(() => ({
   mockUpdateProfile: vi.fn(),
@@ -21,25 +23,51 @@ vi.mock('../../stores/auth-store', () => ({
   }),
 }));
 
+vi.mock('../../lib/query-keys', () => ({
+  queryKeys: {
+    admin: {
+      users: () => ['admin', 'users'],
+    },
+  },
+}));
+
+function renderWithClient(ui: React.ReactElement) {
+  const client = new QueryClient({
+    defaultOptions: {
+      queries: { retry: false },
+      mutations: {
+        onError: (error: Error) => {
+          toast(error.message, 'error');
+        },
+      },
+    },
+  });
+  return render(
+    <QueryClientProvider client={client}>
+      <ToastProvider>{ui}</ToastProvider>
+    </QueryClientProvider>
+  );
+}
+
 describe('ProfilePage', () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
 
   it('renders profile settings heading', () => {
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
     expect(screen.getByRole('heading', { name: 'Profile Settings' })).toBeInTheDocument();
   });
 
   it('renders display name form with current value', () => {
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
     const input = screen.getByLabelText('Display Name');
     expect(input).toBeInTheDocument();
     expect((input as HTMLInputElement).value).toBe('Test User');
   });
 
   it('renders change password form', () => {
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
     expect(screen.getByLabelText('Current Password')).toBeInTheDocument();
     expect(screen.getByLabelText('New Password')).toBeInTheDocument();
     expect(screen.getByLabelText('Confirm New Password')).toBeInTheDocument();
@@ -52,7 +80,7 @@ describe('ProfilePage', () => {
       display_name: 'New Name',
       role: 'maintainer',
     });
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Display Name'), { target: { value: 'New Name' } });
     fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
@@ -73,7 +101,7 @@ describe('ProfilePage', () => {
 
   it('shows error when updateProfile fails', async () => {
     mockUpdateProfile.mockRejectedValue(new Error('Server error'));
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
 
@@ -82,7 +110,7 @@ describe('ProfilePage', () => {
 
   it('shows loading state during display name save', async () => {
     mockUpdateProfile.mockImplementation(() => new Promise(() => {}));
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
 
@@ -93,7 +121,7 @@ describe('ProfilePage', () => {
 
   it('calls changePassword on password form submit', async () => {
     mockChangePassword.mockResolvedValue({ message: 'password changed' });
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'oldpass123' },
@@ -111,7 +139,7 @@ describe('ProfilePage', () => {
   });
 
   it('shows error when passwords do not match', async () => {
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'oldpass123' },
@@ -127,7 +155,7 @@ describe('ProfilePage', () => {
   });
 
   it('shows error when new password is too short', async () => {
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'oldpass123' },
@@ -146,7 +174,7 @@ describe('ProfilePage', () => {
 
   it('shows error when changePassword fails', async () => {
     mockChangePassword.mockRejectedValue(new Error('Invalid current password'));
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'wrongpass' },
@@ -162,7 +190,7 @@ describe('ProfilePage', () => {
 
   it('shows loading state during password change', async () => {
     mockChangePassword.mockImplementation(() => new Promise(() => {}));
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'oldpass123' },
@@ -180,7 +208,7 @@ describe('ProfilePage', () => {
 
   it('clears password fields after successful change', async () => {
     mockChangePassword.mockResolvedValue({ message: 'password changed' });
-    render(<ProfilePage />);
+    renderWithClient(<ProfilePage />);
 
     fireEvent.change(screen.getByLabelText('Current Password'), {
       target: { value: 'oldpass123' },
@@ -195,6 +223,35 @@ describe('ProfilePage', () => {
       expect((screen.getByLabelText('Current Password') as HTMLInputElement).value).toBe('');
       expect((screen.getByLabelText('New Password') as HTMLInputElement).value).toBe('');
       expect((screen.getByLabelText('Confirm New Password') as HTMLInputElement).value).toBe('');
+    });
+  });
+
+  it('shows toast error when profile mutation fails', async () => {
+    mockUpdateProfile.mockRejectedValue(new Error('Network error'));
+    renderWithClient(<ProfilePage />);
+
+    fireEvent.click(screen.getByRole('button', { name: 'Save Name' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Network error/).length).toBeGreaterThan(0);
+    });
+  });
+
+  it('shows toast error when password mutation fails', async () => {
+    mockChangePassword.mockRejectedValue(new Error('Weak password'));
+    renderWithClient(<ProfilePage />);
+
+    fireEvent.change(screen.getByLabelText('Current Password'), {
+      target: { value: 'oldpass123' },
+    });
+    fireEvent.change(screen.getByLabelText('New Password'), { target: { value: 'newpass123' } });
+    fireEvent.change(screen.getByLabelText('Confirm New Password'), {
+      target: { value: 'newpass123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Change Password' }));
+
+    await waitFor(() => {
+      expect(screen.getAllByText(/Weak password/).length).toBeGreaterThan(0);
     });
   });
 });

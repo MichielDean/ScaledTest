@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { formatDateTime } from '../lib/date';
+import { toast } from '../components/toast';
 
 const RULE_TYPES = [
   { value: 'pass_rate', label: 'Pass Rate (%)', placeholder: '95', hasThreshold: true },
@@ -81,6 +82,7 @@ export function QualityGatesPage() {
     onSuccess: () => {
       setConfirmDelete(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
+      toast('Quality gate deleted.', 'success');
     },
   });
 
@@ -226,12 +228,20 @@ function GateCard({
   onCancelDelete: () => void;
   deleteIsPending: boolean;
 }) {
+  const queryClient = useQueryClient();
   const [lastEvaluation, setLastEvaluation] = useState<EvaluationResult | null>(null);
+
+  const [evaluateError, setEvaluateError] = useState<string | null>(null);
 
   const evaluateMutation = useMutation({
     mutationFn: (id: string) => api.evaluateQualityGate(teamId, id) as Promise<EvaluationResult>,
     onSuccess: result => {
+      setEvaluateError(null);
       setLastEvaluation(result);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.evaluations(teamId, gate.id) });
+    },
+    onError: (err: Error) => {
+      setEvaluateError(err.message);
     },
   });
 
@@ -304,6 +314,12 @@ function GateCard({
             )}
           </div>
         </div>
+        {evaluateError && (
+          <p className="flex items-center gap-1.5 text-sm text-destructive mt-2">
+            <AlertCircle size={13} />
+            {evaluateError}
+          </p>
+        )}
 
         {lastEvaluation && lastEvaluation.details?.results && (
           <div className="mt-4">

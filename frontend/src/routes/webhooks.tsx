@@ -3,6 +3,7 @@ import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from '@tansta
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { formatDate } from '../lib/date';
+import { toast } from '../components/toast';
 
 const WEBHOOK_EVENTS = [
   { value: 'report.submitted', label: 'Report Submitted' },
@@ -84,6 +85,7 @@ export function WebhooksPage() {
     onSuccess: () => {
       setConfirmDelete(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.webhooks.all(teamId!) });
+      toast('Webhook deleted.', 'success');
     },
   });
 
