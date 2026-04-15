@@ -25,12 +25,42 @@ func ptrInt32(v int32) *int32 { return &v }
 // Exported so callers can construct Secret names for cleanup (e.g. on cancellation).
 const WorkerTokenSecretPrefix = "st-worker-token-"
 
+// workerTokenSecretName returns the auto-generated Secret name for an execution.
+func workerTokenSecretName(executionID string) string {
+	return WorkerTokenSecretPrefix + executionID
+}
+
 func resourceQty(s string) (resource.Quantity, error) {
 	q, err := resource.ParseQuantity(s)
 	if err != nil {
 		return resource.Quantity{}, fmt.Errorf("parse resource quantity %q: %w", s, err)
 	}
 	return q, nil
+}
+
+type resourceSpecs struct {
+	CPUReq resource.Quantity
+	CPULim resource.Quantity
+	MemReq resource.Quantity
+	MemLim resource.Quantity
+}
+
+func parseResources(cpuReq, cpuLim, memReq, memLim string) (resourceSpecs, error) {
+	var specs resourceSpecs
+	var err error
+	if specs.CPUReq, err = resourceQty(cpuReq); err != nil {
+		return specs, fmt.Errorf("cpu request: %w", err)
+	}
+	if specs.CPULim, err = resourceQty(cpuLim); err != nil {
+		return specs, fmt.Errorf("cpu limit: %w", err)
+	}
+	if specs.MemReq, err = resourceQty(memReq); err != nil {
+		return specs, fmt.Errorf("memory request: %w", err)
+	}
+	if specs.MemLim, err = resourceQty(memLim); err != nil {
+		return specs, fmt.Errorf("memory limit: %w", err)
+	}
+	return specs, nil
 }
 
 // Client wraps the Kubernetes clientset for test execution Job management.
@@ -132,7 +162,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 	secretName := cfg.WorkerTokenSecret
 	autoCreatedSecret := false
 	if secretName == "" {
-		secretName = WorkerTokenSecretPrefix + cfg.ExecutionID
+		secretName = workerTokenSecretName(cfg.ExecutionID)
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
@@ -175,21 +205,9 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 
 	cpuReq, cpuLim, memReq, memLim := cfg.ResourceDefaults()
 
-	cpuReqQty, err := resourceQty(cpuReq)
+	resources, err := parseResources(cpuReq, cpuLim, memReq, memLim)
 	if err != nil {
-		return nil, fmt.Errorf("cpu request: %w", err)
-	}
-	cpuLimQty, err := resourceQty(cpuLim)
-	if err != nil {
-		return nil, fmt.Errorf("cpu limit: %w", err)
-	}
-	memReqQty, err := resourceQty(memReq)
-	if err != nil {
-		return nil, fmt.Errorf("memory request: %w", err)
-	}
-	memLimQty, err := resourceQty(memLim)
-	if err != nil {
-		return nil, fmt.Errorf("memory limit: %w", err)
+		return nil, err
 	}
 
 	containerSecurityContext := &corev1.SecurityContext{
@@ -246,12 +264,12 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 							SecurityContext: containerSecurityContext,
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{
-									corev1.ResourceCPU:    cpuReqQty,
-									corev1.ResourceMemory: memReqQty,
+									corev1.ResourceCPU:    resources.CPUReq,
+									corev1.ResourceMemory: resources.MemReq,
 								},
 								Limits: corev1.ResourceList{
-									corev1.ResourceCPU:    cpuLimQty,
-									corev1.ResourceMemory: memLimQty,
+									corev1.ResourceCPU:    resources.CPULim,
+									corev1.ResourceMemory: resources.MemLim,
 								},
 							},
 						},
@@ -400,13 +418,13 @@ func envOrDuration(key string, fallback time.Duration) time.Duration {
 }
 
 // ReconcileOnce performs a single reconciliation pass over running executions.
-// It handles two cases:
-//  1. Executions with a K8s job name whose job has finished — marks them failed
-//     and cleans up the associated worker token Secret.
-//  2. Executions without a K8s job name that have been running longer than
+// It handles three cases:
+//  1. Executions without a K8s job name that have been running longer than
 //     OrphanTimeout — marks them failed (the job was never created).
-//  3. Executions with a K8s job name but still within OrphanTimeout of their
+//  2. Executions with a K8s job name but still within OrphanTimeout of their
 //     start time — skipped to give recently-started jobs a grace period.
+//  3. Executions with a K8s job name whose job has finished — marks them failed
+//     and cleans up the associated worker token Secret.
 func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int, err error) {
 	executions, err := r.ListRunning(ctx)
 	if err != nil {
@@ -461,7 +479,7 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 			Msg("reconcile: marked orphaned execution as failed")
 
 		if r.SecretDeleter != nil {
-			secretName := WorkerTokenSecretPrefix + exec.ID
+			secretName := workerTokenSecretName(exec.ID)
 			if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
 				log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
 			}
