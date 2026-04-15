@@ -1,6 +1,7 @@
 package server
 
 import (
+	"context"
 	"net/http"
 	"strings"
 	"time"
@@ -30,7 +31,8 @@ import (
 
 // NewRouter creates the chi router with all middleware and route groups.
 // pool may be nil when running without a database (dev mode).
-func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
+// If a k8s reconciler is created, it is returned so the caller can Start/Stop it.
+func NewRouter(cfg *config.Config, pool ...*db.Pool) (http.Handler, *k8s.ExecutionReconciler) {
 	var dbPool *db.Pool
 	if len(pool) > 0 {
 		dbPool = pool[0]
@@ -68,7 +70,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	jwtMgr, err := auth.NewJWTManager(cfg.JWTSecret, accessDur, refreshDur)
 	if err != nil {
 		log.Fatal().Err(err).Msg("invalid JWT configuration")
-		return nil
+		return nil, nil
 	}
 
 	// Auth middleware with API token lookup
@@ -85,7 +87,7 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	csrfMW, err := auth.CSRFMiddleware([]byte(cfg.JWTSecret))
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to create CSRF middleware")
-		return nil
+		return nil, nil
 	}
 
 	// Stores
@@ -104,6 +106,34 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 		log.Warn().Err(k8sErr).Msg("k8s client not available — job launch disabled")
 	} else {
 		k8sClient = k8sC
+	}
+
+	var reconciler *k8s.ExecutionReconciler
+	if k8sClient != nil && dbPool != nil {
+		execStore := store.NewExecutionsStore(dbPool)
+		reconciler = k8s.NewExecutionReconciler(
+			k8sClient,
+			k8sClient,
+			func(ctx context.Context) ([]k8s.RunningExecution, error) {
+				executions, err := execStore.ListRunning(ctx)
+				if err != nil {
+					return nil, err
+				}
+				result := make([]k8s.RunningExecution, 0, len(executions))
+				for _, e := range executions {
+					result = append(result, k8s.RunningExecution{
+						ID:                e.ID,
+						K8sJobName:        e.K8sJobName,
+						WorkerTokenSecret: e.WorkerTokenSecret,
+						StartedAt:         e.StartedAt,
+					})
+				}
+				return result, nil
+			},
+			func(ctx context.Context, id, errorMsg string, now time.Time) error {
+				return execStore.MarkFailed(ctx, id, errorMsg, now)
+			},
+		)
 	}
 
 	var whStore *store.WebhookStore
@@ -374,10 +404,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) http.Handler {
 	// SPA fallback — serves embedded React app
 	if err := spa.Mount(r); err != nil {
 		log.Fatal().Err(err).Msg("failed to mount SPA")
-		return nil
+		return nil, nil
 	}
 
-	return r
+	return r, reconciler
 }
 
 func zerologMiddleware(next http.Handler) http.Handler {

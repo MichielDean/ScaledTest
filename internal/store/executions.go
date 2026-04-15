@@ -22,7 +22,7 @@ func NewExecutionsStore(pool *pgxpool.Pool) *ExecutionsStore {
 func (s *ExecutionsStore) List(ctx context.Context, teamID string, limit, offset int) ([]model.TestExecution, int, error) {
 	rows, err := s.pool.Query(ctx,
 		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
-		        error_msg, started_at, finished_at, created_at, updated_at
+		        worker_token_secret, error_msg, started_at, finished_at, created_at, updated_at
 		 FROM test_executions
 		 WHERE team_id = $1
 		 ORDER BY created_at DESC
@@ -38,7 +38,7 @@ func (s *ExecutionsStore) List(ctx context.Context, teamID string, limit, offset
 		var e model.TestExecution
 		if err := rows.Scan(
 			&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
-			&e.K8sJobName, &e.K8sPodName, &e.ErrorMsg, &e.StartedAt,
+			&e.K8sJobName, &e.K8sPodName, &e.WorkerTokenSecret, &e.ErrorMsg, &e.StartedAt,
 			&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt,
 		); err != nil {
 			return nil, 0, err
@@ -74,12 +74,12 @@ func (s *ExecutionsStore) Get(ctx context.Context, id, teamID string) (*model.Te
 	var e model.TestExecution
 	err := s.pool.QueryRow(ctx,
 		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
-		        error_msg, started_at, finished_at, created_at, updated_at
+		        worker_token_secret, error_msg, started_at, finished_at, created_at, updated_at
 		 FROM test_executions
 		 WHERE id = $1 AND team_id = $2`,
 		id, teamID).Scan(
 		&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
-		&e.K8sJobName, &e.K8sPodName, &e.ErrorMsg, &e.StartedAt,
+		&e.K8sJobName, &e.K8sPodName, &e.WorkerTokenSecret, &e.ErrorMsg, &e.StartedAt,
 		&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt)
 	if err != nil {
 		return nil, err
@@ -144,6 +144,36 @@ func (s *ExecutionsStore) GetK8sJobName(ctx context.Context, id string) (*string
 	return jobName, nil
 }
 
+func (s *ExecutionsStore) GetK8sJobNameByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	var jobName *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT k8s_job_name FROM test_executions WHERE id = $1 AND team_id = $2`, id, teamID).Scan(&jobName)
+	if err != nil {
+		return nil, err
+	}
+	return jobName, nil
+}
+
+func (s *ExecutionsStore) GetWorkerTokenSecret(ctx context.Context, id string) (*string, error) {
+	var secretName *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT worker_token_secret FROM test_executions WHERE id = $1`, id).Scan(&secretName)
+	if err != nil {
+		return nil, err
+	}
+	return secretName, nil
+}
+
+func (s *ExecutionsStore) GetWorkerTokenSecretByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	var secretName *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT worker_token_secret FROM test_executions WHERE id = $1 AND team_id = $2`, id, teamID).Scan(&secretName)
+	if err != nil {
+		return nil, err
+	}
+	return secretName, nil
+}
+
 func (s *ExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName string, now time.Time) error {
 	_, err := s.pool.Exec(ctx,
 		`UPDATE test_executions SET k8s_job_name = $1, updated_at = $2 WHERE id = $3`,
@@ -153,7 +183,41 @@ func (s *ExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName string,
 
 func (s *ExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error {
 	_, err := s.pool.Exec(ctx,
-		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`,
 		errorMsg, now, id)
 	return err
+}
+
+const defaultListRunningLimit = 1000
+
+func (s *ExecutionsStore) ListRunning(ctx context.Context) ([]model.TestExecution, error) {
+	return s.ListRunningLimit(ctx, defaultListRunningLimit)
+}
+
+func (s *ExecutionsStore) ListRunningLimit(ctx context.Context, limit int) ([]model.TestExecution, error) {
+	rows, err := s.pool.Query(ctx,
+		`SELECT id, team_id, status, command, config, report_id, k8s_job_name, k8s_pod_name,
+		        worker_token_secret, error_msg, started_at, finished_at, created_at, updated_at
+		 FROM test_executions
+		 WHERE status = 'running'
+		 ORDER BY created_at ASC
+		 LIMIT $1`, limit)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var executions []model.TestExecution
+	for rows.Next() {
+		var e model.TestExecution
+		if err := rows.Scan(
+			&e.ID, &e.TeamID, &e.Status, &e.Command, &e.Config, &e.ReportID,
+			&e.K8sJobName, &e.K8sPodName, &e.WorkerTokenSecret, &e.ErrorMsg, &e.StartedAt,
+			&e.FinishedAt, &e.CreatedAt, &e.UpdatedAt,
+		); err != nil {
+			return nil, err
+		}
+		executions = append(executions, e)
+	}
+	return executions, rows.Err()
 }

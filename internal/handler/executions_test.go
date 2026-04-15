@@ -16,15 +16,18 @@ import (
 )
 
 type mockExecutionsStore struct {
-	listFn          func(ctx context.Context, teamID string, limit, offset int) ([]model.TestExecution, int, error)
-	createFn        func(ctx context.Context, teamID, command string, configJSON []byte) (string, error)
-	getFn           func(ctx context.Context, id, teamID string) (*model.TestExecution, error)
-	cancelFn        func(ctx context.Context, id, teamID string, now time.Time) (int64, error)
-	updateStatusFn  func(ctx context.Context, id, teamID, status string, now time.Time, errorMsg *string) (int64, error)
-	existsFn        func(ctx context.Context, id, teamID string) (bool, error)
-	getK8sJobNameFn func(ctx context.Context, id string) (*string, error)
-	setK8sJobNameFn func(ctx context.Context, id, jobName string, now time.Time) error
-	markFailedFn    func(ctx context.Context, id, errorMsg string, now time.Time) error
+	listFn                       func(ctx context.Context, teamID string, limit, offset int) ([]model.TestExecution, int, error)
+	createFn                     func(ctx context.Context, teamID, command string, configJSON []byte) (string, error)
+	getFn                        func(ctx context.Context, id, teamID string) (*model.TestExecution, error)
+	cancelFn                     func(ctx context.Context, id, teamID string, now time.Time) (int64, error)
+	updateStatusFn               func(ctx context.Context, id, teamID, status string, now time.Time, errorMsg *string) (int64, error)
+	existsFn                     func(ctx context.Context, id, teamID string) (bool, error)
+	getK8sJobNameFn              func(ctx context.Context, id string) (*string, error)
+	getK8sJobNameByTeamFn        func(ctx context.Context, id, teamID string) (*string, error)
+	setK8sJobNameFn              func(ctx context.Context, id, jobName string, now time.Time) error
+	getWorkerTokenSecretFn       func(ctx context.Context, id string) (*string, error)
+	getWorkerTokenSecretByTeamFn func(ctx context.Context, id, teamID string) (*string, error)
+	markFailedFn                 func(ctx context.Context, id, errorMsg string, now time.Time) error
 }
 
 func (m *mockExecutionsStore) List(ctx context.Context, teamID string, limit, offset int) ([]model.TestExecution, int, error) {
@@ -48,11 +51,32 @@ func (m *mockExecutionsStore) Exists(ctx context.Context, id, teamID string) (bo
 func (m *mockExecutionsStore) GetK8sJobName(ctx context.Context, id string) (*string, error) {
 	return m.getK8sJobNameFn(ctx, id)
 }
+func (m *mockExecutionsStore) GetK8sJobNameByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	if m.getK8sJobNameByTeamFn != nil {
+		return m.getK8sJobNameByTeamFn(ctx, id, teamID)
+	}
+	return m.getK8sJobNameFn(ctx, id)
+}
 func (m *mockExecutionsStore) SetK8sJobName(ctx context.Context, id, jobName string, now time.Time) error {
 	return m.setK8sJobNameFn(ctx, id, jobName, now)
 }
+func (m *mockExecutionsStore) GetWorkerTokenSecret(ctx context.Context, id string) (*string, error) {
+	if m.getWorkerTokenSecretFn != nil {
+		return m.getWorkerTokenSecretFn(ctx, id)
+	}
+	return nil, nil
+}
+func (m *mockExecutionsStore) GetWorkerTokenSecretByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	if m.getWorkerTokenSecretByTeamFn != nil {
+		return m.getWorkerTokenSecretByTeamFn(ctx, id, teamID)
+	}
+	return m.GetWorkerTokenSecret(ctx, id)
+}
 func (m *mockExecutionsStore) MarkFailed(ctx context.Context, id, errorMsg string, now time.Time) error {
 	return m.markFailedFn(ctx, id, errorMsg, now)
+}
+func (m *mockExecutionsStore) ListRunning(ctx context.Context) ([]model.TestExecution, error) {
+	return nil, nil
 }
 
 func TestListExecutions_Unauthorized(t *testing.T) {

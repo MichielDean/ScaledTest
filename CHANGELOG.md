@@ -22,6 +22,18 @@ All notable changes to this project will be documented here.
 
 - **Evaluate mutation cache invalidation**: `evaluateMutation.onSuccess` now invalidates `queryKeys.qualityGates.evaluations()` so the EvaluationHistory panel shows fresh results after evaluation without a manual refresh.
 
+- **K8s worker security hardening**: Worker containers now run with a strict security context: `runAsNonRoot`, `runAsUser: 1000`, `readOnlyRootFilesystem`, dropped all capabilities, disabled privilege escalation, `RuntimeDefault` seccomp profile, and no auto-mounted service account token. Previously, containers ran as root with no restrictions.
+
+- **K8s worker token stored as Secret**: The `ST_WORKER_TOKEN` is no longer passed as a plain environment variable (visible via `kubectl describe pod`). Instead, each execution creates a dedicated K8s Secret (`st-worker-token-<execution-id>`) and injects it via `secretKeyRef`. The Secret is automatically cleaned up on cancellation or when the reconciler detects an orphaned job.
+
+- **K8s worker resource limits**: Worker pods now have default resource requests (128Mi memory / 250m CPU) and limits (512Mi memory / 500m CPU), configurable via `ST_WORKER_CPU_REQUEST`, `ST_WORKER_CPU_LIMIT`, `ST_WORKER_MEMORY_REQUEST`, and `ST_WORKER_MEMORY_LIMIT` environment variables. Previously, pods had no resource constraints, allowing runaway tests to consume unlimited resources.
+
+- **Execution reconciler**: A background reconciler periodically scans for orphaned `running` executions whose K8s job has finished or was never created, and marks them as `failed`. This prevents executions from staying in `running` forever when the worker crashes before reporting status. Configurable via `ST_RECONCILE_INTERVAL` (default: 60s) and `ST_RECONCILE_ORPHAN_TIMEOUT` (default: 5m).
+
+- **Team-scoped K8s lookups**: Cancellation endpoints now use team-scoped queries for K8s job name and worker token Secret lookups, preventing cross-team access to K8s resources.
+
+- **Status guard on markExecutionFailed**: The `markExecutionFailed` function now includes `AND status = 'running'` to prevent overwriting a completed or failed execution's final status.
+
 - **Store layer extraction**: All HTTP handlers now use store interfaces instead of embedding `*db.Pool` directly. Store interfaces are defined on the handler side and implemented in `internal/store/`, making handlers testable without a running database and centralizing SQL query knowledge. Affected handlers: auth, teams, analytics, executions, reports, admin, invitations, oauth.
 
 - **Bulk test result inserts**: Report ingestion now uses `pgx.Batch` to insert test results in bulk instead of one query per result. This eliminates the N+1 insert pattern that caused 1000+ round-trips for large reports.

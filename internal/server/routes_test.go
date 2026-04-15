@@ -61,7 +61,7 @@ func addCSRF(req *http.Request, token string, cookie *http.Cookie) {
 }
 
 func TestHealthEndpoint(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	// No Authorization header — endpoint must be publicly accessible.
 	req := httptest.NewRequest("GET", "/health", nil)
@@ -91,7 +91,7 @@ func TestHealthEndpoint(t *testing.T) {
 }
 
 func TestPublicAuthEndpoints(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	endpoints := []struct {
 		method string
@@ -118,7 +118,7 @@ func TestPublicAuthEndpoints(t *testing.T) {
 }
 
 func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	endpoints := []struct {
 		method string
@@ -143,7 +143,7 @@ func TestAuthenticatedEndpointsRequireToken(t *testing.T) {
 }
 
 func TestAuthenticatedEndpointsWithToken(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 
 	endpoints := []struct {
@@ -175,7 +175,7 @@ func TestAuthenticatedEndpointsWithToken(t *testing.T) {
 }
 
 func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	// Create a token with readonly role
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -192,7 +192,7 @@ func TestAdminEndpointRequiresOwnerRole(t *testing.T) {
 }
 
 func TestCTRFReportIngestion(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
@@ -211,7 +211,7 @@ func TestCTRFReportIngestion(t *testing.T) {
 }
 
 func TestCTRFReportInvalidPayload(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
@@ -228,7 +228,7 @@ func TestCTRFReportInvalidPayload(t *testing.T) {
 }
 
 func TestCSRFTokenEndpoint(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, cookie := testCSRFToken(t, router)
 
 	if csrfToken == "" {
@@ -243,7 +243,7 @@ func TestCSRFTokenEndpoint(t *testing.T) {
 }
 
 func TestCSRFAllowsBearerJWTWithoutCSRF(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 
 	// Bearer JWT POSTs should NOT be blocked by CSRF — the Authorization header
@@ -260,7 +260,7 @@ func TestCSRFAllowsBearerJWTWithoutCSRF(t *testing.T) {
 }
 
 func TestAuthRateLimiting(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	// Auth endpoints allow 10 requests per minute per IP.
 	// Send 11 requests — the 11th should be rate-limited.
@@ -290,7 +290,7 @@ func TestAuthRateLimiting(t *testing.T) {
 }
 
 func TestExecutionCreateRateLimiting(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
@@ -326,7 +326,7 @@ func TestExecutionCreateRateLimiting(t *testing.T) {
 }
 
 func TestReportUploadRateLimiting(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	token := testToken()
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
@@ -364,7 +364,7 @@ func TestReportUploadRateLimiting(t *testing.T) {
 }
 
 func TestCSRFAllowsAPITokenWithoutCSRF(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	// API tokens (sct_) should bypass CSRF — they'll fail auth (no DB) but not CSRF
 	req := httptest.NewRequest("POST", "/api/v1/reports", strings.NewReader(`{}`))
@@ -380,7 +380,7 @@ func TestCSRFAllowsAPITokenWithoutCSRF(t *testing.T) {
 }
 
 func TestReadonlyCannotCreateReport(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	// Create a token with readonly role
@@ -401,7 +401,7 @@ func TestReadonlyCannotCreateReport(t *testing.T) {
 }
 
 func TestReadonlyCannotDeleteReport(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -419,7 +419,7 @@ func TestReadonlyCannotDeleteReport(t *testing.T) {
 }
 
 func TestMaintainerCanCreateReport(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -440,7 +440,7 @@ func TestMaintainerCanCreateReport(t *testing.T) {
 }
 
 func TestReadonlyCannotCreateExecution(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -459,7 +459,7 @@ func TestReadonlyCannotCreateExecution(t *testing.T) {
 }
 
 func TestReadonlyCannotCancelExecution(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -477,7 +477,7 @@ func TestReadonlyCannotCancelExecution(t *testing.T) {
 }
 
 func TestMaintainerCanCreateExecution(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 	csrfToken, csrfCookie := testCSRFToken(t, router)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
@@ -497,7 +497,7 @@ func TestMaintainerCanCreateExecution(t *testing.T) {
 }
 
 func TestReadonlyCanListExecutions(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
@@ -514,7 +514,7 @@ func TestReadonlyCanListExecutions(t *testing.T) {
 }
 
 func TestReadonlyCanListReports(t *testing.T) {
-	router := NewRouter(testConfig(), nil)
+	router, _ := NewRouter(testConfig(), nil)
 
 	mgr, _ := auth.NewJWTManager(testJWTSecret, 15*time.Minute, 7*24*time.Hour)
 	pair, _ := mgr.GenerateTokenPair("user-ro", "readonly@example.com", "readonly", "team-1")
@@ -577,7 +577,7 @@ func TestRateLimitMWDisabledViaConfig(t *testing.T) {
 	// regardless of request volume.
 	cfg := testConfig()
 	cfg.DisableRateLimit = true
-	router := NewRouter(cfg, nil)
+	router, _ := NewRouter(cfg, nil)
 
 	for i := 0; i < 15; i++ {
 		req := httptest.NewRequest("POST", "/auth/login", strings.NewReader(`{"email":"a@b.com","password":"12345678"}`))
