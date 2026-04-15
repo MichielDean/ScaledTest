@@ -245,13 +245,13 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if h.K8s != nil {
-		jobName, _ := h.ExecStore.GetK8sJobName(r.Context(), executionID)
+		jobName, _ := h.ExecStore.GetK8sJobNameByTeam(r.Context(), executionID, claims.TeamID)
 		if jobName != nil && *jobName != "" {
 			if err := h.K8s.DeleteJob(r.Context(), *jobName); err != nil {
 				log.Error().Err(err).Str("job", *jobName).Msg("failed to delete k8s job on cancel")
 			}
 		}
-		secretName, _ := h.ExecStore.GetWorkerTokenSecret(r.Context(), executionID)
+		secretName, _ := h.ExecStore.GetWorkerTokenSecretByTeam(r.Context(), executionID, claims.TeamID)
 		if secretName != nil && *secretName != "" && strings.HasPrefix(*secretName, k8s.WorkerTokenSecretPrefix) {
 			if err := h.K8s.DeleteSecret(r.Context(), *secretName); err != nil {
 				log.Warn().Err(err).Str("secret", *secretName).Msg("failed to delete worker token secret on cancel")
@@ -383,7 +383,7 @@ func markExecutionFailed(ctx context.Context, pool *db.Pool, id, errMsg string) 
 	}
 	defer tx.Rollback(ctx)
 	if _, err := tx.Exec(ctx,
-		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3`,
+		`UPDATE test_executions SET status = 'failed', error_msg = $1, updated_at = $2 WHERE id = $3 AND status = 'running'`,
 		errMsg, time.Now(), id); err != nil {
 		log.Error().Err(err).Str("execution_id", id).Msg("failed to update execution failure status")
 		return

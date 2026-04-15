@@ -144,10 +144,30 @@ func (s *ExecutionsStore) GetK8sJobName(ctx context.Context, id string) (*string
 	return jobName, nil
 }
 
+func (s *ExecutionsStore) GetK8sJobNameByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	var jobName *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT k8s_job_name FROM test_executions WHERE id = $1 AND team_id = $2`, id, teamID).Scan(&jobName)
+	if err != nil {
+		return nil, err
+	}
+	return jobName, nil
+}
+
 func (s *ExecutionsStore) GetWorkerTokenSecret(ctx context.Context, id string) (*string, error) {
 	var secretName *string
 	err := s.pool.QueryRow(ctx,
 		`SELECT worker_token_secret FROM test_executions WHERE id = $1`, id).Scan(&secretName)
+	if err != nil {
+		return nil, err
+	}
+	return secretName, nil
+}
+
+func (s *ExecutionsStore) GetWorkerTokenSecretByTeam(ctx context.Context, id, teamID string) (*string, error) {
+	var secretName *string
+	err := s.pool.QueryRow(ctx,
+		`SELECT worker_token_secret FROM test_executions WHERE id = $1 AND team_id = $2`, id, teamID).Scan(&secretName)
 	if err != nil {
 		return nil, err
 	}

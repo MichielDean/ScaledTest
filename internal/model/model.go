@@ -75,7 +75,7 @@ type TestExecution struct {
 	Config            json.RawMessage `json:"config,omitempty"`
 	ReportID          *string         `json:"report_id,omitempty"`
 	K8sJobName        *string         `json:"k8s_job_name,omitempty"`
-	WorkerTokenSecret *string         `json:"worker_token_secret,omitempty"`
+	WorkerTokenSecret *string         `json:"-"`
 	K8sPodName        *string         `json:"k8s_pod_name,omitempty"`
 	ErrorMsg          *string         `json:"error_msg,omitempty"`
 	StartedAt         *time.Time      `json:"started_at,omitempty"`
