@@ -4,6 +4,7 @@ import { AlertCircle, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { formatDateTime } from '../lib/date';
+import { toast } from '../components/toast';
 
 const RULE_TYPES = [
   { value: 'pass_rate', label: 'Pass Rate (%)', placeholder: '95', hasThreshold: true },
@@ -81,6 +82,10 @@ export function QualityGatesPage() {
     onSuccess: () => {
       setConfirmDelete(null);
       void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.all(teamId!) });
+      toast('Quality gate deleted.', 'success');
+    },
+    onError: (err: Error) => {
+      toast(`Failed to delete quality gate: ${err.message}`, 'error');
     },
   });
 
@@ -226,12 +231,17 @@ function GateCard({
   onCancelDelete: () => void;
   deleteIsPending: boolean;
 }) {
+  const queryClient = useQueryClient();
   const [lastEvaluation, setLastEvaluation] = useState<EvaluationResult | null>(null);
 
   const evaluateMutation = useMutation({
     mutationFn: (id: string) => api.evaluateQualityGate(teamId, id) as Promise<EvaluationResult>,
     onSuccess: result => {
       setLastEvaluation(result);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.qualityGates.evaluations(teamId, gate.id) });
+    },
+    onError: (err: Error) => {
+      toast(`Evaluation failed: ${err.message}`, 'error');
     },
   });
 

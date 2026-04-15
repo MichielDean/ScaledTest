@@ -1,39 +1,64 @@
 import { useState } from 'react';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useAuthStore } from '../stores/auth-store';
 import { api } from '../lib/api';
+import { queryKeys } from '../lib/query-keys';
+import { toast } from '../components/toast';
 
 export function ProfilePage() {
   const { user, setUser } = useAuthStore();
+  const queryClient = useQueryClient();
 
   const [displayName, setDisplayName] = useState(user?.display_name ?? '');
-  const [profileSuccess, setProfileSuccess] = useState('');
   const [profileError, setProfileError] = useState('');
-  const [profileLoading, setProfileLoading] = useState(false);
+  const [profileSuccess, setProfileSuccess] = useState('');
 
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
-  const [passwordSuccess, setPasswordSuccess] = useState('');
   const [passwordError, setPasswordError] = useState('');
-  const [passwordLoading, setPasswordLoading] = useState(false);
+  const [passwordSuccess, setPasswordSuccess] = useState('');
 
-  const handleProfileSubmit = async (e: React.FormEvent) => {
+  const profileMutation = useMutation({
+    mutationFn: (name: string) => api.updateProfile(name),
+    onSuccess: (updated) => {
+      setUser({ id: updated.id, email: updated.email, display_name: updated.display_name, role: updated.role });
+      setProfileSuccess('Display name updated.');
+      setProfileError('');
+      void queryClient.invalidateQueries({ queryKey: queryKeys.admin.users() });
+    },
+    onError: (err: Error) => {
+      setProfileError(err.message);
+      setProfileSuccess('');
+      toast(`Failed to update profile: ${err.message}`, 'error');
+    },
+  });
+
+  const passwordMutation = useMutation({
+    mutationFn: ({ current, next }: { current: string; next: string }) =>
+      api.changePassword(current, next),
+    onSuccess: () => {
+      setPasswordSuccess('Password changed successfully.');
+      setPasswordError('');
+      setCurrentPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+    },
+    onError: (err: Error) => {
+      setPasswordError(err.message);
+      setPasswordSuccess('');
+      toast(`Failed to change password: ${err.message}`, 'error');
+    },
+  });
+
+  const handleProfileSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setProfileError('');
     setProfileSuccess('');
-    setProfileLoading(true);
-    try {
-      const updated = await api.updateProfile(displayName);
-      setUser({ id: updated.id, email: updated.email, display_name: updated.display_name, role: updated.role });
-      setProfileSuccess('Display name updated.');
-    } catch (err) {
-      setProfileError(err instanceof Error ? err.message : 'Update failed');
-    } finally {
-      setProfileLoading(false);
-    }
+    profileMutation.mutate(displayName);
   };
 
-  const handlePasswordSubmit = async (e: React.FormEvent) => {
+  const handlePasswordSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     setPasswordError('');
     setPasswordSuccess('');
@@ -47,18 +72,7 @@ export function ProfilePage() {
       return;
     }
 
-    setPasswordLoading(true);
-    try {
-      await api.changePassword(currentPassword, newPassword);
-      setPasswordSuccess('Password changed successfully.');
-      setCurrentPassword('');
-      setNewPassword('');
-      setConfirmPassword('');
-    } catch (err) {
-      setPasswordError(err instanceof Error ? err.message : 'Password change failed');
-    } finally {
-      setPasswordLoading(false);
-    }
+    passwordMutation.mutate({ current: currentPassword, next: newPassword });
   };
 
   return (
@@ -93,10 +107,10 @@ export function ProfilePage() {
           </div>
           <button
             type="submit"
-            disabled={profileLoading}
+            disabled={profileMutation.isPending}
             className="rounded-md bg-primary px-4 py-2 text-primary-foreground font-medium disabled:opacity-50"
           >
-            {profileLoading ? 'Saving...' : 'Save Name'}
+            {profileMutation.isPending ? 'Saving...' : 'Save Name'}
           </button>
         </form>
       </section>
@@ -155,10 +169,10 @@ export function ProfilePage() {
           </div>
           <button
             type="submit"
-            disabled={passwordLoading}
+            disabled={passwordMutation.isPending}
             className="rounded-md bg-primary px-4 py-2 text-primary-foreground font-medium disabled:opacity-50"
           >
-            {passwordLoading ? 'Changing...' : 'Change Password'}
+            {passwordMutation.isPending ? 'Changing...' : 'Change Password'}
           </button>
         </form>
       </section>

@@ -16,6 +16,7 @@ import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { CHART_TOOLTIP_STYLE } from './dashboard';
 import { formatDate, formatDateShort } from '../lib/date';
+import { ErrorBoundary } from '../components/error-boundary';
 
 interface TrendPoint {
   date: string;
@@ -88,6 +89,7 @@ export function AnalyticsPage() {
       {/* Pass Rate Trends */}
       <section className="rounded-lg border bg-card p-6">
         <h2 className="text-lg font-semibold mb-4">Pass Rate Trends</h2>
+        <ErrorBoundary>
         {trendsQuery.isLoading ? (
           <LoadingPlaceholder />
         ) : trends.length === 0 ? (
@@ -113,6 +115,7 @@ export function AnalyticsPage() {
             </LineChart>
           </ResponsiveContainer>
         )}
+        </ErrorBoundary>
       </section>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
@@ -153,6 +156,7 @@ export function AnalyticsPage() {
         {/* Duration Distribution */}
         <section className="rounded-lg border bg-card p-6">
           <h2 className="text-lg font-semibold mb-4">Duration Distribution</h2>
+          <ErrorBoundary>
           {durationQuery.isLoading ? (
             <LoadingPlaceholder />
           ) : distribution.length === 0 ? (
@@ -172,6 +176,7 @@ export function AnalyticsPage() {
               </BarChart>
             </ResponsiveContainer>
           )}
+          </ErrorBoundary>
         </section>
       </div>
 

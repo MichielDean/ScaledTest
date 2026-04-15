@@ -14,6 +14,7 @@ import { BarChart2, ChevronRight, Play, TrendingUp, Zap } from 'lucide-react';
 import { api } from '../lib/api';
 import { queryKeys } from '../lib/query-keys';
 import { formatDate, formatDateShort } from '../lib/date';
+import { ErrorBoundary } from '../components/error-boundary';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -153,6 +154,7 @@ export function DashboardPage() {
       {/* ---- Trends chart ---- */}
       <section className="rounded-lg border bg-card p-6">
         <h2 className="text-lg font-semibold mb-4">Pass Rate Trends</h2>
+        <ErrorBoundary>
         {trendsQuery.isLoading ? (
           <div className="h-64 flex items-center justify-center text-muted-foreground">
             Loading chart...
@@ -181,6 +183,7 @@ export function DashboardPage() {
             </LineChart>
           </ResponsiveContainer>
         )}
+        </ErrorBoundary>
       </section>
 
       {/* ---- Tables row ---- */}
