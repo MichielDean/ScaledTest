@@ -790,3 +790,36 @@ func TestNewExecutionReconciler_EnvOverrides(t *testing.T) {
 		t.Errorf("ReconcileInterval = %v, want %v", r.ReconcileInterval, 30*time.Second)
 	}
 }
+
+func TestEnvOrDuration_InvalidInput(t *testing.T) {
+	os.Setenv("ST_RECONCILE_INTERVAL", "not-a-duration")
+	defer os.Unsetenv("ST_RECONCILE_INTERVAL")
+
+	result := envOrDuration("ST_RECONCILE_INTERVAL", defaultReconcileInterval)
+	if result != defaultReconcileInterval {
+		t.Errorf("envOrDuration with invalid input = %v, want default %v", result, defaultReconcileInterval)
+	}
+}
+
+func TestEnvOrDuration_ValidInput(t *testing.T) {
+	os.Setenv("ST_RECONCILE_INTERVAL", "45s")
+	defer os.Unsetenv("ST_RECONCILE_INTERVAL")
+
+	result := envOrDuration("ST_RECONCILE_INTERVAL", defaultReconcileInterval)
+	if result != 45*time.Second {
+		t.Errorf("envOrDuration with valid input = %v, want %v", result, 45*time.Second)
+	}
+}
+
+func TestEnvOrDuration_EmptyEnv(t *testing.T) {
+	result := envOrDuration("ST_RECONCILE_INTERVAL_UNSET_XYZ", defaultReconcileInterval)
+	if result != defaultReconcileInterval {
+		t.Errorf("envOrDuration with empty env = %v, want default %v", result, defaultReconcileInterval)
+	}
+}
+
+func TestWorkerTokenSecretPrefix(t *testing.T) {
+	if WorkerTokenSecretPrefix != "st-worker-token-" {
+		t.Errorf("WorkerTokenSecretPrefix = %q, want %q", WorkerTokenSecretPrefix, "st-worker-token-")
+	}
+}

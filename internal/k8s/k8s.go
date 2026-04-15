@@ -21,7 +21,9 @@ func ptrBool(v bool) *bool    { return &v }
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt32(v int32) *int32 { return &v }
 
-const workerTokenSecretPrefix = "st-worker-token-"
+// WorkerTokenSecretPrefix is the prefix for auto-created worker token Secrets.
+// Exported so callers can construct Secret names for cleanup (e.g. on cancellation).
+const WorkerTokenSecretPrefix = "st-worker-token-"
 
 func resourceQty(s string) (resource.Quantity, error) {
 	q, err := resource.ParseQuantity(s)
@@ -128,8 +130,9 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 	var envVars []corev1.EnvVar
 
 	secretName := cfg.WorkerTokenSecret
+	autoCreatedSecret := false
 	if secretName == "" {
-		secretName = workerTokenSecretPrefix + cfg.ExecutionID
+		secretName = WorkerTokenSecretPrefix + cfg.ExecutionID
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
@@ -147,6 +150,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 		if _, err := c.clientset.CoreV1().Secrets(c.namespace).Create(ctx, secret, metav1.CreateOptions{}); err != nil {
 			return nil, fmt.Errorf("create worker token secret: %w", err)
 		}
+		autoCreatedSecret = true
 		log.Info().Str("secret", secretName).Msg("worker token secret created")
 	}
 
@@ -259,6 +263,11 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 
 	created, err := c.clientset.BatchV1().Jobs(c.namespace).Create(ctx, job, metav1.CreateOptions{})
 	if err != nil {
+		if autoCreatedSecret {
+			if delErr := c.clientset.CoreV1().Secrets(c.namespace).Delete(ctx, secretName, metav1.DeleteOptions{}); delErr != nil {
+				log.Warn().Err(delErr).Str("secret", secretName).Msg("failed to clean up worker token secret after job creation failure")
+			}
+		}
 		return nil, fmt.Errorf("create job: %w", err)
 	}
 
@@ -385,6 +394,7 @@ func envOrDuration(key string, fallback time.Duration) time.Duration {
 		if d, err := time.ParseDuration(v); err == nil {
 			return d
 		}
+		log.Warn().Str("key", key).Str("value", v).Msg("invalid duration in env var, using default")
 	}
 	return fallback
 }
@@ -451,7 +461,7 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 			Msg("reconcile: marked orphaned execution as failed")
 
 		if r.SecretDeleter != nil {
-			secretName := workerTokenSecretPrefix + exec.ID
+			secretName := WorkerTokenSecretPrefix + exec.ID
 			if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
 				log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
 			}

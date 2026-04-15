@@ -249,6 +249,10 @@ func (h *ExecutionsHandler) Cancel(w http.ResponseWriter, r *http.Request) {
 				log.Error().Err(err).Str("job", *jobName).Msg("failed to delete k8s job on cancel")
 			}
 		}
+		secretName := k8s.WorkerTokenSecretPrefix + executionID
+		if err := h.K8s.DeleteSecret(r.Context(), secretName); err != nil {
+			log.Warn().Err(err).Str("secret", secretName).Msg("failed to delete worker token secret on cancel")
+		}
 	}
 
 	if h.AuditStore != nil {
