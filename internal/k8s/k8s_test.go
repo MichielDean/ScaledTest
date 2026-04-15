@@ -2,9 +2,16 @@ package k8s
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"testing"
 	"time"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/kubernetes/fake"
+	k8stesting "k8s.io/client-go/testing"
 )
 
 type testJobStatusGetter struct {
@@ -242,6 +249,7 @@ func TestJobConfig_WorkerTokenSecret_Field(t *testing.T) {
 
 func TestReconcileOnce_WhenJobFinished(t *testing.T) {
 	jobName := "st-exec-orphan1"
+	secretName := WorkerTokenSecretPrefix + "orphan1"
 	var markedID string
 	var markedMsg string
 	sd := &testSecretDeleter{}
@@ -258,7 +266,7 @@ func TestReconcileOnce_WhenJobFinished(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "orphan1", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "orphan1", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -468,6 +476,7 @@ func TestReconcileOnce_WhenGetJobStatusFails(t *testing.T) {
 	jobName := "st-exec-err1"
 	called := false
 	sd := &testSecretDeleter{}
+	secretName := WorkerTokenSecretPrefix + "err1"
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -481,7 +490,7 @@ func TestReconcileOnce_WhenGetJobStatusFails(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "err1", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "err1", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -532,6 +541,7 @@ func TestReconcileOnce_WhenEmptyList(t *testing.T) {
 func TestReconcileOnce_WhenMarkFailedFails(t *testing.T) {
 	jobName := "st-exec-mf1"
 	sd := &testSecretDeleter{}
+	secretName := WorkerTokenSecretPrefix + "mf1"
 
 	getter := &testJobStatusGetter{
 		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
@@ -545,7 +555,7 @@ func TestReconcileOnce_WhenMarkFailedFails(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "mf1", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "mf1", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -588,6 +598,7 @@ func TestReconcileOnce_WhenListRunningFails(t *testing.T) {
 func TestReconcileOnce_DefaultErrorMessage(t *testing.T) {
 	jobName := "st-exec-default1"
 	var markedMsg string
+	secretName := WorkerTokenSecretPrefix + "default1"
 	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
@@ -602,7 +613,7 @@ func TestReconcileOnce_DefaultErrorMessage(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "default1", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "default1", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -630,6 +641,8 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 	job1 := "st-exec-multi1"
 	job2 := "st-exec-multi2"
 	job3 := "st-exec-multi3"
+	secret1 := WorkerTokenSecretPrefix + "multi1"
+	secret2 := WorkerTokenSecretPrefix + "multi2"
 	var markedIDs []string
 	sd := &testSecretDeleter{}
 
@@ -652,8 +665,8 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "multi1", K8sJobName: &job1, StartedAt: &startedAt},
-				{ID: "multi2", K8sJobName: &job2, StartedAt: &startedAt},
+				{ID: "multi1", K8sJobName: &job1, WorkerTokenSecret: &secret1, StartedAt: &startedAt},
+				{ID: "multi2", K8sJobName: &job2, WorkerTokenSecret: &secret2, StartedAt: &startedAt},
 				{ID: "multi3", K8sJobName: &job3, StartedAt: &startedAt},
 			}, nil
 		},
@@ -685,6 +698,7 @@ func TestReconcileOnce_MultipleExecutions(t *testing.T) {
 
 func TestReconcileOnce_SecretCleanup(t *testing.T) {
 	jobName := "st-exec-secret1"
+	secretName := WorkerTokenSecretPrefix + "secret1"
 	sd := &testSecretDeleter{}
 
 	getter := &testJobStatusGetter{
@@ -699,7 +713,7 @@ func TestReconcileOnce_SecretCleanup(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "secret1", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "secret1", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -726,6 +740,7 @@ func TestReconcileOnce_SecretCleanup(t *testing.T) {
 
 func TestReconcileOnce_SecretCleanupError_DoesNotBlock(t *testing.T) {
 	jobName := "st-exec-secerr"
+	secretName := WorkerTokenSecretPrefix + "secerr"
 	sd := &testSecretDeleter{err: context.DeadlineExceeded}
 	var markedID string
 
@@ -741,7 +756,7 @@ func TestReconcileOnce_SecretCleanupError_DoesNotBlock(t *testing.T) {
 		SecretDeleter:   sd,
 		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
 			return []RunningExecution{
-				{ID: "secerr", K8sJobName: &jobName, StartedAt: &startedAt},
+				{ID: "secerr", K8sJobName: &jobName, WorkerTokenSecret: &secretName, StartedAt: &startedAt},
 			}, nil
 		},
 		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
@@ -821,5 +836,293 @@ func TestEnvOrDuration_EmptyEnv(t *testing.T) {
 func TestWorkerTokenSecretPrefix(t *testing.T) {
 	if WorkerTokenSecretPrefix != "st-worker-token-" {
 		t.Errorf("WorkerTokenSecretPrefix = %q, want %q", WorkerTokenSecretPrefix, "st-worker-token-")
+	}
+}
+
+func TestCreateJob_SecurityContextAndResources(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset(&corev1.SecretList{})
+	client := &Client{clientset: fakeClient, namespace: "test-ns"}
+
+	cfg := JobConfig{
+		Name:          "st-exec-testsec",
+		Image:         "scaledtest/worker:latest",
+		Command:       "npm test",
+		ExecutionID:   "testsec",
+		WorkerToken:   "secret-token-value",
+		APIBaseURL:    "http://api:8080",
+		CPURequest:    "250m",
+		CPULimit:      "500m",
+		MemoryRequest: "128Mi",
+		MemoryLimit:   "512Mi",
+	}
+
+	result, err := client.CreateJob(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+	if result.Job == nil {
+		t.Fatal("CreateJob() returned nil Job")
+	}
+
+	job := result.Job
+
+	if result.WorkerTokenSecret != "st-worker-token-testsec" {
+		t.Errorf("WorkerTokenSecret = %q, want %q", result.WorkerTokenSecret, "st-worker-token-testsec")
+	}
+	if !result.AutoCreatedSecret {
+		t.Error("AutoCreatedSecret = false, want true")
+	}
+
+	podSpec := job.Spec.Template.Spec
+	container := podSpec.Containers[0]
+
+	if podSpec.AutomountServiceAccountToken == nil || *podSpec.AutomountServiceAccountToken != false {
+		t.Error("AutomountServiceAccountToken should be false")
+	}
+
+	if podSpec.SecurityContext == nil {
+		t.Fatal("Pod SecurityContext is nil")
+	}
+	podSC := podSpec.SecurityContext
+	if podSC.RunAsNonRoot == nil || !*podSC.RunAsNonRoot {
+		t.Error("Pod RunAsNonRoot should be true")
+	}
+	if podSC.RunAsUser == nil || *podSC.RunAsUser != 1000 {
+		t.Error("Pod RunAsUser should be 1000")
+	}
+	if podSC.FSGroup == nil || *podSC.FSGroup != 1000 {
+		t.Error("Pod FSGroup should be 1000")
+	}
+	if podSC.SeccompProfile == nil || podSC.SeccompProfile.Type != corev1.SeccompProfileTypeRuntimeDefault {
+		t.Error("Pod SeccompProfile should be RuntimeDefault")
+	}
+
+	if container.SecurityContext == nil {
+		t.Fatal("Container SecurityContext is nil")
+	}
+	contSC := container.SecurityContext
+	if contSC.RunAsNonRoot == nil || !*contSC.RunAsNonRoot {
+		t.Error("Container RunAsNonRoot should be true")
+	}
+	if contSC.RunAsUser == nil || *contSC.RunAsUser != 1000 {
+		t.Error("Container RunAsUser should be 1000")
+	}
+	if contSC.ReadOnlyRootFilesystem == nil || !*contSC.ReadOnlyRootFilesystem {
+		t.Error("Container ReadOnlyRootFilesystem should be true")
+	}
+	if contSC.AllowPrivilegeEscalation == nil || *contSC.AllowPrivilegeEscalation != false {
+		t.Error("Container AllowPrivilegeEscalation should be false")
+	}
+	if contSC.Capabilities == nil || len(contSC.Capabilities.Drop) != 1 || contSC.Capabilities.Drop[0] != "ALL" {
+		t.Error("Container Capabilities.Drop should be [ALL]")
+	}
+
+	cpuReq := container.Resources.Requests[corev1.ResourceCPU]
+	if cpuReq.String() != "250m" {
+		t.Errorf("CPU request = %q, want %q", cpuReq.String(), "250m")
+	}
+	cpuLim := container.Resources.Limits[corev1.ResourceCPU]
+	if cpuLim.String() != "500m" {
+		t.Errorf("CPU limit = %q, want %q", cpuLim.String(), "500m")
+	}
+	memReq := container.Resources.Requests[corev1.ResourceMemory]
+	if memReq.String() != "128Mi" {
+		t.Errorf("Memory request = %q, want %q", memReq.String(), "128Mi")
+	}
+	memLim := container.Resources.Limits[corev1.ResourceMemory]
+	if memLim.String() != "512Mi" {
+		t.Errorf("Memory limit = %q, want %q", memLim.String(), "512Mi")
+	}
+
+	foundToken := false
+	for _, env := range container.Env {
+		if env.Name == "ST_WORKER_TOKEN" {
+			foundToken = true
+			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil {
+				t.Error("ST_WORKER_TOKEN should use SecretKeyRef")
+			} else {
+				if env.ValueFrom.SecretKeyRef.Name != "st-worker-token-testsec" {
+					t.Errorf("ST_WORKER_TOKEN SecretKeyRef.Name = %q, want %q", env.ValueFrom.SecretKeyRef.Name, "st-worker-token-testsec")
+				}
+				if env.ValueFrom.SecretKeyRef.Key != "ST_WORKER_TOKEN" {
+					t.Errorf("ST_WORKER_TOKEN SecretKeyRef.Key = %q, want %q", env.ValueFrom.SecretKeyRef.Key, "ST_WORKER_TOKEN")
+				}
+			}
+			if env.Value != "" {
+				t.Error("ST_WORKER_TOKEN should not have a plain Value when using SecretKeyRef")
+			}
+		}
+	}
+	if !foundToken {
+		t.Error("ST_WORKER_TOKEN env var not found")
+	}
+}
+
+func TestCreateJob_WithPreExistingSecret(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset(&corev1.SecretList{})
+	client := &Client{clientset: fakeClient, namespace: "test-ns"}
+
+	cfg := JobConfig{
+		Name:              "st-exec-presec",
+		Image:             "scaledtest/worker:latest",
+		Command:           "npm test",
+		ExecutionID:       "presec",
+		WorkerToken:       "secret-token-value",
+		WorkerTokenSecret: "my-pre-existing-secret",
+		APIBaseURL:        "http://api:8080",
+	}
+
+	result, err := client.CreateJob(context.Background(), cfg)
+	if err != nil {
+		t.Fatalf("CreateJob() error = %v", err)
+	}
+
+	if result.WorkerTokenSecret != "my-pre-existing-secret" {
+		t.Errorf("WorkerTokenSecret = %q, want %q", result.WorkerTokenSecret, "my-pre-existing-secret")
+	}
+	if result.AutoCreatedSecret {
+		t.Error("AutoCreatedSecret = true for pre-existing secret, want false")
+	}
+
+	container := result.Job.Spec.Template.Spec.Containers[0]
+	foundToken := false
+	for _, env := range container.Env {
+		if env.Name == "ST_WORKER_TOKEN" {
+			foundToken = true
+			if env.ValueFrom == nil || env.ValueFrom.SecretKeyRef == nil {
+				t.Error("ST_WORKER_TOKEN should use SecretKeyRef")
+			} else if env.ValueFrom.SecretKeyRef.Name != "my-pre-existing-secret" {
+				t.Errorf("ST_WORKER_TOKEN SecretKeyRef.Name = %q, want %q", env.ValueFrom.SecretKeyRef.Name, "my-pre-existing-secret")
+			}
+		}
+	}
+	if !foundToken {
+		t.Error("ST_WORKER_TOKEN env var not found")
+	}
+
+	secrets, err := fakeClient.CoreV1().Secrets("test-ns").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list secrets: %v", err)
+	}
+	if len(secrets.Items) != 0 {
+		t.Errorf("expected 0 auto-created secrets, got %d", len(secrets.Items))
+	}
+}
+
+func TestCreateJob_SecretCleanedUpOnJobFailure(t *testing.T) {
+	fakeClient := fake.NewSimpleClientset()
+	fakeClient.PrependReactor("create", "jobs", func(action k8stesting.Action) (handled bool, ret runtime.Object, err error) {
+		return true, nil, fmt.Errorf("job creation failed")
+	})
+
+	cfg := JobConfig{
+		Name:        "st-exec-failsec",
+		Image:       "scaledtest/worker:latest",
+		Command:     "npm test",
+		ExecutionID: "failsec",
+		WorkerToken: "secret-token-value",
+		APIBaseURL:  "http://api:8080",
+	}
+
+	client := &Client{clientset: fakeClient, namespace: "test-ns"}
+
+	result, err := client.CreateJob(context.Background(), cfg)
+	if err == nil {
+		t.Fatal("CreateJob() should fail when Job creation fails, but it didn't")
+	}
+	if result != nil {
+		t.Errorf("CreateJob() result should be nil on failure, got %+v", result)
+	}
+
+	secrets, err := fakeClient.CoreV1().Secrets("test-ns").List(context.Background(), metav1.ListOptions{})
+	if err != nil {
+		t.Fatalf("list secrets: %v", err)
+	}
+	if len(secrets.Items) != 0 {
+		t.Errorf("auto-created Secret should be cleaned up on Job creation failure, but found %d secrets", len(secrets.Items))
+	}
+}
+
+func TestReconcileOnce_SkipsPreExistingSecret(t *testing.T) {
+	jobName := "st-exec-presec1"
+	preExistingSecret := "my-team-secret"
+	sd := &testSecretDeleter{}
+	var markedIDs []string
+
+	getter := &testJobStatusGetter{
+		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
+			return &JobStatus{FailedCondition: true, Failed: 1}, nil
+		},
+	}
+
+	startedAt := time.Now().Add(-10 * time.Minute)
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: getter,
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "presec1", K8sJobName: &jobName, WorkerTokenSecret: &preExistingSecret, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			markedIDs = append(markedIDs, id)
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("reconciled count = %d, want 1", n)
+	}
+	if len(markedIDs) != 1 || markedIDs[0] != "presec1" {
+		t.Errorf("marked IDs = %v, want [presec1]", markedIDs)
+	}
+	if len(sd.deleted) != 0 {
+		t.Errorf("pre-existing secret should NOT be deleted, but got deletions: %v", sd.deleted)
+	}
+}
+
+func TestReconcileOnce_NilWorkerTokenSecret_SkipsDeletion(t *testing.T) {
+	jobName := "st-exec-nosec1"
+	sd := &testSecretDeleter{}
+	var markedIDs []string
+
+	getter := &testJobStatusGetter{
+		Fn: func(ctx context.Context, name string) (*JobStatus, error) {
+			return &JobStatus{FailedCondition: true, Failed: 1}, nil
+		},
+	}
+
+	startedAt := time.Now().Add(-10 * time.Minute)
+	reconciler := &ExecutionReconciler{
+		JobStatusGetter: getter,
+		SecretDeleter:   sd,
+		ListRunning: func(ctx context.Context) ([]RunningExecution, error) {
+			return []RunningExecution{
+				{ID: "nosec1", K8sJobName: &jobName, WorkerTokenSecret: nil, StartedAt: &startedAt},
+			}, nil
+		},
+		MarkFailed: func(ctx context.Context, id, errorMsg string, now time.Time) error {
+			markedIDs = append(markedIDs, id)
+			return nil
+		},
+		OrphanTimeout:     defaultOrphanTimeout,
+		ReconcileInterval: defaultReconcileInterval,
+	}
+
+	n, err := reconciler.ReconcileOnce(context.Background())
+	if err != nil {
+		t.Fatalf("ReconcileOnce() error = %v", err)
+	}
+	if n != 1 {
+		t.Errorf("reconciled count = %d, want 1", n)
+	}
+	if len(sd.deleted) != 0 {
+		t.Errorf("nil WorkerTokenSecret should not trigger deletion, but got: %v", sd.deleted)
 	}
 }

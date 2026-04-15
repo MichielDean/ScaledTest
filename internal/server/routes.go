@@ -122,9 +122,10 @@ func NewRouter(cfg *config.Config, pool ...*db.Pool) (http.Handler, *k8s.Executi
 				result := make([]k8s.RunningExecution, 0, len(executions))
 				for _, e := range executions {
 					result = append(result, k8s.RunningExecution{
-						ID:         e.ID,
-						K8sJobName: e.K8sJobName,
-						StartedAt:  e.StartedAt,
+						ID:                e.ID,
+						K8sJobName:        e.K8sJobName,
+						WorkerTokenSecret: e.WorkerTokenSecret,
+						StartedAt:         e.StartedAt,
 					})
 				}
 				return result, nil

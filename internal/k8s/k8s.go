@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
 	batchv1 "k8s.io/api/batch/v1"
@@ -65,7 +66,7 @@ func parseResources(cpuReq, cpuLim, memReq, memLim string) (resourceSpecs, error
 
 // Client wraps the Kubernetes clientset for test execution Job management.
 type Client struct {
-	clientset *kubernetes.Clientset
+	clientset kubernetes.Interface
 	namespace string
 }
 
@@ -155,8 +156,15 @@ func (cfg *JobConfig) ResourceDefaults() (cpuReq, cpuLim, memReq, memLim string)
 	return
 }
 
+// CreateJobResult holds the created Job and metadata about the worker token Secret.
+type CreateJobResult struct {
+	Job               *batchv1.Job
+	WorkerTokenSecret string // Name of the K8s Secret used for ST_WORKER_TOKEN
+	AutoCreatedSecret bool   // True if the Secret was auto-created (and should be cleaned up)
+}
+
 // CreateJob creates a Kubernetes Job for test execution.
-func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, error) {
+func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*CreateJobResult, error) {
 	var envVars []corev1.EnvVar
 
 	secretName := cfg.WorkerTokenSecret
@@ -294,7 +302,11 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 		Str("execution_id", cfg.ExecutionID).
 		Msg("k8s job created")
 
-	return created, nil
+	return &CreateJobResult{
+		Job:               created,
+		WorkerTokenSecret: secretName,
+		AutoCreatedSecret: autoCreatedSecret,
+	}, nil
 }
 
 // DeleteJob deletes a Kubernetes Job and its pods (for cancellation).
@@ -364,9 +376,10 @@ func (s *JobStatus) IsFinished() bool {
 
 // RunningExecution represents a test execution that is currently in 'running' state.
 type RunningExecution struct {
-	ID         string
-	K8sJobName *string
-	StartedAt  *time.Time
+	ID                string
+	K8sJobName        *string
+	WorkerTokenSecret *string
+	StartedAt         *time.Time
 }
 
 // JobStatusGetter abstracts K8s job status lookup for reconciliation.
@@ -478,10 +491,12 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 			Str("failure", errMsg).
 			Msg("reconcile: marked orphaned execution as failed")
 
-		if r.SecretDeleter != nil {
-			secretName := workerTokenSecretName(exec.ID)
-			if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
-				log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
+		if r.SecretDeleter != nil && exec.WorkerTokenSecret != nil {
+			secretName := *exec.WorkerTokenSecret
+			if strings.HasPrefix(secretName, WorkerTokenSecretPrefix) {
+				if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
+					log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
+				}
 			}
 		}
 
