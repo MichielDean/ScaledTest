@@ -20,6 +20,9 @@ import (
 func ptrBool(v bool) *bool    { return &v }
 func ptrInt64(v int64) *int64 { return &v }
 func ptrInt32(v int32) *int32 { return &v }
+
+const workerTokenSecretPrefix = "st-worker-token-"
+
 func resourceQty(s string) (resource.Quantity, error) {
 	q, err := resource.ParseQuantity(s)
 	if err != nil {
@@ -126,7 +129,7 @@ func (c *Client) CreateJob(ctx context.Context, cfg JobConfig) (*batchv1.Job, er
 
 	secretName := cfg.WorkerTokenSecret
 	if secretName == "" {
-		secretName = "st-worker-token-" + cfg.ExecutionID
+		secretName = workerTokenSecretPrefix + cfg.ExecutionID
 		secret := &corev1.Secret{
 			ObjectMeta: metav1.ObjectMeta{
 				Name:      secretName,
@@ -448,7 +451,7 @@ func (r *ExecutionReconciler) ReconcileOnce(ctx context.Context) (reconciled int
 			Msg("reconcile: marked orphaned execution as failed")
 
 		if r.SecretDeleter != nil {
-			secretName := "st-worker-token-" + exec.ID
+			secretName := workerTokenSecretPrefix + exec.ID
 			if delErr := r.SecretDeleter.DeleteSecret(ctx, secretName); delErr != nil {
 				log.Warn().Err(delErr).Str("secret", secretName).Msg("reconcile: failed to delete worker token secret")
 			}
