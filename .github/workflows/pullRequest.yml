@@ -14,17 +14,17 @@ concurrency:
 
 jobs:
   go-test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
 
       - name: Go vet
         run: go vet ./...
@@ -33,7 +33,7 @@ jobs:
         run: go test ./... -v
 
   go-integration-test:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     needs: [e2e-tests]
     timeout-minutes: 10
@@ -52,13 +52,13 @@ jobs:
           --health-timeout 5s
           --health-retries 5
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
 
       - name: Run store integration tests
         env:
@@ -66,17 +66,18 @@ jobs:
         run: make test-integration
 
   frontend-build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@v6
         with:
           node-version: 22
-          package-manager-cache: false
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
@@ -91,17 +92,18 @@ jobs:
         run: npx vite build
 
   jest-tests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@v6
         with:
           node-version: 22
-          package-manager-cache: false
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Install dependencies
         working-directory: frontend
@@ -112,24 +114,25 @@ jobs:
         run: npm test
 
   go-build:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 10
     needs: [go-test, frontend-build]
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@v6
         with:
           node-version: 22
-          package-manager-cache: false
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
         working-directory: frontend
@@ -149,7 +152,7 @@ jobs:
         run: CGO_ENABLED=0 go build -ldflags="-s -w" -o bin/scaledtest-worker ./cmd/worker
 
   e2e-tests:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.event.pull_request.head.repo.full_name == github.repository
     timeout-minutes: 20
     services:
@@ -167,19 +170,20 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     steps:
-      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+      - uses: actions/checkout@v6
 
       - name: Setup Go
-        uses: actions/setup-go@4b73464bb391d4059bd26b0524d20df3927bd417 # v6.3.0
+        uses: actions/setup-go@v6
         with:
           go-version-file: go.mod
-          cache: false
+          cache: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@53b83947a5a98c8d113130e565377fae1a50d02f # v6.3.0
+        uses: actions/setup-node@v6
         with:
           node-version: 22
-          package-manager-cache: false
+          cache: 'npm'
+          cache-dependency-path: frontend/package-lock.json
 
       - name: Build frontend
         working-directory: frontend
@@ -224,7 +228,7 @@ jobs:
             --output=test-results
 
       - name: Upload Playwright screenshots
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-screenshots
@@ -232,7 +236,7 @@ jobs:
           retention-days: 30
 
       - name: Upload Playwright HTML report
-        uses: actions/upload-artifact@bbbca2ddaa5d8feaa63e36b76fdaad77386f024f # v7.0.0
+        uses: actions/upload-artifact@v7
         if: always()
         with:
           name: playwright-report
