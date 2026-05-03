@@ -86,3 +86,5 @@ e2e/.auth/
 
 # Cistern pipeline operational files
 CONTEXT.md
+.current-stage
+CATARACTAE.md
